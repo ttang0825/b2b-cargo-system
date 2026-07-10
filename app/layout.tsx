@@ -26,6 +26,8 @@ export default function RootLayout({
             <nav style={{ display: "flex", gap: 18, fontSize: 13.5 }}>
               <Link href="/admin/companies">화주 관리 (영업)</Link>
               <Link href="/admin/customers">활성 화주 (CRM)</Link>
+              <Link href="/admin/rates">운임기준표</Link>
+              <Link href="/admin/quotes">견적 관리</Link>
             </nav>
           </div>
         </div>
