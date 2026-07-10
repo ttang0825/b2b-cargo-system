@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { getStatusColor } from "@/lib/statusColors";
 
 type Customer = {
   id: string;
@@ -109,7 +110,21 @@ export default function CustomersPage() {
                       "-"
                     )}
                   </td>
-                  <td>{c.status}</td>
+                  <td>
+                    <span
+                      style={{
+                        display: "inline-block",
+                        padding: "3px 10px",
+                        borderRadius: 999,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        background: getStatusColor(c.status).bg,
+                        color: getStatusColor(c.status).text,
+                      }}
+                    >
+                      {c.status}
+                    </span>
+                  </td>
                   <td>{c.next_followup_date || "-"}</td>
                 </tr>
               ))}
