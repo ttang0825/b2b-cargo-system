@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { STATUS_OPTIONS, getStatusColor } from "@/lib/statusColors";
 
 type Company = {
   id: string;
@@ -23,22 +24,6 @@ const SOURCE_TABS = [
   { key: "프랜차이즈DB", label: "프랜차이즈" },
   { key: "패키징공장DB", label: "패키징공장" },
   { key: "직접등록", label: "직접 등록" },
-];
-
-const STATUS_OPTIONS = [
-  "미접촉",
-  "연락시도",
-  "연락완료",
-  "추후연락",
-  "제안서발송",
-  "견적요청",
-  "견적발송",
-  "첫거래완료",
-  "재거래발생",
-  "반복화주",
-  "월정산화주",
-  "휴면화주",
-  "거래중단",
 ];
 
 export default function CompaniesPage() {
@@ -327,9 +312,12 @@ export default function CompaniesPage() {
                       }
                       style={{
                         fontSize: "12px",
-                        padding: "4px 6px",
-                        borderRadius: 6,
-                        border: "1px solid var(--border)",
+                        padding: "4px 8px",
+                        borderRadius: 999,
+                        border: "none",
+                        fontWeight: 600,
+                        background: getStatusColor(c.status).bg,
+                        color: getStatusColor(c.status).text,
                       }}
                     >
                       {STATUS_OPTIONS.map((s) => (
