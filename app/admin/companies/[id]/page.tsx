@@ -13,11 +13,19 @@ type CompanyDetail = { [key: string]: any };
 function Field({ label, value }: { label: string; value: any }) {
   if (value === null || value === undefined || value === "") return null;
   return (
-    <div style={{ marginBottom: 10 }}>
+    <div style={{ marginBottom: 10, minWidth: 0 }}>
       <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
         {label}
       </div>
-      <div style={{ fontSize: 13.5 }}>{String(value)}</div>
+      <div
+        style={{
+          fontSize: 13.5,
+          overflowWrap: "anywhere",
+          wordBreak: "break-word",
+        }}
+      >
+        {String(value)}
+      </div>
     </div>
   );
 }
@@ -333,7 +341,7 @@ export default function CompanyDetailPage() {
               gap: 4,
             }}
           >
-            <div style={{ marginBottom: 10 }}>
+            <div style={{ marginBottom: 10, minWidth: 0 }}>
               <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
                 영업상태
               </div>
@@ -422,7 +430,14 @@ export default function CompanyDetailPage() {
             <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
               메모
             </div>
-            <div style={{ fontSize: 13.5, whiteSpace: "pre-wrap" }}>
+            <div
+              style={{
+                fontSize: 13.5,
+                whiteSpace: "pre-wrap",
+                overflowWrap: "anywhere",
+                wordBreak: "break-word",
+              }}
+            >
               {company.notes}
             </div>
           </div>
