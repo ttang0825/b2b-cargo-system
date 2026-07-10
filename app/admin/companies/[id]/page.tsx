@@ -42,6 +42,18 @@ export default function CompanyDetailPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  type Location = {
+    id: string;
+    location_name: string | null;
+    address: string | null;
+    location_type: string | null;
+  };
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [newLocType, setNewLocType] = useState("상차지");
+  const [newLocAddress, setNewLocAddress] = useState("");
+  const [editingLocId, setEditingLocId] = useState<string | null>(null);
+  const [editingLocValue, setEditingLocValue] = useState("");
+
   const [editForm, setEditForm] = useState({
     status: "",
     grade: "",
@@ -79,9 +91,62 @@ export default function CompanyDetailPage() {
   }
 
   useEffect(() => {
-    if (id) loadCompany();
+    if (id) {
+      loadCompany();
+      loadLocations();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  async function loadLocations() {
+    const { data } = await supabase
+      .from("customer_locations")
+      .select("id,location_name,address,location_type")
+      .eq("company_id", id);
+    setLocations(data || []);
+  }
+
+  async function handleAddLocation() {
+    if (!newLocAddress.trim()) return;
+    const { error } = await supabase.from("customer_locations").insert({
+      company_id: id,
+      address: newLocAddress,
+      location_type: newLocType,
+    });
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setNewLocAddress("");
+    loadLocations();
+  }
+
+  async function handleUpdateLocation(locId: string) {
+    const { error } = await supabase
+      .from("customer_locations")
+      .update({ address: editingLocValue })
+      .eq("id", locId);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setEditingLocId(null);
+    loadLocations();
+  }
+
+  async function handleDeleteLocation(locId: string) {
+    const confirmed = window.confirm("이 주소를 삭제하시겠습니까?");
+    if (!confirmed) return;
+    const { error } = await supabase
+      .from("customer_locations")
+      .delete()
+      .eq("id", locId);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    loadLocations();
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -442,6 +507,122 @@ export default function CompanyDetailPage() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* 저장된 주소 (상차지/하차지) */}
+      <div className="card" style={{ padding: 20, marginBottom: 20 }}>
+        <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
+          저장된 주소
+        </h3>
+
+        {["상차지", "하차지"].map((type) => {
+          const list = locations.filter((l) => l.location_type === type);
+          return (
+            <div key={type} style={{ marginBottom: 14 }}>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "var(--text-muted)",
+                  marginBottom: 6,
+                }}
+              >
+                {type}
+              </div>
+              {list.length === 0 ? (
+                <p style={{ fontSize: 12.5, color: "var(--text-muted)" }}>
+                  저장된 {type}가 없습니다.
+                </p>
+              ) : (
+                list.map((loc, i) => (
+                  <div
+                    key={loc.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "6px 0",
+                      borderBottom: "1px solid var(--border)",
+                      fontSize: 13,
+                    }}
+                  >
+                    <span
+                      style={{
+                        color: "var(--text-muted)",
+                        fontSize: 11.5,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {type === "상차지" ? "주소" : "주소"}
+                      {i + 1}
+                    </span>
+                    {editingLocId === loc.id ? (
+                      <input
+                        autoFocus
+                        value={editingLocValue}
+                        onChange={(e) => setEditingLocValue(e.target.value)}
+                        onBlur={() => handleUpdateLocation(loc.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter")
+                            (e.target as HTMLInputElement).blur();
+                        }}
+                        style={{ flex: 1, fontSize: 13, padding: "3px 6px" }}
+                      />
+                    ) : (
+                      <span
+                        style={{ flex: 1, cursor: "pointer" }}
+                        onClick={() => {
+                          setEditingLocId(loc.id);
+                          setEditingLocValue(loc.address || "");
+                        }}
+                        title="클릭해서 수정"
+                      >
+                        {loc.address}
+                      </span>
+                    )}
+                    <button
+                      className="btn-danger"
+                      style={{
+                        padding: "2px 8px",
+                        borderRadius: 6,
+                        fontSize: 11,
+                        cursor: "pointer",
+                        flexShrink: 0,
+                      }}
+                      onClick={() => handleDeleteLocation(loc.id)}
+                    >
+                      삭제
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          );
+        })}
+
+        <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
+          <select
+            value={newLocType}
+            onChange={(e) => setNewLocType(e.target.value)}
+            style={{ width: 100, fontSize: 12.5 }}
+          >
+            <option value="상차지">상차지</option>
+            <option value="하차지">하차지</option>
+          </select>
+          <input
+            value={newLocAddress}
+            onChange={(e) => setNewLocAddress(e.target.value)}
+            placeholder="주소 직접 추가"
+            style={{ flex: 1, fontSize: 12.5, padding: "5px 8px" }}
+          />
+          <button
+            className="btn"
+            type="button"
+            style={{ padding: "5px 12px", fontSize: 12.5 }}
+            onClick={handleAddLocation}
+          >
+            추가
+          </button>
+        </div>
       </div>
 
       {/* 향후 연동 예정 영역 */}
