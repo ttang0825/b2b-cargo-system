@@ -28,6 +28,7 @@ export default function RootLayout({
               <Link href="/admin/customers">활성 화주 (CRM)</Link>
               <Link href="/admin/rates">운임기준표</Link>
               <Link href="/admin/quotes">견적 관리</Link>
+              <Link href="/admin/orders">운송오더</Link>
             </nav>
           </div>
         </div>
