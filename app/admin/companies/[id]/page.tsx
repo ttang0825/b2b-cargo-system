@@ -4,22 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
-
-const STATUS_OPTIONS = [
-  "미접촉",
-  "연락시도",
-  "연락완료",
-  "추후연락",
-  "제안서발송",
-  "견적요청",
-  "견적발송",
-  "첫거래완료",
-  "재거래발생",
-  "반복화주",
-  "월정산화주",
-  "휴면화주",
-  "거래중단",
-];
+import { STATUS_OPTIONS, getStatusColor } from "@/lib/statusColors";
 
 const GRADE_OPTIONS = ["S", "A", "B", "C", "D", "휴면"];
 
@@ -188,6 +173,11 @@ export default function CompanyDetailPage() {
                 onChange={(e) =>
                   setEditForm({ ...editForm, status: e.target.value })
                 }
+                style={{
+                  fontWeight: 600,
+                  background: getStatusColor(editForm.status).bg,
+                  color: getStatusColor(editForm.status).text,
+                }}
               >
                 {STATUS_OPTIONS.map((s) => (
                   <option key={s} value={s}>
@@ -274,7 +264,25 @@ export default function CompanyDetailPage() {
               gap: 4,
             }}
           >
-            <Field label="영업상태" value={company.status} />
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
+                영업상태
+              </div>
+              <span
+                style={{
+                  display: "inline-block",
+                  marginTop: 2,
+                  padding: "3px 10px",
+                  borderRadius: 999,
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  background: getStatusColor(company.status).bg,
+                  color: getStatusColor(company.status).text,
+                }}
+              >
+                {company.status}
+              </span>
+            </div>
             <Field label="화주등급" value={company.grade} />
             <Field label="대표번호" value={company.phone} />
             <Field label="담당부서" value={company.contact_department} />
