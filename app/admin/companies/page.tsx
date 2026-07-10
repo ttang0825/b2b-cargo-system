@@ -9,6 +9,9 @@ type Company = {
   id: string;
   name: string;
   industry: string | null;
+  sub_industry: string | null;
+  metro_region: string | null;
+  district: string | null;
   region: string | null;
   phone: string | null;
   status: string;
@@ -20,11 +23,23 @@ type Company = {
 
 const SOURCE_TABS = [
   { key: "전체", label: "전체" },
-  { key: "영업대상DB", label: "영업대상 (제조업체)" },
+  { key: "수도권중소업체DB", label: "수도권 중소업체" },
   { key: "프랜차이즈DB", label: "프랜차이즈" },
   { key: "패키징공장DB", label: "패키징공장" },
   { key: "직접등록", label: "직접 등록" },
 ];
+
+const ACTIVE_STATUSES = ["견적요청", "견적발송", "첫거래완료"];
+
+function formatIndustry(c: Company) {
+  if (c.industry && c.sub_industry) return `${c.industry} / ${c.sub_industry}`;
+  return c.industry || c.sub_industry || "-";
+}
+
+function formatRegion(c: Company) {
+  if (c.metro_region && c.district) return `${c.metro_region} ${c.district}`;
+  return c.metro_region || c.district || c.region || "-";
+}
 
 export default function CompaniesPage() {
   const router = useRouter();
@@ -34,6 +49,7 @@ export default function CompaniesPage() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState("전체");
+  const [search, setSearch] = useState("");
 
   const [form, setForm] = useState({
     name: "",
@@ -51,7 +67,7 @@ export default function CompaniesPage() {
     const { data, error } = await supabase
       .from("companies")
       .select(
-        "id,name,industry,region,phone,status,grade,next_followup_date,created_at,source_sheet"
+        "id,name,industry,sub_industry,metro_region,district,region,phone,status,grade,next_followup_date,created_at,source_sheet"
       )
       .order("created_at", { ascending: false });
 
@@ -120,11 +136,30 @@ export default function CompaniesPage() {
     );
   }
 
-  const filteredCompanies = companies.filter((c) => {
-    if (activeTab === "전체") return true;
-    if (activeTab === "직접등록") return !c.source_sheet;
-    return c.source_sheet === activeTab;
-  });
+  async function handleSendToCRM(id: string, name: string) {
+    const confirmed = window.confirm(
+      `"${name}"을(를) 활성 화주(CRM)로 전환하시겠습니까? 영업상태가 "첫거래완료"로 변경됩니다.`
+    );
+    if (!confirmed) return;
+    await handleStatusChange(id, "첫거래완료");
+  }
+
+  const filteredCompanies = companies
+    .filter((c) => {
+      if (activeTab === "전체") return true;
+      if (activeTab === "직접등록") return !c.source_sheet;
+      return c.source_sheet === activeTab;
+    })
+    .filter((c) => {
+      if (!search.trim()) return true;
+      const q = search.trim().toLowerCase();
+      return (
+        c.name.toLowerCase().includes(q) ||
+        (c.phone || "").includes(q) ||
+        formatRegion(c).toLowerCase().includes(q) ||
+        formatIndustry(c).toLowerCase().includes(q)
+      );
+    });
 
   const tabCounts: Record<string, number> = { 전체: companies.length };
   for (const c of companies) {
@@ -150,7 +185,7 @@ export default function CompaniesPage() {
         style={{
           display: "flex",
           gap: 8,
-          marginBottom: 16,
+          marginBottom: 12,
           flexWrap: "wrap",
         }}
       >
@@ -165,6 +200,21 @@ export default function CompaniesPage() {
           </button>
         ))}
       </div>
+
+      <input
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="회사명, 연락처, 지역, 업종으로 검색"
+        style={{
+          width: "100%",
+          maxWidth: 360,
+          marginBottom: 16,
+          padding: "9px 12px",
+          border: "1px solid var(--border)",
+          borderRadius: "var(--radius)",
+          fontSize: 13.5,
+        }}
+      />
 
       {error && <div className="error-box">오류: {error}</div>}
 
@@ -273,7 +323,7 @@ export default function CompaniesPage() {
           <div className="empty-state">불러오는 중...</div>
         ) : filteredCompanies.length === 0 ? (
           <div className="empty-state">
-            해당 구분에 등록된 업체가 없습니다.
+            해당 조건에 등록된 업체가 없습니다.
           </div>
         ) : (
           <table>
@@ -281,11 +331,12 @@ export default function CompaniesPage() {
               <tr>
                 <th>출처</th>
                 <th>회사명</th>
-                <th>업종</th>
+                <th>업종/세부업종</th>
                 <th>지역</th>
                 <th>대표번호</th>
                 <th>영업상태</th>
                 <th>등록일</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -301,8 +352,8 @@ export default function CompaniesPage() {
                     </span>
                   </td>
                   <td>{c.name}</td>
-                  <td>{c.industry || "-"}</td>
-                  <td>{c.region || "-"}</td>
+                  <td>{formatIndustry(c)}</td>
+                  <td>{formatRegion(c)}</td>
                   <td>{c.phone || "-"}</td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <select
@@ -328,6 +379,25 @@ export default function CompaniesPage() {
                     </select>
                   </td>
                   <td>{new Date(c.created_at).toLocaleDateString("ko-KR")}</td>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    {!["첫거래완료", "재거래발생", "반복화주", "월정산화주"].includes(
+                      c.status
+                    ) && (
+                      <button
+                        className="btn-ghost"
+                        style={{
+                          padding: "4px 10px",
+                          borderRadius: 6,
+                          fontSize: 11.5,
+                          cursor: "pointer",
+                          whiteSpace: "nowrap",
+                        }}
+                        onClick={() => handleSendToCRM(c.id, c.name)}
+                      >
+                        CRM 전환
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
