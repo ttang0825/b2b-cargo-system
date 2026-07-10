@@ -201,6 +201,17 @@ export default function QuoteDetailPage() {
               </option>
             ))}
           </select>
+          {quote.status === "수주" && (
+            <button
+              className="btn"
+              style={{ marginLeft: 12, fontSize: 12.5, padding: "6px 12px" }}
+              onClick={() =>
+                router.push(`/admin/orders?from_quote=${quote.id}`)
+              }
+            >
+              + 운송오더 생성
+            </button>
+          )}
         </div>
 
         <div
