@@ -32,6 +32,7 @@ export default function CompanyDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const [editForm, setEditForm] = useState({
     status: "",
@@ -98,6 +99,58 @@ export default function CompanyDetailPage() {
     loadCompany();
   }
 
+  async function handleDelete() {
+    if (!company) return;
+    setDeleting(true);
+    setError(null);
+
+    // 이 업체와 연결된 실거래 기록(견적/운송오더/정산)이 있는지 먼저 확인합니다.
+    const [quoteRes, orderRes, invoiceRes] = await Promise.all([
+      supabase
+        .from("quotes")
+        .select("id", { count: "exact", head: true })
+        .eq("company_id", id),
+      supabase
+        .from("orders")
+        .select("id", { count: "exact", head: true })
+        .eq("company_id", id),
+      supabase
+        .from("invoices")
+        .select("id", { count: "exact", head: true })
+        .eq("company_id", id),
+    ]);
+
+    const relatedCount =
+      (quoteRes.count || 0) + (orderRes.count || 0) + (invoiceRes.count || 0);
+
+    if (relatedCount > 0) {
+      setDeleting(false);
+      alert(
+        `이 업체는 이미 견적/운송/정산 기록이 ${relatedCount}건 있어 삭제할 수 없습니다.\n` +
+          `대신 영업상태를 "거래중단"으로 변경해주세요. (기록은 보존, 목록에서만 구분됩니다)`
+      );
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `"${company.name}" 업체를 정말 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`
+    );
+    if (!confirmed) {
+      setDeleting(false);
+      return;
+    }
+
+    const { error } = await supabase.from("companies").delete().eq("id", id);
+    setDeleting(false);
+
+    if (error) {
+      setError(error.message);
+      return;
+    }
+
+    router.push("/admin/companies");
+  }
+
   if (loading) {
     return (
       <main className="container">
@@ -141,9 +194,25 @@ export default function CompanyDetailPage() {
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           {!editing ? (
-            <button className="btn" onClick={() => setEditing(true)}>
-              정보 수정
-            </button>
+            <>
+              <button className="btn" onClick={() => setEditing(true)}>
+                정보 수정
+              </button>
+              <button
+                className="btn-danger"
+                onClick={handleDelete}
+                disabled={deleting}
+                style={{
+                  padding: "9px 16px",
+                  borderRadius: "var(--radius)",
+                  fontSize: 13.5,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                {deleting ? "확인 중..." : "삭제"}
+              </button>
+            </>
           ) : (
             <>
               <button className="btn" onClick={handleSave} disabled={saving}>
