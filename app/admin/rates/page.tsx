@@ -46,12 +46,14 @@ function EditableNumber({
 }) {
   const [editing, setEditing] = useState(false);
   const [temp, setTemp] = useState(String(value ?? ""));
+  const step = suffix === "원" ? 1000 : 1;
 
   if (editing) {
     return (
       <input
         autoFocus
         type="number"
+        step={step}
         value={temp}
         onChange={(e) => setTemp(e.target.value)}
         onBlur={() => {
