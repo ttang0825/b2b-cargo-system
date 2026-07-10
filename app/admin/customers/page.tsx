@@ -131,8 +131,8 @@ export default function CustomersPage() {
           bv = formatRegion(b);
           break;
         case "status":
-          av = STATUS_OPTIONS.indexOf(a.status);
-          bv = STATUS_OPTIONS.indexOf(b.status);
+          av = (STATUS_OPTIONS as readonly string[]).indexOf(a.status);
+          bv = (STATUS_OPTIONS as readonly string[]).indexOf(b.status);
           break;
         case "total_orders_count":
           av = a.total_orders_count || 0;
