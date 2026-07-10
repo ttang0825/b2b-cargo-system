@@ -309,6 +309,18 @@ export default function QuotesPage() {
       setError("개인/신규 고객명을 입력해주세요.");
       return;
     }
+    if (!form.origin.trim()) {
+      setError("출발지를 입력해주세요.");
+      return;
+    }
+    if (!form.destination.trim()) {
+      setError("도착지를 입력해주세요.");
+      return;
+    }
+    if (!form.distance_km || Number(form.distance_km) <= 0) {
+      setError("거리(km)를 입력해주세요.");
+      return;
+    }
     if (!calc) {
       setError("해당 거리에 맞는 운임기준을 찾지 못했습니다. 거리를 확인해주세요.");
       return;
@@ -474,7 +486,7 @@ export default function QuotesPage() {
                 style={{ fontSize: 12.5, padding: "7px 12px" }}
                 onClick={() => setCustomerMode("company")}
               >
-                기존 화주(법인)
+                기존 화주
               </button>
               <button
                 type="button"
@@ -565,7 +577,7 @@ export default function QuotesPage() {
 
             <div className="form-grid" style={{ padding: 0 }}>
               <div className="field">
-                <label>출발지</label>
+                <label>출발지 *</label>
                 <div style={{ display: "flex", gap: 6 }}>
                   <input
                     value={form.origin}
@@ -629,15 +641,16 @@ export default function QuotesPage() {
                   </div>
                 )}
                 {customerMode === "company" && selectedCompany && (
-                  <div
+                  <label
+                    htmlFor="saveOrigin"
                     style={{
-                      display: "flex",
+                      display: "inline-flex",
                       alignItems: "center",
-                      gap: 7,
-                      marginTop: 8,
-                      padding: "6px 10px",
-                      background: "var(--accent-soft)",
-                      borderRadius: 6,
+                      gap: 5,
+                      marginTop: 6,
+                      fontSize: 12,
+                      color: "var(--text-muted)",
+                      cursor: "pointer",
                     }}
                   >
                     <input
@@ -645,24 +658,15 @@ export default function QuotesPage() {
                       type="checkbox"
                       checked={saveOrigin}
                       onChange={(e) => setSaveOrigin(e.target.checked)}
-                      style={{ margin: 0, flexShrink: 0 }}
+                      style={{ margin: 0 }}
                     />
-                    <label
-                      htmlFor="saveOrigin"
-                      style={{
-                        fontSize: 12,
-                        color: "var(--accent)",
-                        cursor: "pointer",
-                      }}
-                    >
-                      이 출발지를 화주 주소록에 저장
-                    </label>
-                  </div>
+                    이 출발지를 화주 주소록에 저장
+                  </label>
                 )}
               </div>
 
               <div className="field">
-                <label>도착지</label>
+                <label>도착지 *</label>
                 <div style={{ display: "flex", gap: 6 }}>
                   <input
                     value={form.destination}
@@ -726,15 +730,16 @@ export default function QuotesPage() {
                   </div>
                 )}
                 {customerMode === "company" && selectedCompany && (
-                  <div
+                  <label
+                    htmlFor="saveDestination"
                     style={{
-                      display: "flex",
+                      display: "inline-flex",
                       alignItems: "center",
-                      gap: 7,
-                      marginTop: 8,
-                      padding: "6px 10px",
-                      background: "var(--accent-soft)",
-                      borderRadius: 6,
+                      gap: 5,
+                      marginTop: 6,
+                      fontSize: 12,
+                      color: "var(--text-muted)",
+                      cursor: "pointer",
                     }}
                   >
                     <input
@@ -742,19 +747,10 @@ export default function QuotesPage() {
                       type="checkbox"
                       checked={saveDestination}
                       onChange={(e) => setSaveDestination(e.target.checked)}
-                      style={{ margin: 0, flexShrink: 0 }}
+                      style={{ margin: 0 }}
                     />
-                    <label
-                      htmlFor="saveDestination"
-                      style={{
-                        fontSize: 12,
-                        color: "var(--accent)",
-                        cursor: "pointer",
-                      }}
-                    >
-                      이 도착지를 화주 주소록에 저장
-                    </label>
-                  </div>
+                    이 도착지를 화주 주소록에 저장
+                  </label>
                 )}
               </div>
               <div className="field">
