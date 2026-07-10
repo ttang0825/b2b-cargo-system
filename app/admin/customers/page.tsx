@@ -178,20 +178,42 @@ export default function CustomersPage() {
           alignItems: "center",
         }}
       >
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="회사명, 담당자, 연락처, 지역으로 검색"
-          style={{
-            flex: 1,
-            minWidth: 220,
-            maxWidth: 360,
-            padding: "9px 12px",
-            border: "1px solid var(--border)",
-            borderRadius: "var(--radius)",
-            fontSize: 13.5,
-          }}
-        />
+        <div style={{ position: "relative", flex: 1, minWidth: 220, maxWidth: 360 }}>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="회사명, 담당자, 연락처, 지역으로 검색"
+            style={{
+              width: "100%",
+              padding: "9px 30px 9px 12px",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius)",
+              fontSize: 13.5,
+            }}
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              aria-label="검색어 지우기"
+              style={{
+                position: "absolute",
+                right: 8,
+                top: "50%",
+                transform: "translateY(-50%)",
+                border: "none",
+                background: "transparent",
+                color: "var(--text-muted)",
+                cursor: "pointer",
+                fontSize: 15,
+                lineHeight: 1,
+                padding: 4,
+              }}
+            >
+              ×
+            </button>
+          )}
+        </div>
         <span style={{ fontSize: 12.5, color: "var(--text-muted)" }}>정렬</span>
         <select
           value={sortKey}
