@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
 type Company = {
@@ -41,6 +42,7 @@ const STATUS_OPTIONS = [
 ];
 
 export default function CompaniesPage() {
+  const router = useRouter();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -303,7 +305,11 @@ export default function CompaniesPage() {
             </thead>
             <tbody>
               {filteredCompanies.map((c) => (
-                <tr key={c.id}>
+                <tr
+                  key={c.id}
+                  onClick={() => router.push(`/admin/companies/${c.id}`)}
+                  style={{ cursor: "pointer" }}
+                >
                   <td>
                     <span className="badge">
                       {c.source_sheet || "직접등록"}
@@ -313,7 +319,7 @@ export default function CompaniesPage() {
                   <td>{c.industry || "-"}</td>
                   <td>{c.region || "-"}</td>
                   <td>{c.phone || "-"}</td>
-                  <td>
+                  <td onClick={(e) => e.stopPropagation()}>
                     <select
                       value={c.status}
                       onChange={(e) =>
