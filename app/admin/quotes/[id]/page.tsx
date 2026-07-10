@@ -35,6 +35,7 @@ type QuoteDetail = {
   guest_phone: string | null;
   guest_email: string | null;
   company_id: string | null;
+  selected_options: Record<string, any> | null;
   companies: { id: string; name: string; phone: string | null } | null;
 };
 
@@ -237,8 +238,47 @@ export default function QuoteDetailPage() {
               <div style={{ fontSize: 13.5 }}>{quote.guest_phone}</div>
             </div>
           )}
+          {quote.companies && (
+            <div>
+              <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
+                화주 상세
+              </div>
+              <Link
+                href={`/admin/companies/${quote.companies.id}`}
+                style={{ fontSize: 13.5, textDecoration: "underline" }}
+              >
+                {quote.companies.name} 페이지로 이동 →
+              </Link>
+            </div>
+          )}
         </div>
       </div>
+
+      {quote.selected_options && (
+        <div className="card" style={{ padding: 20, marginBottom: 20 }}>
+          <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
+            견적 조건
+          </h3>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+              gap: 10,
+            }}
+          >
+            {Object.entries(quote.selected_options).map(([k, v]) => (
+              <div key={k}>
+                <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
+                  {k.replace(/_/g, " ")}
+                </div>
+                <div style={{ fontSize: 13.5 }}>
+                  {typeof v === "boolean" ? (v ? "적용" : "-") : String(v)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="card" style={{ padding: 20 }}>
         <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
