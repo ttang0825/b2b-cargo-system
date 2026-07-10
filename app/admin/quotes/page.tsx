@@ -3,17 +3,27 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
-type Rate = {
-  id: string;
+const VEHICLES = ["1톤", "1.4톤", "2.5톤", "3.5톤", "5톤", "5톤 플러스/축"];
+
+type Tier = {
+  distance_from_km: number;
+  distance_to_km: number | null;
   vehicle_type: string;
   base_fare: number;
-  per_km_rate: number;
-  waiting_fee_per_unit: number;
-  night_surcharge_pct: number;
-  weekend_surcharge_pct: number;
-  cold_surcharge_pct: number;
-  forklift_fee: number;
-  manual_load_fee: number;
+};
+
+type Surcharge = {
+  category: string;
+  option_name: string;
+  rate_pct: number;
+  flat_amount: number;
+};
+
+type ExtraFee = {
+  vehicle_type: string;
+  free_waiting_minutes: number;
+  waiting_fee_per_unit: number | null;
+  waypoint_fee: number | null;
 };
 
 type CompanyLite = { id: string; name: string; phone: string | null };
@@ -31,18 +41,28 @@ type QuoteRow = {
   companies: { name: string } | null;
 };
 
+const SINGLE_SELECT_CATEGORIES = [
+  "차량형태",
+  "상하차방식",
+  "물품특성",
+  "운송시간",
+  "긴급여부",
+  "왕복/편도",
+];
+
 function won(n: number) {
   return Math.round(n).toLocaleString("ko-KR") + "원";
 }
 
 export default function QuotesPage() {
-  const [rates, setRates] = useState<Rate[]>([]);
+  const [tiers, setTiers] = useState<Tier[]>([]);
+  const [surcharges, setSurcharges] = useState<Surcharge[]>([]);
+  const [extraFees, setExtraFees] = useState<ExtraFee[]>([]);
   const [quotes, setQuotes] = useState<QuoteRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // 고객 구분: 기존 화주 검색 or 개인/신규 게스트
   const [customerMode, setCustomerMode] = useState<"company" | "guest">(
     "company"
   );
@@ -59,22 +79,28 @@ export default function QuotesPage() {
     origin: "",
     destination: "",
     distance_km: "",
-    vehicle_type: "",
+    vehicle_type: "1톤",
     item: "",
-    night: false,
-    weekend: false,
-    cold: false,
-    forklift: false,
-    manual: false,
-    discount_amount: "",
+    차량형태: "카고",
+    상하차방식: "지게차/도크",
+    물품특성: "일반화물",
+    운송시간: "평일 주간",
+    긴급여부: "일반",
+    "왕복/편도": "편도",
+    firstDealDiscount: false,
+    waitingMinutes: "",
+    waypointCount: "",
   });
 
-  async function loadRates() {
-    const { data } = await supabase
-      .from("rates")
-      .select("*")
-      .order("vehicle_type");
-    setRates((data as Rate[]) || []);
+  async function loadRateData() {
+    const [t, s, e] = await Promise.all([
+      supabase.from("rate_distance_tiers").select("*"),
+      supabase.from("rate_surcharges").select("*"),
+      supabase.from("rate_vehicle_extra_fees").select("*"),
+    ]);
+    setTiers((t.data as Tier[]) || []);
+    setSurcharges((s.data as Surcharge[]) || []);
+    setExtraFees((e.data as ExtraFee[]) || []);
   }
 
   async function loadQuotes() {
@@ -92,7 +118,7 @@ export default function QuotesPage() {
   }
 
   useEffect(() => {
-    loadRates();
+    loadRateData();
     loadQuotes();
   }, []);
 
@@ -117,32 +143,90 @@ export default function QuotesPage() {
     };
   }, [companySearch]);
 
-  const selectedRate = useMemo(
-    () => rates.find((r) => r.vehicle_type === form.vehicle_type) || null,
-    [rates, form.vehicle_type]
-  );
+  function findOption(category: string, name: string) {
+    return surcharges.find(
+      (s) => s.category === category && s.option_name === name
+    );
+  }
 
   const calc = useMemo(() => {
-    if (!selectedRate) return null;
     const distance = Number(form.distance_km) || 0;
-    const base = selectedRate.base_fare + distance * selectedRate.per_km_rate;
+    const tierMatch = tiers.find(
+      (t) =>
+        t.vehicle_type === form.vehicle_type &&
+        distance >= t.distance_from_km &&
+        (t.distance_to_km === null || distance <= t.distance_to_km)
+    );
+    if (!tierMatch) return null;
 
-    let surchargePct = 0;
-    if (form.night) surchargePct += selectedRate.night_surcharge_pct || 0;
-    if (form.weekend) surchargePct += selectedRate.weekend_surcharge_pct || 0;
-    if (form.cold) surchargePct += selectedRate.cold_surcharge_pct || 0;
+    const base = tierMatch.base_fare;
 
-    const pctAmount = base * (surchargePct / 100);
-    const flatAmount =
-      (form.forklift ? selectedRate.forklift_fee || 0 : 0) +
-      (form.manual ? selectedRate.manual_load_fee || 0 : 0);
+    const selections: [string, string][] = [
+      ["차량형태", form.차량형태],
+      ["상하차방식", form.상하차방식],
+      ["물품특성", form.물품특성],
+      ["운송시간", form.운송시간],
+      ["긴급여부", form.긴급여부],
+      ["왕복/편도", form["왕복/편도"]],
+    ];
 
-    const surchargeTotal = pctAmount + flatAmount;
-    const discount = Number(form.discount_amount) || 0;
-    const final = Math.max(base + surchargeTotal - discount, 0);
+    let ratePctTotal = 0;
+    let flatTotal = 0;
+    const breakdown: { label: string; amount: number }[] = [];
 
-    return { base, surchargeTotal, discount, final };
-  }, [selectedRate, form]);
+    for (const [cat, opt] of selections) {
+      const found = findOption(cat, opt);
+      if (!found) continue;
+      if (found.rate_pct) {
+        ratePctTotal += found.rate_pct;
+        breakdown.push({
+          label: `${opt} (${(found.rate_pct * 100).toFixed(0)}%)`,
+          amount: base * found.rate_pct,
+        });
+      }
+      if (found.flat_amount) {
+        flatTotal += found.flat_amount;
+        breakdown.push({ label: opt, amount: found.flat_amount });
+      }
+    }
+
+    if (form.firstDealDiscount) {
+      const disc = findOption("특별할인", "첫거래지원(10%)");
+      if (disc) {
+        ratePctTotal += disc.rate_pct;
+        breakdown.push({
+          label: "첫거래지원(10%)",
+          amount: base * disc.rate_pct,
+        });
+      }
+    }
+
+    const extra = extraFees.find((e) => e.vehicle_type === form.vehicle_type);
+    let waitingExtra = 0;
+    const waitingMin = Number(form.waitingMinutes) || 0;
+    const freeMin = extra?.free_waiting_minutes ?? 30;
+    if (extra?.waiting_fee_per_unit && waitingMin > freeMin) {
+      const units = Math.ceil((waitingMin - freeMin) / 30);
+      waitingExtra = units * extra.waiting_fee_per_unit;
+      breakdown.push({ label: `대기료(${waitingMin}분)`, amount: waitingExtra });
+    }
+
+    let waypointExtra = 0;
+    const waypointCount = Number(form.waypointCount) || 0;
+    if (extra?.waypoint_fee && waypointCount > 0) {
+      waypointExtra = waypointCount * extra.waypoint_fee;
+      breakdown.push({
+        label: `경유지 ${waypointCount}곳`,
+        amount: waypointExtra,
+      });
+    }
+
+    const pctAmount = base * ratePctTotal;
+    const surchargeTotal = pctAmount + flatTotal + waitingExtra + waypointExtra;
+    const final = Math.max(base + surchargeTotal, 0);
+
+    return { base, surchargeTotal, final, breakdown, tierMatch };
+  }, [tiers, surcharges, extraFees, form]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -156,61 +240,71 @@ export default function QuotesPage() {
       setError("개인/신규 고객명을 입력해주세요.");
       return;
     }
-    if (!selectedRate) {
-      setError("차량종류(운임기준)를 선택해주세요.");
+    if (!calc) {
+      setError("해당 거리에 맞는 운임기준을 찾지 못했습니다. 거리를 확인해주세요.");
       return;
     }
-    if (!calc) return;
 
     setSaving(true);
-
     const quoteNo = `Q-${Date.now()}`;
 
-    const { error } = await supabase.from("quotes").insert({
-      quote_no: quoteNo,
-      company_id: customerMode === "company" ? selectedCompany!.id : null,
-      guest_name: customerMode === "guest" ? form.guest_name : null,
-      guest_phone: customerMode === "guest" ? form.guest_phone || null : null,
-      guest_email: customerMode === "guest" ? form.guest_email || null : null,
-      origin: form.origin || null,
-      destination: form.destination || null,
-      distance_km: Number(form.distance_km) || null,
-      vehicle_type: form.vehicle_type,
-      item: form.item || null,
-      load_type: form.forklift ? "지게차" : form.manual ? "수작업" : null,
-      base_fare: calc.base,
-      surcharge_amount: calc.surchargeTotal,
-      discount_amount: calc.discount,
-      final_amount: calc.final,
-      status: "작성중",
-    });
-
-    setSaving(false);
+    const { data: newQuote, error } = await supabase
+      .from("quotes")
+      .insert({
+        quote_no: quoteNo,
+        company_id: customerMode === "company" ? selectedCompany!.id : null,
+        guest_name: customerMode === "guest" ? form.guest_name : null,
+        guest_phone:
+          customerMode === "guest" ? form.guest_phone || null : null,
+        guest_email:
+          customerMode === "guest" ? form.guest_email || null : null,
+        origin: form.origin || null,
+        destination: form.destination || null,
+        distance_km: Number(form.distance_km) || null,
+        vehicle_type: form.vehicle_type,
+        item: form.item || null,
+        base_fare: calc.base,
+        surcharge_amount: calc.surchargeTotal,
+        discount_amount: 0,
+        final_amount: calc.final,
+        status: "상담중",
+      })
+      .select("id")
+      .single();
 
     if (error) {
+      setSaving(false);
       setError(error.message);
       return;
     }
 
-    // 폼 초기화
+    // 가산 항목 세부 내역을 quote_items에 저장
+    if (newQuote && calc.breakdown.length > 0) {
+      await supabase.from("quote_items").insert(
+        calc.breakdown.map((b) => ({
+          quote_id: newQuote.id,
+          item_name: b.label,
+          amount: Math.round(b.amount),
+        }))
+      );
+    }
+
+    setSaving(false);
+    setSelectedCompany(null);
+    setCompanySearch("");
     setForm({
+      ...form,
       guest_name: "",
       guest_phone: "",
       guest_email: "",
       origin: "",
       destination: "",
       distance_km: "",
-      vehicle_type: "",
       item: "",
-      night: false,
-      weekend: false,
-      cold: false,
-      forklift: false,
-      manual: false,
-      discount_amount: "",
+      waitingMinutes: "",
+      waypointCount: "",
+      firstDealDiscount: false,
     });
-    setSelectedCompany(null);
-    setCompanySearch("");
     loadQuotes();
   }
 
@@ -220,37 +314,35 @@ export default function QuotesPage() {
         <div>
           <h1 className="page-title">견적 관리</h1>
           <p className="page-desc">
-            운임기준표를 기준으로 자동 계산합니다. 기존 화주뿐 아니라
-            개인/신규 고객도 견적을 받을 수 있습니다.
+            거리구간 × 톤수 기본운임에 가산기준을 조합해 자동 계산합니다.
+            기존 화주 또는 개인/신규 고객 모두 견적 가능합니다. (부가세 별도)
           </p>
         </div>
       </div>
 
       {error && <div className="error-box">오류: {error}</div>}
 
-      {rates.length === 0 && (
+      {tiers.length === 0 && (
         <div className="error-box">
-          아직 등록된 운임기준이 없습니다. 먼저{" "}
+          운임기준 데이터가 아직 없습니다. 먼저{" "}
           <a href="/admin/rates" style={{ textDecoration: "underline" }}>
             운임기준표
           </a>
-          에서 차량별 기준을 등록해주세요.
+          가 등록되어 있는지 확인해주세요.
         </div>
       )}
 
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1.1fr 0.9fr",
+          gridTemplateColumns: "1.2fr 0.8fr",
           gap: 20,
           alignItems: "start",
           marginBottom: 24,
         }}
       >
-        {/* 입력 폼 */}
         <div className="card" style={{ padding: 20 }}>
           <form onSubmit={handleSubmit}>
-            {/* 고객 구분 */}
             <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
               <button
                 type="button"
@@ -280,7 +372,7 @@ export default function QuotesPage() {
                       setSelectedCompany(null);
                       setCompanySearch(e.target.value);
                     }}
-                    placeholder="회사명 입력 (예: 정밀, 유통 등)"
+                    placeholder="회사명 입력"
                   />
                 </div>
                 {!selectedCompany && companyResults.length > 0 && (
@@ -302,10 +394,7 @@ export default function QuotesPage() {
                           borderBottom: "1px solid var(--border)",
                         }}
                       >
-                        {c.name}{" "}
-                        <span style={{ color: "var(--text-muted)" }}>
-                          {c.phone || ""}
-                        </span>
+                        {c.name}
                       </div>
                     ))}
                   </div>
@@ -329,16 +418,6 @@ export default function QuotesPage() {
                     onChange={(e) =>
                       setForm({ ...form, guest_phone: e.target.value })
                     }
-                    placeholder="010-0000-0000"
-                  />
-                </div>
-                <div className="field">
-                  <label>이메일</label>
-                  <input
-                    value={form.guest_email}
-                    onChange={(e) =>
-                      setForm({ ...form, guest_email: e.target.value })
-                    }
                   />
                 </div>
               </div>
@@ -349,9 +428,7 @@ export default function QuotesPage() {
                 <label>출발지</label>
                 <input
                   value={form.origin}
-                  onChange={(e) =>
-                    setForm({ ...form, origin: e.target.value })
-                  }
+                  onChange={(e) => setForm({ ...form, origin: e.target.value })}
                 />
               </div>
               <div className="field">
@@ -364,7 +441,7 @@ export default function QuotesPage() {
                 />
               </div>
               <div className="field">
-                <label>거리(km)</label>
+                <label>거리(km) *</label>
                 <input
                   type="number"
                   value={form.distance_km}
@@ -374,74 +451,90 @@ export default function QuotesPage() {
                 />
               </div>
               <div className="field">
-                <label>차량종류 *</label>
+                <label>톤수 *</label>
                 <select
                   value={form.vehicle_type}
                   onChange={(e) =>
                     setForm({ ...form, vehicle_type: e.target.value })
                   }
                 >
-                  <option value="">선택</option>
-                  {rates.map((r) => (
-                    <option key={r.id} value={r.vehicle_type}>
-                      {r.vehicle_type}
+                  {VEHICLES.map((v) => (
+                    <option key={v} value={v}>
+                      {v}
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {SINGLE_SELECT_CATEGORIES.map((cat) => {
+                const options = surcharges.filter((s) => s.category === cat);
+                return (
+                  <div className="field" key={cat}>
+                    <label>{cat}</label>
+                    <select
+                      value={(form as any)[cat]}
+                      onChange={(e) =>
+                        setForm({ ...form, [cat]: e.target.value })
+                      }
+                    >
+                      {options.map((o) => (
+                        <option key={o.option_name} value={o.option_name}>
+                          {o.option_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })}
+
+              <div className="field">
+                <label>대기시간(분)</label>
+                <input
+                  type="number"
+                  value={form.waitingMinutes}
+                  onChange={(e) =>
+                    setForm({ ...form, waitingMinutes: e.target.value })
+                  }
+                  placeholder="무료 30분 초과분만 가산"
+                />
+              </div>
+              <div className="field">
+                <label>경유지 수</label>
+                <input
+                  type="number"
+                  value={form.waypointCount}
+                  onChange={(e) =>
+                    setForm({ ...form, waypointCount: e.target.value })
+                  }
+                />
               </div>
               <div className="field" style={{ gridColumn: "1 / -1" }}>
                 <label>품목</label>
                 <input
                   value={form.item}
-                  onChange={(e) =>
-                    setForm({ ...form, item: e.target.value })
-                  }
+                  onChange={(e) => setForm({ ...form, item: e.target.value })}
                 />
               </div>
             </div>
 
-            <div
+            <label
               style={{
                 display: "flex",
-                gap: 14,
-                flexWrap: "wrap",
-                margin: "14px 0",
+                gap: 6,
+                alignItems: "center",
                 fontSize: 13,
+                margin: "14px 0",
               }}
             >
-              {[
-                ["night", "야간"],
-                ["weekend", "주말"],
-                ["cold", "냉장/냉동"],
-                ["forklift", "지게차 상하차"],
-                ["manual", "수작업 상하차"],
-              ].map(([key, label]) => (
-                <label
-                  key={key}
-                  style={{ display: "flex", gap: 6, alignItems: "center" }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={(form as any)[key]}
-                    onChange={(e) =>
-                      setForm({ ...form, [key]: e.target.checked })
-                    }
-                  />
-                  {label}
-                </label>
-              ))}
-            </div>
-
-            <div className="field" style={{ maxWidth: 220, marginBottom: 14 }}>
-              <label>할인 금액(원)</label>
               <input
-                type="number"
-                value={form.discount_amount}
+                type="checkbox"
+                checked={form.firstDealDiscount}
                 onChange={(e) =>
-                  setForm({ ...form, discount_amount: e.target.value })
+                  setForm({ ...form, firstDealDiscount: e.target.checked })
                 }
               />
-            </div>
+              첫거래지원 할인 적용 (10%)
+            </label>
 
             <button className="btn" type="submit" disabled={saving}>
               {saving ? "저장 중..." : "견적 저장"}
@@ -454,24 +547,39 @@ export default function QuotesPage() {
           <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
             자동 계산 결과
           </h3>
-          {!selectedRate ? (
+          {!calc ? (
             <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
-              차량종류를 선택하면 실시간으로 계산됩니다.
+              거리와 톤수를 입력하면 실시간으로 계산됩니다.
             </p>
-          ) : calc ? (
+          ) : (
             <div style={{ fontSize: 13.5 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                <span style={{ color: "var(--text-muted)" }}>기본운임 + 거리운임</span>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: 8,
+                }}
+              >
+                <span style={{ color: "var(--text-muted)" }}>
+                  기본운임 ({form.vehicle_type})
+                </span>
                 <span>{won(calc.base)}</span>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                <span style={{ color: "var(--text-muted)" }}>할증 합계</span>
-                <span>+{won(calc.surchargeTotal)}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                <span style={{ color: "var(--text-muted)" }}>할인</span>
-                <span>-{won(calc.discount)}</span>
-              </div>
+              {calc.breakdown.map((b, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginBottom: 6,
+                    fontSize: 12.5,
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  <span>+ {b.label}</span>
+                  <span>{won(b.amount)}</span>
+                </div>
+              ))}
               <div
                 style={{
                   borderTop: "1px solid var(--border)",
@@ -486,12 +594,14 @@ export default function QuotesPage() {
                 <span>최종 견적금액</span>
                 <span>{won(calc.final)}</span>
               </div>
+              <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 6 }}>
+                부가세 별도
+              </p>
             </div>
-          ) : null}
+          )}
         </div>
       </div>
 
-      {/* 최근 견적 목록 */}
       <div className="card">
         {loading ? (
           <div className="empty-state">불러오는 중...</div>
@@ -504,7 +614,7 @@ export default function QuotesPage() {
                 <th>견적번호</th>
                 <th>고객</th>
                 <th>구간</th>
-                <th>차량</th>
+                <th>톤수</th>
                 <th>금액</th>
                 <th>상태</th>
                 <th>일시</th>
@@ -528,9 +638,7 @@ export default function QuotesPage() {
                   <td>{q.vehicle_type || "-"}</td>
                   <td>{q.final_amount ? won(q.final_amount) : "-"}</td>
                   <td>{q.status}</td>
-                  <td>
-                    {new Date(q.created_at).toLocaleDateString("ko-KR")}
-                  </td>
+                  <td>{new Date(q.created_at).toLocaleDateString("ko-KR")}</td>
                 </tr>
               ))}
             </tbody>
