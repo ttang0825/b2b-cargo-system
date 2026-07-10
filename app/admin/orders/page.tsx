@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { ORDER_STATUS_OPTIONS, getOrderStatusColor } from "@/lib/orderStatusColors";
+import DateTimePicker from "./DateTimePicker";
 
 type CompanyLite = { id: string; name: string; phone: string | null };
 
@@ -23,7 +24,7 @@ type OrderRow = {
 
 const SORT_OPTIONS = [
   { key: "created_at", label: "등록일" },
-  { key: "requested_pickup_at", label: "운송 희망일" },
+  { key: "requested_pickup_at", label: "상차일" },
   { key: "status", label: "배차상태" },
   { key: "customer", label: "고객명" },
 ];
@@ -60,6 +61,7 @@ function OrdersPageInner() {
     vehicle_type: "",
     item: "",
     requested_pickup_at: "",
+    requested_delivery_at: "",
     load_condition: "",
     unload_condition: "",
     special_notes: "",
@@ -170,6 +172,7 @@ function OrdersPageInner() {
       vehicle_type: form.vehicle_type || null,
       item: form.item || null,
       requested_pickup_at: form.requested_pickup_at || null,
+      requested_delivery_at: form.requested_delivery_at || null,
       load_condition: form.load_condition || null,
       unload_condition: form.unload_condition || null,
       special_notes: form.special_notes || null,
@@ -193,6 +196,7 @@ function OrdersPageInner() {
       vehicle_type: "",
       item: "",
       requested_pickup_at: "",
+      requested_delivery_at: "",
       load_condition: "",
       unload_condition: "",
       special_notes: "",
@@ -381,16 +385,20 @@ function OrdersPageInner() {
                   placeholder="예: 1톤 탑차"
                 />
               </div>
-              <div className="field">
-                <label>운송 희망일시</label>
-                <input
-                  type="datetime-local"
-                  value={form.requested_pickup_at}
-                  onChange={(e) =>
-                    setForm({ ...form, requested_pickup_at: e.target.value })
-                  }
-                />
-              </div>
+              <DateTimePicker
+                label="상차 예정일시"
+                value={form.requested_pickup_at}
+                onChange={(v) =>
+                  setForm({ ...form, requested_pickup_at: v })
+                }
+              />
+              <DateTimePicker
+                label="하차 예정일시"
+                value={form.requested_delivery_at}
+                onChange={(v) =>
+                  setForm({ ...form, requested_delivery_at: v })
+                }
+              />
               <div className="field">
                 <label>상차 조건</label>
                 <input
@@ -535,7 +543,7 @@ function OrdersPageInner() {
                 <th>고객</th>
                 <th>구간</th>
                 <th>차량</th>
-                <th>운송희망일</th>
+                <th>상차일</th>
                 <th>배차상태</th>
                 <th>등록일</th>
               </tr>
