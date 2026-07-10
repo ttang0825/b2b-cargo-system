@@ -98,6 +98,11 @@ export default function RatesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
+  const [pendingScale, setPendingScale] = useState<{
+    vehicleType: string;
+    ratio: number;
+    excludeId: string;
+  } | null>(null);
 
   async function load() {
     setLoading(true);
@@ -129,6 +134,9 @@ export default function RatesPage() {
   }
 
   async function updateTierFare(id: string, base_fare: number) {
+    const oldTier = tiers.find((t) => t.id === id);
+    const oldValue = oldTier?.base_fare ?? 0;
+
     const { error } = await supabase
       .from("rate_distance_tiers")
       .update({ base_fare })
@@ -140,6 +148,45 @@ export default function RatesPage() {
     setTiers((prev) =>
       prev.map((t) => (t.id === id ? { ...t, base_fare } : t))
     );
+    flashSaved();
+
+    // 비율이 바뀌었다면, 다른 구간에도 같은 비율로 적용할지 물어봅니다.
+    if (oldTier && oldValue > 0 && base_fare !== oldValue) {
+      const ratio = base_fare / oldValue;
+      setPendingScale({
+        vehicleType: oldTier.vehicle_type,
+        ratio,
+        excludeId: id,
+      });
+    }
+  }
+
+  async function applyScale(scope: "vehicle" | "all") {
+    if (!pendingScale) return;
+    const { vehicleType, ratio, excludeId } = pendingScale;
+    const targets = tiers.filter((t) => {
+      if (t.id === excludeId) return false;
+      if (scope === "vehicle") return t.vehicle_type === vehicleType;
+      return true;
+    });
+
+    const updates = targets.map((t) => {
+      const newFare = Math.round((t.base_fare * ratio) / 100) * 100;
+      return supabase
+        .from("rate_distance_tiers")
+        .update({ base_fare: newFare })
+        .eq("id", t.id)
+        .then(() => ({ id: t.id, newFare }));
+    });
+
+    const results = await Promise.all(updates);
+    setTiers((prev) =>
+      prev.map((t) => {
+        const found = results.find((r) => r.id === t.id);
+        return found ? { ...t, base_fare: found.newFare } : t;
+      })
+    );
+    setPendingScale(null);
     flashSaved();
   }
 
@@ -228,6 +275,66 @@ export default function RatesPage() {
       </div>
 
       {error && <div className="error-box">오류: {error}</div>}
+
+      {pendingScale && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.35)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 50,
+          }}
+        >
+          <div
+            className="card"
+            style={{ padding: 24, maxWidth: 380, background: "var(--surface)" }}
+          >
+            <h3 style={{ fontSize: 15, marginTop: 0, marginBottom: 8 }}>
+              다른 구간에도 같은 비율을 적용할까요?
+            </h3>
+            <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 18 }}>
+              방금 변경한 비율은{" "}
+              <strong>
+                {pendingScale.ratio > 1 ? "+" : ""}
+                {((pendingScale.ratio - 1) * 100).toFixed(1)}%
+              </strong>
+              입니다. 100원 단위로 반올림해서 적용됩니다.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <button
+                className="btn"
+                onClick={() => applyScale("vehicle")}
+                style={{ width: "100%" }}
+              >
+                "{pendingScale.vehicleType}" 전체 거리구간에 적용
+              </button>
+              <button
+                className="btn btn-ghost"
+                onClick={() => applyScale("all")}
+                style={{ width: "100%" }}
+              >
+                전체 테이블(모든 톤수)에 적용
+              </button>
+              <button
+                className="btn-ghost"
+                onClick={() => setPendingScale(null)}
+                style={{
+                  width: "100%",
+                  padding: "9px 16px",
+                  borderRadius: "var(--radius)",
+                  cursor: "pointer",
+                  fontSize: 13.5,
+                }}
+              >
+                아니오, 이 칸만 적용
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {tiers.length === 0 ? (
         <div className="error-box">
