@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { ORDER_STATUS_OPTIONS, getOrderStatusColor } from "@/lib/orderStatusColors";
+import DateTimePicker from "../DateTimePicker";
 
 type OrderDetail = {
   id: string;
@@ -15,6 +16,7 @@ type OrderDetail = {
   item: string | null;
   status: string;
   requested_pickup_at: string | null;
+  requested_delivery_at: string | null;
   load_condition: string | null;
   unload_condition: string | null;
   special_notes: string | null;
@@ -63,6 +65,7 @@ export default function OrderDetailPage() {
     vehicle_type: "",
     item: "",
     requested_pickup_at: "",
+    requested_delivery_at: "",
     load_condition: "",
     unload_condition: "",
     special_notes: "",
@@ -90,6 +93,9 @@ export default function OrderDetailPage() {
       requested_pickup_at: data.requested_pickup_at
         ? data.requested_pickup_at.slice(0, 16)
         : "",
+      requested_delivery_at: data.requested_delivery_at
+        ? data.requested_delivery_at.slice(0, 16)
+        : "",
       load_condition: data.load_condition || "",
       unload_condition: data.unload_condition || "",
       special_notes: data.special_notes || "",
@@ -114,6 +120,7 @@ export default function OrderDetailPage() {
         vehicle_type: editForm.vehicle_type || null,
         item: editForm.item || null,
         requested_pickup_at: editForm.requested_pickup_at || null,
+        requested_delivery_at: editForm.requested_delivery_at || null,
         load_condition: editForm.load_condition || null,
         unload_condition: editForm.unload_condition || null,
         special_notes: editForm.special_notes || null,
@@ -304,19 +311,20 @@ export default function OrderDetailPage() {
                 }
               />
             </div>
-            <div className="field">
-              <label>운송 희망일시</label>
-              <input
-                type="datetime-local"
-                value={editForm.requested_pickup_at}
-                onChange={(e) =>
-                  setEditForm({
-                    ...editForm,
-                    requested_pickup_at: e.target.value,
-                  })
-                }
-              />
-            </div>
+            <DateTimePicker
+              label="상차 예정일시"
+              value={editForm.requested_pickup_at}
+              onChange={(v) =>
+                setEditForm({ ...editForm, requested_pickup_at: v })
+              }
+            />
+            <DateTimePicker
+              label="하차 예정일시"
+              value={editForm.requested_delivery_at}
+              onChange={(v) =>
+                setEditForm({ ...editForm, requested_delivery_at: v })
+              }
+            />
             <div className="field">
               <label>상차 조건</label>
               <input
@@ -389,10 +397,20 @@ export default function OrderDetailPage() {
             <Field label="도착지" value={order.destination} />
             <Field label="차량" value={order.vehicle_type} />
             <Field
-              label="운송 희망일시"
+              label="상차 예정일시"
               value={
                 order.requested_pickup_at
                   ? new Date(order.requested_pickup_at).toLocaleString("ko-KR")
+                  : null
+              }
+            />
+            <Field
+              label="하차 예정일시"
+              value={
+                order.requested_delivery_at
+                  ? new Date(order.requested_delivery_at).toLocaleString(
+                      "ko-KR"
+                    )
                   : null
               }
             />
