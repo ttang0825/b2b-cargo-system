@@ -29,7 +29,23 @@ const SOURCE_TABS = [
   { key: "직접등록", label: "직접 등록" },
 ];
 
-const ACTIVE_STATUSES = ["견적요청", "견적발송", "첫거래완료"];
+const ACTIVE_STATUSES_FOR_BUTTON = [
+  "견적요청",
+  "견적발송",
+  "첫거래완료",
+  "재거래발생",
+  "반복화주",
+  "월정산화주",
+];
+
+const SORT_OPTIONS = [
+  { key: "created_at", label: "등록일" },
+  { key: "source", label: "출처" },
+  { key: "name", label: "회사명" },
+  { key: "industry", label: "업종/세부업종" },
+  { key: "region", label: "지역" },
+  { key: "status", label: "영업상태" },
+];
 
 function formatIndustry(c: Company) {
   if (c.industry && c.sub_industry) return `${c.industry} / ${c.sub_industry}`;
@@ -50,6 +66,8 @@ export default function CompaniesPage() {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState("전체");
   const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = useState("created_at");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   const [form, setForm] = useState({
     name: "",
@@ -138,10 +156,10 @@ export default function CompaniesPage() {
 
   async function handleSendToCRM(id: string, name: string) {
     const confirmed = window.confirm(
-      `"${name}"을(를) 활성 화주(CRM)로 전환하시겠습니까? 영업상태가 "첫거래완료"로 변경됩니다.`
+      `"${name}"을(를) 활성 화주(CRM)로 전환하시겠습니까? 영업상태가 "견적요청"으로 변경됩니다.`
     );
     if (!confirmed) return;
-    await handleStatusChange(id, "첫거래완료");
+    await handleStatusChange(id, "견적요청");
   }
 
   const filteredCompanies = companies
@@ -159,6 +177,40 @@ export default function CompaniesPage() {
         formatRegion(c).toLowerCase().includes(q) ||
         formatIndustry(c).toLowerCase().includes(q)
       );
+    })
+    .sort((a, b) => {
+      let av: string | number = "";
+      let bv: string | number = "";
+      switch (sortKey) {
+        case "source":
+          av = a.source_sheet || "직접등록";
+          bv = b.source_sheet || "직접등록";
+          break;
+        case "name":
+          av = a.name;
+          bv = b.name;
+          break;
+        case "industry":
+          av = formatIndustry(a);
+          bv = formatIndustry(b);
+          break;
+        case "region":
+          av = formatRegion(a);
+          bv = formatRegion(b);
+          break;
+        case "status":
+          av = STATUS_OPTIONS.indexOf(a.status);
+          bv = STATUS_OPTIONS.indexOf(b.status);
+          break;
+        case "created_at":
+        default:
+          av = a.created_at;
+          bv = b.created_at;
+      }
+      let cmp: number;
+      if (typeof av === "number" && typeof bv === "number") cmp = av - bv;
+      else cmp = String(av).localeCompare(String(bv), "ko");
+      return sortDir === "asc" ? cmp : -cmp;
     });
 
   const tabCounts: Record<string, number> = { 전체: companies.length };
@@ -201,20 +253,50 @@ export default function CompaniesPage() {
         ))}
       </div>
 
-      <input
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="회사명, 연락처, 지역, 업종으로 검색"
+      <div
         style={{
-          width: "100%",
-          maxWidth: 360,
+          display: "flex",
+          gap: 8,
           marginBottom: 16,
-          padding: "9px 12px",
-          border: "1px solid var(--border)",
-          borderRadius: "var(--radius)",
-          fontSize: 13.5,
+          flexWrap: "wrap",
+          alignItems: "center",
         }}
-      />
+      >
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="회사명, 연락처, 지역, 업종으로 검색"
+          style={{
+            flex: 1,
+            minWidth: 220,
+            maxWidth: 360,
+            padding: "9px 12px",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius)",
+            fontSize: 13.5,
+          }}
+        />
+        <span style={{ fontSize: 12.5, color: "var(--text-muted)" }}>정렬</span>
+        <select
+          value={sortKey}
+          onChange={(e) => setSortKey(e.target.value)}
+          style={{ fontSize: 12.5, padding: "7px 8px" }}
+        >
+          {SORT_OPTIONS.map((o) => (
+            <option key={o.key} value={o.key}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className="btn-ghost"
+          style={{ padding: "6px 10px", borderRadius: 6, fontSize: 12.5, cursor: "pointer" }}
+          onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+        >
+          {sortDir === "asc" ? "오름차순 ↑" : "내림차순 ↓"}
+        </button>
+      </div>
 
       {error && <div className="error-box">오류: {error}</div>}
 
@@ -380,9 +462,7 @@ export default function CompaniesPage() {
                   </td>
                   <td>{new Date(c.created_at).toLocaleDateString("ko-KR")}</td>
                   <td onClick={(e) => e.stopPropagation()}>
-                    {!["첫거래완료", "재거래발생", "반복화주", "월정산화주"].includes(
-                      c.status
-                    ) && (
+                    {!ACTIVE_STATUSES_FOR_BUTTON.includes(c.status) && (
                       <button
                         className="btn-ghost"
                         style={{
