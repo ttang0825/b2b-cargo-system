@@ -30,6 +30,85 @@ function Field({ label, value }: { label: string; value: any }) {
   );
 }
 
+// 편집모드일 때는 입력창, 아닐 때는 값을 보여주는 공용 그리드 필드
+function EditableField({
+  label,
+  value,
+  editing,
+  onChange,
+  type = "text",
+}: {
+  label: string;
+  value: any;
+  editing: boolean;
+  onChange: (v: string) => void;
+  type?: string;
+}) {
+  if (!editing) return <Field label={label} value={value} />;
+  return (
+    <div className="field" style={{ minWidth: 0 }}>
+      <label>{label}</label>
+      <input
+        type={type}
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  );
+}
+
+const BASIC_FIELDS = [
+  ["industry", "업종"],
+  ["sub_industry", "세부업종"],
+  ["main_items", "취급 품목"],
+  ["metro_region", "광역권"],
+  ["district", "시군구"],
+  ["sub_district", "세부권역"],
+  ["industrial_complex", "산업단지"],
+  ["website", "웹사이트"],
+  ["recommended_vehicle", "추천 차량"],
+  ["expected_volume", "예상 운송수요"],
+  ["biz_reg_no", "사업자등록번호"],
+  ["franchise_operator", "프랜차이즈 본부"],
+  ["company_scale", "규모구간"],
+];
+
+const SALES_REF_FIELDS = [
+  ["priority", "우선순위"],
+  ["lead_type", "화주유형"],
+  ["sales_message", "영업 메시지 포인트"],
+  ["sales_potential", "영업가능성"],
+  ["sales_difficulty", "영업난이도"],
+  ["cold_chain_risk", "냉장/냉동 리스크"],
+  ["volume_potential", "운송수요 가능성"],
+  ["total_score", "종합점수"],
+  ["next_action", "다음액션"],
+  ["data_source", "데이터출처"],
+  ["verification_notes", "검증메모"],
+];
+
+const CRM_CONTACT_FIELDS = [
+  ["contact_name", "담당자명"],
+  ["contact_position", "직책"],
+  ["contact_mobile", "휴대폰"],
+  ["contact_email", "이메일"],
+];
+
+const CRM_BIZ_FIELDS = [
+  ["payment_terms", "결제조건"],
+  ["main_pickup_region", "주요 상차지역"],
+  ["main_dropoff_region", "주요 하차지역"],
+  ["assigned_staff", "담당직원"],
+];
+
+const CRM_PERFORMANCE_FIELDS: [string, string, string?][] = [
+  ["total_orders_count", "누적 오더수", "number"],
+  ["total_revenue", "누적 매출(원)", "number"],
+  ["total_margin", "누적 마진(원)", "number"],
+  ["outstanding_amount", "미수금(원)", "number"],
+  ["last_order_date", "최근 오더일", "date"],
+];
+
 export default function CompanyDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -54,7 +133,7 @@ export default function CompanyDetailPage() {
   const [editingLocId, setEditingLocId] = useState<string | null>(null);
   const [editingLocValue, setEditingLocValue] = useState("");
 
-  const [editForm, setEditForm] = useState({
+  const [editForm, setEditForm] = useState<Record<string, any>>({
     status: "",
     grade: "",
     phone: "",
@@ -62,7 +141,12 @@ export default function CompanyDetailPage() {
     contact_department: "",
     next_followup_date: "",
     notes: "",
+    repeat_customer: false,
   });
+
+  function set(key: string, value: any) {
+    setEditForm((prev) => ({ ...prev, [key]: value }));
+  }
 
   async function loadCompany() {
     setLoading(true);
@@ -77,15 +161,26 @@ export default function CompanyDetailPage() {
       setError(error.message);
     } else {
       setCompany(data);
-      setEditForm({
-        status: data.status || "미접촉",
-        grade: data.grade || "",
-        phone: data.phone || "",
-        address: data.address || "",
-        contact_department: data.contact_department || "",
-        next_followup_date: data.next_followup_date || "",
-        notes: data.notes || "",
-      });
+      const allKeys = [
+        "status",
+        "grade",
+        "phone",
+        "address",
+        "contact_department",
+        "next_followup_date",
+        "notes",
+        "repeat_customer",
+        ...BASIC_FIELDS.map((f) => f[0]),
+        ...SALES_REF_FIELDS.map((f) => f[0]),
+        ...CRM_CONTACT_FIELDS.map((f) => f[0]),
+        ...CRM_BIZ_FIELDS.map((f) => f[0]),
+        ...CRM_PERFORMANCE_FIELDS.map((f) => f[0]),
+      ];
+      const initial: Record<string, any> = {};
+      for (const k of allKeys) {
+        initial[k] = data[k] ?? (k === "repeat_customer" ? false : "");
+      }
+      setEditForm(initial);
     }
     setLoading(false);
   }
@@ -151,17 +246,24 @@ export default function CompanyDetailPage() {
   async function handleSave() {
     setSaving(true);
     setError(null);
+
+    const payload: Record<string, any> = {};
+    for (const key of Object.keys(editForm)) {
+      let v = editForm[key];
+      if (v === "") v = null;
+      if (
+        CRM_PERFORMANCE_FIELDS.some(
+          (f) => f[0] === key && f[2] === "number"
+        )
+      ) {
+        v = v === null ? null : Number(v);
+      }
+      payload[key] = v;
+    }
+
     const { error } = await supabase
       .from("companies")
-      .update({
-        status: editForm.status,
-        grade: editForm.grade || null,
-        phone: editForm.phone || null,
-        address: editForm.address || null,
-        contact_department: editForm.contact_department || null,
-        next_followup_date: editForm.next_followup_date || null,
-        notes: editForm.notes || null,
-      })
+      .update(payload)
       .eq("id", id);
     setSaving(false);
     if (error) {
@@ -177,7 +279,6 @@ export default function CompanyDetailPage() {
     setDeleting(true);
     setError(null);
 
-    // 이 업체와 연결된 실거래 기록(견적/운송오더/정산)이 있는지 먼저 확인합니다.
     const [quoteRes, orderRes, invoiceRes] = await Promise.all([
       supabase
         .from("quotes")
@@ -199,14 +300,16 @@ export default function CompanyDetailPage() {
     if (relatedCount > 0) {
       setDeleting(false);
       alert(
-        `이 업체는 이미 견적/운송/정산 기록이 ${relatedCount}건 있어 삭제할 수 없습니다.\n` +
-          `대신 영업상태를 "거래중단"으로 변경해주세요. (기록은 보존, 목록에서만 구분됩니다)`
+        `이 업체는 이미 견적/운송/정산 기록이 ${relatedCount}건 있어 완전삭제할 수 없습니다.\n` +
+          `대신 영업상태를 "거래중단"으로 변경해주세요.`
       );
       return;
     }
 
     const confirmed = window.confirm(
-      `"${company.name}" 업체를 정말 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`
+      `"${company.name}" 업체를 정말 완전히 삭제하시겠습니까?\n` +
+        `이 작업은 절대 되돌릴 수 없습니다 (백업이 없습니다). ` +
+        `단순히 목록에서 빼고 싶다면 취소 후 영업상태를 "거래중단" 또는 "휴면화주"로 바꿔주세요.`
     );
     if (!confirmed) {
       setDeleting(false);
@@ -283,7 +386,7 @@ export default function CompanyDetailPage() {
                   cursor: "pointer",
                 }}
               >
-                {deleting ? "확인 중..." : "삭제"}
+                {deleting ? "확인 중..." : "완전삭제"}
               </button>
             </>
           ) : (
@@ -293,7 +396,10 @@ export default function CompanyDetailPage() {
               </button>
               <button
                 className="btn btn-ghost"
-                onClick={() => setEditing(false)}
+                onClick={() => {
+                  setEditing(false);
+                  loadCompany();
+                }}
               >
                 취소
               </button>
@@ -304,7 +410,7 @@ export default function CompanyDetailPage() {
 
       {error && <div className="error-box">오류: {error}</div>}
 
-      {/* 영업 상태 / 편집 영역 */}
+      {/* 영업 상태 */}
       <div className="card" style={{ padding: 20, marginBottom: 20 }}>
         {editing ? (
           <div className="form-grid" style={{ padding: 0 }}>
@@ -312,9 +418,7 @@ export default function CompanyDetailPage() {
               <label>영업상태</label>
               <select
                 value={editForm.status}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, status: e.target.value })
-                }
+                onChange={(e) => set("status", e.target.value)}
                 style={{
                   fontWeight: 600,
                   background: getStatusColor(editForm.status).bg,
@@ -332,9 +436,7 @@ export default function CompanyDetailPage() {
               <label>화주등급</label>
               <select
                 value={editForm.grade}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, grade: e.target.value })
-                }
+                onChange={(e) => set("grade", e.target.value)}
               >
                 <option value="">미지정</option>
                 {GRADE_OPTIONS.map((g) => (
@@ -348,21 +450,14 @@ export default function CompanyDetailPage() {
               <label>대표번호</label>
               <input
                 value={editForm.phone}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, phone: e.target.value })
-                }
+                onChange={(e) => set("phone", e.target.value)}
               />
             </div>
             <div className="field">
               <label>담당부서</label>
               <input
                 value={editForm.contact_department}
-                onChange={(e) =>
-                  setEditForm({
-                    ...editForm,
-                    contact_department: e.target.value,
-                  })
-                }
+                onChange={(e) => set("contact_department", e.target.value)}
               />
             </div>
             <div className="field">
@@ -370,21 +465,14 @@ export default function CompanyDetailPage() {
               <input
                 type="date"
                 value={editForm.next_followup_date || ""}
-                onChange={(e) =>
-                  setEditForm({
-                    ...editForm,
-                    next_followup_date: e.target.value,
-                  })
-                }
+                onChange={(e) => set("next_followup_date", e.target.value)}
               />
             </div>
             <div className="field" style={{ gridColumn: "1 / -1" }}>
               <label>주소</label>
               <input
                 value={editForm.address}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, address: e.target.value })
-                }
+                onChange={(e) => set("address", e.target.value)}
               />
             </div>
             <div className="field" style={{ gridColumn: "1 / -1" }}>
@@ -392,9 +480,7 @@ export default function CompanyDetailPage() {
               <textarea
                 rows={3}
                 value={editForm.notes}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, notes: e.target.value })
-                }
+                onChange={(e) => set("notes", e.target.value)}
               />
             </div>
           </div>
@@ -437,76 +523,166 @@ export default function CompanyDetailPage() {
         )}
       </div>
 
-      {/* 기본 조사정보 */}
+      {/* 기본 정보 (수정 가능) */}
       <div className="card" style={{ padding: 20, marginBottom: 20 }}>
         <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
           기본 정보
         </h3>
         <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
-            gap: 4,
-          }}
+          className={editing ? "form-grid" : undefined}
+          style={
+            editing
+              ? { padding: 0 }
+              : {
+                  display: "grid",
+                  gridTemplateColumns:
+                    "repeat(auto-fill, minmax(180px, 1fr))",
+                  gap: 4,
+                }
+          }
         >
-          <Field label="업종" value={company.industry} />
-          <Field label="세부업종" value={company.sub_industry} />
-          <Field label="취급 품목" value={company.main_items} />
-          <Field label="광역권" value={company.metro_region} />
-          <Field label="시군구" value={company.district} />
-          <Field label="세부권역" value={company.sub_district} />
-          <Field label="산업단지" value={company.industrial_complex} />
-          <Field label="웹사이트" value={company.website} />
-          <Field label="추천 차량" value={company.recommended_vehicle} />
-          <Field label="예상 운송수요" value={company.expected_volume} />
-          <Field label="냉장/냉동 필요" value={company.cold_chain_needed ? "예" : null} />
-          <Field label="사업자등록번호" value={company.biz_reg_no} />
-          <Field label="프랜차이즈 본부" value={company.franchise_operator} />
-          <Field label="규모구간" value={company.company_scale} />
+          {BASIC_FIELDS.map(([key, label]) => (
+            <EditableField
+              key={key}
+              label={label}
+              value={editing ? editForm[key] : company[key]}
+              editing={editing}
+              onChange={(v) => set(key, v)}
+            />
+          ))}
         </div>
       </div>
 
-      {/* 영업 참고 정보 (엑셀 조사 데이터) */}
+      {/* 영업 참고 정보 (수정 가능) */}
       <div className="card" style={{ padding: 20, marginBottom: 20 }}>
         <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
           영업 참고 정보
         </h3>
         <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
-            gap: 4,
-          }}
+          className={editing ? "form-grid" : undefined}
+          style={
+            editing
+              ? { padding: 0 }
+              : {
+                  display: "grid",
+                  gridTemplateColumns:
+                    "repeat(auto-fill, minmax(180px, 1fr))",
+                  gap: 4,
+                }
+          }
         >
-          <Field label="우선순위" value={company.priority} />
-          <Field label="화주유형" value={company.lead_type} />
-          <Field label="영업 메시지 포인트" value={company.sales_message} />
-          <Field label="영업가능성" value={company.sales_potential} />
-          <Field label="영업난이도" value={company.sales_difficulty} />
-          <Field label="냉장/냉동 리스크" value={company.cold_chain_risk} />
-          <Field label="운송수요 가능성" value={company.volume_potential} />
-          <Field label="종합점수" value={company.total_score} />
-          <Field label="다음액션" value={company.next_action} />
-          <Field label="데이터출처" value={company.data_source} />
-          <Field label="검증메모" value={company.verification_notes} />
+          {SALES_REF_FIELDS.map(([key, label]) => (
+            <EditableField
+              key={key}
+              label={label}
+              value={editing ? editForm[key] : company[key]}
+              editing={editing}
+              onChange={(v) => set(key, v)}
+            />
+          ))}
         </div>
-        {company.notes && (
-          <div style={{ marginTop: 12 }}>
-            <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
-              메모
+      </div>
+
+      {/* CRM 상세정보: 담당자 */}
+      <div className="card" style={{ padding: 20, marginBottom: 20 }}>
+        <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
+          담당자 정보
+        </h3>
+        <div
+          className={editing ? "form-grid" : undefined}
+          style={
+            editing
+              ? { padding: 0 }
+              : {
+                  display: "grid",
+                  gridTemplateColumns:
+                    "repeat(auto-fill, minmax(180px, 1fr))",
+                  gap: 4,
+                }
+          }
+        >
+          {CRM_CONTACT_FIELDS.map(([key, label]) => (
+            <EditableField
+              key={key}
+              label={label}
+              value={editing ? editForm[key] : company[key]}
+              editing={editing}
+              onChange={(v) => set(key, v)}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* CRM 상세정보: 거래조건 + 실적 */}
+      <div className="card" style={{ padding: 20, marginBottom: 20 }}>
+        <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
+          거래조건 · 실적
+        </h3>
+        <div
+          className={editing ? "form-grid" : undefined}
+          style={
+            editing
+              ? { padding: 0, marginBottom: 14 }
+              : {
+                  display: "grid",
+                  gridTemplateColumns:
+                    "repeat(auto-fill, minmax(180px, 1fr))",
+                  gap: 4,
+                  marginBottom: 14,
+                }
+          }
+        >
+          {CRM_BIZ_FIELDS.map(([key, label]) => (
+            <EditableField
+              key={key}
+              label={label}
+              value={editing ? editForm[key] : company[key]}
+              editing={editing}
+              onChange={(v) => set(key, v)}
+            />
+          ))}
+        </div>
+        <div
+          className={editing ? "form-grid" : undefined}
+          style={
+            editing
+              ? { padding: 0 }
+              : {
+                  display: "grid",
+                  gridTemplateColumns:
+                    "repeat(auto-fill, minmax(180px, 1fr))",
+                  gap: 4,
+                }
+          }
+        >
+          {CRM_PERFORMANCE_FIELDS.map(([key, label, type]) => (
+            <EditableField
+              key={key}
+              label={label}
+              value={editing ? editForm[key] : company[key]}
+              editing={editing}
+              onChange={(v) => set(key, v)}
+              type={type || "text"}
+            />
+          ))}
+          {editing ? (
+            <div className="field">
+              <label>재거래 여부</label>
+              <select
+                value={editForm.repeat_customer ? "true" : "false"}
+                onChange={(e) => set("repeat_customer", e.target.value === "true")}
+              >
+                <option value="false">아니오</option>
+                <option value="true">예</option>
+              </select>
             </div>
-            <div
-              style={{
-                fontSize: 13.5,
-                whiteSpace: "pre-wrap",
-                overflowWrap: "anywhere",
-                wordBreak: "break-word",
-              }}
-            >
-              {company.notes}
-            </div>
-          </div>
-        )}
+          ) : (
+            <Field
+              label="재거래 여부"
+              value={company.repeat_customer ? "예" : null}
+            />
+          )}
+        </div>
       </div>
 
       {/* 저장된 주소 (상차지/하차지) */}
@@ -552,8 +728,7 @@ export default function CompanyDetailPage() {
                         flexShrink: 0,
                       }}
                     >
-                      {type === "상차지" ? "주소" : "주소"}
-                      {i + 1}
+                      주소{i + 1}
                     </span>
                     {editingLocId === loc.id ? (
                       <input
@@ -634,7 +809,7 @@ export default function CompanyDetailPage() {
           영업활동이력 · 견적내역 · 정산내역
         </h3>
         <p style={{ fontSize: 12.5, color: "var(--text-muted)", margin: 0 }}>
-          다음 단계(견적/배차/정산 화면 제작)에서 이 업체와 연결된 통화기록,
+          다음 단계(배차/정산 화면 제작)에서 이 업체와 연결된 통화기록,
           견적서, 거래내역이 이 자리에 표시됩니다.
         </p>
       </div>
