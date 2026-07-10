@@ -199,8 +199,8 @@ export default function CompaniesPage() {
           bv = formatRegion(b);
           break;
         case "status":
-          av = STATUS_OPTIONS.indexOf(a.status);
-          bv = STATUS_OPTIONS.indexOf(b.status);
+          av = (STATUS_OPTIONS as readonly string[]).indexOf(a.status);
+          bv = (STATUS_OPTIONS as readonly string[]).indexOf(b.status);
           break;
         case "created_at":
         default:
