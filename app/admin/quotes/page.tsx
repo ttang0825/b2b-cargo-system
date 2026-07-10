@@ -33,7 +33,12 @@ type ExtraFee = {
   waypoint_fee: number | null;
 };
 
-type CompanyLite = { id: string; name: string; phone: string | null };
+type CompanyLite = {
+  id: string;
+  name: string;
+  phone: string | null;
+  address: string | null;
+};
 
 type QuoteRow = {
   id: string;
@@ -97,7 +102,15 @@ export default function QuotesPage() {
     new window.daum.Postcode({
       oncomplete: (data: any) => {
         const addr = data.roadAddress || data.jibunAddress;
-        setForm((prev) => ({ ...prev, [target]: addr }));
+        if (target === "origin") {
+          setForm((prev) => ({ ...prev, origin: addr, originDetail: "" }));
+        } else {
+          setForm((prev) => ({
+            ...prev,
+            destination: addr,
+            destinationDetail: "",
+          }));
+        }
       },
     }).open();
   }
@@ -116,7 +129,9 @@ export default function QuotesPage() {
     guest_phone: "",
     guest_email: "",
     origin: "",
+    originDetail: "",
     destination: "",
+    destinationDetail: "",
     distance_km: "",
     vehicle_type: "1톤",
     item: "",
@@ -170,7 +185,7 @@ export default function QuotesPage() {
       }
       const { data } = await supabase
         .from("companies")
-        .select("id,name,phone")
+        .select("id,name,phone,address")
         .ilike("name", `%${companySearch}%`)
         .limit(8);
       if (active) setCompanyResults((data as CompanyLite[]) || []);
@@ -302,6 +317,13 @@ export default function QuotesPage() {
     setSaving(true);
     const quoteNo = `Q-${Date.now()}`;
 
+    const fullOrigin = [form.origin, form.originDetail]
+      .filter((v) => v.trim())
+      .join(" ");
+    const fullDestination = [form.destination, form.destinationDetail]
+      .filter((v) => v.trim())
+      .join(" ");
+
     const { data: newQuote, error } = await supabase
       .from("quotes")
       .insert({
@@ -312,8 +334,8 @@ export default function QuotesPage() {
           customerMode === "guest" ? form.guest_phone || null : null,
         guest_email:
           customerMode === "guest" ? form.guest_email || null : null,
-        origin: form.origin || null,
-        destination: form.destination || null,
+        origin: fullOrigin || null,
+        destination: fullDestination || null,
         distance_km: Number(form.distance_km) || null,
         vehicle_type: form.vehicle_type,
         item: form.item || null,
@@ -346,16 +368,16 @@ export default function QuotesPage() {
     // 체크했다면 이번 출발지/도착지를 이 화주의 자주 쓰는 주소로 저장
     if (customerMode === "company" && selectedCompany) {
       const toSave = [];
-      if (saveOrigin && form.origin.trim())
+      if (saveOrigin && fullOrigin)
         toSave.push({
           company_id: selectedCompany.id,
-          address: form.origin,
+          address: fullOrigin,
           location_type: "상차지",
         });
-      if (saveDestination && form.destination.trim())
+      if (saveDestination && fullDestination)
         toSave.push({
           company_id: selectedCompany.id,
-          address: form.destination,
+          address: fullDestination,
           location_type: "하차지",
         });
       if (toSave.length > 0) {
@@ -374,7 +396,9 @@ export default function QuotesPage() {
       guest_phone: "",
       guest_email: "",
       origin: "",
+      originDetail: "",
       destination: "",
+      destinationDetail: "",
       distance_km: "",
       item: "",
       waitingMinutes: "",
@@ -486,6 +510,10 @@ export default function QuotesPage() {
                         onClick={() => {
                           setSelectedCompany(c);
                           setCompanyResults([]);
+                          // 출발지가 비어있으면 화주의 등록 주소를 기본값으로 채워줍니다 (수정 가능)
+                          if (c.address && !form.origin.trim()) {
+                            setForm((prev) => ({ ...prev, origin: c.address || "" }));
+                          }
                         }}
                         style={{
                           padding: "8px 12px",
@@ -495,6 +523,18 @@ export default function QuotesPage() {
                         }}
                       >
                         {c.name}
+                        {c.address && (
+                          <span
+                            style={{
+                              display: "block",
+                              fontSize: 11.5,
+                              color: "var(--text-muted)",
+                              marginTop: 2,
+                            }}
+                          >
+                            {c.address}
+                          </span>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -532,6 +572,7 @@ export default function QuotesPage() {
                     onChange={(e) =>
                       setForm({ ...form, origin: e.target.value })
                     }
+                    placeholder="도로명주소 검색 또는 직접 입력"
                     style={{ flex: 1 }}
                   />
                   <button
@@ -549,6 +590,14 @@ export default function QuotesPage() {
                     주소검색
                   </button>
                 </div>
+                <input
+                  value={form.originDetail}
+                  onChange={(e) =>
+                    setForm({ ...form, originDetail: e.target.value })
+                  }
+                  placeholder="상세주소 (동/층/호수, 창고 위치 등)"
+                  style={{ marginTop: 6 }}
+                />
                 {savedLocations.filter((l) => l.location_type === "상차지")
                   .length > 0 && (
                   <div
@@ -556,7 +605,7 @@ export default function QuotesPage() {
                       display: "flex",
                       gap: 4,
                       flexWrap: "wrap",
-                      marginTop: 6,
+                      marginTop: 8,
                     }}
                   >
                     {savedLocations
@@ -567,7 +616,11 @@ export default function QuotesPage() {
                           className="badge"
                           style={{ cursor: "pointer" }}
                           onClick={() =>
-                            setForm({ ...form, origin: l.address || "" })
+                            setForm({
+                              ...form,
+                              origin: l.address || "",
+                              originDetail: "",
+                            })
                           }
                         >
                           {l.address}
@@ -576,25 +629,38 @@ export default function QuotesPage() {
                   </div>
                 )}
                 {customerMode === "company" && selectedCompany && (
-                  <label
+                  <div
                     style={{
                       display: "flex",
-                      gap: 5,
                       alignItems: "center",
-                      fontSize: 11.5,
-                      color: "var(--text-muted)",
-                      marginTop: 5,
+                      gap: 7,
+                      marginTop: 8,
+                      padding: "6px 10px",
+                      background: "var(--accent-soft)",
+                      borderRadius: 6,
                     }}
                   >
                     <input
+                      id="saveOrigin"
                       type="checkbox"
                       checked={saveOrigin}
                       onChange={(e) => setSaveOrigin(e.target.checked)}
+                      style={{ margin: 0, flexShrink: 0 }}
                     />
-                    이 출발지를 화주 주소록에 저장
-                  </label>
+                    <label
+                      htmlFor="saveOrigin"
+                      style={{
+                        fontSize: 12,
+                        color: "var(--accent)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      이 출발지를 화주 주소록에 저장
+                    </label>
+                  </div>
                 )}
               </div>
+
               <div className="field">
                 <label>도착지</label>
                 <div style={{ display: "flex", gap: 6 }}>
@@ -603,6 +669,7 @@ export default function QuotesPage() {
                     onChange={(e) =>
                       setForm({ ...form, destination: e.target.value })
                     }
+                    placeholder="도로명주소 검색 또는 직접 입력"
                     style={{ flex: 1 }}
                   />
                   <button
@@ -620,6 +687,14 @@ export default function QuotesPage() {
                     주소검색
                   </button>
                 </div>
+                <input
+                  value={form.destinationDetail}
+                  onChange={(e) =>
+                    setForm({ ...form, destinationDetail: e.target.value })
+                  }
+                  placeholder="상세주소 (동/층/호수, 하차장 위치 등)"
+                  style={{ marginTop: 6 }}
+                />
                 {savedLocations.filter((l) => l.location_type === "하차지")
                   .length > 0 && (
                   <div
@@ -627,7 +702,7 @@ export default function QuotesPage() {
                       display: "flex",
                       gap: 4,
                       flexWrap: "wrap",
-                      marginTop: 6,
+                      marginTop: 8,
                     }}
                   >
                     {savedLocations
@@ -638,7 +713,11 @@ export default function QuotesPage() {
                           className="badge"
                           style={{ cursor: "pointer" }}
                           onClick={() =>
-                            setForm({ ...form, destination: l.address || "" })
+                            setForm({
+                              ...form,
+                              destination: l.address || "",
+                              destinationDetail: "",
+                            })
                           }
                         >
                           {l.address}
@@ -647,23 +726,35 @@ export default function QuotesPage() {
                   </div>
                 )}
                 {customerMode === "company" && selectedCompany && (
-                  <label
+                  <div
                     style={{
                       display: "flex",
-                      gap: 5,
                       alignItems: "center",
-                      fontSize: 11.5,
-                      color: "var(--text-muted)",
-                      marginTop: 5,
+                      gap: 7,
+                      marginTop: 8,
+                      padding: "6px 10px",
+                      background: "var(--accent-soft)",
+                      borderRadius: 6,
                     }}
                   >
                     <input
+                      id="saveDestination"
                       type="checkbox"
                       checked={saveDestination}
                       onChange={(e) => setSaveDestination(e.target.checked)}
+                      style={{ margin: 0, flexShrink: 0 }}
                     />
-                    이 도착지를 화주 주소록에 저장
-                  </label>
+                    <label
+                      htmlFor="saveDestination"
+                      style={{
+                        fontSize: 12,
+                        color: "var(--accent)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      이 도착지를 화주 주소록에 저장
+                    </label>
+                  </div>
                 )}
               </div>
               <div className="field">
