@@ -1,8 +1,6 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { ORDER_STATUS_OPTIONS, getOrderStatusColor } from "@/lib/orderStatusColors";
@@ -30,7 +28,7 @@ const SORT_OPTIONS = [
   { key: "customer", label: "고객명" },
 ];
 
-export default function OrdersPage() {
+function OrdersPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const fromQuoteId = searchParams.get("from_quote");
@@ -601,5 +599,19 @@ export default function OrdersPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function OrdersPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="container">
+          <div className="empty-state">불러오는 중...</div>
+        </main>
+      }
+    >
+      <OrdersPageInner />
+    </Suspense>
   );
 }
