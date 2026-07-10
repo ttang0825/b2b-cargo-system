@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { getStatusColor } from "@/lib/statusColors";
+import { STATUS_OPTIONS, getStatusColor } from "@/lib/statusColors";
 
 type Customer = {
   id: string;
@@ -33,6 +33,15 @@ const ACTIVE_CUSTOMER_STATUSES = [
   "월정산화주",
 ];
 
+const SORT_OPTIONS = [
+  { key: "name", label: "회사명" },
+  { key: "industry", label: "업종/세부업종" },
+  { key: "region", label: "지역" },
+  { key: "status", label: "거래상태" },
+  { key: "total_orders_count", label: "누적오더" },
+  { key: "grade", label: "등급" },
+];
+
 function formatIndustry(c: Customer) {
   if (c.industry && c.sub_industry) return `${c.industry} / ${c.sub_industry}`;
   return c.industry || c.sub_industry || "-";
@@ -54,6 +63,8 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = useState("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   async function loadCustomers() {
     setLoading(true);
@@ -96,16 +107,51 @@ export default function CustomersPage() {
     loadCustomers();
   }
 
-  const filtered = customers.filter((c) => {
-    if (!search.trim()) return true;
-    const q = search.trim().toLowerCase();
-    return (
-      c.name.toLowerCase().includes(q) ||
-      (c.phone || "").includes(q) ||
-      (c.contact_name || "").toLowerCase().includes(q) ||
-      formatRegion(c).toLowerCase().includes(q)
-    );
-  });
+  const filtered = customers
+    .filter((c) => {
+      if (!search.trim()) return true;
+      const q = search.trim().toLowerCase();
+      return (
+        c.name.toLowerCase().includes(q) ||
+        (c.phone || "").includes(q) ||
+        (c.contact_name || "").toLowerCase().includes(q) ||
+        formatRegion(c).toLowerCase().includes(q)
+      );
+    })
+    .sort((a, b) => {
+      let av: string | number = "";
+      let bv: string | number = "";
+      switch (sortKey) {
+        case "industry":
+          av = formatIndustry(a);
+          bv = formatIndustry(b);
+          break;
+        case "region":
+          av = formatRegion(a);
+          bv = formatRegion(b);
+          break;
+        case "status":
+          av = STATUS_OPTIONS.indexOf(a.status);
+          bv = STATUS_OPTIONS.indexOf(b.status);
+          break;
+        case "total_orders_count":
+          av = a.total_orders_count || 0;
+          bv = b.total_orders_count || 0;
+          break;
+        case "grade":
+          av = a.grade || "Z";
+          bv = b.grade || "Z";
+          break;
+        case "name":
+        default:
+          av = a.name;
+          bv = b.name;
+      }
+      let cmp: number;
+      if (typeof av === "number" && typeof bv === "number") cmp = av - bv;
+      else cmp = String(av).localeCompare(String(bv), "ko");
+      return sortDir === "asc" ? cmp : -cmp;
+    });
 
   return (
     <main className="container">
@@ -123,20 +169,50 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      <input
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="회사명, 담당자, 연락처, 지역으로 검색"
+      <div
         style={{
-          width: "100%",
-          maxWidth: 360,
+          display: "flex",
+          gap: 8,
           marginBottom: 16,
-          padding: "9px 12px",
-          border: "1px solid var(--border)",
-          borderRadius: "var(--radius)",
-          fontSize: 13.5,
+          flexWrap: "wrap",
+          alignItems: "center",
         }}
-      />
+      >
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="회사명, 담당자, 연락처, 지역으로 검색"
+          style={{
+            flex: 1,
+            minWidth: 220,
+            maxWidth: 360,
+            padding: "9px 12px",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius)",
+            fontSize: 13.5,
+          }}
+        />
+        <span style={{ fontSize: 12.5, color: "var(--text-muted)" }}>정렬</span>
+        <select
+          value={sortKey}
+          onChange={(e) => setSortKey(e.target.value)}
+          style={{ fontSize: 12.5, padding: "7px 8px" }}
+        >
+          {SORT_OPTIONS.map((o) => (
+            <option key={o.key} value={o.key}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className="btn-ghost"
+          style={{ padding: "6px 10px", borderRadius: 6, fontSize: 12.5, cursor: "pointer" }}
+          onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+        >
+          {sortDir === "asc" ? "오름차순 ↑" : "내림차순 ↓"}
+        </button>
+      </div>
 
       {error && <div className="error-box">오류: {error}</div>}
 
