@@ -13,7 +13,16 @@ type Company = {
   grade: string | null;
   next_followup_date: string | null;
   created_at: string;
+  source_sheet: string | null;
 };
+
+const SOURCE_TABS = [
+  { key: "전체", label: "전체" },
+  { key: "영업대상DB", label: "영업대상 (제조업체)" },
+  { key: "프랜차이즈DB", label: "프랜차이즈" },
+  { key: "패키징공장DB", label: "패키징공장" },
+  { key: "직접등록", label: "직접 등록" },
+];
 
 const STATUS_OPTIONS = [
   "미접촉",
@@ -37,6 +46,7 @@ export default function CompaniesPage() {
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState("전체");
 
   const [form, setForm] = useState({
     name: "",
@@ -54,7 +64,7 @@ export default function CompaniesPage() {
     const { data, error } = await supabase
       .from("companies")
       .select(
-        "id,name,industry,region,phone,status,grade,next_followup_date,created_at"
+        "id,name,industry,region,phone,status,grade,next_followup_date,created_at,source_sheet"
       )
       .order("created_at", { ascending: false });
 
@@ -123,6 +133,18 @@ export default function CompaniesPage() {
     );
   }
 
+  const filteredCompanies = companies.filter((c) => {
+    if (activeTab === "전체") return true;
+    if (activeTab === "직접등록") return !c.source_sheet;
+    return c.source_sheet === activeTab;
+  });
+
+  const tabCounts: Record<string, number> = { 전체: companies.length };
+  for (const c of companies) {
+    const key = c.source_sheet || "직접등록";
+    tabCounts[key] = (tabCounts[key] || 0) + 1;
+  }
+
   return (
     <main className="container">
       <div className="page-header">
@@ -135,6 +157,26 @@ export default function CompaniesPage() {
         <button className="btn" onClick={() => setShowForm((v) => !v)}>
           {showForm ? "닫기" : "+ 신규 업체 등록"}
         </button>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          marginBottom: 16,
+          flexWrap: "wrap",
+        }}
+      >
+        {SOURCE_TABS.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={activeTab === tab.key ? "btn" : "btn btn-ghost"}
+            style={{ fontSize: 12.5, padding: "7px 12px" }}
+          >
+            {tab.label} ({tabCounts[tab.key] || 0})
+          </button>
+        ))}
       </div>
 
       {error && <div className="error-box">오류: {error}</div>}
@@ -242,14 +284,15 @@ export default function CompaniesPage() {
       <div className="card">
         {loading ? (
           <div className="empty-state">불러오는 중...</div>
-        ) : companies.length === 0 ? (
+        ) : filteredCompanies.length === 0 ? (
           <div className="empty-state">
-            등록된 업체가 없습니다. 우측 상단에서 신규 업체를 등록해보세요.
+            해당 구분에 등록된 업체가 없습니다.
           </div>
         ) : (
           <table>
             <thead>
               <tr>
+                <th>출처</th>
                 <th>회사명</th>
                 <th>업종</th>
                 <th>지역</th>
@@ -259,8 +302,13 @@ export default function CompaniesPage() {
               </tr>
             </thead>
             <tbody>
-              {companies.map((c) => (
+              {filteredCompanies.map((c) => (
                 <tr key={c.id}>
+                  <td>
+                    <span className="badge">
+                      {c.source_sheet || "직접등록"}
+                    </span>
+                  </td>
                   <td>{c.name}</td>
                   <td>{c.industry || "-"}</td>
                   <td>{c.region || "-"}</td>
