@@ -112,6 +112,16 @@ a {
   border: 1px solid var(--border);
 }
 
+.btn-danger {
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid #eac9b8;
+}
+
+.btn-danger:hover {
+  background: #fbeee8;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -168,6 +178,10 @@ tbody td {
 
 tbody tr:last-child td {
   border-bottom: none;
+}
+
+tbody tr:hover {
+  background: var(--accent-soft);
 }
 
 .badge {
