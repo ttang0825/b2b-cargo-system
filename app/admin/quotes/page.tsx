@@ -38,6 +38,7 @@ type CompanyLite = {
   name: string;
   phone: string | null;
   address: string | null;
+  status: string;
 };
 
 type QuoteRow = {
@@ -60,6 +61,21 @@ const SINGLE_SELECT_CATEGORIES = [
   "운송시간",
   "긴급여부",
   "왕복/편도",
+];
+
+// 영업 퍼널 순서 (견적 저장 시 상태를 "뒤로 되돌리지" 않고 앞으로만 진행시키기 위한 기준)
+const STATUS_ORDER = [
+  "미접촉",
+  "연락시도",
+  "연락완료",
+  "추후연락",
+  "제안서발송",
+  "견적요청",
+  "견적발송",
+  "첫거래완료",
+  "재거래발생",
+  "반복화주",
+  "월정산화주",
 ];
 
 function won(n: number) {
@@ -185,7 +201,7 @@ export default function QuotesPage() {
       }
       const { data } = await supabase
         .from("companies")
-        .select("id,name,phone,address")
+        .select("id,name,phone,address,status")
         .ilike("name", `%${companySearch}%`)
         .limit(8);
       if (active) setCompanyResults((data as CompanyLite[]) || []);
@@ -356,6 +372,18 @@ export default function QuotesPage() {
         discount_amount: 0,
         final_amount: calc.final,
         status: "상담중",
+        selected_options: {
+          톤수: form.vehicle_type,
+          차량형태: form.차량형태,
+          상하차방식: form.상하차방식,
+          물품특성: form.물품특성,
+          운송시간: form.운송시간,
+          긴급여부: form.긴급여부,
+          "왕복/편도": form["왕복/편도"],
+          대기시간_분: Number(form.waitingMinutes) || 0,
+          경유지수: Number(form.waypointCount) || 0,
+          첫거래지원할인: form.firstDealDiscount,
+        },
       })
       .select("id")
       .single();
@@ -364,6 +392,18 @@ export default function QuotesPage() {
       setSaving(false);
       setError(error.message);
       return;
+    }
+
+    // 견적을 받은 화주는 영업상태를 "견적요청" 이상으로 자동 승격 (이미 더 진행된 상태면 건드리지 않음)
+    if (customerMode === "company" && selectedCompany) {
+      const currentIdx = STATUS_ORDER.indexOf(selectedCompany.status);
+      const targetIdx = STATUS_ORDER.indexOf("견적요청");
+      if (currentIdx !== -1 && currentIdx < targetIdx) {
+        await supabase
+          .from("companies")
+          .update({ status: "견적요청" })
+          .eq("id", selectedCompany.id);
+      }
     }
 
     // 가산 항목 세부 내역을 quote_items에 저장
