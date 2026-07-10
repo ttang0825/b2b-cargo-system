@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+
+declare global {
+  interface Window {
+    daum: any;
+  }
+}
 
 const VEHICLES = ["1톤", "1.4톤", "2.5톤", "3.5톤", "5톤", "5톤 플러스/축"];
 
@@ -55,6 +62,7 @@ function won(n: number) {
 }
 
 export default function QuotesPage() {
+  const router = useRouter();
   const [tiers, setTiers] = useState<Tier[]>([]);
   const [surcharges, setSurcharges] = useState<Surcharge[]>([]);
   const [extraFees, setExtraFees] = useState<ExtraFee[]>([]);
@@ -62,6 +70,37 @@ export default function QuotesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [postcodeReady, setPostcodeReady] = useState(false);
+
+  const [savedLocations, setSavedLocations] = useState<
+    { id: string; location_name: string | null; address: string | null; location_type: string | null }[]
+  >([]);
+  const [saveOrigin, setSaveOrigin] = useState(false);
+  const [saveDestination, setSaveDestination] = useState(false);
+
+  // 다음(Daum) 우편번호 서비스 스크립트 로드 (API 키 불필요, 무료)
+  useEffect(() => {
+    if (document.getElementById("daum-postcode-script")) {
+      setPostcodeReady(true);
+      return;
+    }
+    const script = document.createElement("script");
+    script.id = "daum-postcode-script";
+    script.src =
+      "https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js";
+    script.onload = () => setPostcodeReady(true);
+    document.body.appendChild(script);
+  }, []);
+
+  function openAddressSearch(target: "origin" | "destination") {
+    if (!postcodeReady || !window.daum) return;
+    new window.daum.Postcode({
+      oncomplete: (data: any) => {
+        const addr = data.roadAddress || data.jibunAddress;
+        setForm((prev) => ({ ...prev, [target]: addr }));
+      },
+    }).open();
+  }
 
   const [customerMode, setCustomerMode] = useState<"company" | "guest">(
     "company"
@@ -142,6 +181,21 @@ export default function QuotesPage() {
       clearTimeout(t);
     };
   }, [companySearch]);
+
+  useEffect(() => {
+    async function loadLocations() {
+      if (customerMode !== "company" || !selectedCompany) {
+        setSavedLocations([]);
+        return;
+      }
+      const { data } = await supabase
+        .from("customer_locations")
+        .select("id,location_name,address,location_type")
+        .eq("company_id", selectedCompany.id);
+      setSavedLocations(data || []);
+    }
+    loadLocations();
+  }, [selectedCompany, customerMode]);
 
   function findOption(category: string, name: string) {
     return surcharges.find(
@@ -289,9 +343,31 @@ export default function QuotesPage() {
       );
     }
 
+    // 체크했다면 이번 출발지/도착지를 이 화주의 자주 쓰는 주소로 저장
+    if (customerMode === "company" && selectedCompany) {
+      const toSave = [];
+      if (saveOrigin && form.origin.trim())
+        toSave.push({
+          company_id: selectedCompany.id,
+          address: form.origin,
+          location_type: "상차지",
+        });
+      if (saveDestination && form.destination.trim())
+        toSave.push({
+          company_id: selectedCompany.id,
+          address: form.destination,
+          location_type: "하차지",
+        });
+      if (toSave.length > 0) {
+        await supabase.from("customer_locations").insert(toSave);
+      }
+    }
+
     setSaving(false);
     setSelectedCompany(null);
     setCompanySearch("");
+    setSaveOrigin(false);
+    setSaveDestination(false);
     setForm({
       ...form,
       guest_name: "",
@@ -305,6 +381,20 @@ export default function QuotesPage() {
       waypointCount: "",
       firstDealDiscount: false,
     });
+    loadQuotes();
+  }
+
+  async function handleDeleteQuote(id: string, quoteNo: string | null) {
+    const confirmed = window.confirm(
+      `견적 "${quoteNo}"을(를) 삭제하시겠습니까? 되돌릴 수 없습니다.`
+    );
+    if (!confirmed) return;
+    await supabase.from("quote_items").delete().eq("quote_id", id);
+    const { error } = await supabase.from("quotes").delete().eq("id", id);
+    if (error) {
+      setError(error.message);
+      return;
+    }
     loadQuotes();
   }
 
@@ -342,7 +432,17 @@ export default function QuotesPage() {
         }}
       >
         <div className="card" style={{ padding: 20 }}>
-          <form onSubmit={handleSubmit}>
+          <form
+            onSubmit={handleSubmit}
+            onKeyDown={(e) => {
+              if (
+                e.key === "Enter" &&
+                (e.target as HTMLElement).tagName !== "TEXTAREA"
+              ) {
+                e.preventDefault();
+              }
+            }}
+          >
             <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
               <button
                 type="button"
@@ -426,19 +526,145 @@ export default function QuotesPage() {
             <div className="form-grid" style={{ padding: 0 }}>
               <div className="field">
                 <label>출발지</label>
-                <input
-                  value={form.origin}
-                  onChange={(e) => setForm({ ...form, origin: e.target.value })}
-                />
+                <div style={{ display: "flex", gap: 6 }}>
+                  <input
+                    value={form.origin}
+                    onChange={(e) =>
+                      setForm({ ...form, origin: e.target.value })
+                    }
+                    style={{ flex: 1 }}
+                  />
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    style={{
+                      padding: "0 10px",
+                      borderRadius: 6,
+                      fontSize: 12,
+                      whiteSpace: "nowrap",
+                      cursor: "pointer",
+                    }}
+                    onClick={() => openAddressSearch("origin")}
+                  >
+                    주소검색
+                  </button>
+                </div>
+                {savedLocations.filter((l) => l.location_type === "상차지")
+                  .length > 0 && (
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 4,
+                      flexWrap: "wrap",
+                      marginTop: 6,
+                    }}
+                  >
+                    {savedLocations
+                      .filter((l) => l.location_type === "상차지")
+                      .map((l) => (
+                        <span
+                          key={l.id}
+                          className="badge"
+                          style={{ cursor: "pointer" }}
+                          onClick={() =>
+                            setForm({ ...form, origin: l.address || "" })
+                          }
+                        >
+                          {l.address}
+                        </span>
+                      ))}
+                  </div>
+                )}
+                {customerMode === "company" && selectedCompany && (
+                  <label
+                    style={{
+                      display: "flex",
+                      gap: 5,
+                      alignItems: "center",
+                      fontSize: 11.5,
+                      color: "var(--text-muted)",
+                      marginTop: 5,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={saveOrigin}
+                      onChange={(e) => setSaveOrigin(e.target.checked)}
+                    />
+                    이 출발지를 화주 주소록에 저장
+                  </label>
+                )}
               </div>
               <div className="field">
                 <label>도착지</label>
-                <input
-                  value={form.destination}
-                  onChange={(e) =>
-                    setForm({ ...form, destination: e.target.value })
-                  }
-                />
+                <div style={{ display: "flex", gap: 6 }}>
+                  <input
+                    value={form.destination}
+                    onChange={(e) =>
+                      setForm({ ...form, destination: e.target.value })
+                    }
+                    style={{ flex: 1 }}
+                  />
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    style={{
+                      padding: "0 10px",
+                      borderRadius: 6,
+                      fontSize: 12,
+                      whiteSpace: "nowrap",
+                      cursor: "pointer",
+                    }}
+                    onClick={() => openAddressSearch("destination")}
+                  >
+                    주소검색
+                  </button>
+                </div>
+                {savedLocations.filter((l) => l.location_type === "하차지")
+                  .length > 0 && (
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 4,
+                      flexWrap: "wrap",
+                      marginTop: 6,
+                    }}
+                  >
+                    {savedLocations
+                      .filter((l) => l.location_type === "하차지")
+                      .map((l) => (
+                        <span
+                          key={l.id}
+                          className="badge"
+                          style={{ cursor: "pointer" }}
+                          onClick={() =>
+                            setForm({ ...form, destination: l.address || "" })
+                          }
+                        >
+                          {l.address}
+                        </span>
+                      ))}
+                  </div>
+                )}
+                {customerMode === "company" && selectedCompany && (
+                  <label
+                    style={{
+                      display: "flex",
+                      gap: 5,
+                      alignItems: "center",
+                      fontSize: 11.5,
+                      color: "var(--text-muted)",
+                      marginTop: 5,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={saveDestination}
+                      onChange={(e) => setSaveDestination(e.target.checked)}
+                    />
+                    이 도착지를 화주 주소록에 저장
+                  </label>
+                )}
               </div>
               <div className="field">
                 <label>거리(km) *</label>
@@ -618,11 +844,16 @@ export default function QuotesPage() {
                 <th>금액</th>
                 <th>상태</th>
                 <th>일시</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {quotes.map((q) => (
-                <tr key={q.id}>
+                <tr
+                  key={q.id}
+                  onClick={() => router.push(`/admin/quotes/${q.id}`)}
+                  style={{ cursor: "pointer" }}
+                >
                   <td>{q.quote_no}</td>
                   <td>
                     {q.companies?.name || q.guest_name || "-"}
@@ -639,6 +870,20 @@ export default function QuotesPage() {
                   <td>{q.final_amount ? won(q.final_amount) : "-"}</td>
                   <td>{q.status}</td>
                   <td>{new Date(q.created_at).toLocaleDateString("ko-KR")}</td>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <button
+                      className="btn-danger"
+                      style={{
+                        padding: "4px 10px",
+                        borderRadius: 6,
+                        fontSize: 12,
+                        cursor: "pointer",
+                      }}
+                      onClick={() => handleDeleteQuote(q.id, q.quote_no)}
+                    >
+                      삭제
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
