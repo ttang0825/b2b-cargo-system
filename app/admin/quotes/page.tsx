@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { generateDailyNumber } from "@/lib/generateNumber";
+import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 
 declare global {
   interface Window {
@@ -93,6 +94,7 @@ export default function QuotesPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [postcodeReady, setPostcodeReady] = useState(false);
+  const [period, setPeriod] = useState<DatePreset>("all");
 
   const [savedLocations, setSavedLocations] = useState<
     { id: string; location_name: string | null; address: string | null; location_type: string | null }[]
@@ -174,24 +176,35 @@ export default function QuotesPage() {
     setExtraFees((e.data as ExtraFee[]) || []);
   }
 
-  async function loadQuotes() {
+  async function loadQuotes(preset: DatePreset = period) {
     setLoading(true);
-    const { data, error } = await supabase
+    const { from } = getDateRange(preset);
+    let query = supabase
       .from("quotes")
       .select(
         "id,quote_no,origin,destination,vehicle_type,final_amount,status,created_at,guest_name,companies(name)"
       )
       .order("created_at", { ascending: false })
-      .limit(50);
+      .limit(preset === "all" ? 50 : 200);
+    if (from) query = query.gte("created_at", from);
+
+    const { data, error } = await query;
     if (error) setError(error.message);
     else setQuotes(data as any as QuoteRow[]);
     setLoading(false);
   }
 
+  // 최초 진입 시 운임기준 데이터 + 견적 목록 로드
   useEffect(() => {
     loadRateData();
-    loadQuotes();
+    loadQuotes("all");
   }, []);
+
+  // 기간 필터 변경 시 목록만 다시 로드
+  useEffect(() => {
+    loadQuotes(period);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period]);
 
   useEffect(() => {
     let active = true;
@@ -458,7 +471,7 @@ export default function QuotesPage() {
       waypointCount: "",
       firstDealDiscount: false,
     });
-    loadQuotes();
+    loadQuotes(period);
   }
 
   async function handleDeleteQuote(id: string, quoteNo: string | null) {
@@ -472,7 +485,7 @@ export default function QuotesPage() {
       setError(error.message);
       return;
     }
-    loadQuotes();
+    loadQuotes(period);
   }
 
   return (
@@ -485,6 +498,7 @@ export default function QuotesPage() {
             기존 화주 또는 개인/신규 고객 모두 견적 가능합니다. (부가세 별도)
           </p>
         </div>
+        <DateRangeFilter value={period} onChange={setPeriod} />
       </div>
 
       {error && <div className="error-box">오류: {error}</div>}
@@ -960,7 +974,11 @@ export default function QuotesPage() {
         {loading ? (
           <div className="empty-state">불러오는 중...</div>
         ) : quotes.length === 0 ? (
-          <div className="empty-state">아직 생성된 견적이 없습니다.</div>
+          <div className="empty-state">
+            {period === "all"
+              ? "아직 생성된 견적이 없습니다."
+              : "선택한 기간에 생성된 견적이 없습니다."}
+          </div>
         ) : (
           <table style={{ minWidth: 880 }}>
             <thead>
