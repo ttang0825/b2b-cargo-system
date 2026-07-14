@@ -69,6 +69,7 @@ export default function DispatchDetailPage() {
   }, [id]);
 
   async function handleStatusChange(status: string) {
+    const prevStatus = dispatch?.dispatch_status;
     const { error } = await supabase
       .from("dispatches")
       .update({ dispatch_status: status })
@@ -83,6 +84,27 @@ export default function DispatchDetailPage() {
         .from("orders")
         .update({ status: DISPATCH_TO_ORDER_STATUS[status] })
         .eq("id", dispatch.orders.id);
+    }
+
+    // "운송완료"로 새로 바뀐 경우에만 차주의 누적 운송건수를 1건 증가시킵니다.
+    if (
+      status === "운송완료" &&
+      prevStatus !== "운송완료" &&
+      dispatch?.drivers?.id
+    ) {
+      const { data: driver } = await supabase
+        .from("drivers")
+        .select("completed_trip_count")
+        .eq("id", dispatch.drivers.id)
+        .single();
+      if (driver) {
+        await supabase
+          .from("drivers")
+          .update({
+            completed_trip_count: (driver.completed_trip_count || 0) + 1,
+          })
+          .eq("id", dispatch.drivers.id);
+      }
     }
   }
 
@@ -292,6 +314,7 @@ export default function DispatchDetailPage() {
             <label>화주 청구운임(원)</label>
             <input
               type="number"
+              step={100}
               value={editForm.customer_charge}
               onChange={(e) =>
                 setEditForm({ ...editForm, customer_charge: e.target.value })
@@ -302,6 +325,7 @@ export default function DispatchDetailPage() {
             <label>차주 지급운임(원)</label>
             <input
               type="number"
+              step={100}
               value={editForm.driver_payout}
               onChange={(e) =>
                 setEditForm({ ...editForm, driver_payout: e.target.value })
