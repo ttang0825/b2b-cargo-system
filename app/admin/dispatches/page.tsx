@@ -34,6 +34,8 @@ type DispatchRow = {
   driver_payout: number | null;
   margin: number | null;
   created_at: string;
+  order_id: string;
+  driver_id: string | null;
   orders: {
     order_no: string | null;
     origin: string | null;
@@ -65,6 +67,9 @@ export default function DispatchesPage() {
   const [selectedDriver, setSelectedDriver] = useState<DriverLite | null>(
     null
   );
+  const [recommendedDrivers, setRecommendedDrivers] = useState<DriverLite[]>(
+    []
+  );
   const [customerCharge, setCustomerCharge] = useState("");
   const [driverPayout, setDriverPayout] = useState("");
   const [memo, setMemo] = useState("");
@@ -74,7 +79,7 @@ export default function DispatchesPage() {
     const { data, error } = await supabase
       .from("dispatches")
       .select(
-        "id,dispatch_status,customer_charge,driver_payout,margin,created_at,orders(order_no,origin,destination,companies(name),guest_name),drivers(name,phone)"
+        "id,dispatch_status,customer_charge,driver_payout,margin,created_at,order_id,driver_id,orders(order_no,origin,destination,companies(name),guest_name),drivers(name,phone)"
       )
       .order("created_at", { ascending: false });
     if (error) setError(error.message);
@@ -122,6 +127,8 @@ export default function DispatchesPage() {
 
   async function handleSelectOrder(orderId: string) {
     setSelectedOrderId(orderId);
+    setSelectedDriver(null);
+    setRecommendedDrivers([]);
     const order = availableOrders.find((o) => o.id === orderId);
     if (order?.quote_id) {
       const { data: q } = await supabase
@@ -130,6 +137,22 @@ export default function DispatchesPage() {
         .eq("id", order.quote_id)
         .single();
       if (q?.final_amount) setCustomerCharge(String(Math.round(q.final_amount)));
+    }
+    // 오더가 요구하는 톤수와 같은 차량을 가진 차주를 자동으로 추천
+    if (order?.vehicle_type) {
+      const { data: matchedVehicles } = await supabase
+        .from("vehicles")
+        .select("driver_id, vehicle_number, vehicle_type, drivers(id,name,phone)")
+        .eq("vehicle_type", order.vehicle_type);
+      const drivers = (matchedVehicles || [])
+        .filter((v: any) => v.drivers)
+        .map((v: any) => ({
+          id: v.drivers.id,
+          name: v.drivers.name,
+          phone: v.drivers.phone,
+          vehicles: [{ vehicle_number: v.vehicle_number, vehicle_type: v.vehicle_type }],
+        }));
+      setRecommendedDrivers(drivers);
     }
   }
 
@@ -188,6 +211,9 @@ export default function DispatchesPage() {
     orderNo: string | null,
     status: string
   ) {
+    const target = dispatches.find((d) => d.id === dispatchId);
+    const prevStatus = target?.dispatch_status;
+
     const { error } = await supabase
       .from("dispatches")
       .update({ dispatch_status: status })
@@ -202,17 +228,28 @@ export default function DispatchesPage() {
       )
     );
 
-    // 연결된 오더 상태도 같이 갱신 (배차 테이블에서 order_id를 다시 조회)
-    const { data: dispatch } = await supabase
-      .from("dispatches")
-      .select("order_id")
-      .eq("id", dispatchId)
-      .single();
-    if (dispatch?.order_id && DISPATCH_TO_ORDER_STATUS[status]) {
+    if (target?.order_id && DISPATCH_TO_ORDER_STATUS[status]) {
       await supabase
         .from("orders")
         .update({ status: DISPATCH_TO_ORDER_STATUS[status] })
-        .eq("id", dispatch.order_id);
+        .eq("id", target.order_id);
+    }
+
+    // "운송완료"로 새로 바뀐 경우에만 차주의 누적 운송건수를 1건 증가시킵니다.
+    if (status === "운송완료" && prevStatus !== "운송완료" && target?.driver_id) {
+      const { data: driver } = await supabase
+        .from("drivers")
+        .select("completed_trip_count")
+        .eq("id", target.driver_id)
+        .single();
+      if (driver) {
+        await supabase
+          .from("drivers")
+          .update({
+            completed_trip_count: (driver.completed_trip_count || 0) + 1,
+          })
+          .eq("id", target.driver_id);
+      }
     }
   }
 
@@ -271,13 +308,40 @@ export default function DispatchesPage() {
 
             <div className="field" style={{ marginBottom: 14 }}>
               <label>배정할 차주 *</label>
+              {!selectedDriver && recommendedDrivers.length > 0 && (
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ fontSize: 11.5, color: "var(--accent)", marginBottom: 4 }}>
+                    ✓ 이 오더의 차량조건과 일치하는 차주
+                  </div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {recommendedDrivers.map((d) => (
+                      <button
+                        type="button"
+                        key={d.id}
+                        onClick={() => {
+                          setSelectedDriver(d);
+                          setDriverResults([]);
+                        }}
+                        className="badge"
+                        style={{
+                          cursor: "pointer",
+                          border: "1px solid var(--accent)",
+                          background: "var(--accent-soft)",
+                        }}
+                      >
+                        {d.name} ({d.vehicles?.[0]?.vehicle_number || "번호미상"})
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <input
                 value={selectedDriver ? selectedDriver.name : driverSearch}
                 onChange={(e) => {
                   setSelectedDriver(null);
                   setDriverSearch(e.target.value);
                 }}
-                placeholder="차주명 검색"
+                placeholder="추천 차주 중에 없으면 이름으로 검색"
               />
               {!selectedDriver && driverResults.length > 0 && (
                 <div
@@ -314,6 +378,7 @@ export default function DispatchesPage() {
                 <label>화주 청구운임(원)</label>
                 <input
                   type="number"
+                  step={100}
                   value={customerCharge}
                   onChange={(e) => setCustomerCharge(e.target.value)}
                 />
@@ -322,6 +387,7 @@ export default function DispatchesPage() {
                 <label>차주 지급운임(원)</label>
                 <input
                   type="number"
+                  step={100}
                   value={driverPayout}
                   onChange={(e) => setDriverPayout(e.target.value)}
                 />
