@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { ORDER_STATUS_OPTIONS, getOrderStatusColor } from "@/lib/orderStatusColors";
+import { LOAD_UNLOAD_CONDITIONS } from "@/lib/constants";
 import DateTimePicker from "../DateTimePicker";
 
 type OrderDetail = {
@@ -311,32 +312,43 @@ export default function OrderDetailPage() {
                 }
               />
             </div>
-            <DateTimePicker
-              label="상차 예정일시"
-              value={editForm.requested_pickup_at}
-              onChange={(v) =>
-                setEditForm({ ...editForm, requested_pickup_at: v })
-              }
-            />
-            <DateTimePicker
-              label="하차 예정일시"
-              value={editForm.requested_delivery_at}
-              onChange={(v) =>
-                setEditForm({ ...editForm, requested_delivery_at: v })
-              }
-            />
-            <div className="field">
-              <label>상차 조건</label>
-              <input
-                value={editForm.load_condition}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, load_condition: e.target.value })
+            <div style={{ gridColumn: "1 / -1" }}>
+              <DateTimePicker
+                label="상차 예정일시"
+                value={editForm.requested_pickup_at}
+                onChange={(v) =>
+                  setEditForm({ ...editForm, requested_pickup_at: v })
+                }
+              />
+            </div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <DateTimePicker
+                label="하차 예정일시"
+                value={editForm.requested_delivery_at}
+                onChange={(v) =>
+                  setEditForm({ ...editForm, requested_delivery_at: v })
                 }
               />
             </div>
             <div className="field">
+              <label>상차 조건</label>
+              <select
+                value={editForm.load_condition}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, load_condition: e.target.value })
+                }
+              >
+                <option value="">선택</option>
+                {LOAD_UNLOAD_CONDITIONS.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
               <label>하차 조건</label>
-              <input
+              <select
                 value={editForm.unload_condition}
                 onChange={(e) =>
                   setEditForm({
@@ -344,7 +356,14 @@ export default function OrderDetailPage() {
                     unload_condition: e.target.value,
                   })
                 }
-              />
+              >
+                <option value="">선택</option>
+                {LOAD_UNLOAD_CONDITIONS.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="field">
               <label>품목</label>
