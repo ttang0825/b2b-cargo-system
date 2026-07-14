@@ -91,23 +91,23 @@ export default function InvoiceDetailPage() {
       return;
     }
 
-    // 입금 확인 상태가 바뀌면, 연결된 화주의 미수금을 자동으로 가감합니다.
+    // 입금 확인 상태가 바뀌면, 연결된 화주의 미수금을 전체 재계산합니다
+    // (증분 방식 대신, 그 화주의 모든 미입금 정산건을 다시 합산 - 삭제된
+    // 기록이 있어도 항상 정확합니다).
     if (invoice.companies?.id && wasReceived !== nowReceived) {
-      const { data: company } = await supabase
+      const { data: allInvoices } = await supabase
+        .from("invoices")
+        .select("id,customer_charge_total,payment_received")
+        .eq("company_id", invoice.companies.id);
+      const outstanding = (allInvoices || [])
+        .filter((i) => i.id !== id) // 이 건은 아래서 최신 nowReceived 기준으로 따로 반영
+        .filter((i) => !i.payment_received)
+        .reduce((sum, i) => sum + (i.customer_charge_total || 0), 0);
+      const thisAmount = nowReceived ? 0 : invoice.customer_charge_total || 0;
+      await supabase
         .from("companies")
-        .select("outstanding_amount")
-        .eq("id", invoice.companies.id)
-        .single();
-      if (company) {
-        const delta = invoice.customer_charge_total || 0;
-        const newOutstanding = nowReceived
-          ? (company.outstanding_amount || 0) - delta
-          : (company.outstanding_amount || 0) + delta;
-        await supabase
-          .from("companies")
-          .update({ outstanding_amount: Math.max(newOutstanding, 0) })
-          .eq("id", invoice.companies.id);
-      }
+        .update({ outstanding_amount: outstanding + thisAmount })
+        .eq("id", invoice.companies.id);
     }
 
     setSaving(false);
