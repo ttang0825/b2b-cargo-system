@@ -6,6 +6,19 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 
 const VEHICLE_TYPES = ["1톤", "1.4톤", "2.5톤", "3.5톤", "5톤", "5톤 플러스/축"];
+const BODY_TYPES = [
+  "카고",
+  "탑차",
+  "윙바디",
+  "냉장탑",
+  "냉동탑",
+  "리프트",
+  "크레인",
+  "렉카",
+  "트레일러",
+  "사다리차",
+  "기타/협의",
+];
 
 function Field({ label, value }: { label: string; value: any }) {
   if (value === null || value === undefined || value === "") return null;
@@ -19,18 +32,37 @@ function Field({ label, value }: { label: string; value: any }) {
   );
 }
 
+type Vehicle = {
+  id: string;
+  vehicle_number: string | null;
+  vehicle_type: string | null;
+  body_type: string | null;
+};
+
 export default function DriverDetailPage() {
   const params = useParams();
   const router = useRouter();
   const id = params?.id as string;
 
   const [driver, setDriver] = useState<any>(null);
-  const [vehicle, setVehicle] = useState<any>(null);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  const [newVehicle, setNewVehicle] = useState({
+    vehicle_number: "",
+    vehicle_type: "1톤",
+    body_type: "카고",
+  });
+  const [editingVehicleId, setEditingVehicleId] = useState<string | null>(null);
+  const [editingVehicle, setEditingVehicle] = useState({
+    vehicle_number: "",
+    vehicle_type: "1톤",
+    body_type: "카고",
+  });
 
   const [editForm, setEditForm] = useState({
     name: "",
@@ -42,18 +74,19 @@ export default function DriverDetailPage() {
     cold_chain_available: false,
     lift_available: false,
     forklift_available: false,
+    license_verified: false,
+    insurance_verified: false,
+    insurance_expiry: "",
     rating: "",
     claim_history: "",
     notes: "",
-    vehicle_number: "",
-    vehicle_type: "1톤",
   });
 
   async function load() {
     setLoading(true);
     const { data, error } = await supabase
       .from("drivers")
-      .select("*, vehicles(id,vehicle_number,vehicle_type)")
+      .select("*")
       .eq("id", id)
       .single();
     if (error) {
@@ -62,8 +95,6 @@ export default function DriverDetailPage() {
       return;
     }
     setDriver(data);
-    const v = data.vehicles?.[0] || null;
-    setVehicle(v);
     setEditForm({
       name: data.name || "",
       phone: data.phone || "",
@@ -74,19 +105,75 @@ export default function DriverDetailPage() {
       cold_chain_available: data.cold_chain_available || false,
       lift_available: data.lift_available || false,
       forklift_available: data.forklift_available || false,
-      rating: data.rating || "",
+      license_verified: data.license_verified || false,
+      insurance_verified: data.insurance_verified || false,
+      insurance_expiry: data.insurance_expiry || "",
+      rating: data.rating ?? "",
       claim_history: data.claim_history || "",
       notes: data.notes || "",
-      vehicle_number: v?.vehicle_number || "",
-      vehicle_type: v?.vehicle_type || "1톤",
     });
+    await loadVehicles();
     setLoading(false);
+  }
+
+  async function loadVehicles() {
+    const { data } = await supabase
+      .from("vehicles")
+      .select("id,vehicle_number,vehicle_type,body_type")
+      .eq("driver_id", id);
+    setVehicles(data || []);
   }
 
   useEffect(() => {
     if (id) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  async function handleAddVehicle() {
+    if (!newVehicle.vehicle_number.trim()) return;
+    const { error } = await supabase.from("vehicles").insert({
+      driver_id: id,
+      vehicle_number: newVehicle.vehicle_number,
+      vehicle_type: newVehicle.vehicle_type,
+      body_type: newVehicle.body_type,
+      cold_chain: editForm.cold_chain_available,
+      lift: editForm.lift_available,
+    });
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setNewVehicle({ vehicle_number: "", vehicle_type: "1톤", body_type: "카고" });
+    loadVehicles();
+  }
+
+  async function handleUpdateVehicle(vehicleId: string) {
+    const { error } = await supabase
+      .from("vehicles")
+      .update({
+        vehicle_number: editingVehicle.vehicle_number,
+        vehicle_type: editingVehicle.vehicle_type,
+        body_type: editingVehicle.body_type,
+      })
+      .eq("id", vehicleId);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setEditingVehicleId(null);
+    loadVehicles();
+  }
+
+  async function handleDeleteVehicle(vehicleId: string) {
+    const confirmed = window.confirm("이 차량을 삭제하시겠습니까?");
+    if (!confirmed) return;
+    const { error } = await supabase.from("vehicles").delete().eq("id", vehicleId);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    loadVehicles();
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -103,39 +190,20 @@ export default function DriverDetailPage() {
         cold_chain_available: editForm.cold_chain_available,
         lift_available: editForm.lift_available,
         forklift_available: editForm.forklift_available,
+        license_verified: editForm.license_verified,
+        insurance_verified: editForm.insurance_verified,
+        insurance_expiry: editForm.insurance_expiry || null,
         rating: editForm.rating ? Number(editForm.rating) : null,
         claim_history: editForm.claim_history || null,
         notes: editForm.notes || null,
       })
       .eq("id", id);
 
+    setSaving(false);
     if (error) {
-      setSaving(false);
       setError(error.message);
       return;
     }
-
-    if (vehicle) {
-      await supabase
-        .from("vehicles")
-        .update({
-          vehicle_number: editForm.vehicle_number || null,
-          vehicle_type: editForm.vehicle_type,
-          cold_chain: editForm.cold_chain_available,
-          lift: editForm.lift_available,
-        })
-        .eq("id", vehicle.id);
-    } else if (editForm.vehicle_number.trim()) {
-      await supabase.from("vehicles").insert({
-        driver_id: id,
-        vehicle_number: editForm.vehicle_number,
-        vehicle_type: editForm.vehicle_type,
-        cold_chain: editForm.cold_chain_available,
-        lift: editForm.lift_available,
-      });
-    }
-
-    setSaving(false);
     setEditing(false);
     load();
   }
@@ -162,9 +230,7 @@ export default function DriverDetailPage() {
       setDeleting(false);
       return;
     }
-    if (vehicle) {
-      await supabase.from("vehicles").delete().eq("id", vehicle.id);
-    }
+    await supabase.from("vehicles").delete().eq("driver_id", id);
     const { error } = await supabase.from("drivers").delete().eq("id", id);
     setDeleting(false);
     if (error) {
@@ -208,11 +274,8 @@ export default function DriverDetailPage() {
         <div>
           <h1 className="page-title">{driver.name}</h1>
           <p className="page-desc">
-            {vehicle
-              ? `${vehicle.vehicle_number || "번호 미등록"} · ${
-                  vehicle.vehicle_type || ""
-                }`
-              : "차량 미등록"}
+            차량 {vehicles.length}대 등록 · 누적 운송{" "}
+            {driver.completed_trip_count || 0}건
           </p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -279,30 +342,6 @@ export default function DriverDetailPage() {
               />
             </div>
             <div className="field">
-              <label>차량번호</label>
-              <input
-                value={editForm.vehicle_number}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, vehicle_number: e.target.value })
-                }
-              />
-            </div>
-            <div className="field">
-              <label>차량 톤수</label>
-              <select
-                value={editForm.vehicle_type}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, vehicle_type: e.target.value })
-                }
-              >
-                {VEHICLE_TYPES.map((v) => (
-                  <option key={v} value={v}>
-                    {v}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
               <label>운행 가능지역</label>
               <input
                 value={editForm.operating_regions}
@@ -348,6 +387,16 @@ export default function DriverDetailPage() {
                 }
               />
             </div>
+            <div className="field">
+              <label>보험 만기일</label>
+              <input
+                type="date"
+                value={editForm.insurance_expiry}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, insurance_expiry: e.target.value })
+                }
+              />
+            </div>
             <div className="field" style={{ gridColumn: "1 / -1" }}>
               <label>클레임 이력</label>
               <textarea
@@ -378,8 +427,6 @@ export default function DriverDetailPage() {
             }}
           >
             <Field label="연락처" value={driver.phone} />
-            <Field label="차량번호" value={vehicle?.vehicle_number} />
-            <Field label="차량톤수" value={vehicle?.vehicle_type} />
             <Field label="운행 가능지역" value={driver.operating_regions} />
             <Field label="선호 노선" value={driver.preferred_routes} />
             <Field label="정산 계좌" value={driver.bank_account} />
@@ -388,18 +435,22 @@ export default function DriverDetailPage() {
               value={driver.is_business ? "사업자" : "개인"}
             />
             <Field label="평점" value={driver.rating} />
+            <Field label="보험 만기일" value={driver.insurance_expiry} />
+            <Field label="누적 운송건수" value={driver.completed_trip_count || 0} />
             <Field label="클레임 이력" value={driver.claim_history} />
           </div>
         )}
 
         {editing ? (
           <div
-            style={{ display: "flex", gap: 16, marginTop: 14, fontSize: 13 }}
+            style={{ display: "flex", gap: 16, marginTop: 14, fontSize: 13, flexWrap: "wrap" }}
           >
             {[
               ["cold_chain_available", "냉장/냉동 가능"],
               ["lift_available", "리프트 가능"],
               ["forklift_available", "지게차 가능"],
+              ["license_verified", "화물운송자격증 보유"],
+              ["insurance_verified", "적재물배상보험 가입"],
             ].map(([key, label]) => (
               <label
                 key={key}
@@ -417,10 +468,12 @@ export default function DriverDetailPage() {
             ))}
           </div>
         ) : (
-          <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+          <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
             {driver.cold_chain_available && <span className="badge">냉장/냉동</span>}
             {driver.lift_available && <span className="badge">리프트</span>}
             {driver.forklift_available && <span className="badge">지게차</span>}
+            {driver.license_verified && <span className="badge">자격증 보유</span>}
+            {driver.insurance_verified && <span className="badge">보험 가입</span>}
           </div>
         )}
 
@@ -436,6 +489,173 @@ export default function DriverDetailPage() {
         )}
       </div>
 
+      {/* 보유 차량 목록 (여러 대 등록 가능) */}
+      <div className="card" style={{ padding: 20, marginBottom: 20 }}>
+        <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
+          보유 차량
+        </h3>
+
+        {vehicles.length === 0 ? (
+          <p style={{ fontSize: 12.5, color: "var(--text-muted)" }}>
+            등록된 차량이 없습니다.
+          </p>
+        ) : (
+          vehicles.map((v) => (
+            <div
+              key={v.id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "8px 0",
+                borderBottom: "1px solid var(--border)",
+                fontSize: 13,
+                flexWrap: "wrap",
+              }}
+            >
+              {editingVehicleId === v.id ? (
+                <>
+                  <input
+                    autoFocus
+                    value={editingVehicle.vehicle_number}
+                    onChange={(e) =>
+                      setEditingVehicle({
+                        ...editingVehicle,
+                        vehicle_number: e.target.value,
+                      })
+                    }
+                    style={{ width: 110, fontSize: 12.5, padding: "4px 6px" }}
+                  />
+                  <select
+                    value={editingVehicle.vehicle_type}
+                    onChange={(e) =>
+                      setEditingVehicle({
+                        ...editingVehicle,
+                        vehicle_type: e.target.value,
+                      })
+                    }
+                    style={{ fontSize: 12.5 }}
+                  >
+                    {VEHICLE_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={editingVehicle.body_type}
+                    onChange={(e) =>
+                      setEditingVehicle({
+                        ...editingVehicle,
+                        body_type: e.target.value,
+                      })
+                    }
+                    style={{ fontSize: 12.5 }}
+                  >
+                    {BODY_TYPES.map((b) => (
+                      <option key={b} value={b}>
+                        {b}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    className="btn"
+                    type="button"
+                    style={{ padding: "4px 10px", fontSize: 12 }}
+                    onClick={() => handleUpdateVehicle(v.id)}
+                  >
+                    저장
+                  </button>
+                  <button
+                    className="btn-ghost"
+                    type="button"
+                    style={{ padding: "4px 10px", fontSize: 12, borderRadius: 6, cursor: "pointer" }}
+                    onClick={() => setEditingVehicleId(null)}
+                  >
+                    취소
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span style={{ flex: 1 }}>
+                    {v.vehicle_number || "번호 미등록"} · {v.vehicle_type} ·{" "}
+                    {v.body_type || "형태 미지정"}
+                  </span>
+                  <button
+                    className="btn-ghost"
+                    type="button"
+                    style={{ padding: "4px 10px", fontSize: 12, borderRadius: 6, cursor: "pointer" }}
+                    onClick={() => {
+                      setEditingVehicleId(v.id);
+                      setEditingVehicle({
+                        vehicle_number: v.vehicle_number || "",
+                        vehicle_type: v.vehicle_type || "1톤",
+                        body_type: v.body_type || "카고",
+                      });
+                    }}
+                  >
+                    수정
+                  </button>
+                  <button
+                    className="btn-danger"
+                    type="button"
+                    style={{ padding: "4px 10px", fontSize: 12, borderRadius: 6, cursor: "pointer" }}
+                    onClick={() => handleDeleteVehicle(v.id)}
+                  >
+                    삭제
+                  </button>
+                </>
+              )}
+            </div>
+          ))
+        )}
+
+        <div style={{ display: "flex", gap: 6, marginTop: 12, flexWrap: "wrap" }}>
+          <input
+            value={newVehicle.vehicle_number}
+            onChange={(e) =>
+              setNewVehicle({ ...newVehicle, vehicle_number: e.target.value })
+            }
+            placeholder="차량번호"
+            style={{ width: 120, fontSize: 12.5, padding: "5px 8px" }}
+          />
+          <select
+            value={newVehicle.vehicle_type}
+            onChange={(e) =>
+              setNewVehicle({ ...newVehicle, vehicle_type: e.target.value })
+            }
+            style={{ fontSize: 12.5 }}
+          >
+            {VEHICLE_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+          <select
+            value={newVehicle.body_type}
+            onChange={(e) =>
+              setNewVehicle({ ...newVehicle, body_type: e.target.value })
+            }
+            style={{ fontSize: 12.5 }}
+          >
+            {BODY_TYPES.map((b) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
+          </select>
+          <button
+            className="btn"
+            type="button"
+            style={{ padding: "5px 12px", fontSize: 12.5 }}
+            onClick={handleAddVehicle}
+          >
+            차량 추가
+          </button>
+        </div>
+      </div>
+
       <div
         className="card"
         style={{ padding: 20, marginBottom: 20, opacity: 0.6 }}
@@ -444,8 +664,8 @@ export default function DriverDetailPage() {
           배차 이력
         </h3>
         <p style={{ fontSize: 12.5, color: "var(--text-muted)", margin: 0 }}>
-          배차 관리 화면 제작 후, 이 차주가 수행한 운송 건들이 이 자리에
-          표시됩니다.
+          이 차주가 수행한 운송 건 상세 목록은 다음 단계에서 이 자리에
+          표시됩니다. (누적 운송건수는 위에서 자동 집계되고 있습니다.)
         </p>
       </div>
     </main>
