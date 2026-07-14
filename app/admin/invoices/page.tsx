@@ -8,6 +8,7 @@ import {
   INVOICE_STATUS_OPTIONS,
   getInvoiceStatusColor,
 } from "@/lib/invoiceStatusColors";
+import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 
 type OrderLite = {
   id: string;
@@ -32,6 +33,10 @@ type InvoiceRow = {
   companies: { name: string } | null;
 };
 
+// "전체" 기간을 선택해도 한 번에 너무 많은 데이터를 불러오지 않도록 안전장치로 상한을 둠
+const ALL_PERIOD_LIMIT = 500;
+const FILTERED_PERIOD_LIMIT = 500;
+
 function won(n: number | null) {
   if (n === null || n === undefined) return "-";
   return Math.round(n).toLocaleString("ko-KR") + "원";
@@ -52,6 +57,7 @@ export default function InvoicesPage() {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("전체");
+  const [period, setPeriod] = useState<DatePreset>("all");
 
   const [selectedOrderId, setSelectedOrderId] = useState("");
   const [billingPeriod, setBillingPeriod] = useState(currentMonth());
@@ -59,14 +65,19 @@ export default function InvoicesPage() {
   const [driverPayoutTotal, setDriverPayoutTotal] = useState("");
   const [paymentDueDate, setPaymentDueDate] = useState("");
 
-  async function loadInvoices() {
+  async function loadInvoices(preset: DatePreset = period) {
     setLoading(true);
-    const { data, error } = await supabase
+    const { from } = getDateRange(preset);
+    let query = supabase
       .from("invoices")
       .select(
         "id,billing_period,customer_charge_total,driver_payout_total,commission_total,tax_invoice_issued,payment_received,driver_paid,status,created_at,orders(order_no),companies(name)"
       )
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(preset === "all" ? ALL_PERIOD_LIMIT : FILTERED_PERIOD_LIMIT);
+    if (from) query = query.gte("created_at", from);
+
+    const { data, error } = await query;
     if (error) setError(error.message);
     else setInvoices(data as any as InvoiceRow[]);
     setLoading(false);
@@ -92,9 +103,16 @@ export default function InvoicesPage() {
   }
 
   useEffect(() => {
-    loadInvoices();
+    loadInvoices("all");
     loadAvailableOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 기간 필터 변경 시 정산 목록만 다시 로드
+  useEffect(() => {
+    loadInvoices(period);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period]);
 
   async function handleSelectOrder(orderId: string) {
     setSelectedOrderId(orderId);
@@ -212,7 +230,7 @@ export default function InvoicesPage() {
     setCustomerChargeTotal("");
     setDriverPayoutTotal("");
     setPaymentDueDate("");
-    loadInvoices();
+    loadInvoices(period);
     loadAvailableOrders();
   }
 
@@ -239,12 +257,22 @@ export default function InvoicesPage() {
             관리합니다.
           </p>
         </div>
-        <button className="btn" onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "닫기" : "+ 신규 정산 등록"}
-        </button>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <DateRangeFilter value={period} onChange={setPeriod} />
+          <button className="btn" onClick={() => setShowForm((v) => !v)}>
+            {showForm ? "닫기" : "+ 신규 정산 등록"}
+          </button>
+        </div>
       </div>
 
       {error && <div className="error-box">오류: {error}</div>}
+
+      {period === "all" && invoices.length >= ALL_PERIOD_LIMIT && (
+        <div className="error-box">
+          최근 {ALL_PERIOD_LIMIT}건만 표시 중입니다. 더 오래된 데이터를 보려면
+          기간 필터를 좁혀서 확인해주세요.
+        </div>
+      )}
 
       {showForm && (
         <div className="card" style={{ marginBottom: 24, padding: 20 }}>
@@ -389,7 +417,11 @@ export default function InvoicesPage() {
         {loading ? (
           <div className="empty-state">불러오는 중...</div>
         ) : filtered.length === 0 ? (
-          <div className="empty-state">등록된 정산 건이 없습니다.</div>
+          <div className="empty-state">
+            {period === "all"
+              ? "등록된 정산 건이 없습니다."
+              : "선택한 기간에 등록된 정산 건이 없습니다."}
+          </div>
         ) : (
           <table>
             <thead>
