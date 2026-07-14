@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { generateDailyNumber } from "@/lib/generateNumber";
 
 declare global {
   interface Window {
@@ -343,7 +344,7 @@ export default function QuotesPage() {
     }
 
     setSaving(true);
-    const quoteNo = `Q-${Date.now()}`;
+    const quoteNo = await generateDailyNumber("quotes", "Q");
 
     const fullOrigin = [form.origin, form.originDetail]
       .filter((v) => v.trim())
