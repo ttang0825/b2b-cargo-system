@@ -29,6 +29,7 @@ export default function RootLayout({
               <Link href="/admin/rates">운임기준표</Link>
               <Link href="/admin/quotes">견적 관리</Link>
               <Link href="/admin/orders">운송오더</Link>
+              <Link href="/admin/drivers">차주 관리</Link>
             </nav>
           </div>
         </div>
