@@ -25,6 +25,7 @@ type DriverLite = {
   name: string;
   phone: string | null;
   vehicles: { vehicle_number: string | null; vehicle_type: string | null }[];
+  regionMatch?: boolean;
 };
 
 type DispatchRow = {
@@ -138,20 +139,36 @@ export default function DispatchesPage() {
         .single();
       if (q?.final_amount) setCustomerCharge(String(Math.round(q.final_amount)));
     }
-    // 오더가 요구하는 톤수와 같은 차량을 가진 차주를 자동으로 추천
+    // 오더가 요구하는 톤수와 같은 차량을 가진 차주를 자동으로 추천하되,
+    // 운행 가능지역이 이 오더의 출발지/도착지와 겹치는 차주를 우선 표시
     if (order?.vehicle_type) {
       const { data: matchedVehicles } = await supabase
         .from("vehicles")
-        .select("driver_id, vehicle_number, vehicle_type, drivers(id,name,phone)")
+        .select(
+          "driver_id, vehicle_number, vehicle_type, drivers(id,name,phone,operating_regions)"
+        )
         .eq("vehicle_type", order.vehicle_type);
+
+      const routeText = `${order.origin || ""} ${order.destination || ""}`;
+
       const drivers = (matchedVehicles || [])
         .filter((v: any) => v.drivers)
-        .map((v: any) => ({
-          id: v.drivers.id,
-          name: v.drivers.name,
-          phone: v.drivers.phone,
-          vehicles: [{ vehicle_number: v.vehicle_number, vehicle_type: v.vehicle_type }],
-        }));
+        .map((v: any) => {
+          const regions: string[] = v.drivers.operating_regions
+            ? v.drivers.operating_regions.split(",").map((s: string) => s.trim())
+            : [];
+          const regionMatch = regions.some((r) => r && routeText.includes(r));
+          return {
+            id: v.drivers.id,
+            name: v.drivers.name,
+            phone: v.drivers.phone,
+            regionMatch,
+            vehicles: [
+              { vehicle_number: v.vehicle_number, vehicle_type: v.vehicle_type },
+            ],
+          };
+        })
+        .sort((a, b) => Number(b.regionMatch) - Number(a.regionMatch));
       setRecommendedDrivers(drivers);
     }
   }
@@ -311,7 +328,7 @@ export default function DispatchesPage() {
               {!selectedDriver && recommendedDrivers.length > 0 && (
                 <div style={{ marginBottom: 8 }}>
                   <div style={{ fontSize: 11.5, color: "var(--accent)", marginBottom: 4 }}>
-                    ✓ 이 오더의 차량조건과 일치하는 차주
+                    ✓ 차량조건이 맞는 차주 (지역까지 일치하면 우선 표시)
                   </div>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     {recommendedDrivers.map((d) => (
@@ -325,10 +342,15 @@ export default function DispatchesPage() {
                         className="badge"
                         style={{
                           cursor: "pointer",
-                          border: "1px solid var(--accent)",
-                          background: "var(--accent-soft)",
+                          border: d.regionMatch
+                            ? "1px solid var(--accent)"
+                            : "1px solid var(--border)",
+                          background: d.regionMatch
+                            ? "var(--accent-soft)"
+                            : "var(--surface)",
                         }}
                       >
+                        {d.regionMatch ? "📍 " : ""}
                         {d.name} ({d.vehicles?.[0]?.vehicle_number || "번호미상"})
                       </button>
                     ))}
