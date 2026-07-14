@@ -298,22 +298,22 @@ export default function CustomersPage() {
                   onClick={() => router.push(`/admin/companies/${c.id}`)}
                   style={{ cursor: "pointer" }}
                 >
-                  <td>{c.name}</td>
-                  <td>{formatIndustry(c)}</td>
-                  <td>{formatRegion(c)}</td>
-                  <td>{c.contact_name || "-"}</td>
-                  <td>{c.contact_mobile || c.phone || "-"}</td>
-                  <td>{c.payment_terms || "-"}</td>
-                  <td>{c.total_orders_count || 0}건</td>
-                  <td>{won(c.outstanding_amount)}</td>
-                  <td>
+                  <td style={{ maxWidth: 140 }}>{c.name}</td>
+                  <td className="cell-nowrap">{formatIndustry(c)}</td>
+                  <td className="cell-nowrap">{formatRegion(c)}</td>
+                  <td className="cell-nowrap">{c.contact_name || "-"}</td>
+                  <td className="cell-nowrap">{c.contact_mobile || c.phone || "-"}</td>
+                  <td className="cell-nowrap">{c.payment_terms || "-"}</td>
+                  <td className="cell-nowrap">{c.total_orders_count || 0}건</td>
+                  <td className="cell-nowrap">{won(c.outstanding_amount)}</td>
+                  <td className="cell-nowrap">
                     {c.grade ? (
                       <span className="badge">{c.grade}</span>
                     ) : (
                       "-"
                     )}
                   </td>
-                  <td>
+                  <td className="cell-nowrap">
                     <span
                       style={{
                         display: "inline-block",
@@ -328,7 +328,7 @@ export default function CustomersPage() {
                       {c.status}
                     </span>
                   </td>
-                  <td>
+                  <td className="cell-nowrap">
                     {c.latestDispatchStatus ? (
                       <span
                         style={{
