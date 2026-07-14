@@ -132,7 +132,7 @@ export default function DispatchDetailPage() {
       setError(error.message);
       return;
     }
-    load();
+    router.push("/admin/dispatches");
   }
 
   async function handleDelete() {
