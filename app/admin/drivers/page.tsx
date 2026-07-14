@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { REGIONS, formatPhoneNumber } from "@/lib/constants";
+import MultiSelectTags from "@/components/MultiSelectTags";
 
 const VEHICLE_TYPES = ["1톤", "1.4톤", "2.5톤", "3.5톤", "5톤", "5톤 플러스/축"];
 const BODY_TYPES = [
@@ -63,6 +65,7 @@ export default function DriversPage() {
     operating_regions: "",
     preferred_routes: "",
     is_business: false,
+    biz_reg_no: "",
     bank_account: "",
     vehicle_number: "",
     vehicle_type: "1톤",
@@ -109,6 +112,7 @@ export default function DriversPage() {
         operating_regions: form.operating_regions || null,
         preferred_routes: form.preferred_routes || null,
         is_business: form.is_business,
+        biz_reg_no: form.is_business ? form.biz_reg_no || null : null,
         bank_account: form.bank_account || null,
         cold_chain_available: form.cold_chain_available,
         lift_available: form.lift_available,
@@ -145,6 +149,7 @@ export default function DriversPage() {
       operating_regions: "",
       preferred_routes: "",
       is_business: false,
+      biz_reg_no: "",
       bank_account: "",
       vehicle_number: "",
       vehicle_type: "1톤",
@@ -201,7 +206,12 @@ export default function DriversPage() {
     <main className="container">
       <div className="page-header">
         <div>
-          <h1 className="page-title">차주(기사) 관리</h1>
+          <h1 className="page-title">
+            차주(기사) 관리{" "}
+            <span style={{ fontSize: 15, color: "var(--text-muted)", fontWeight: 500 }}>
+              (총 {drivers.length}명)
+            </span>
+          </h1>
           <p className="page-desc">
             배차에 활용할 차주풀입니다. 차량은 등록 후 상세페이지에서 여러 대
             추가할 수 있습니다.
@@ -229,8 +239,10 @@ export default function DriversPage() {
                 <label>연락처</label>
                 <input
                   value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  placeholder="010-0000-0000"
+                  onChange={(e) =>
+                    setForm({ ...form, phone: formatPhoneNumber(e.target.value) })
+                  }
+                  placeholder="숫자만 입력하면 자동으로 - 표시"
                 />
               </div>
               <div className="field">
@@ -273,24 +285,20 @@ export default function DriversPage() {
                   ))}
                 </select>
               </div>
-              <div className="field">
-                <label>운행 가능지역</label>
-                <input
+              <div className="field" style={{ gridColumn: "1 / -1" }}>
+                <label>운행 가능지역 (중복 선택 가능)</label>
+                <MultiSelectTags
+                  options={REGIONS}
                   value={form.operating_regions}
-                  onChange={(e) =>
-                    setForm({ ...form, operating_regions: e.target.value })
-                  }
-                  placeholder="예: 수도권 전역"
+                  onChange={(v) => setForm({ ...form, operating_regions: v })}
                 />
               </div>
-              <div className="field">
-                <label>선호 노선</label>
-                <input
+              <div className="field" style={{ gridColumn: "1 / -1" }}>
+                <label>선호 노선 (중복 선택 가능)</label>
+                <MultiSelectTags
+                  options={REGIONS}
                   value={form.preferred_routes}
-                  onChange={(e) =>
-                    setForm({ ...form, preferred_routes: e.target.value })
-                  }
-                  placeholder="예: 서울-경기"
+                  onChange={(v) => setForm({ ...form, preferred_routes: v })}
                 />
               </div>
               <div className="field">
@@ -318,6 +326,18 @@ export default function DriversPage() {
                   <option value="true">사업자</option>
                 </select>
               </div>
+              {form.is_business && (
+                <div className="field">
+                  <label>사업자등록번호</label>
+                  <input
+                    value={form.biz_reg_no}
+                    onChange={(e) =>
+                      setForm({ ...form, biz_reg_no: e.target.value })
+                    }
+                    placeholder="000-00-00000"
+                  />
+                </div>
+              )}
             </div>
 
             <div style={{ display: "flex", gap: 16, margin: "14px 0", fontSize: 13, flexWrap: "wrap" }}>
