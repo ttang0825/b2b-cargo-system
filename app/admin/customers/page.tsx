@@ -274,7 +274,7 @@ export default function CustomersPage() {
             목록에서 "CRM 전환" 버튼을 눌러 등록할 수 있습니다.
           </div>
         ) : (
-          <table style={{ minWidth: 1080 }}>
+          <table className="table-compact" style={{ minWidth: 880 }}>
             <thead>
               <tr>
                 <th>회사명</th>
@@ -300,7 +300,14 @@ export default function CustomersPage() {
                 >
                   <td className="cell-nowrap" style={{ minWidth: 110 }}>{c.name}</td>
                   <td style={{ maxWidth: 170 }}>{formatIndustry(c)}</td>
-                  <td className="cell-nowrap">{formatRegion(c)}</td>
+                  <td className="cell-nowrap">
+                    <div>{c.metro_region || "-"}</div>
+                    {c.district && (
+                      <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
+                        {c.district}
+                      </div>
+                    )}
+                  </td>
                   <td className="cell-nowrap">{c.contact_name || "-"}</td>
                   <td className="cell-nowrap">{c.contact_mobile || c.phone || "-"}</td>
                   <td className="cell-nowrap">{c.payment_terms || "-"}</td>
