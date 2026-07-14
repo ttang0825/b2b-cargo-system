@@ -956,13 +956,13 @@ export default function QuotesPage() {
         </div>
       </div>
 
-      <div className="card">
+      <div className="card" style={{ overflowX: "auto" }}>
         {loading ? (
           <div className="empty-state">불러오는 중...</div>
         ) : quotes.length === 0 ? (
           <div className="empty-state">아직 생성된 견적이 없습니다.</div>
         ) : (
-          <table>
+          <table style={{ minWidth: 880 }}>
             <thead>
               <tr>
                 <th>견적번호</th>
@@ -983,7 +983,7 @@ export default function QuotesPage() {
                   style={{ cursor: "pointer" }}
                 >
                   <td className="cell-nowrap">{q.quote_no}</td>
-                  <td style={{ maxWidth: 130 }}>
+                  <td className="cell-nowrap" style={{ minWidth: 110 }}>
                     {q.companies?.name || q.guest_name || "-"}
                     {!q.companies?.name && q.guest_name && (
                       <span className="badge" style={{ marginLeft: 6 }}>
