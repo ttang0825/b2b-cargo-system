@@ -1,13 +1,19 @@
 :root {
-  --bg: #f7f7f5;
+  --bg: #f2f4f6;
   --surface: #ffffff;
-  --border: #e4e4e0;
-  --text: #1c1c1a;
-  --text-muted: #6b6b66;
-  --accent: #2f5d50;
-  --accent-soft: #e8f0ed;
-  --danger: #b3441e;
-  --radius: 8px;
+  --border: #e5e8eb;
+  --text: #191f28;
+  --text-muted: #8b95a1;
+  --accent: #3182f6;
+  --accent-hover: #1b64da;
+  --accent-soft: #e8f3ff;
+  --danger: #f04452;
+  --danger-soft: #ffeeee;
+  --radius: 14px;
+  --radius-lg: 20px;
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 14px rgba(15, 23, 42, 0.07);
+  --shadow-lg: 0 12px 28px rgba(15, 23, 42, 0.1);
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Pretendard", "Malgun Gothic", sans-serif;
 }
 * {
@@ -20,6 +26,8 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.003em;
 }
 a {
   color: inherit;
@@ -29,6 +37,8 @@ a {
   margin: 0 auto;
   padding: 32px 24px 64px;
 }
+
+/* 상단 헤더 */
 .top-nav {
   border-bottom: 1px solid var(--border);
   background: var(--surface);
@@ -36,7 +46,7 @@ a {
 .top-nav-inner {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 16px 24px;
+  padding: 18px 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -50,41 +60,41 @@ a {
   color: var(--accent);
 }
 .brand {
-  font-weight: 700;
-  font-size: 15px;
-  letter-spacing: -0.01em;
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: -0.02em;
   transition: color 0.15s;
 }
 .brand-sub {
   color: var(--text-muted);
   font-size: 12px;
   margin-top: 2px;
+  font-weight: 500;
 }
 
 /* 상단 우측 메뉴 - 칩 버튼 */
 .nav-chip {
   display: inline-flex;
   align-items: center;
-  padding: 6px 14px;
+  padding: 8px 16px;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  font-size: 12.5px;
-  font-weight: 600;
+  border: none;
+  background: var(--bg);
+  color: #4e5968;
+  font-size: 13px;
+  font-weight: 700;
   white-space: nowrap;
   text-decoration: none;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
 }
 .nav-chip:hover {
   background: var(--accent-soft);
-  border-color: var(--accent);
   color: var(--accent);
 }
 .nav-chip-active {
   background: var(--accent);
-  border-color: var(--accent);
   color: #ffffff;
+  box-shadow: 0 4px 10px rgba(49, 130, 246, 0.28);
 }
 .nav-chip-active:hover {
   background: var(--accent);
@@ -95,25 +105,29 @@ a {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
   gap: 16px;
   flex-wrap: wrap;
 }
 .page-title {
-  font-size: 22px;
-  font-weight: 700;
-  margin: 0 0 4px;
-  letter-spacing: -0.01em;
+  font-size: 26px;
+  font-weight: 800;
+  margin: 0 0 6px;
+  letter-spacing: -0.02em;
 }
 .page-desc {
   color: var(--text-muted);
-  font-size: 13.5px;
+  font-size: 14px;
   margin: 0;
+  font-weight: 500;
 }
+
+/* 카드 - 보더 대신 그림자 기반 */
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 /* 홈화면 - 메뉴 카드 그리드 */
@@ -125,113 +139,143 @@ a {
 .home-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 22px;
+  gap: 12px;
+  padding: 26px;
   text-decoration: none;
   color: var(--text);
-  transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
 .home-card:hover {
-  border-color: var(--accent);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(47, 93, 80, 0.12);
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
 }
 .home-card-tag {
   display: inline-flex;
   align-self: flex-start;
-  padding: 3px 10px;
+  padding: 4px 12px;
   border-radius: 999px;
   background: var(--accent-soft);
   color: var(--accent);
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 11.5px;
+  font-weight: 800;
   letter-spacing: 0.02em;
 }
 .home-card-title {
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 17px;
+  font-weight: 800;
   margin: 0;
+  letter-spacing: -0.01em;
 }
 .home-card-desc {
-  font-size: 13px;
+  font-size: 13.5px;
   color: var(--text-muted);
   margin: 0;
-  line-height: 1.5;
+  line-height: 1.55;
+  font-weight: 500;
 }
 
+/* 버튼 */
 .btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 9px 16px;
-  border-radius: var(--radius);
-  border: 1px solid var(--accent);
+  padding: 11px 20px;
+  border-radius: 12px;
+  border: none;
   background: var(--accent);
   color: white;
-  font-size: 13.5px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 700;
   cursor: pointer;
+  box-shadow: 0 4px 10px rgba(49, 130, 246, 0.25);
+  transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
 }
 .btn:hover {
-  opacity: 0.92;
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(49, 130, 246, 0.32);
+}
+.btn:active {
+  transform: translateY(0);
 }
 .btn-ghost {
-  background: transparent;
+  background: var(--bg);
   color: var(--text);
-  border: 1px solid var(--border);
+  border: none;
+  box-shadow: none;
+}
+.btn-ghost:hover {
+  background: #e9ebee;
+  transform: none;
+  box-shadow: none;
 }
 .btn-danger {
-  background: transparent;
+  background: var(--danger-soft);
   color: var(--danger);
-  border: 1px solid #eac9b8;
+  border: none;
+  box-shadow: none;
 }
 .btn-danger:hover {
-  background: #fbeee8;
+  background: #ffdfe1;
+  transform: none;
+  box-shadow: none;
 }
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 14px;
-  padding: 20px;
+  padding: 22px;
 }
 .field label {
   display: block;
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--text-muted);
-  margin-bottom: 6px;
+  margin-bottom: 7px;
+  font-weight: 600;
 }
 .field input,
 .field select,
 .field textarea {
   width: 100%;
-  padding: 8px 10px;
+  padding: 11px 13px;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  font-size: 13.5px;
-  background: var(--surface);
+  border-radius: 12px;
+  font-size: 14px;
+  background: #f9fafb;
   color: var(--text);
   font-family: inherit;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 .form-actions {
-  padding: 0 20px 20px;
+  padding: 0 22px 22px;
   display: flex;
   gap: 10px;
 }
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13.5px;
+  font-size: 14px;
 }
 thead th {
   text-align: left;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-muted);
-  padding: 10px 16px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
+  font-size: 12.5px;
 }
 tbody td {
-  padding: 12px 16px;
+  padding: 13px 16px;
   border-bottom: 1px solid var(--border);
   vertical-align: middle;
 }
@@ -250,26 +294,28 @@ tbody tr:hover {
 }
 .badge {
   display: inline-block;
-  padding: 3px 9px;
+  padding: 4px 11px;
   border-radius: 999px;
   font-size: 11.5px;
-  font-weight: 600;
+  font-weight: 700;
   background: var(--accent-soft);
   color: var(--accent);
   white-space: nowrap;
 }
 .empty-state {
-  padding: 48px 20px;
+  padding: 56px 20px;
   text-align: center;
   color: var(--text-muted);
-  font-size: 13.5px;
+  font-size: 14px;
+  font-weight: 500;
 }
 .error-box {
-  background: #fbeee8;
-  border: 1px solid #eac9b8;
+  background: var(--danger-soft);
+  border: none;
   color: var(--danger);
-  padding: 12px 16px;
-  border-radius: var(--radius);
-  font-size: 13px;
+  padding: 13px 16px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  font-weight: 600;
   margin-bottom: 16px;
 }
