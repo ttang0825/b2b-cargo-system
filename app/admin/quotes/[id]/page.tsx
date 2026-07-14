@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
+import { STATUS_OPTIONS as COMPANY_STATUS_ORDER } from "@/lib/statusColors";
 
 const STATUS_OPTIONS = ["상담중", "견적제출", "수주", "보류", "실패"];
 
@@ -94,6 +95,27 @@ export default function QuoteDetailPage() {
       return;
     }
     setQuote((q) => (q ? { ...q, status } : q));
+
+    // 견적을 실제로 화주에게 "발송"한 시점 = 화주 영업상태도 "견적발송"으로 승격 (뒤로는 안 돌아감)
+    if (status === "견적제출" && quote?.company_id) {
+      const { data: company } = await supabase
+        .from("companies")
+        .select("status")
+        .eq("id", quote.company_id)
+        .single();
+      if (company) {
+        const currentIdx = COMPANY_STATUS_ORDER.indexOf(
+          company.status as any
+        );
+        const targetIdx = COMPANY_STATUS_ORDER.indexOf("견적발송" as any);
+        if (currentIdx === -1 || currentIdx < targetIdx) {
+          await supabase
+            .from("companies")
+            .update({ status: "견적발송" })
+            .eq("id", quote.company_id);
+        }
+      }
+    }
   }
 
   async function handleDelete() {
