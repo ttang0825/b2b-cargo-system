@@ -1,8 +1,8 @@
 import "./globals.css";
-import Link from "next/link";
+import TopNav from "@/components/TopNav";
 
 export const metadata = {
-  title: "B2B 화물운송 통합 운영 시스템",
+  title: "EGG 운송 통합 운영 시스템",
   description: "화주 CRM · 견적 · 배차 · 정산 통합 관리",
 };
 
@@ -14,27 +14,7 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body>
-        <div className="top-nav">
-          <div
-            className="top-nav-inner"
-            style={{ flexWrap: "wrap", gap: 16 }}
-          >
-            <div>
-              <div className="brand">B2B 화물운송 통합 운영 시스템</div>
-              <div className="brand-sub">내부 관리자 (admin)</div>
-            </div>
-            <nav style={{ display: "flex", gap: 18, fontSize: 13.5 }}>
-              <Link href="/admin/companies">화주 관리 (영업)</Link>
-              <Link href="/admin/customers">활성 화주 (CRM)</Link>
-              <Link href="/admin/rates">운임기준표</Link>
-              <Link href="/admin/quotes">견적 관리</Link>
-              <Link href="/admin/orders">운송오더</Link>
-              <Link href="/admin/drivers">차주 관리</Link>
-              <Link href="/admin/dispatches">배차 관리</Link>
-              <Link href="/admin/invoices">정산 관리</Link>
-            </nav>
-          </div>
-        </div>
+        <TopNav />
         {children}
       </body>
     </html>
