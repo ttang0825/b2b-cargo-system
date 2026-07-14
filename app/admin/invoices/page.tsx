@@ -146,24 +146,42 @@ export default function InvoicesPage() {
       return;
     }
 
-    // 화주 CRM 누적실적 자동 반영 (법인 화주에 연결된 오더인 경우만)
+    // 화주 CRM 실적 자동 반영 (법인 화주에 연결된 오더인 경우만)
+    // 카운터를 "더하는" 방식 대신, 실제 정산(invoices) 기록을 매번 다시 세어
+    // 계산합니다 - 과거에 오더/정산을 삭제한 적이 있어도 항상 정확합니다.
     if (order?.company_id) {
       const { data: company } = await supabase
         .from("companies")
-        .select(
-          "status,total_orders_count,total_revenue,total_margin,outstanding_amount"
-        )
+        .select("status")
         .eq("id", order.company_id)
         .single();
-      if (company) {
-        const newOrderCount = (company.total_orders_count || 0) + 1;
 
-        // 실제 정산이 발생한 시점 = 실거래 성사. 누적 거래횟수에 따라
-        // 첫거래완료 → 재거래발생 → 반복화주 순으로 자동 승격 (뒤로 되돌리지 않음)
+      const { data: allInvoices } = await supabase
+        .from("invoices")
+        .select("customer_charge_total,commission_total,payment_received")
+        .eq("company_id", order.company_id);
+
+      const list = allInvoices || [];
+      const totalOrdersCount = list.length; // 방금 등록한 이 건 포함해서 이미 저장됨
+      const totalRevenue = list.reduce(
+        (sum, i) => sum + (i.customer_charge_total || 0),
+        0
+      );
+      const totalMargin = list.reduce(
+        (sum, i) => sum + (i.commission_total || 0),
+        0
+      );
+      const outstandingAmount = list
+        .filter((i) => !i.payment_received)
+        .reduce((sum, i) => sum + (i.customer_charge_total || 0), 0);
+
+      if (company) {
+        // 실제 정산 건수에 따라 첫거래완료 → 재거래발생 → 반복화주 순으로
+        // 자동 승격 (뒤로는 되돌리지 않음)
         const targetStatus =
-          newOrderCount === 1
+          totalOrdersCount === 1
             ? "첫거래완료"
-            : newOrderCount === 2
+            : totalOrdersCount === 2
             ? "재거래발생"
             : "반복화주";
         const currentIdx = STATUS_OPTIONS.indexOf(company.status as any);
@@ -177,12 +195,12 @@ export default function InvoicesPage() {
           .from("companies")
           .update({
             status: nextStatus,
-            total_orders_count: newOrderCount,
-            total_revenue: (company.total_revenue || 0) + chargeNum,
-            total_margin: (company.total_margin || 0) + commission,
-            outstanding_amount: (company.outstanding_amount || 0) + chargeNum,
+            total_orders_count: totalOrdersCount,
+            total_revenue: totalRevenue,
+            total_margin: totalMargin,
+            outstanding_amount: outstandingAmount,
             last_order_date: new Date().toISOString().slice(0, 10),
-            repeat_customer: newOrderCount > 1,
+            repeat_customer: totalOrdersCount > 1,
           })
           .eq("id", order.company_id);
       }
