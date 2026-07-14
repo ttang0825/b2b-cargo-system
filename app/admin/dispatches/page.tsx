@@ -252,21 +252,34 @@ export default function DispatchesPage() {
         .eq("id", target.order_id);
     }
 
-    // "운송완료"로 새로 바뀐 경우에만 차주의 누적 운송건수를 1건 증가시킵니다.
+    // "운송완료"로 새로 바뀐 경우 +1, 벗어나는 경우 -1
     if (status === "운송완료" && prevStatus !== "운송완료" && target?.driver_id) {
-      const { data: driver } = await supabase
+      await adjustDriverTripCount(target.driver_id, 1);
+    } else if (
+      prevStatus === "운송완료" &&
+      status !== "운송완료" &&
+      target?.driver_id
+    ) {
+      await adjustDriverTripCount(target.driver_id, -1);
+    }
+  }
+
+  async function adjustDriverTripCount(driverId: string, delta: number) {
+    const { data: driver } = await supabase
+      .from("drivers")
+      .select("completed_trip_count")
+      .eq("id", driverId)
+      .single();
+    if (driver) {
+      await supabase
         .from("drivers")
-        .select("completed_trip_count")
-        .eq("id", target.driver_id)
-        .single();
-      if (driver) {
-        await supabase
-          .from("drivers")
-          .update({
-            completed_trip_count: (driver.completed_trip_count || 0) + 1,
-          })
-          .eq("id", target.driver_id);
-      }
+        .update({
+          completed_trip_count: Math.max(
+            (driver.completed_trip_count || 0) + delta,
+            0
+          ),
+        })
+        .eq("id", driverId);
     }
   }
 
