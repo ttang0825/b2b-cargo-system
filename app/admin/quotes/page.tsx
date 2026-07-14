@@ -982,8 +982,8 @@ export default function QuotesPage() {
                   onClick={() => router.push(`/admin/quotes/${q.id}`)}
                   style={{ cursor: "pointer" }}
                 >
-                  <td>{q.quote_no}</td>
-                  <td>
+                  <td className="cell-nowrap">{q.quote_no}</td>
+                  <td style={{ maxWidth: 130 }}>
                     {q.companies?.name || q.guest_name || "-"}
                     {!q.companies?.name && q.guest_name && (
                       <span className="badge" style={{ marginLeft: 6 }}>
@@ -992,13 +992,14 @@ export default function QuotesPage() {
                     )}
                   </td>
                   <td>
-                    {q.origin || "-"} → {q.destination || "-"}
+                    <div>{q.origin || "-"} →</div>
+                    <div>{q.destination || "-"}</div>
                   </td>
-                  <td>{q.vehicle_type || "-"}</td>
-                  <td>{q.final_amount ? won(q.final_amount) : "-"}</td>
-                  <td>{q.status}</td>
-                  <td>{new Date(q.created_at).toLocaleDateString("ko-KR")}</td>
-                  <td onClick={(e) => e.stopPropagation()}>
+                  <td className="cell-nowrap">{q.vehicle_type || "-"}</td>
+                  <td className="cell-nowrap">{q.final_amount ? won(q.final_amount) : "-"}</td>
+                  <td className="cell-nowrap">{q.status}</td>
+                  <td className="cell-nowrap">{new Date(q.created_at).toLocaleDateString("ko-KR")}</td>
+                  <td className="cell-nowrap" onClick={(e) => e.stopPropagation()}>
                     <button
                       className="btn-danger"
                       style={{
