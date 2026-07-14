@@ -11,7 +11,11 @@ export default function MultiSelectTags({
   onChange: (v: string) => void;
 }) {
   const selected = value
-    ? value.split(",").map((s) => s.trim()).filter(Boolean)
+    ? value
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .filter((s) => options.includes(s)) // 예전 자유입력 텍스트 등 목록에 없는 값은 제외
     : [];
 
   function toggle(opt: string) {
