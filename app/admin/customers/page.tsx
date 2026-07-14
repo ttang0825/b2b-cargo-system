@@ -265,7 +265,7 @@ export default function CustomersPage() {
 
       {error && <div className="error-box">오류: {error}</div>}
 
-      <div className="card">
+      <div className="card" style={{ overflowX: "auto" }}>
         {loading ? (
           <div className="empty-state">불러오는 중...</div>
         ) : filtered.length === 0 ? (
@@ -274,7 +274,7 @@ export default function CustomersPage() {
             목록에서 "CRM 전환" 버튼을 눌러 등록할 수 있습니다.
           </div>
         ) : (
-          <table>
+          <table style={{ minWidth: 1080 }}>
             <thead>
               <tr>
                 <th>회사명</th>
@@ -298,8 +298,8 @@ export default function CustomersPage() {
                   onClick={() => router.push(`/admin/companies/${c.id}`)}
                   style={{ cursor: "pointer" }}
                 >
-                  <td style={{ maxWidth: 140 }}>{c.name}</td>
-                  <td className="cell-nowrap">{formatIndustry(c)}</td>
+                  <td className="cell-nowrap" style={{ minWidth: 110 }}>{c.name}</td>
+                  <td style={{ maxWidth: 170 }}>{formatIndustry(c)}</td>
                   <td className="cell-nowrap">{formatRegion(c)}</td>
                   <td className="cell-nowrap">{c.contact_name || "-"}</td>
                   <td className="cell-nowrap">{c.contact_mobile || c.phone || "-"}</td>
