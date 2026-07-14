@@ -8,6 +8,7 @@ import {
   getDispatchStatusColor,
   DISPATCH_TO_ORDER_STATUS,
 } from "@/lib/dispatchStatusColors";
+import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 
 type OrderLite = {
   id: string;
@@ -47,6 +48,10 @@ type DispatchRow = {
   drivers: { name: string; phone: string | null } | null;
 };
 
+// "전체" 기간을 선택해도 한 번에 너무 많은 데이터를 불러오지 않도록 안전장치로 상한을 둠
+const ALL_PERIOD_LIMIT = 500;
+const FILTERED_PERIOD_LIMIT = 500;
+
 function won(n: number | null) {
   if (n === null || n === undefined) return "-";
   return Math.round(n).toLocaleString("ko-KR") + "원";
@@ -61,6 +66,7 @@ export default function DispatchesPage() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
+  const [period, setPeriod] = useState<DatePreset>("all");
 
   const [selectedOrderId, setSelectedOrderId] = useState("");
   const [driverSearch, setDriverSearch] = useState("");
@@ -75,14 +81,19 @@ export default function DispatchesPage() {
   const [driverPayout, setDriverPayout] = useState("");
   const [memo, setMemo] = useState("");
 
-  async function loadDispatches() {
+  async function loadDispatches(preset: DatePreset = period) {
     setLoading(true);
-    const { data, error } = await supabase
+    const { from } = getDateRange(preset);
+    let query = supabase
       .from("dispatches")
       .select(
         "id,dispatch_status,customer_charge,driver_payout,margin,created_at,order_id,driver_id,orders(order_no,origin,destination,companies(name),guest_name),drivers(name,phone)"
       )
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(preset === "all" ? ALL_PERIOD_LIMIT : FILTERED_PERIOD_LIMIT);
+    if (from) query = query.gte("created_at", from);
+
+    const { data, error } = await query;
     if (error) setError(error.message);
     else setDispatches(data as any as DispatchRow[]);
     setLoading(false);
@@ -101,9 +112,16 @@ export default function DispatchesPage() {
   }
 
   useEffect(() => {
-    loadDispatches();
+    loadDispatches("all");
     loadAvailableOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 기간 필터 변경 시 배차 목록만 다시 로드
+  useEffect(() => {
+    loadDispatches(period);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period]);
 
   useEffect(() => {
     let active = true;
@@ -219,7 +237,7 @@ export default function DispatchesPage() {
     setCustomerCharge("");
     setDriverPayout("");
     setMemo("");
-    loadDispatches();
+    loadDispatches(period);
     loadAvailableOrders();
   }
 
@@ -305,12 +323,22 @@ export default function DispatchesPage() {
             접수된 운송오더에 차주를 배정하고 진행상태를 관리합니다.
           </p>
         </div>
-        <button className="btn" onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "닫기" : "+ 신규 배차"}
-        </button>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <DateRangeFilter value={period} onChange={setPeriod} />
+          <button className="btn" onClick={() => setShowForm((v) => !v)}>
+            {showForm ? "닫기" : "+ 신규 배차"}
+          </button>
+        </div>
       </div>
 
       {error && <div className="error-box">오류: {error}</div>}
+
+      {period === "all" && dispatches.length >= ALL_PERIOD_LIMIT && (
+        <div className="error-box">
+          최근 {ALL_PERIOD_LIMIT}건만 표시 중입니다. 더 오래된 데이터를 보려면
+          기간 필터를 좁혀서 확인해주세요.
+        </div>
+      )}
 
       {showForm && (
         <div className="card" style={{ marginBottom: 24, padding: 20 }}>
@@ -500,7 +528,11 @@ export default function DispatchesPage() {
         {loading ? (
           <div className="empty-state">불러오는 중...</div>
         ) : filtered.length === 0 ? (
-          <div className="empty-state">등록된 배차가 없습니다.</div>
+          <div className="empty-state">
+            {period === "all"
+              ? "등록된 배차가 없습니다."
+              : "선택한 기간에 등록된 배차가 없습니다."}
+          </div>
         ) : (
           <table>
             <thead>
