@@ -4,6 +4,8 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { ORDER_STATUS_OPTIONS, getOrderStatusColor } from "@/lib/orderStatusColors";
+import { LOAD_UNLOAD_CONDITIONS } from "@/lib/constants";
+import { generateDailyNumber } from "@/lib/generateNumber";
 import DateTimePicker from "./DateTimePicker";
 
 type CompanyLite = { id: string; name: string; phone: string | null };
@@ -159,7 +161,7 @@ function OrdersPageInner() {
     }
 
     setSaving(true);
-    const orderNo = `O-${Date.now()}`;
+    const orderNo = await generateDailyNumber("orders", "O");
 
     const { error } = await supabase.from("orders").insert({
       order_no: orderNo,
@@ -385,39 +387,55 @@ function OrdersPageInner() {
                   placeholder="예: 1톤 탑차"
                 />
               </div>
-              <DateTimePicker
-                label="상차 예정일시"
-                value={form.requested_pickup_at}
-                onChange={(v) =>
-                  setForm({ ...form, requested_pickup_at: v })
-                }
-              />
-              <DateTimePicker
-                label="하차 예정일시"
-                value={form.requested_delivery_at}
-                onChange={(v) =>
-                  setForm({ ...form, requested_delivery_at: v })
-                }
-              />
+              <div style={{ gridColumn: "1 / -1" }}>
+                <DateTimePicker
+                  label="상차 예정일시"
+                  value={form.requested_pickup_at}
+                  onChange={(v) =>
+                    setForm({ ...form, requested_pickup_at: v })
+                  }
+                />
+              </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <DateTimePicker
+                  label="하차 예정일시"
+                  value={form.requested_delivery_at}
+                  onChange={(v) =>
+                    setForm({ ...form, requested_delivery_at: v })
+                  }
+                />
+              </div>
               <div className="field">
                 <label>상차 조건</label>
-                <input
+                <select
                   value={form.load_condition}
                   onChange={(e) =>
                     setForm({ ...form, load_condition: e.target.value })
                   }
-                  placeholder="예: 지게차"
-                />
+                >
+                  <option value="">선택</option>
+                  {LOAD_UNLOAD_CONDITIONS.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="field">
                 <label>하차 조건</label>
-                <input
+                <select
                   value={form.unload_condition}
                   onChange={(e) =>
                     setForm({ ...form, unload_condition: e.target.value })
                   }
-                  placeholder="예: 수작업"
-                />
+                >
+                  <option value="">선택</option>
+                  {LOAD_UNLOAD_CONDITIONS.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="field" style={{ gridColumn: "1 / -1" }}>
                 <label>품목</label>
