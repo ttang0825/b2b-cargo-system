@@ -5,6 +5,25 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
 const VEHICLE_TYPES = ["1톤", "1.4톤", "2.5톤", "3.5톤", "5톤", "5톤 플러스/축"];
+const BODY_TYPES = [
+  "카고",
+  "탑차",
+  "윙바디",
+  "냉장탑",
+  "냉동탑",
+  "리프트",
+  "크레인",
+  "렉카",
+  "트레일러",
+  "사다리차",
+  "기타/협의",
+];
+
+type VehicleLite = {
+  vehicle_number: string | null;
+  vehicle_type: string | null;
+  body_type: string | null;
+};
 
 type DriverRow = {
   id: string;
@@ -15,14 +34,16 @@ type DriverRow = {
   lift_available: boolean;
   forklift_available: boolean;
   rating: number | null;
+  completed_trip_count: number | null;
   created_at: string;
-  vehicles: { vehicle_number: string | null; vehicle_type: string | null }[];
+  vehicles: VehicleLite[];
 };
 
 const SORT_OPTIONS = [
   { key: "created_at", label: "등록일" },
   { key: "name", label: "차주명" },
   { key: "rating", label: "평점" },
+  { key: "completed_trip_count", label: "운송건수" },
 ];
 
 export default function DriversPage() {
@@ -45,9 +66,12 @@ export default function DriversPage() {
     bank_account: "",
     vehicle_number: "",
     vehicle_type: "1톤",
+    body_type: "카고",
     cold_chain_available: false,
     lift_available: false,
     forklift_available: false,
+    license_verified: false,
+    insurance_verified: false,
     notes: "",
   });
 
@@ -56,7 +80,7 @@ export default function DriversPage() {
     const { data, error } = await supabase
       .from("drivers")
       .select(
-        "id,name,phone,operating_regions,cold_chain_available,lift_available,forklift_available,rating,created_at,vehicles(vehicle_number,vehicle_type)"
+        "id,name,phone,operating_regions,cold_chain_available,lift_available,forklift_available,rating,completed_trip_count,created_at,vehicles(vehicle_number,vehicle_type,body_type)"
       )
       .order("created_at", { ascending: false });
     if (error) setError(error.message);
@@ -89,6 +113,8 @@ export default function DriversPage() {
         cold_chain_available: form.cold_chain_available,
         lift_available: form.lift_available,
         forklift_available: form.forklift_available,
+        license_verified: form.license_verified,
+        insurance_verified: form.insurance_verified,
         notes: form.notes || null,
       })
       .select("id")
@@ -105,6 +131,7 @@ export default function DriversPage() {
         driver_id: newDriver.id,
         vehicle_number: form.vehicle_number,
         vehicle_type: form.vehicle_type,
+        body_type: form.body_type,
         cold_chain: form.cold_chain_available,
         lift: form.lift_available,
       });
@@ -121,9 +148,12 @@ export default function DriversPage() {
       bank_account: "",
       vehicle_number: "",
       vehicle_type: "1톤",
+      body_type: "카고",
       cold_chain_available: false,
       lift_available: false,
       forklift_available: false,
+      license_verified: false,
+      insurance_verified: false,
       notes: "",
     });
     loadDrivers();
@@ -134,12 +164,14 @@ export default function DriversPage() {
       .filter((d) => {
         if (!search.trim()) return true;
         const q = search.trim().toLowerCase();
-        const vehicleNo = d.vehicles?.[0]?.vehicle_number || "";
+        const vehicleNos = (d.vehicles || [])
+          .map((v) => v.vehicle_number || "")
+          .join(" ");
         return (
           d.name.toLowerCase().includes(q) ||
           (d.phone || "").includes(q) ||
           (d.operating_regions || "").toLowerCase().includes(q) ||
-          vehicleNo.toLowerCase().includes(q)
+          vehicleNos.toLowerCase().includes(q)
         );
       })
       .sort((a, b) => {
@@ -151,6 +183,9 @@ export default function DriversPage() {
         } else if (sortKey === "rating") {
           av = a.rating || 0;
           bv = b.rating || 0;
+        } else if (sortKey === "completed_trip_count") {
+          av = a.completed_trip_count || 0;
+          bv = b.completed_trip_count || 0;
         } else {
           av = a.created_at;
           bv = b.created_at;
@@ -168,7 +203,8 @@ export default function DriversPage() {
         <div>
           <h1 className="page-title">차주(기사) 관리</h1>
           <p className="page-desc">
-            배차에 활용할 차주풀입니다. 차량 정보도 함께 등록합니다.
+            배차에 활용할 차주풀입니다. 차량은 등록 후 상세페이지에서 여러 대
+            추가할 수 있습니다.
           </p>
         </div>
         <button className="btn" onClick={() => setShowForm((v) => !v)}>
@@ -198,7 +234,7 @@ export default function DriversPage() {
                 />
               </div>
               <div className="field">
-                <label>차량번호</label>
+                <label>차량번호 (첫 차량)</label>
                 <input
                   value={form.vehicle_number}
                   onChange={(e) =>
@@ -218,6 +254,21 @@ export default function DriversPage() {
                   {VEHICLE_TYPES.map((v) => (
                     <option key={v} value={v}>
                       {v}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>차량형태</label>
+                <select
+                  value={form.body_type}
+                  onChange={(e) =>
+                    setForm({ ...form, body_type: e.target.value })
+                  }
+                >
+                  {BODY_TYPES.map((b) => (
+                    <option key={b} value={b}>
+                      {b}
                     </option>
                   ))}
                 </select>
@@ -269,11 +320,13 @@ export default function DriversPage() {
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: 16, margin: "14px 0", fontSize: 13 }}>
+            <div style={{ display: "flex", gap: 16, margin: "14px 0", fontSize: 13, flexWrap: "wrap" }}>
               {[
                 ["cold_chain_available", "냉장/냉동 가능"],
                 ["lift_available", "리프트 가능"],
                 ["forklift_available", "지게차 가능"],
+                ["license_verified", "화물운송자격증 보유"],
+                ["insurance_verified", "적재물배상보험 가입"],
               ].map(([key, label]) => (
                 <label
                   key={key}
@@ -391,10 +444,10 @@ export default function DriversPage() {
               <tr>
                 <th>차주명</th>
                 <th>연락처</th>
-                <th>차량번호</th>
-                <th>차량톤수</th>
+                <th>보유 차량</th>
                 <th>운행가능지역</th>
                 <th>특수조건</th>
+                <th>운송건수</th>
                 <th>평점</th>
               </tr>
             </thead>
@@ -407,8 +460,18 @@ export default function DriversPage() {
                 >
                   <td>{d.name}</td>
                   <td>{d.phone || "-"}</td>
-                  <td>{d.vehicles?.[0]?.vehicle_number || "-"}</td>
-                  <td>{d.vehicles?.[0]?.vehicle_type || "-"}</td>
+                  <td>
+                    {d.vehicles && d.vehicles.length > 0
+                      ? d.vehicles
+                          .map(
+                            (v) =>
+                              `${v.vehicle_type || ""}${
+                                v.body_type ? `(${v.body_type})` : ""
+                              }`
+                          )
+                          .join(", ")
+                      : "-"}
+                  </td>
                   <td>{d.operating_regions || "-"}</td>
                   <td>
                     <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
@@ -421,6 +484,7 @@ export default function DriversPage() {
                       )}
                     </div>
                   </td>
+                  <td>{d.completed_trip_count || 0}건</td>
                   <td>{d.rating ? d.rating.toFixed(1) : "-"}</td>
                 </tr>
               ))}
