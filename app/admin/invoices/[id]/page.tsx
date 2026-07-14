@@ -111,7 +111,7 @@ export default function InvoiceDetailPage() {
     }
 
     setSaving(false);
-    load();
+    router.push("/admin/invoices");
   }
 
   async function handleDelete() {
