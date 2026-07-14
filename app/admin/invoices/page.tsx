@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { STATUS_OPTIONS } from "@/lib/statusColors";
 import {
   INVOICE_STATUS_OPTIONS,
   getInvoiceStatusColor,
@@ -149,19 +150,39 @@ export default function InvoicesPage() {
     if (order?.company_id) {
       const { data: company } = await supabase
         .from("companies")
-        .select("total_orders_count,total_revenue,total_margin,outstanding_amount")
+        .select(
+          "status,total_orders_count,total_revenue,total_margin,outstanding_amount"
+        )
         .eq("id", order.company_id)
         .single();
       if (company) {
+        const newOrderCount = (company.total_orders_count || 0) + 1;
+
+        // 실제 정산이 발생한 시점 = 실거래 성사. 누적 거래횟수에 따라
+        // 첫거래완료 → 재거래발생 → 반복화주 순으로 자동 승격 (뒤로 되돌리지 않음)
+        const targetStatus =
+          newOrderCount === 1
+            ? "첫거래완료"
+            : newOrderCount === 2
+            ? "재거래발생"
+            : "반복화주";
+        const currentIdx = STATUS_OPTIONS.indexOf(company.status as any);
+        const targetIdx = STATUS_OPTIONS.indexOf(targetStatus as any);
+        const nextStatus =
+          currentIdx !== -1 && currentIdx >= targetIdx
+            ? company.status
+            : targetStatus;
+
         await supabase
           .from("companies")
           .update({
-            total_orders_count: (company.total_orders_count || 0) + 1,
+            status: nextStatus,
+            total_orders_count: newOrderCount,
             total_revenue: (company.total_revenue || 0) + chargeNum,
             total_margin: (company.total_margin || 0) + commission,
             outstanding_amount: (company.outstanding_amount || 0) + chargeNum,
             last_order_date: new Date().toISOString().slice(0, 10),
-            repeat_customer: (company.total_orders_count || 0) + 1 > 1,
+            repeat_customer: newOrderCount > 1,
           })
           .eq("id", order.company_id);
       }
