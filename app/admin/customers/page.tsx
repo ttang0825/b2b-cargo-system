@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { STATUS_OPTIONS, getStatusColor } from "@/lib/statusColors";
+import { getDispatchStatusColor } from "@/lib/dispatchStatusColors";
 
 type Customer = {
   id: string;
@@ -21,6 +22,7 @@ type Customer = {
   payment_terms: string | null;
   total_orders_count: number | null;
   outstanding_amount: number | null;
+  latestDispatchStatus?: string | null;
 };
 
 // 견적요청 단계부터 "활성 관리 대상"으로 간주합니다.
@@ -79,9 +81,29 @@ export default function CustomersPage() {
 
     if (error) {
       setError(error.message);
-    } else {
-      setCustomers(data as Customer[]);
+      setLoading(false);
+      return;
     }
+
+    const list = (data as Customer[]) || [];
+
+    // 각 화주의 가장 최근 배차상태를 조회해서 붙여줍니다
+    const { data: dispatchRows } = await supabase
+      .from("dispatches")
+      .select("dispatch_status,created_at,orders(company_id)")
+      .order("created_at", { ascending: false });
+
+    const latestByCompany: Record<string, string> = {};
+    for (const row of dispatchRows || []) {
+      const companyId = (row as any).orders?.company_id;
+      if (companyId && !latestByCompany[companyId]) {
+        latestByCompany[companyId] = (row as any).dispatch_status;
+      }
+    }
+
+    setCustomers(
+      list.map((c) => ({ ...c, latestDispatchStatus: latestByCompany[c.id] || null }))
+    );
     setLoading(false);
   }
 
@@ -157,7 +179,12 @@ export default function CustomersPage() {
     <main className="container">
       <div className="page-header">
         <div>
-          <h1 className="page-title">활성 화주 (거래 중인 고객)</h1>
+          <h1 className="page-title">
+            활성 화주 (거래 중인 고객){" "}
+            <span style={{ fontSize: 15, color: "var(--text-muted)", fontWeight: 500 }}>
+              (총 {customers.length}건)
+            </span>
+          </h1>
           <p className="page-desc">
             견적요청 이상 단계에 진입한 화주만 모아 보여줍니다. 전체
             영업대상은{" "}
@@ -260,6 +287,7 @@ export default function CustomersPage() {
                 <th>미수금</th>
                 <th>등급</th>
                 <th>거래상태</th>
+                <th>배차상태</th>
                 <th></th>
               </tr>
             </thead>
@@ -299,6 +327,25 @@ export default function CustomersPage() {
                     >
                       {c.status}
                     </span>
+                  </td>
+                  <td>
+                    {c.latestDispatchStatus ? (
+                      <span
+                        style={{
+                          display: "inline-block",
+                          padding: "3px 10px",
+                          borderRadius: 999,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          background: getDispatchStatusColor(c.latestDispatchStatus).bg,
+                          color: getDispatchStatusColor(c.latestDispatchStatus).text,
+                        }}
+                      >
+                        {c.latestDispatchStatus}
+                      </span>
+                    ) : (
+                      "-"
+                    )}
                   </td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <button
