@@ -348,3 +348,35 @@ tbody tr:hover {
   font-weight: 600;
   margin-bottom: 16px;
 }
+
+/* 견적서 등 인쇄용 문서 시트 */
+.print-sheet {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 48px;
+  max-width: 780px;
+  margin: 0 auto;
+  color: #191f28;
+}
+@media print {
+  .top-nav,
+  .print-hide {
+    display: none !important;
+  }
+  body {
+    background: #ffffff !important;
+  }
+  .print-sheet {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+  }
+  @page {
+    size: A4;
+    margin: 18mm;
+  }
+}
