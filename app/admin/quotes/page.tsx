@@ -723,29 +723,6 @@ export default function QuotesPage() {
                       ))}
                   </div>
                 )}
-                {customerMode === "company" && selectedCompany && (
-                  <label
-                    htmlFor="saveOrigin"
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 5,
-                      marginTop: 6,
-                      fontSize: 12,
-                      color: "var(--text-muted)",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <input
-                      id="saveOrigin"
-                      type="checkbox"
-                      checked={saveOrigin}
-                      onChange={(e) => setSaveOrigin(e.target.checked)}
-                      style={{ margin: 0 }}
-                    />
-                    이 출발지를 화주 주소록에 저장
-                  </label>
-                )}
               </div>
 
               <div className="field">
@@ -812,17 +789,48 @@ export default function QuotesPage() {
                       ))}
                   </div>
                 )}
-                {customerMode === "company" && selectedCompany && (
+              </div>
+
+              {customerMode === "company" && selectedCompany && (
+                <div
+                  style={{
+                    gridColumn: "1 / -1",
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 14,
+                  }}
+                >
                   <label
-                    htmlFor="saveDestination"
+                    htmlFor="saveOrigin"
                     style={{
-                      display: "inline-flex",
+                      display: "flex",
                       alignItems: "center",
-                      gap: 5,
-                      marginTop: 6,
+                      gap: 6,
                       fontSize: 12,
                       color: "var(--text-muted)",
                       cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    <input
+                      id="saveOrigin"
+                      type="checkbox"
+                      checked={saveOrigin}
+                      onChange={(e) => setSaveOrigin(e.target.checked)}
+                      style={{ margin: 0, flexShrink: 0 }}
+                    />
+                    이 출발지를 화주 주소록에 저장
+                  </label>
+                  <label
+                    htmlFor="saveDestination"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      fontSize: 12,
+                      color: "var(--text-muted)",
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
                     }}
                   >
                     <input
@@ -830,12 +838,13 @@ export default function QuotesPage() {
                       type="checkbox"
                       checked={saveDestination}
                       onChange={(e) => setSaveDestination(e.target.checked)}
-                      style={{ margin: 0 }}
+                      style={{ margin: 0, flexShrink: 0 }}
                     />
                     이 도착지를 화주 주소록에 저장
                   </label>
-                )}
-              </div>
+                </div>
+              )}
+
               <div className="field">
                 <label>거리(km) *</label>
                 <div style={{ display: "flex", gap: 6 }}>
