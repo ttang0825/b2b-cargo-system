@@ -95,6 +95,7 @@ export default function QuotesPage() {
   const [saving, setSaving] = useState(false);
   const [postcodeReady, setPostcodeReady] = useState(false);
   const [period, setPeriod] = useState<DatePreset>("all");
+  const [calculatingDistance, setCalculatingDistance] = useState(false);
 
   const [savedLocations, setSavedLocations] = useState<
     { id: string; location_name: string | null; address: string | null; location_type: string | null }[]
@@ -241,6 +242,33 @@ export default function QuotesPage() {
     }
     loadLocations();
   }, [selectedCompany, customerMode]);
+
+  // 카카오 API로 출발지/도착지 실제 도로거리를 자동 계산
+  async function handleAutoDistance() {
+    if (!form.origin.trim() || !form.destination.trim()) {
+      setError("거리를 자동계산하려면 출발지와 도착지를 먼저 입력해주세요.");
+      return;
+    }
+    setCalculatingDistance(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/distance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ origin: form.origin, destination: form.destination }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "거리 계산에 실패했습니다.");
+        return;
+      }
+      setForm((prev) => ({ ...prev, distance_km: String(data.distance_km) }));
+    } catch {
+      setError("거리 계산 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setCalculatingDistance(false);
+    }
+  }
 
   function findOption(category: string, name: string) {
     return surcharges.find(
@@ -810,13 +838,31 @@ export default function QuotesPage() {
               </div>
               <div className="field">
                 <label>거리(km) *</label>
-                <input
-                  type="number"
-                  value={form.distance_km}
-                  onChange={(e) =>
-                    setForm({ ...form, distance_km: e.target.value })
-                  }
-                />
+                <div style={{ display: "flex", gap: 6 }}>
+                  <input
+                    type="number"
+                    value={form.distance_km}
+                    onChange={(e) =>
+                      setForm({ ...form, distance_km: e.target.value })
+                    }
+                    style={{ flex: 1 }}
+                  />
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    style={{
+                      padding: "0 10px",
+                      borderRadius: 6,
+                      fontSize: 12,
+                      whiteSpace: "nowrap",
+                      cursor: "pointer",
+                    }}
+                    onClick={handleAutoDistance}
+                    disabled={calculatingDistance}
+                  >
+                    {calculatingDistance ? "계산 중..." : "자동계산"}
+                  </button>
+                </div>
               </div>
               <div className="field">
                 <label>톤수 *</label>
