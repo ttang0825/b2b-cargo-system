@@ -12,6 +12,7 @@ const MENU = [
   { href: "/admin/drivers", label: "차주 관리" },
   { href: "/admin/dispatches", label: "배차 관리" },
   { href: "/admin/invoices", label: "정산 관리" },
+  { href: "/admin/guide", label: "이용가이드" },
 ];
 
 export default function TopNav() {
