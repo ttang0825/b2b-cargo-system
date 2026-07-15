@@ -931,7 +931,7 @@ export default function QuotesPage() {
                 <span style={{ color: "var(--text-muted)" }}>
                   기본운임 ({form.vehicle_type})
                 </span>
-                <span>{won(calc.base)}</span>
+                <span className="num">{won(calc.base)}</span>
               </div>
               {calc.breakdown.map((b, i) => (
                 <div
@@ -945,7 +945,7 @@ export default function QuotesPage() {
                   }}
                 >
                   <span>+ {b.label}</span>
-                  <span>{won(b.amount)}</span>
+                  <span className="num">{won(b.amount)}</span>
                 </div>
               ))}
               <div
@@ -960,7 +960,7 @@ export default function QuotesPage() {
                 }}
               >
                 <span>최종 견적금액</span>
-                <span>{won(calc.final)}</span>
+                <span className="num">{won(calc.final)}</span>
               </div>
               <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 6 }}>
                 부가세 별도
@@ -1000,7 +1000,9 @@ export default function QuotesPage() {
                   onClick={() => router.push(`/admin/quotes/${q.id}`)}
                   style={{ cursor: "pointer" }}
                 >
-                  <td className="cell-nowrap">{q.quote_no}</td>
+                  <td className="cell-nowrap">
+                    <span className="num">{q.quote_no}</span>
+                  </td>
                   <td className="cell-nowrap" style={{ minWidth: 110 }}>
                     {q.companies?.name || q.guest_name || "-"}
                     {!q.companies?.name && q.guest_name && (
@@ -1014,9 +1016,17 @@ export default function QuotesPage() {
                     <div>{q.destination || "-"}</div>
                   </td>
                   <td className="cell-nowrap">{q.vehicle_type || "-"}</td>
-                  <td className="cell-nowrap">{q.final_amount ? won(q.final_amount) : "-"}</td>
+                  <td className="cell-nowrap">
+                    <span className="num">
+                      {q.final_amount ? won(q.final_amount) : "-"}
+                    </span>
+                  </td>
                   <td className="cell-nowrap">{q.status}</td>
-                  <td className="cell-nowrap">{new Date(q.created_at).toLocaleDateString("ko-KR")}</td>
+                  <td className="cell-nowrap">
+                    <span className="num">
+                      {new Date(q.created_at).toLocaleDateString("ko-KR")}
+                    </span>
+                  </td>
                   <td className="cell-nowrap" onClick={(e) => e.stopPropagation()}>
                     <button
                       className="btn-danger"
