@@ -5,8 +5,15 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { STATUS_OPTIONS, getStatusColor } from "@/lib/statusColors";
-
-const GRADE_OPTIONS = ["S", "A", "B", "C", "D", "휴면"];
+import {
+  REGIONS,
+  VEHICLE_TYPES,
+  BODY_TYPES,
+  GRADE_OPTIONS,
+  formatPhoneNumber,
+} from "@/lib/constants";
+import { MANUAL_SOURCE_OPTIONS, getSourceChips } from "@/lib/sourceColors";
+import MultiSelectTags from "@/components/MultiSelectTags";
 
 type CompanyDetail = { [key: string]: any };
 
@@ -55,6 +62,20 @@ function EditableField({
       />
     </div>
   );
+}
+
+// "1톤 카고" 형태의 저장 문자열을 톤수/차량형태 선택값으로 분리
+function parseRecommendedVehicle(v: string | null | undefined) {
+  if (!v) return { tonnage: VEHICLE_TYPES[0], bodytype: BODY_TYPES[0] };
+  const trimmed = v.trim();
+  for (const t of VEHICLE_TYPES) {
+    if (trimmed.startsWith(t)) {
+      const rest = trimmed.slice(t.length).trim();
+      const matchedBody = BODY_TYPES.find((b) => b === rest);
+      return { tonnage: t, bodytype: matchedBody || BODY_TYPES[0] };
+    }
+  }
+  return { tonnage: VEHICLE_TYPES[0], bodytype: BODY_TYPES[0] };
 }
 
 const BASIC_FIELDS = [
@@ -142,6 +163,10 @@ export default function CompanyDetailPage() {
     next_followup_date: "",
     notes: "",
     repeat_customer: false,
+    manual_source_type: "",
+    manual_source_note: "",
+    recommended_vehicle_tonnage: VEHICLE_TYPES[0],
+    recommended_vehicle_bodytype: BODY_TYPES[0],
   });
 
   function set(key: string, value: any) {
@@ -170,6 +195,8 @@ export default function CompanyDetailPage() {
         "next_followup_date",
         "notes",
         "repeat_customer",
+        "manual_source_type",
+        "manual_source_note",
         ...BASIC_FIELDS.map((f) => f[0]),
         ...SALES_REF_FIELDS.map((f) => f[0]),
         ...CRM_CONTACT_FIELDS.map((f) => f[0]),
@@ -180,6 +207,9 @@ export default function CompanyDetailPage() {
       for (const k of allKeys) {
         initial[k] = data[k] ?? (k === "repeat_customer" ? false : "");
       }
+      const parsedVehicle = parseRecommendedVehicle(data.recommended_vehicle);
+      initial.recommended_vehicle_tonnage = parsedVehicle.tonnage;
+      initial.recommended_vehicle_bodytype = parsedVehicle.bodytype;
       setEditForm(initial);
     }
     setLoading(false);
@@ -247,8 +277,10 @@ export default function CompanyDetailPage() {
     setSaving(true);
     setError(null);
 
+    const uiOnlyKeys = ["recommended_vehicle_tonnage", "recommended_vehicle_bodytype"];
     const payload: Record<string, any> = {};
     for (const key of Object.keys(editForm)) {
+      if (uiOnlyKeys.includes(key)) continue;
       let v = editForm[key];
       if (v === "") v = null;
       if (
@@ -259,6 +291,16 @@ export default function CompanyDetailPage() {
         v = v === null ? null : Number(v);
       }
       payload[key] = v;
+    }
+
+    // 톤수 + 차량형태 선택값을 기존 컬럼 하나로 합쳐서 저장
+    const tonnage = editForm.recommended_vehicle_tonnage;
+    const bodytype = editForm.recommended_vehicle_bodytype;
+    payload.recommended_vehicle = tonnage && bodytype ? `${tonnage} ${bodytype}` : null;
+
+    // "기타"가 아니면 출처 설명은 비워서 저장 (다른 분류로 바꿨는데 이전 수기설명이 남지 않도록)
+    if (payload.manual_source_type !== "기타") {
+      payload.manual_source_note = null;
     }
 
     const { error } = await supabase
@@ -362,10 +404,20 @@ export default function CompanyDetailPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">{company.name}</h1>
-          <p className="page-desc">
-            <span className="badge">{company.source_sheet || "직접등록"}</span>
-            {"  "}
-            {company.industry || "업종 미확인"}
+          <p
+            className="page-desc"
+            style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}
+          >
+            {getSourceChips(company).map((chip, i) => (
+              <span
+                key={i}
+                className="badge"
+                style={{ background: chip.bg, color: chip.text }}
+              >
+                {chip.label}
+              </span>
+            ))}
+            <span>{company.industry || "업종 미확인"}</span>
           </p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -450,7 +502,8 @@ export default function CompanyDetailPage() {
               <label>대표번호</label>
               <input
                 value={editForm.phone}
-                onChange={(e) => set("phone", e.target.value)}
+                onChange={(e) => set("phone", formatPhoneNumber(e.target.value))}
+                placeholder="숫자만 입력하면 자동으로 - 표시"
               />
             </div>
             <div className="field">
@@ -468,6 +521,37 @@ export default function CompanyDetailPage() {
                 onChange={(e) => set("next_followup_date", e.target.value)}
               />
             </div>
+
+            {/* 임포트된 DB 업체는 출처가 고정이라 이 항목을 숨기고, 직접등록 업체만 분류를 고를 수 있음 */}
+            {!company.source_sheet && (
+              <>
+                <div className="field">
+                  <label>출처 분류</label>
+                  <select
+                    value={editForm.manual_source_type}
+                    onChange={(e) => set("manual_source_type", e.target.value)}
+                  >
+                    <option value="">미지정</option>
+                    {MANUAL_SOURCE_OPTIONS.map((o) => (
+                      <option key={o} value={o}>
+                        {o === "기타" ? "기타 (수기작성)" : o}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {editForm.manual_source_type === "기타" && (
+                  <div className="field">
+                    <label>출처 설명</label>
+                    <input
+                      value={editForm.manual_source_note}
+                      onChange={(e) => set("manual_source_note", e.target.value)}
+                      placeholder="예: 지인 소개, 홈페이지 문의 등"
+                    />
+                  </div>
+                )}
+              </>
+            )}
+
             <div className="field" style={{ gridColumn: "1 / -1" }}>
               <label>주소</label>
               <input
@@ -541,15 +625,52 @@ export default function CompanyDetailPage() {
                 }
           }
         >
-          {BASIC_FIELDS.map(([key, label]) => (
-            <EditableField
-              key={key}
-              label={label}
-              value={editing ? editForm[key] : company[key]}
-              editing={editing}
-              onChange={(v) => set(key, v)}
-            />
-          ))}
+          {BASIC_FIELDS.map(([key, label]) => {
+            if (key === "recommended_vehicle" && editing) {
+              return (
+                <div className="field" key={key} style={{ minWidth: 0 }}>
+                  <label>{label}</label>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <select
+                      value={editForm.recommended_vehicle_tonnage}
+                      onChange={(e) =>
+                        set("recommended_vehicle_tonnage", e.target.value)
+                      }
+                      style={{ flex: 1 }}
+                    >
+                      {VEHICLE_TYPES.map((t) => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={editForm.recommended_vehicle_bodytype}
+                      onChange={(e) =>
+                        set("recommended_vehicle_bodytype", e.target.value)
+                      }
+                      style={{ flex: 1 }}
+                    >
+                      {BODY_TYPES.map((b) => (
+                        <option key={b} value={b}>
+                          {b}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <EditableField
+                key={key}
+                label={label}
+                value={editing ? editForm[key] : company[key]}
+                editing={editing}
+                onChange={(v) => set(key, v)}
+              />
+            );
+          })}
         </div>
       </div>
 
@@ -601,15 +722,31 @@ export default function CompanyDetailPage() {
                 }
           }
         >
-          {CRM_CONTACT_FIELDS.map(([key, label]) => (
-            <EditableField
-              key={key}
-              label={label}
-              value={editing ? editForm[key] : company[key]}
-              editing={editing}
-              onChange={(v) => set(key, v)}
-            />
-          ))}
+          {CRM_CONTACT_FIELDS.map(([key, label]) => {
+            if (key === "contact_mobile" && editing) {
+              return (
+                <div className="field" key={key} style={{ minWidth: 0 }}>
+                  <label>{label}</label>
+                  <input
+                    value={editForm.contact_mobile}
+                    onChange={(e) =>
+                      set("contact_mobile", formatPhoneNumber(e.target.value))
+                    }
+                    placeholder="숫자만 입력하면 자동으로 - 표시"
+                  />
+                </div>
+              );
+            }
+            return (
+              <EditableField
+                key={key}
+                label={label}
+                value={editing ? editForm[key] : company[key]}
+                editing={editing}
+                onChange={(v) => set(key, v)}
+              />
+            );
+          })}
         </div>
       </div>
 
@@ -632,15 +769,36 @@ export default function CompanyDetailPage() {
                 }
           }
         >
-          {CRM_BIZ_FIELDS.map(([key, label]) => (
-            <EditableField
-              key={key}
-              label={label}
-              value={editing ? editForm[key] : company[key]}
-              editing={editing}
-              onChange={(v) => set(key, v)}
-            />
-          ))}
+          {CRM_BIZ_FIELDS.map(([key, label]) => {
+            if (
+              (key === "main_pickup_region" || key === "main_dropoff_region") &&
+              editing
+            ) {
+              return (
+                <div
+                  className="field"
+                  key={key}
+                  style={{ gridColumn: "1 / -1", minWidth: 0 }}
+                >
+                  <label>{label} (중복 선택 가능)</label>
+                  <MultiSelectTags
+                    options={REGIONS}
+                    value={editForm[key] || ""}
+                    onChange={(v) => set(key, v)}
+                  />
+                </div>
+              );
+            }
+            return (
+              <EditableField
+                key={key}
+                label={label}
+                value={editing ? editForm[key] : company[key]}
+                editing={editing}
+                onChange={(v) => set(key, v)}
+              />
+            );
+          })}
         </div>
         <div
           className={editing ? "form-grid" : undefined}
