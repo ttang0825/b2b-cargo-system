@@ -605,7 +605,9 @@ function OrdersPageInner() {
                   onClick={() => router.push(`/admin/orders/${o.id}`)}
                   style={{ cursor: "pointer" }}
                 >
-                  <td>{o.order_no}</td>
+                  <td>
+                    <span className="num">{o.order_no}</span>
+                  </td>
                   <td>
                     {o.companies?.name || o.guest_name || "-"}
                     {!o.companies?.name && o.guest_name && (
@@ -619,14 +621,16 @@ function OrdersPageInner() {
                   </td>
                   <td>{o.vehicle_type || "-"}</td>
                   <td>
-                    {o.requested_pickup_at
-                      ? new Date(o.requested_pickup_at).toLocaleString("ko-KR", {
-                          month: "2-digit",
-                          day: "2-digit",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
-                      : "-"}
+                    <span className="num">
+                      {o.requested_pickup_at
+                        ? new Date(o.requested_pickup_at).toLocaleString("ko-KR", {
+                            month: "2-digit",
+                            day: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "-"}
+                    </span>
                   </td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <select
@@ -649,7 +653,11 @@ function OrdersPageInner() {
                       ))}
                     </select>
                   </td>
-                  <td>{new Date(o.created_at).toLocaleDateString("ko-KR")}</td>
+                  <td>
+                    <span className="num">
+                      {new Date(o.created_at).toLocaleDateString("ko-KR")}
+                    </span>
+                  </td>
                 </tr>
               ))}
             </tbody>
