@@ -12,7 +12,6 @@ const MENU = [
   { href: "/admin/drivers", label: "차주 관리" },
   { href: "/admin/dispatches", label: "배차 관리" },
   { href: "/admin/invoices", label: "정산 관리" },
-  { href: "/admin/guide", label: "이용가이드" },
 ];
 
 export default function TopNav() {
@@ -25,20 +24,25 @@ export default function TopNav() {
           <div className="brand">EGG 운송 통합 운영 시스템</div>
           <div className="brand-sub">내부 관리자 (admin)</div>
         </Link>
-        <nav style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {MENU.map((m) => {
-            const active = pathname?.startsWith(m.href);
-            return (
-              <Link
-                key={m.href}
-                href={m.href}
-                className={active ? "nav-chip nav-chip-active" : "nav-chip"}
-              >
-                {m.label}
-              </Link>
-            );
-          })}
-        </nav>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+          <nav style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {MENU.map((m) => {
+              const active = pathname?.startsWith(m.href);
+              return (
+                <Link
+                  key={m.href}
+                  href={m.href}
+                  className={active ? "nav-chip nav-chip-active" : "nav-chip"}
+                >
+                  {m.label}
+                </Link>
+              );
+            })}
+          </nav>
+          <Link href="/admin/guide" className="guide-link">
+            이용가이드
+          </Link>
+        </div>
       </div>
     </div>
   );
