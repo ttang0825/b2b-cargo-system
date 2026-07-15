@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 const MENU = [
   { href: "/admin/companies", label: "화주 관리 (영업)" },
@@ -16,6 +16,16 @@ const MENU = [
 
 export default function TopNav() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  // 로그인 화면에서는 헤더 자체를 숨김
+  if (pathname === "/admin/login") return null;
+
+  async function handleLogout() {
+    await fetch("/api/admin-logout", { method: "POST" });
+    router.push("/admin/login");
+    router.refresh();
+  }
 
   return (
     <div className="top-nav">
@@ -42,6 +52,9 @@ export default function TopNav() {
           <Link href="/admin/guide" className="guide-link">
             이용가이드
           </Link>
+          <button onClick={handleLogout} className="guide-link" style={{ border: "none", background: "none", cursor: "pointer" }}>
+            로그아웃
+          </button>
         </div>
       </div>
     </div>
