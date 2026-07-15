@@ -335,7 +335,7 @@ export default function InvoicesPage() {
             {customerChargeTotal && driverPayoutTotal && (
               <p style={{ fontSize: 13, marginTop: 10 }}>
                 수수료(마진):{" "}
-                <strong>
+                <strong className="num">
                   {won(Number(customerChargeTotal) - Number(driverPayoutTotal))}
                 </strong>
               </p>
@@ -445,12 +445,22 @@ export default function InvoicesPage() {
                   onClick={() => router.push(`/admin/invoices/${i.id}`)}
                   style={{ cursor: "pointer" }}
                 >
-                  <td>{i.orders?.order_no || "-"}</td>
+                  <td>
+                    <span className="num">{i.orders?.order_no || "-"}</span>
+                  </td>
                   <td>{i.companies?.name || "-"}</td>
-                  <td>{i.billing_period || "-"}</td>
-                  <td>{won(i.customer_charge_total)}</td>
-                  <td>{won(i.driver_payout_total)}</td>
-                  <td>{won(i.commission_total)}</td>
+                  <td>
+                    <span className="num">{i.billing_period || "-"}</span>
+                  </td>
+                  <td>
+                    <span className="num">{won(i.customer_charge_total)}</span>
+                  </td>
+                  <td>
+                    <span className="num">{won(i.driver_payout_total)}</span>
+                  </td>
+                  <td>
+                    <span className="num">{won(i.commission_total)}</span>
+                  </td>
                   <td>{i.tax_invoice_issued ? "발행" : "-"}</td>
                   <td>{i.payment_received ? "완료" : "대기"}</td>
                   <td>{i.driver_paid ? "완료" : "대기"}</td>
