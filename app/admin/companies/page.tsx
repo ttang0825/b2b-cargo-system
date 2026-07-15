@@ -4,6 +4,15 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { STATUS_OPTIONS, getStatusColor } from "@/lib/statusColors";
+import {
+  REGIONS,
+  VEHICLE_TYPES,
+  BODY_TYPES,
+  GRADE_OPTIONS,
+  formatPhoneNumber,
+} from "@/lib/constants";
+import { MANUAL_SOURCE_OPTIONS, getSourceChips } from "@/lib/sourceColors";
+import MultiSelectTags from "@/components/MultiSelectTags";
 
 type Company = {
   id: string;
@@ -19,6 +28,8 @@ type Company = {
   next_followup_date: string | null;
   created_at: string;
   source_sheet: string | null;
+  manual_source_type: string | null;
+  manual_source_note: string | null;
 };
 
 const SOURCE_TABS = [
@@ -47,6 +58,35 @@ const SORT_OPTIONS = [
   { key: "status", label: "영업상태" },
 ];
 
+const EMPTY_FORM = {
+  name: "",
+  industry: "",
+  sub_industry: "",
+  metro_region: "",
+  district: "",
+  address: "",
+  phone: "",
+  website: "",
+  main_items: "",
+  biz_reg_no: "",
+  contact_name: "",
+  contact_position: "",
+  contact_mobile: "",
+  contact_email: "",
+  payment_terms: "",
+  main_pickup_region: "",
+  main_dropoff_region: "",
+  assigned_staff: "",
+  recommended_vehicle_tonnage: VEHICLE_TYPES[0],
+  recommended_vehicle_bodytype: BODY_TYPES[0],
+  status: "미접촉",
+  grade: "",
+  next_followup_date: "",
+  notes: "",
+  source_type: "",
+  source_note: "",
+};
+
 function formatIndustry(c: Company) {
   if (c.industry && c.sub_industry) return `${c.industry} / ${c.sub_industry}`;
   return c.industry || c.sub_industry || "-";
@@ -69,15 +109,11 @@ export default function CompaniesPage() {
   const [sortKey, setSortKey] = useState("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
-  const [form, setForm] = useState({
-    name: "",
-    industry: "",
-    region: "",
-    phone: "",
-    status: "미접촉",
-    recommended_vehicle: "",
-    notes: "",
-  });
+  const [form, setForm] = useState(EMPTY_FORM);
+
+  function setField(key: keyof typeof EMPTY_FORM, value: string) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
 
   async function loadCompanies() {
     setLoading(true);
@@ -85,7 +121,7 @@ export default function CompaniesPage() {
     const { data, error } = await supabase
       .from("companies")
       .select(
-        "id,name,industry,sub_industry,metro_region,district,region,phone,status,grade,next_followup_date,created_at,source_sheet"
+        "id,name,industry,sub_industry,metro_region,district,region,phone,status,grade,next_followup_date,created_at,source_sheet,manual_source_type,manual_source_note"
       )
       .order("created_at", { ascending: false });
 
@@ -110,14 +146,38 @@ export default function CompaniesPage() {
     setSaving(true);
     setError(null);
 
+    const recommendedVehicle =
+      form.recommended_vehicle_tonnage && form.recommended_vehicle_bodytype
+        ? `${form.recommended_vehicle_tonnage} ${form.recommended_vehicle_bodytype}`
+        : null;
+
     const { error } = await supabase.from("companies").insert({
       name: form.name,
       industry: form.industry || null,
-      region: form.region || null,
+      sub_industry: form.sub_industry || null,
+      metro_region: form.metro_region || null,
+      district: form.district || null,
+      address: form.address || null,
       phone: form.phone || null,
+      website: form.website || null,
+      main_items: form.main_items || null,
+      biz_reg_no: form.biz_reg_no || null,
+      contact_name: form.contact_name || null,
+      contact_position: form.contact_position || null,
+      contact_mobile: form.contact_mobile || null,
+      contact_email: form.contact_email || null,
+      payment_terms: form.payment_terms || null,
+      main_pickup_region: form.main_pickup_region || null,
+      main_dropoff_region: form.main_dropoff_region || null,
+      assigned_staff: form.assigned_staff || null,
+      recommended_vehicle: recommendedVehicle,
       status: form.status,
-      recommended_vehicle: form.recommended_vehicle || null,
+      grade: form.grade || null,
+      next_followup_date: form.next_followup_date || null,
       notes: form.notes || null,
+      manual_source_type: form.source_type || null,
+      manual_source_note:
+        form.source_type === "기타" ? form.source_note || null : null,
     });
 
     setSaving(false);
@@ -127,15 +187,7 @@ export default function CompaniesPage() {
       return;
     }
 
-    setForm({
-      name: "",
-      industry: "",
-      region: "",
-      phone: "",
-      status: "미접촉",
-      recommended_vehicle: "",
-      notes: "",
-    });
+    setForm(EMPTY_FORM);
     setShowForm(false);
     loadCompanies();
   }
@@ -330,9 +382,7 @@ export default function CompaniesPage() {
                 <label>회사명 *</label>
                 <input
                   value={form.name}
-                  onChange={(e) =>
-                    setForm({ ...form, name: e.target.value })
-                  }
+                  onChange={(e) => setField("name", e.target.value)}
                   placeholder="예: ○○정밀"
                 />
               </div>
@@ -340,20 +390,44 @@ export default function CompaniesPage() {
                 <label>업종</label>
                 <input
                   value={form.industry}
-                  onChange={(e) =>
-                    setForm({ ...form, industry: e.target.value })
-                  }
+                  onChange={(e) => setField("industry", e.target.value)}
                   placeholder="예: 제조 / 금속가공"
                 />
               </div>
               <div className="field">
-                <label>지역</label>
+                <label>세부업종</label>
                 <input
-                  value={form.region}
-                  onChange={(e) =>
-                    setForm({ ...form, region: e.target.value })
-                  }
-                  placeholder="예: 시흥"
+                  value={form.sub_industry}
+                  onChange={(e) => setField("sub_industry", e.target.value)}
+                />
+              </div>
+              <div className="field">
+                <label>광역권</label>
+                <select
+                  value={form.metro_region}
+                  onChange={(e) => setField("metro_region", e.target.value)}
+                >
+                  <option value="">선택</option>
+                  {REGIONS.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>시군구</label>
+                <input
+                  value={form.district}
+                  onChange={(e) => setField("district", e.target.value)}
+                  placeholder="예: 시흥시"
+                />
+              </div>
+              <div className="field" style={{ gridColumn: "1 / -1" }}>
+                <label>주소</label>
+                <input
+                  value={form.address}
+                  onChange={(e) => setField("address", e.target.value)}
                 />
               </div>
               <div className="field">
@@ -361,31 +435,204 @@ export default function CompaniesPage() {
                 <input
                   value={form.phone}
                   onChange={(e) =>
-                    setForm({ ...form, phone: e.target.value })
+                    setField("phone", formatPhoneNumber(e.target.value))
                   }
-                  placeholder="031-000-0000"
+                  placeholder="숫자만 입력하면 자동으로 - 표시"
                 />
               </div>
               <div className="field">
-                <label>추천 차량</label>
+                <label>웹사이트</label>
                 <input
-                  value={form.recommended_vehicle}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      recommended_vehicle: e.target.value,
-                    })
-                  }
-                  placeholder="예: 1톤 탑차"
+                  value={form.website}
+                  onChange={(e) => setField("website", e.target.value)}
+                  placeholder="https://"
                 />
+              </div>
+              <div className="field">
+                <label>취급 품목</label>
+                <input
+                  value={form.main_items}
+                  onChange={(e) => setField("main_items", e.target.value)}
+                />
+              </div>
+              <div className="field">
+                <label>사업자등록번호</label>
+                <input
+                  value={form.biz_reg_no}
+                  onChange={(e) => setField("biz_reg_no", e.target.value)}
+                  placeholder="000-00-00000"
+                />
+              </div>
+
+              <div
+                style={{
+                  gridColumn: "1 / -1",
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                  color: "var(--text-muted)",
+                  marginTop: 8,
+                }}
+              >
+                담당자 정보
+              </div>
+              <div className="field">
+                <label>담당자명</label>
+                <input
+                  value={form.contact_name}
+                  onChange={(e) => setField("contact_name", e.target.value)}
+                />
+              </div>
+              <div className="field">
+                <label>직책</label>
+                <input
+                  value={form.contact_position}
+                  onChange={(e) => setField("contact_position", e.target.value)}
+                />
+              </div>
+              <div className="field">
+                <label>휴대폰</label>
+                <input
+                  value={form.contact_mobile}
+                  onChange={(e) =>
+                    setField("contact_mobile", formatPhoneNumber(e.target.value))
+                  }
+                  placeholder="숫자만 입력하면 자동으로 - 표시"
+                />
+              </div>
+              <div className="field">
+                <label>이메일</label>
+                <input
+                  value={form.contact_email}
+                  onChange={(e) => setField("contact_email", e.target.value)}
+                />
+              </div>
+
+              <div
+                style={{
+                  gridColumn: "1 / -1",
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                  color: "var(--text-muted)",
+                  marginTop: 8,
+                }}
+              >
+                거래 정보
+              </div>
+              <div className="field">
+                <label>추천 차량</label>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <select
+                    value={form.recommended_vehicle_tonnage}
+                    onChange={(e) =>
+                      setField("recommended_vehicle_tonnage", e.target.value)
+                    }
+                    style={{ flex: 1 }}
+                  >
+                    {VEHICLE_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={form.recommended_vehicle_bodytype}
+                    onChange={(e) =>
+                      setField("recommended_vehicle_bodytype", e.target.value)
+                    }
+                    style={{ flex: 1 }}
+                  >
+                    {BODY_TYPES.map((b) => (
+                      <option key={b} value={b}>
+                        {b}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="field">
+                <label>결제조건</label>
+                <input
+                  value={form.payment_terms}
+                  onChange={(e) => setField("payment_terms", e.target.value)}
+                  placeholder="예: 월말 정산"
+                />
+              </div>
+              <div className="field">
+                <label>담당직원</label>
+                <input
+                  value={form.assigned_staff}
+                  onChange={(e) => setField("assigned_staff", e.target.value)}
+                />
+              </div>
+              <div className="field" style={{ gridColumn: "1 / -1" }}>
+                <label>주요 상차지역 (중복 선택 가능)</label>
+                <MultiSelectTags
+                  options={REGIONS}
+                  value={form.main_pickup_region}
+                  onChange={(v) => setField("main_pickup_region", v)}
+                />
+              </div>
+              <div className="field" style={{ gridColumn: "1 / -1" }}>
+                <label>주요 하차지역 (중복 선택 가능)</label>
+                <MultiSelectTags
+                  options={REGIONS}
+                  value={form.main_dropoff_region}
+                  onChange={(v) => setField("main_dropoff_region", v)}
+                />
+              </div>
+
+              <div
+                style={{
+                  gridColumn: "1 / -1",
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                  color: "var(--text-muted)",
+                  marginTop: 8,
+                }}
+              >
+                출처
+              </div>
+              <div className="field">
+                <label>출처 분류</label>
+                <select
+                  value={form.source_type}
+                  onChange={(e) => setField("source_type", e.target.value)}
+                >
+                  <option value="">미지정</option>
+                  {MANUAL_SOURCE_OPTIONS.map((o) => (
+                    <option key={o} value={o}>
+                      {o === "기타" ? "기타 (수기작성)" : o}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {form.source_type === "기타" && (
+                <div className="field">
+                  <label>출처 설명</label>
+                  <input
+                    value={form.source_note}
+                    onChange={(e) => setField("source_note", e.target.value)}
+                    placeholder="예: 지인 소개, 홈페이지 문의 등"
+                  />
+                </div>
+              )}
+
+              <div
+                style={{
+                  gridColumn: "1 / -1",
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                  color: "var(--text-muted)",
+                  marginTop: 8,
+                }}
+              >
+                영업 정보
               </div>
               <div className="field">
                 <label>영업상태</label>
                 <select
                   value={form.status}
-                  onChange={(e) =>
-                    setForm({ ...form, status: e.target.value })
-                  }
+                  onChange={(e) => setField("status", e.target.value)}
                 >
                   {STATUS_OPTIONS.map((s) => (
                     <option key={s} value={s}>
@@ -394,14 +641,34 @@ export default function CompaniesPage() {
                   ))}
                 </select>
               </div>
+              <div className="field">
+                <label>화주등급</label>
+                <select
+                  value={form.grade}
+                  onChange={(e) => setField("grade", e.target.value)}
+                >
+                  <option value="">미지정</option>
+                  {GRADE_OPTIONS.map((g) => (
+                    <option key={g} value={g}>
+                      {g}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>다음 연락 예정일</label>
+                <input
+                  type="date"
+                  value={form.next_followup_date}
+                  onChange={(e) => setField("next_followup_date", e.target.value)}
+                />
+              </div>
               <div className="field" style={{ gridColumn: "1 / -1" }}>
                 <label>메모</label>
                 <textarea
                   rows={2}
                   value={form.notes}
-                  onChange={(e) =>
-                    setForm({ ...form, notes: e.target.value })
-                  }
+                  onChange={(e) => setField("notes", e.target.value)}
                   placeholder="통화내용, 특이사항"
                 />
               </div>
@@ -413,7 +680,10 @@ export default function CompaniesPage() {
               <button
                 type="button"
                 className="btn btn-ghost"
-                onClick={() => setShowForm(false)}
+                onClick={() => {
+                  setForm(EMPTY_FORM);
+                  setShowForm(false);
+                }}
               >
                 취소
               </button>
@@ -451,9 +721,17 @@ export default function CompaniesPage() {
                   style={{ cursor: "pointer" }}
                 >
                   <td>
-                    <span className="badge">
-                      {c.source_sheet || "직접등록"}
-                    </span>
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                      {getSourceChips(c).map((chip, i) => (
+                        <span
+                          key={i}
+                          className="badge"
+                          style={{ background: chip.bg, color: chip.text }}
+                        >
+                          {chip.label}
+                        </span>
+                      ))}
+                    </div>
                   </td>
                   <td>{c.name}</td>
                   <td>{formatIndustry(c)}</td>
