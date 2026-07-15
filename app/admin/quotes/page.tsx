@@ -96,6 +96,7 @@ export default function QuotesPage() {
   const [postcodeReady, setPostcodeReady] = useState(false);
   const [period, setPeriod] = useState<DatePreset>("all");
   const [calculatingDistance, setCalculatingDistance] = useState(false);
+  const [ratesLoading, setRatesLoading] = useState(true);
 
   const [savedLocations, setSavedLocations] = useState<
     { id: string; location_name: string | null; address: string | null; location_type: string | null }[]
@@ -167,6 +168,7 @@ export default function QuotesPage() {
   });
 
   async function loadRateData() {
+    setRatesLoading(true);
     const [t, s, e] = await Promise.all([
       supabase.from("rate_distance_tiers").select("*"),
       supabase.from("rate_surcharges").select("*"),
@@ -175,6 +177,7 @@ export default function QuotesPage() {
     setTiers((t.data as Tier[]) || []);
     setSurcharges((s.data as Surcharge[]) || []);
     setExtraFees((e.data as ExtraFee[]) || []);
+    setRatesLoading(false);
   }
 
   async function loadQuotes(preset: DatePreset = period) {
@@ -531,7 +534,7 @@ export default function QuotesPage() {
 
       {error && <div className="error-box">오류: {error}</div>}
 
-      {tiers.length === 0 && (
+      {!ratesLoading && tiers.length === 0 && (
         <div className="error-box">
           운임기준 데이터가 아직 없습니다. 먼저{" "}
           <a href="/admin/rates" style={{ textDecoration: "underline" }}>
