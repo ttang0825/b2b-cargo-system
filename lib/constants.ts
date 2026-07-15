@@ -1,4 +1,4 @@
-// 여러 화면(차주관리, 운송오더 등)에서 공통으로 쓰는 선택지들
+// 여러 화면(화주관리, 차주관리, 운송오더 등)에서 공통으로 쓰는 선택지들
 
 export const REGIONS = [
   "서울",
@@ -30,6 +30,27 @@ export const LOAD_UNLOAD_CONDITIONS = [
   "크레인/장비협의",
   "협의",
 ];
+
+// 차량 톤수 (차주관리·견적관리와 동일한 목록 - 화주 "추천 차량" 선택에도 재사용)
+export const VEHICLE_TYPES = ["1톤", "1.4톤", "2.5톤", "3.5톤", "5톤", "5톤 플러스/축"];
+
+// 차량 형태 (차주관리와 동일한 목록)
+export const BODY_TYPES = [
+  "카고",
+  "탑차",
+  "윙바디",
+  "냉장탑",
+  "냉동탑",
+  "리프트",
+  "크레인",
+  "렉카",
+  "트레일러",
+  "사다리차",
+  "기타/협의",
+];
+
+// 화주 등급
+export const GRADE_OPTIONS = ["S", "A", "B", "C", "D", "휴면"];
 
 // 입력값에서 숫자만 뽑아 한국 전화번호 형식으로 자동 하이픈 삽입
 export function formatPhoneNumber(raw: string): string {
