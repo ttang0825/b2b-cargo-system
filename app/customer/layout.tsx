@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
+import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 
 const PUBLIC_PATHS = ["/customer/login"];
 
