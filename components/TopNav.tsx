@@ -18,8 +18,8 @@ export default function TopNav() {
   const pathname = usePathname();
   const router = useRouter();
 
-  // 로그인 화면에서는 헤더 자체를 숨김
-  if (pathname === "/admin/login") return null;
+  // 로그인 화면과 화주포털 영역에서는 admin 헤더 자체를 숨김
+  if (pathname === "/admin/login" || pathname?.startsWith("/customer")) return null;
 
   async function handleLogout() {
     await fetch("/api/admin-logout", { method: "POST" });
