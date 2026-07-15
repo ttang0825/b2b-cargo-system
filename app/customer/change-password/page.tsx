@@ -35,11 +35,18 @@ export default function ChangePasswordPage() {
       return;
     }
 
+    // must_change_password 표시는 화주 계정에 쓰기 권한이 없으므로,
+    // 서버 API를 통해 본인 인증 후 안전하게 갱신합니다.
     if (session) {
-      await supabase
-        .from("customer_accounts")
-        .update({ must_change_password: false })
-        .eq("auth_user_id", session.user.id);
+      const res = await fetch("/api/customer/confirm-password-change", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) {
+        setLoading(false);
+        setError("비밀번호는 변경되었지만, 완료 처리 중 오류가 발생했습니다. 다시 로그인해주세요.");
+        return;
+      }
     }
 
     setLoading(false);
