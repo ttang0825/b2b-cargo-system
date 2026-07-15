@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 
 function won(n: number | null) {
   if (!n) return "-";
