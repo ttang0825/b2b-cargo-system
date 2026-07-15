@@ -468,7 +468,7 @@ export default function DispatchesPage() {
             {customerCharge && driverPayout && (
               <p style={{ fontSize: 13, marginTop: 10 }}>
                 예상 마진:{" "}
-                <strong>
+                <strong className="num">
                   {won(Number(customerCharge) - Number(driverPayout))}
                 </strong>
               </p>
@@ -554,15 +554,23 @@ export default function DispatchesPage() {
                   onClick={() => router.push(`/admin/dispatches/${d.id}`)}
                   style={{ cursor: "pointer" }}
                 >
-                  <td>{d.orders?.order_no || "-"}</td>
+                  <td>
+                    <span className="num">{d.orders?.order_no || "-"}</span>
+                  </td>
                   <td>{d.orders?.companies?.name || d.orders?.guest_name || "-"}</td>
                   <td>
                     {d.orders?.origin || "-"} → {d.orders?.destination || "-"}
                   </td>
                   <td>{d.drivers?.name || "-"}</td>
-                  <td>{won(d.customer_charge)}</td>
-                  <td>{won(d.driver_payout)}</td>
-                  <td>{won(d.margin)}</td>
+                  <td>
+                    <span className="num">{won(d.customer_charge)}</span>
+                  </td>
+                  <td>
+                    <span className="num">{won(d.driver_payout)}</span>
+                  </td>
+                  <td>
+                    <span className="num">{won(d.margin)}</span>
+                  </td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <select
                       value={d.dispatch_status}
