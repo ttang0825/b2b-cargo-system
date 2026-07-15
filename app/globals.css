@@ -14,7 +14,8 @@
   --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
   --shadow-md: 0 4px 14px rgba(15, 23, 42, 0.07);
   --shadow-lg: 0 12px 28px rgba(15, 23, 42, 0.1);
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Pretendard", "Malgun Gothic", sans-serif;
+  --font-sans: "SUIT Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", "Pretendard", "Malgun Gothic", sans-serif;
+  --font-display: "Space Grotesk", var(--font-sans);
 }
 * {
   box-sizing: border-box;
@@ -60,6 +61,7 @@ a {
   color: var(--accent);
 }
 .brand {
+  font-family: var(--font-display);
   font-weight: 800;
   font-size: 16px;
   letter-spacing: -0.02em;
@@ -110,6 +112,7 @@ a {
   flex-wrap: wrap;
 }
 .page-title {
+  font-family: var(--font-display);
   font-size: 26px;
   font-weight: 800;
   margin: 0 0 6px;
@@ -128,6 +131,13 @@ a {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
+}
+
+/* 숫자/코드 데이터 - Space Grotesk (견적번호, 오더번호, 금액 등) */
+.num {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
 
 /* 홈화면 - 메뉴 카드 그리드 */
@@ -161,6 +171,7 @@ a {
   letter-spacing: 0.02em;
 }
 .home-card-title {
+  font-family: var(--font-display);
   font-size: 17px;
   font-weight: 800;
   margin: 0;
