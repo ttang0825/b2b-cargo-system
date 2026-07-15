@@ -1,12 +1,5 @@
 import Link from "next/link";
 
-const GUIDE_ITEM = {
-  href: "/admin/guide",
-  tag: "가이드",
-  title: "이용 가이드",
-  desc: "처음 사용하시나요? 화면별 사용법과 자주 헷갈리는 점을 여기서 먼저 확인하세요.",
-};
-
 const MENU = [
   {
     href: "/admin/companies",
@@ -69,15 +62,6 @@ export default function AdminHomePage() {
       </div>
 
       <div className="home-grid">
-        <Link
-          href={GUIDE_ITEM.href}
-          className="card home-card"
-          style={{ background: "var(--accent-soft)", borderColor: "var(--accent)" }}
-        >
-          <span className="home-card-tag">{GUIDE_ITEM.tag}</span>
-          <h3 className="home-card-title">{GUIDE_ITEM.title}</h3>
-          <p className="home-card-desc">{GUIDE_ITEM.desc}</p>
-        </Link>
         {MENU.map((m) => (
           <Link key={m.href} href={m.href} className="card home-card">
             <span className="home-card-tag">{m.tag}</span>
@@ -85,6 +69,12 @@ export default function AdminHomePage() {
             <p className="home-card-desc">{m.desc}</p>
           </Link>
         ))}
+      </div>
+
+      <div style={{ textAlign: "right", marginTop: 16 }}>
+        <Link href="/admin/guide" className="guide-link">
+          이용가이드
+        </Link>
       </div>
     </main>
   );
