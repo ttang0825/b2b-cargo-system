@@ -313,7 +313,7 @@ export default function QuoteDetailPage() {
         </div>
       )}
 
-      <div className="card" style={{ padding: 20 }}>
+      <div className="card" style={{ padding: 20, marginBottom: 20 }}>
         <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
           견적 계산 내역
         </h3>
@@ -326,7 +326,7 @@ export default function QuoteDetailPage() {
           }}
         >
           <span style={{ color: "var(--text-muted)" }}>기본운임</span>
-          <span>{won(quote.base_fare)}</span>
+          <span className="num">{won(quote.base_fare)}</span>
         </div>
         {items.map((it) => (
           <div
@@ -340,7 +340,7 @@ export default function QuoteDetailPage() {
             }}
           >
             <span>+ {it.item_name}</span>
-            <span>{won(it.amount)}</span>
+            <span className="num">{won(it.amount)}</span>
           </div>
         ))}
         <div
@@ -355,21 +355,27 @@ export default function QuoteDetailPage() {
           }}
         >
           <span>최종 견적금액</span>
-          <span>{won(quote.final_amount)}</span>
+          <span className="num">{won(quote.final_amount)}</span>
         </div>
         <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 6 }}>
           부가세 별도
         </p>
       </div>
 
-      <div className="card" style={{ padding: 20, marginTop: 20, opacity: 0.6 }}>
+      <div className="card" style={{ padding: 20, marginTop: 20 }}>
         <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 6 }}>
-          견적서 출력 · 화주포털 공유
+          견적서 출력
         </h3>
-        <p style={{ fontSize: 12.5, color: "var(--text-muted)", margin: 0 }}>
-          다음 단계에서 이 화면에 PDF 견적서 다운로드, 화주포털 노출 기능이
-          추가될 예정입니다.
+        <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginBottom: 14 }}>
+          화주에게 전달할 정식 견적서를 새 탭에서 열어 인쇄하거나 PDF로 저장할 수
+          있습니다. (화주포털을 통한 공유 기능은 추후 추가될 예정입니다.)
         </p>
+        <button
+          className="btn"
+          onClick={() => window.open(`/admin/quotes/${quote.id}/print`, "_blank")}
+        >
+          견적서 출력 (PDF)
+        </button>
       </div>
     </main>
   );
