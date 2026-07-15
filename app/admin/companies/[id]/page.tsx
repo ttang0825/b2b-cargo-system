@@ -169,6 +169,13 @@ export default function CompanyDetailPage() {
     recommended_vehicle_bodytype: BODY_TYPES[0],
   });
 
+  const [portalAccounts, setPortalAccounts] = useState<any[]>([]);
+  const [newAccountEmail, setNewAccountEmail] = useState("");
+  const [newAccountName, setNewAccountName] = useState("");
+  const [issuingAccount, setIssuingAccount] = useState(false);
+  const [issuedCredentials, setIssuedCredentials] = useState<{ email: string; password: string } | null>(null);
+  const [portalError, setPortalError] = useState<string | null>(null);
+
   function set(key: string, value: any) {
     setEditForm((prev) => ({ ...prev, [key]: value }));
   }
@@ -219,9 +226,62 @@ export default function CompanyDetailPage() {
     if (id) {
       loadCompany();
       loadLocations();
+      loadPortalAccounts();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  async function loadPortalAccounts() {
+    const { data } = await supabase
+      .from("customer_accounts")
+      .select("id,email,name,is_active,must_change_password,created_at")
+      .eq("company_id", id)
+      .order("created_at", { ascending: false });
+    setPortalAccounts(data || []);
+  }
+
+  async function handleIssueAccount(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newAccountEmail.trim()) {
+      setPortalError("이메일을 입력해주세요.");
+      return;
+    }
+    setIssuingAccount(true);
+    setPortalError(null);
+    setIssuedCredentials(null);
+    try {
+      const res = await fetch("/api/admin/create-portal-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company_id: id,
+          email: newAccountEmail.trim(),
+          name: newAccountName.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPortalError(data.error || "계정 발급에 실패했습니다.");
+        return;
+      }
+      setIssuedCredentials({ email: data.email, password: data.password });
+      setNewAccountEmail("");
+      setNewAccountName("");
+      loadPortalAccounts();
+    } catch {
+      setPortalError("계정 발급 중 오류가 발생했습니다.");
+    } finally {
+      setIssuingAccount(false);
+    }
+  }
+
+  async function handleToggleAccountActive(accountId: string, isActive: boolean) {
+    await supabase
+      .from("customer_accounts")
+      .update({ is_active: !isActive })
+      .eq("id", accountId);
+    loadPortalAccounts();
+  }
 
   async function loadLocations() {
     const { data } = await supabase
@@ -956,6 +1016,113 @@ export default function CompanyDetailPage() {
             추가
           </button>
         </div>
+      </div>
+
+      {/* 화주포털 계정 관리 */}
+      <div className="card" style={{ padding: 20, marginBottom: 20 }}>
+        <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 6 }}>
+          화주포털 계정
+        </h3>
+        <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginTop: 0, marginBottom: 16 }}>
+          이 화주가 견적·배차·정산 현황을 직접 조회할 수 있는 포털 계정을 발급합니다.
+          보통 첫 운송오더가 등록되는 시점에 발급하는 것을 권장합니다.
+        </p>
+
+        {portalAccounts.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            {portalAccounts.map((acc) => (
+              <div
+                key={acc.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "10px 0",
+                  borderBottom: "1px solid var(--border)",
+                  fontSize: 13,
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: 600 }}>
+                    {acc.email}
+                    {acc.name && (
+                      <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>
+                        {" "}
+                        ({acc.name})
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 2 }}>
+                    {new Date(acc.created_at).toLocaleDateString("ko-KR")} 발급
+                    {acc.must_change_password && " · 최초 비밀번호 미변경"}
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span
+                    className="badge"
+                    style={
+                      acc.is_active
+                        ? undefined
+                        : { background: "var(--danger-soft)", color: "var(--danger)" }
+                    }
+                  >
+                    {acc.is_active ? "활성" : "비활성"}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    style={{ padding: "4px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                    onClick={() => handleToggleAccountActive(acc.id, acc.is_active)}
+                  >
+                    {acc.is_active ? "비활성화" : "다시 활성화"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {issuedCredentials && (
+          <div
+            style={{
+              background: "var(--accent-soft)",
+              borderRadius: 12,
+              padding: 14,
+              marginBottom: 16,
+              fontSize: 13,
+            }}
+          >
+            <div style={{ fontWeight: 700, marginBottom: 6, color: "var(--accent)" }}>
+              계정이 발급되었습니다 — 아래 정보를 화주에게 전달해주세요 (한 번만 표시됩니다)
+            </div>
+            <div>이메일: <span className="num">{issuedCredentials.email}</span></div>
+            <div>임시 비밀번호: <span className="num">{issuedCredentials.password}</span></div>
+            <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 6 }}>
+              최초 로그인 시 비밀번호를 새로 설정하도록 되어 있습니다.
+            </div>
+          </div>
+        )}
+
+        {portalError && <div className="error-box">{portalError}</div>}
+
+        <form onSubmit={handleIssueAccount} style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input
+            type="email"
+            value={newAccountEmail}
+            onChange={(e) => setNewAccountEmail(e.target.value)}
+            placeholder="담당자 이메일"
+            style={{ flex: "1 1 200px" }}
+          />
+          <input
+            value={newAccountName}
+            onChange={(e) => setNewAccountName(e.target.value)}
+            placeholder="담당자 이름 (선택)"
+            style={{ flex: "1 1 140px" }}
+          />
+          <button className="btn" type="submit" disabled={issuingAccount}>
+            {issuingAccount ? "발급 중..." : "포털 계정 발급"}
+          </button>
+        </form>
       </div>
 
       {/* 향후 연동 예정 영역 */}
