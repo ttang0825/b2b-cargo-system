@@ -6,11 +6,11 @@ import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 
 const PUBLIC_PATHS = ["/customer/login"];
 
-export default function CustomerLayout({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
+export default function CustomerLayout({ children }: { children: React.ReactNode }) {  const router = useRouter();
   const pathname = usePathname();
   const [checking, setChecking] = useState(true);
   const [companyName, setCompanyName] = useState("");
+  const [notified, setNotified] = useState({ quotes: false, dispatches: false, invoices: false });
 
   useEffect(() => {
     async function check() {
@@ -47,9 +47,37 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
 
       setCompanyName((account.companies as any)?.name || "");
       setChecking(false);
+
+      // 지금 보고 있는 메뉴의 알림은 해제
+      if (pathname === "/customer/quotes") setNotified((prev) => ({ ...prev, quotes: false }));
+      if (pathname === "/customer/dispatches") setNotified((prev) => ({ ...prev, dispatches: false }));
+      if (pathname === "/customer/invoices") setNotified((prev) => ({ ...prev, invoices: false }));
     }
     check();
   }, [pathname, router]);
+
+  // 견적/배차/정산 변경사항을 실시간으로 감지해서 해당 메뉴에 알림 표시
+  useEffect(() => {
+    if (PUBLIC_PATHS.includes(pathname || "")) return;
+
+    const channel = supabase
+      .channel("customer_layout_notifications")
+      .on("postgres_changes", { event: "*", schema: "public", table: "quotes" }, () => {
+        setNotified((prev) => (pathname === "/customer/quotes" ? prev : { ...prev, quotes: true }));
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "dispatches" }, () => {
+        setNotified((prev) => (pathname === "/customer/dispatches" ? prev : { ...prev, dispatches: true }));
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "invoices" }, () => {
+        setNotified((prev) => (pathname === "/customer/invoices" ? prev : { ...prev, invoices: true }));
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -80,10 +108,25 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
             <nav style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <a href="/customer" className="nav-chip">대시보드</a>
               <a href="/customer/request" className="nav-chip">발주 요청</a>
-              <a href="/customer/quotes" className="nav-chip">견적 확인</a>
-              <a href="/customer/dispatches" className="nav-chip">배차·운송 조회</a>
+              <a href="/customer/quotes" className="nav-chip" style={{ position: "relative" }}>
+                견적 확인
+                {notified.quotes && (
+                  <span style={{ position: "absolute", top: 4, right: 4, width: 7, height: 7, borderRadius: "50%", background: "var(--danger)" }} />
+                )}
+              </a>
+              <a href="/customer/dispatches" className="nav-chip" style={{ position: "relative" }}>
+                배차·운송 조회
+                {notified.dispatches && (
+                  <span style={{ position: "absolute", top: 4, right: 4, width: 7, height: 7, borderRadius: "50%", background: "var(--danger)" }} />
+                )}
+              </a>
               <a href="/customer/calendar" className="nav-chip">캘린더</a>
-              <a href="/customer/invoices" className="nav-chip">정산·세금계산서</a>
+              <a href="/customer/invoices" className="nav-chip" style={{ position: "relative" }}>
+                정산·세금계산서
+                {notified.invoices && (
+                  <span style={{ position: "absolute", top: 4, right: 4, width: 7, height: 7, borderRadius: "50%", background: "var(--danger)" }} />
+                )}
+              </a>
               <a href="/customer/stats" className="nav-chip">통계</a>
               <a href="/customer/locations" className="nav-chip">배송지 관리</a>
               <a href="/customer/announcements" className="nav-chip">공지사항</a>
