@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
-import { VEHICLE_TYPES } from "@/lib/constants";
+import { VEHICLE_TYPES, BODY_TYPES } from "@/lib/constants";
+import DateTimePicker from "@/components/DateTimePicker";
 
 const REQUEST_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   대기중: { bg: "#fff1e2", text: "#d9730d" },
@@ -10,32 +11,49 @@ const REQUEST_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   반려: { bg: "var(--danger-soft)", text: "var(--danger)" },
 };
 
+type SavedLocation = { id: string; address: string | null; location_type: string | null };
+
 export default function PortalRequestPage() {
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [accountId, setAccountId] = useState<string | null>(null);
   const [requests, setRequests] = useState<any[]>([]);
+  const [savedLocations, setSavedLocations] = useState<SavedLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [saveOrigin, setSaveOrigin] = useState(false);
+  const [saveDestination, setSaveDestination] = useState(false);
 
   const [form, setForm] = useState({
     origin: "",
     destination: "",
     vehicle_type: VEHICLE_TYPES[0],
+    body_type: BODY_TYPES[0],
     item: "",
     requested_pickup_at: "",
+    requested_dropoff_at: "",
     notes: "",
   });
 
   async function loadRequests(cid: string) {
     const { data } = await supabase
       .from("portal_order_requests")
-      .select("id,origin,destination,vehicle_type,item,requested_pickup_at,status,staff_note,created_at")
+      .select(
+        "id,origin,destination,vehicle_type,body_type,item,requested_pickup_at,requested_dropoff_at,status,staff_note,created_at"
+      )
       .eq("company_id", cid)
       .order("created_at", { ascending: false })
       .limit(30);
     setRequests(data || []);
+  }
+
+  async function loadSavedLocations(cid: string) {
+    const { data } = await supabase
+      .from("customer_locations")
+      .select("id,address,location_type")
+      .eq("company_id", cid);
+    setSavedLocations(data || []);
   }
 
   useEffect(() => {
@@ -55,11 +73,41 @@ export default function PortalRequestPage() {
       if (account) {
         setCompanyId(account.company_id);
         setAccountId(account.id);
-        await loadRequests(account.company_id);
+
+        // 회사 기본 주소를 출발지 기본값으로 채워줌 (수정 가능)
+        const { data: company } = await supabase
+          .from("companies")
+          .select("address")
+          .eq("id", account.company_id)
+          .single();
+        if (company?.address) {
+          setForm((prev) => ({ ...prev, origin: company.address }));
+        }
+
+        await Promise.all([loadRequests(account.company_id), loadSavedLocations(account.company_id)]);
       }
       setLoading(false);
     }
     init();
+
+    // 승인/반려 상태가 바뀌면 새로고침 없이 바로 반영
+    const channel = supabase
+      .channel("portal_requests_customer")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "portal_order_requests" },
+        () => {
+          setCompanyId((cid) => {
+            if (cid) loadRequests(cid);
+            return cid;
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   function setField(key: keyof typeof form, value: string) {
@@ -86,29 +134,58 @@ export default function PortalRequestPage() {
       origin: form.origin,
       destination: form.destination,
       vehicle_type: form.vehicle_type,
+      body_type: form.body_type,
       item: form.item || null,
       requested_pickup_at: form.requested_pickup_at || null,
+      requested_dropoff_at: form.requested_dropoff_at || null,
       notes: form.notes || null,
       status: "대기중",
     });
 
-    setSaving(false);
     if (insertError) {
+      setSaving(false);
       setError(insertError.message);
       return;
     }
 
+    // 체크한 주소를 배송지 목록에 저장
+    const toSave: any[] = [];
+    if (saveOrigin && form.origin.trim())
+      toSave.push({ company_id: companyId, address: form.origin, location_type: "상차지" });
+    if (saveDestination && form.destination.trim())
+      toSave.push({ company_id: companyId, address: form.destination, location_type: "하차지" });
+    if (toSave.length > 0) {
+      await supabase.from("customer_locations").insert(toSave);
+      await loadSavedLocations(companyId);
+    }
+
+    setSaving(false);
     setSuccess(true);
-    setForm({
-      origin: "",
+    setSaveOrigin(false);
+    setSaveDestination(false);
+    setForm((prev) => ({
+      ...prev,
       destination: "",
-      vehicle_type: VEHICLE_TYPES[0],
       item: "",
       requested_pickup_at: "",
+      requested_dropoff_at: "",
       notes: "",
-    });
+    }));
+    loadRequests(companyId);
+  }
+
+  async function handleDeleteRequest(id: string) {
+    if (!window.confirm("이 요청을 삭제하시겠습니까?")) return;
+    const { error: deleteError } = await supabase.from("portal_order_requests").delete().eq("id", id);
+    if (deleteError) {
+      setError(deleteError.message);
+      return;
+    }
     if (companyId) loadRequests(companyId);
   }
+
+  const pickupBadges = savedLocations.filter((l) => l.location_type === "상차지");
+  const dropoffBadges = savedLocations.filter((l) => l.location_type === "하차지");
 
   return (
     <main className="container">
@@ -128,20 +205,84 @@ export default function PortalRequestPage() {
             <div className="field">
               <label>출발지 *</label>
               <input value={form.origin} onChange={(e) => setField("origin", e.target.value)} />
+              {pickupBadges.length > 0 && (
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 8 }}>
+                  {pickupBadges.map((l) => (
+                    <span
+                      key={l.id}
+                      className="badge"
+                      style={{ cursor: "pointer" }}
+                      onClick={() => setField("origin", l.address || "")}
+                    >
+                      {l.address}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="field">
               <label>도착지 *</label>
-              <input
-                value={form.destination}
-                onChange={(e) => setField("destination", e.target.value)}
-              />
+              <input value={form.destination} onChange={(e) => setField("destination", e.target.value)} />
+              {dropoffBadges.length > 0 && (
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 8 }}>
+                  {dropoffBadges.map((l) => (
+                    <span
+                      key={l.id}
+                      className="badge"
+                      style={{ cursor: "pointer" }}
+                      onClick={() => setField("destination", l.address || "")}
+                    >
+                      {l.address}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
-            <div className="field">
-              <label>희망 차량</label>
-              <select
-                value={form.vehicle_type}
-                onChange={(e) => setField("vehicle_type", e.target.value)}
+
+            <div style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontSize: 12,
+                  color: "var(--text-muted)",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
               >
+                <input
+                  type="checkbox"
+                  checked={saveOrigin}
+                  onChange={(e) => setSaveOrigin(e.target.checked)}
+                  style={{ margin: 0 }}
+                />
+                이 출발지를 배송지 목록에 저장
+              </label>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontSize: 12,
+                  color: "var(--text-muted)",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={saveDestination}
+                  onChange={(e) => setSaveDestination(e.target.checked)}
+                  style={{ margin: 0 }}
+                />
+                이 도착지를 배송지 목록에 저장
+              </label>
+            </div>
+
+            <div className="field">
+              <label>희망 톤수</label>
+              <select value={form.vehicle_type} onChange={(e) => setField("vehicle_type", e.target.value)}>
                 {VEHICLE_TYPES.map((v) => (
                   <option key={v} value={v}>
                     {v}
@@ -150,13 +291,31 @@ export default function PortalRequestPage() {
               </select>
             </div>
             <div className="field">
-              <label>희망 상차 일시</label>
-              <input
-                type="datetime-local"
+              <label>희망 차종</label>
+              <select value={form.body_type} onChange={(e) => setField("body_type", e.target.value)}>
+                {BODY_TYPES.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ gridColumn: "1 / -1" }}>
+              <DateTimePicker
+                label="희망 상차 일시"
                 value={form.requested_pickup_at}
-                onChange={(e) => setField("requested_pickup_at", e.target.value)}
+                onChange={(v) => setField("requested_pickup_at", v)}
               />
             </div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <DateTimePicker
+                label="희망 하차 일시"
+                value={form.requested_dropoff_at}
+                onChange={(v) => setField("requested_dropoff_at", v)}
+              />
+            </div>
+
             <div className="field" style={{ gridColumn: "1 / -1" }}>
               <label>품목</label>
               <input value={form.item} onChange={(e) => setField("item", e.target.value)} />
@@ -209,7 +368,7 @@ export default function PortalRequestPage() {
         ) : requests.length === 0 ? (
           <div className="empty-state">아직 보낸 요청이 없습니다.</div>
         ) : (
-          <table style={{ minWidth: 720 }}>
+          <table style={{ minWidth: 780 }}>
             <thead>
               <tr>
                 <th>구간</th>
@@ -217,6 +376,7 @@ export default function PortalRequestPage() {
                 <th>희망 상차일</th>
                 <th>상태</th>
                 <th>담당자 메모</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -225,7 +385,9 @@ export default function PortalRequestPage() {
                   <td>
                     {r.origin} → {r.destination}
                   </td>
-                  <td className="cell-nowrap">{r.vehicle_type || "-"}</td>
+                  <td className="cell-nowrap">
+                    {[r.vehicle_type, r.body_type].filter(Boolean).join(" ") || "-"}
+                  </td>
                   <td className="cell-nowrap">
                     <span className="num">
                       {r.requested_pickup_at
@@ -254,6 +416,17 @@ export default function PortalRequestPage() {
                     </span>
                   </td>
                   <td>{r.staff_note || "-"}</td>
+                  <td className="cell-nowrap">
+                    {r.status === "대기중" && (
+                      <button
+                        className="btn-danger"
+                        style={{ padding: "4px 10px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}
+                        onClick={() => handleDeleteRequest(r.id)}
+                      >
+                        삭제
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
