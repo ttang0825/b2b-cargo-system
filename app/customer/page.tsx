@@ -52,10 +52,12 @@ export default function CustomerDashboard() {
     }
     load();
 
-    // 견적이 삭제/추가/변경되면 새로고침 없이 바로 반영
+    // 견적/배차/정산이 삭제·추가·변경되면 새로고침 없이 바로 반영
     const channel = supabase
-      .channel("customer_dashboard_quotes")
+      .channel("customer_dashboard_all")
       .on("postgres_changes", { event: "*", schema: "public", table: "quotes" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "dispatches" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "invoices" }, () => load())
       .subscribe();
 
     return () => {
