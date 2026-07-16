@@ -112,11 +112,13 @@ function OrdersPageInner() {
       const { data: q } = await supabase
         .from("quotes")
         .select(
-          "id,company_id,guest_name,guest_phone,origin,destination,vehicle_type,item,companies(id,name,phone)"
+          "id,company_id,guest_name,guest_phone,origin,destination,vehicle_type,item,selected_options,notes,requested_pickup_at,requested_dropoff_at,companies(id,name,phone)"
         )
         .eq("id", fromQuoteId)
         .single();
       if (!q) return;
+
+      const options = (q.selected_options as any) || {};
 
       setShowForm(true);
       setForm((prev) => ({
@@ -128,6 +130,11 @@ function OrdersPageInner() {
         quote_id: q.id,
         guest_name: q.guest_name || "",
         guest_phone: q.guest_phone || "",
+        load_condition: options.상차조건 || "",
+        unload_condition: options.하차조건 || "",
+        special_notes: q.notes || "",
+        requested_pickup_at: q.requested_pickup_at ? q.requested_pickup_at.slice(0, 16) : "",
+        requested_delivery_at: q.requested_dropoff_at ? q.requested_dropoff_at.slice(0, 16) : "",
       }));
       if (q.company_id && (q as any).companies) {
         setCustomerMode("company");
