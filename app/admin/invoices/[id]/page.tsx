@@ -65,6 +65,14 @@ export default function InvoiceDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // 화주 입금완료 + 차주 지급완료가 둘 다 체크되면 정산상태를 자동으로 "입금완료"로 전환
+  useEffect(() => {
+    if (editForm.payment_received && editForm.driver_paid && editForm.status !== "입금완료") {
+      setEditForm((prev) => ({ ...prev, status: "입금완료" }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editForm.payment_received, editForm.driver_paid]);
+
   async function handleSave() {
     setSaving(true);
     setError(null);
