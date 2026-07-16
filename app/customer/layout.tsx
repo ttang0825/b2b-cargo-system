@@ -87,7 +87,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
               <a href="/customer/stats" className="nav-chip">통계</a>
               <a href="/customer/locations" className="nav-chip">배송지 관리</a>
               <a href="/customer/announcements" className="nav-chip">공지사항</a>
-              <a href="/customer/profile" className="nav-chip">내 정보</a>
+              <a href="/customer/profile" className="nav-chip">담당자 정보</a>
               <a href="/customer/change-password" className="nav-chip">비밀번호 변경</a>
             </nav>
             <button
