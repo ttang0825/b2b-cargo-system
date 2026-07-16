@@ -21,6 +21,16 @@ export default function CustomerDispatchesPage() {
       setLoading(false);
     }
     load();
+
+    const channel = supabase
+      .channel("customer_dispatches_list")
+      .on("postgres_changes", { event: "*", schema: "public", table: "dispatches" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => load())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   return (
