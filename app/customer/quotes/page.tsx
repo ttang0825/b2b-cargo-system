@@ -25,6 +25,16 @@ export default function CustomerQuotesPage() {
       setLoading(false);
     }
     load();
+
+    // 견적이 삭제/추가/변경되면 새로고침 없이 바로 반영
+    const channel = supabase
+      .channel("customer_quotes_list")
+      .on("postgres_changes", { event: "*", schema: "public", table: "quotes" }, () => load())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   return (
