@@ -32,6 +32,19 @@ export default function TopNav() {
       setPendingRequests(count || 0);
     }
     loadPendingCount();
+
+    const channel = supabase
+      .channel("topnav_portal_requests")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "portal_order_requests" },
+        () => loadPendingCount()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [pathname]);
 
   // 로그인 화면과 화주포털 영역에서는 admin 헤더 자체를 숨김
