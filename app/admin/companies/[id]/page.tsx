@@ -234,7 +234,7 @@ export default function CompanyDetailPage() {
   async function loadPortalAccounts() {
     const { data } = await supabase
       .from("customer_accounts")
-      .select("id,email,name,is_active,must_change_password,created_at")
+      .select("id,auth_user_id,email,name,is_active,must_change_password,created_at")
       .eq("company_id", id)
       .order("created_at", { ascending: false });
     setPortalAccounts(data || []);
@@ -281,6 +281,30 @@ export default function CompanyDetailPage() {
       .update({ is_active: !isActive })
       .eq("id", accountId);
     loadPortalAccounts();
+  }
+
+  async function handleResetPassword(authUserId: string, email: string) {
+    const confirmed = window.confirm(
+      `"${email}" 계정의 비밀번호를 재설정하시겠습니까? 기존 비밀번호는 더 이상 쓸 수 없게 됩니다.`
+    );
+    if (!confirmed) return;
+    setPortalError(null);
+    try {
+      const res = await fetch("/api/admin/reset-portal-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ auth_user_id: authUserId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPortalError(data.error || "비밀번호 재설정에 실패했습니다.");
+        return;
+      }
+      setIssuedCredentials({ email, password: data.password });
+      loadPortalAccounts();
+    } catch {
+      setPortalError("비밀번호 재설정 중 오류가 발생했습니다.");
+    }
   }
 
   async function loadLocations() {
@@ -1072,6 +1096,14 @@ export default function CompanyDetailPage() {
                     type="button"
                     className="btn-ghost"
                     style={{ padding: "4px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                    onClick={() => handleResetPassword(acc.auth_user_id, acc.email)}
+                  >
+                    비밀번호 재설정
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    style={{ padding: "4px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
                     onClick={() => handleToggleAccountActive(acc.id, acc.is_active)}
                   >
                     {acc.is_active ? "비활성화" : "다시 활성화"}
@@ -1093,7 +1125,7 @@ export default function CompanyDetailPage() {
             }}
           >
             <div style={{ fontWeight: 700, marginBottom: 6, color: "var(--accent)" }}>
-              계정이 발급되었습니다 — 아래 정보를 화주에게 전달해주세요 (한 번만 표시됩니다)
+              아래 로그인 정보를 화주에게 전달해주세요 (한 번만 표시됩니다)
             </div>
             <div>이메일: <span className="num">{issuedCredentials.email}</span></div>
             <div>임시 비밀번호: <span className="num">{issuedCredentials.password}</span></div>
