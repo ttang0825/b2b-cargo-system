@@ -98,6 +98,8 @@ function QuotesPageInner() {
   const [postcodeReady, setPostcodeReady] = useState(false);
   const [period, setPeriod] = useState<DatePreset>("all");
   const [calculatingDistance, setCalculatingDistance] = useState(false);
+  const [distanceAutoCalculated, setDistanceAutoCalculated] = useState(false);
+  const [allowManualDistance, setAllowManualDistance] = useState(false);
   const [ratesLoading, setRatesLoading] = useState(true);
 
   const [savedLocations, setSavedLocations] = useState<
@@ -319,6 +321,8 @@ function QuotesPageInner() {
         return;
       }
       setForm((prev) => ({ ...prev, distance_km: String(data.distance_km) }));
+      setDistanceAutoCalculated(true);
+      setAllowManualDistance(false);
     } catch {
       setError("거리 계산 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
     } finally {
@@ -452,6 +456,12 @@ function QuotesPageInner() {
     }
     if (!form.distance_km || Number(form.distance_km) <= 0) {
       setError("거리(km)를 입력해주세요.");
+      return;
+    }
+    if (!distanceAutoCalculated && !allowManualDistance) {
+      setError(
+        "거리 자동계산을 먼저 실행해주세요. 직접 입력한 값을 쓰시려면 거리 입력창 아래 체크박스를 선택해주세요."
+      );
       return;
     }
     if (!calc) {
@@ -589,6 +599,8 @@ function QuotesPageInner() {
       requested_dropoff_at: "",
       notes: "",
     });
+    setDistanceAutoCalculated(false);
+    setAllowManualDistance(false);
     loadQuotes(period);
   }
 
@@ -941,9 +953,10 @@ function QuotesPageInner() {
                   <input
                     type="number"
                     value={form.distance_km}
-                    onChange={(e) =>
-                      setForm({ ...form, distance_km: e.target.value })
-                    }
+                    onChange={(e) => {
+                      setForm({ ...form, distance_km: e.target.value });
+                      setDistanceAutoCalculated(false);
+                    }}
                     style={{ flex: 1 }}
                   />
                   <button
@@ -962,6 +975,27 @@ function QuotesPageInner() {
                     {calculatingDistance ? "계산 중..." : "자동계산"}
                   </button>
                 </div>
+                {form.distance_km && !distanceAutoCalculated && (
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 5,
+                      marginTop: 6,
+                      fontSize: 11.5,
+                      color: "var(--text-muted)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={allowManualDistance}
+                      onChange={(e) => setAllowManualDistance(e.target.checked)}
+                      style={{ margin: 0, width: "auto" }}
+                    />
+                    자동계산 없이 직접 입력한 거리를 사용합니다
+                  </label>
+                )}
               </div>
               <div className="field">
                 <label>톤수 *</label>
