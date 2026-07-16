@@ -13,10 +13,11 @@ export default function CustomerDashboard() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ quotes: 0, activeDispatches: 0, unpaidInvoices: 0 });
   const [recentQuotes, setRecentQuotes] = useState<any[]>([]);
+  const [latestAnnouncement, setLatestAnnouncement] = useState<any | null>(null);
 
   useEffect(() => {
     async function load() {
-      const [{ count: quoteCount }, { data: dispatchRows }, { count: invoiceCount }, { data: recent }] =
+      const [{ count: quoteCount }, { data: dispatchRows }, { count: invoiceCount }, { data: recent }, { data: announcement }] =
         await Promise.all([
           supabase.from("quotes").select("id", { count: "exact", head: true }),
           supabase
@@ -32,6 +33,12 @@ export default function CustomerDashboard() {
             .select("id,quote_no,origin,destination,final_amount,status,created_at")
             .order("created_at", { ascending: false })
             .limit(5),
+          supabase
+            .from("announcements")
+            .select("id,title,content,created_at")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
         ]);
 
       setStats({
@@ -40,6 +47,7 @@ export default function CustomerDashboard() {
         unpaidInvoices: invoiceCount || 0,
       });
       setRecentQuotes(recent || []);
+      setLatestAnnouncement(announcement || null);
       setLoading(false);
     }
     load();
@@ -58,6 +66,36 @@ export default function CustomerDashboard() {
         <div className="empty-state">불러오는 중...</div>
       ) : (
         <>
+          {latestAnnouncement && (
+            <div
+              className="card"
+              style={{
+                padding: 16,
+                marginBottom: 20,
+                background: "var(--accent-soft)",
+                border: "none",
+              }}
+            >
+              <div style={{ fontSize: 11.5, color: "var(--accent)", fontWeight: 700, marginBottom: 4 }}>
+                📢 공지사항
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
+                {latestAnnouncement.title}
+              </div>
+              {latestAnnouncement.content && (
+                <div style={{ fontSize: 12.5, color: "var(--text-muted)" }}>
+                  {latestAnnouncement.content}
+                </div>
+              )}
+              <a
+                href="/customer/announcements"
+                style={{ fontSize: 11.5, color: "var(--accent)", textDecoration: "underline" }}
+              >
+                전체 공지사항 보기 →
+              </a>
+            </div>
+          )}
+
           <div
             style={{
               display: "grid",
