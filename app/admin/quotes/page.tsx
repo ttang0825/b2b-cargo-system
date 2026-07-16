@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { generateDailyNumber } from "@/lib/generateNumber";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
+import DateTimePicker from "@/components/DateTimePicker";
 
 declare global {
   interface Window {
@@ -167,6 +168,9 @@ function QuotesPageInner() {
     firstDealDiscount: false,
     waitingMinutes: "",
     waypointCount: "",
+    requested_pickup_at: "",
+    requested_dropoff_at: "",
+    notes: "",
   });
 
   async function loadRateData() {
@@ -219,7 +223,7 @@ function QuotesPageInner() {
       const { data: reqData } = await supabase
         .from("portal_order_requests")
         .select(
-          "id,company_id,origin,destination,vehicle_type,body_type,item,load_condition,unload_condition,item_condition,transport_time,urgency,trip_type,waiting_minutes,waypoint_count,companies(id,name,phone,address,status)"
+          "id,company_id,origin,destination,vehicle_type,body_type,item,load_condition,unload_condition,item_condition,transport_time,urgency,trip_type,waiting_minutes,waypoint_count,requested_pickup_at,requested_dropoff_at,notes,companies(id,name,phone,address,status)"
         )
         .eq("id", fromRequestId)
         .single();
@@ -246,6 +250,13 @@ function QuotesPageInner() {
         waypointCount:
           reqData.waypoint_count != null ? String(reqData.waypoint_count) : prev.waypointCount,
         item: reqData.item || "",
+        requested_pickup_at: reqData.requested_pickup_at
+          ? reqData.requested_pickup_at.slice(0, 16)
+          : prev.requested_pickup_at,
+        requested_dropoff_at: reqData.requested_dropoff_at
+          ? reqData.requested_dropoff_at.slice(0, 16)
+          : prev.requested_dropoff_at,
+        notes: reqData.notes || prev.notes,
       }));
     }
     prefillFromRequest();
@@ -478,6 +489,9 @@ function QuotesPageInner() {
         discount_amount: 0,
         final_amount: calc.final,
         status: "상담중",
+        requested_pickup_at: form.requested_pickup_at || null,
+        requested_dropoff_at: form.requested_dropoff_at || null,
+        notes: form.notes || null,
         selected_options: {
           톤수: form.vehicle_type,
           차량형태: form.차량형태,
@@ -571,6 +585,9 @@ function QuotesPageInner() {
       waitingMinutes: "",
       waypointCount: "",
       firstDealDiscount: false,
+      requested_pickup_at: "",
+      requested_dropoff_at: "",
+      notes: "",
     });
     loadQuotes(period);
   }
@@ -1035,11 +1052,34 @@ function QuotesPageInner() {
                   }
                 />
               </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <DateTimePicker
+                  label="희망 상차 일시"
+                  value={form.requested_pickup_at}
+                  onChange={(v) => setForm({ ...form, requested_pickup_at: v })}
+                />
+              </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <DateTimePicker
+                  label="희망 하차 일시"
+                  value={form.requested_dropoff_at}
+                  onChange={(v) => setForm({ ...form, requested_dropoff_at: v })}
+                />
+              </div>
               <div className="field" style={{ gridColumn: "1 / -1" }}>
                 <label>품목</label>
                 <input
                   value={form.item}
                   onChange={(e) => setForm({ ...form, item: e.target.value })}
+                />
+              </div>
+              <div className="field" style={{ gridColumn: "1 / -1" }}>
+                <label>특이사항</label>
+                <textarea
+                  rows={2}
+                  value={form.notes}
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  placeholder="상하차 조건 관련 참고사항 등"
                 />
               </div>
             </div>
