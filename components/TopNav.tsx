@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabaseClient";
 
 const MENU = [
   { href: "/admin/companies", label: "화주 관리 (영업)" },
@@ -17,6 +19,20 @@ const MENU = [
 export default function TopNav() {
   const pathname = usePathname();
   const router = useRouter();
+  const [pendingRequests, setPendingRequests] = useState(0);
+
+  useEffect(() => {
+    if (pathname === "/admin/login" || pathname?.startsWith("/customer")) return;
+
+    async function loadPendingCount() {
+      const { count } = await supabase
+        .from("portal_order_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "대기중");
+      setPendingRequests(count || 0);
+    }
+    loadPendingCount();
+  }, [pathname]);
 
   // 로그인 화면과 화주포털 영역에서는 admin 헤더 자체를 숨김
   if (pathname === "/admin/login" || pathname?.startsWith("/customer")) return null;
@@ -48,11 +64,47 @@ export default function TopNav() {
                 </Link>
               );
             })}
+            <Link
+              href="/admin/portal-requests"
+              className={
+                pathname?.startsWith("/admin/portal-requests") ? "nav-chip nav-chip-active" : "nav-chip"
+              }
+              style={{ position: "relative" }}
+            >
+              화주 요청
+              {pendingRequests > 0 && (
+                <span
+                  style={{
+                    marginLeft: 6,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    minWidth: 16,
+                    height: 16,
+                    padding: "0 4px",
+                    borderRadius: 999,
+                    background: "var(--danger)",
+                    color: "#fff",
+                    fontSize: 10,
+                    fontWeight: 800,
+                  }}
+                >
+                  {pendingRequests}
+                </span>
+              )}
+            </Link>
           </nav>
           <Link href="/admin/guide" className="guide-link">
             이용가이드
           </Link>
-          <button onClick={handleLogout} className="guide-link" style={{ border: "none", background: "none", cursor: "pointer" }}>
+          <Link href="/admin/announcements" className="guide-link">
+            공지사항 관리
+          </Link>
+          <button
+            onClick={handleLogout}
+            className="guide-link"
+            style={{ border: "none", background: "none", cursor: "pointer" }}
+          >
             로그아웃
           </button>
         </div>
