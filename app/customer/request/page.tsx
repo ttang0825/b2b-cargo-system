@@ -335,7 +335,7 @@ export default function PortalRequestPage() {
             )}
             <label
               style={{
-                display: "flex",
+                display: "inline-flex",
                 alignItems: "center",
                 gap: 6,
                 marginTop: 8,
@@ -344,7 +344,12 @@ export default function PortalRequestPage() {
                 cursor: "pointer",
               }}
             >
-              <input type="checkbox" checked={saveOrigin} onChange={(e) => setSaveOrigin(e.target.checked)} style={{ margin: 0 }} />
+              <input
+                type="checkbox"
+                checked={saveOrigin}
+                onChange={(e) => setSaveOrigin(e.target.checked)}
+                style={{ margin: 0, width: "auto", flexShrink: 0 }}
+              />
               이 출발지를 배송지 목록에 저장
             </label>
           </div>
@@ -387,7 +392,7 @@ export default function PortalRequestPage() {
             )}
             <label
               style={{
-                display: "flex",
+                display: "inline-flex",
                 alignItems: "center",
                 gap: 6,
                 marginTop: 8,
@@ -396,7 +401,12 @@ export default function PortalRequestPage() {
                 cursor: "pointer",
               }}
             >
-              <input type="checkbox" checked={saveDestination} onChange={(e) => setSaveDestination(e.target.checked)} style={{ margin: 0 }} />
+              <input
+                type="checkbox"
+                checked={saveDestination}
+                onChange={(e) => setSaveDestination(e.target.checked)}
+                style={{ margin: 0, width: "auto", flexShrink: 0 }}
+              />
               이 도착지를 배송지 목록에 저장
             </label>
           </div>
@@ -506,7 +516,7 @@ export default function PortalRequestPage() {
                 <th>희망 상차일</th>
                 <th>상태</th>
                 <th>특이사항</th>
-                <th>담당자 메모</th>
+                <th>반려 사유</th>
                 <th></th>
               </tr>
             </thead>
