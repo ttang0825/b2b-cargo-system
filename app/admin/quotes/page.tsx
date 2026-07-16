@@ -58,7 +58,6 @@ type QuoteRow = {
 
 const SINGLE_SELECT_CATEGORIES = [
   "차량형태",
-  "상하차방식",
   "물품특성",
   "운송시간",
   "긴급여부",
@@ -159,7 +158,8 @@ function QuotesPageInner() {
     vehicle_type: "1톤",
     item: "",
     차량형태: "카고",
-    상하차방식: "지게차/도크",
+    상차조건: "지게차/도크",
+    하차조건: "지게차/도크",
     물품특성: "일반화물",
     운송시간: "평일 주간",
     긴급여부: "일반",
@@ -219,7 +219,7 @@ function QuotesPageInner() {
       const { data: reqData } = await supabase
         .from("portal_order_requests")
         .select(
-          "id,company_id,origin,destination,vehicle_type,body_type,item,companies(id,name,phone,address,status)"
+          "id,company_id,origin,destination,vehicle_type,body_type,item,load_condition,unload_condition,item_condition,transport_time,urgency,trip_type,waiting_minutes,waypoint_count,companies(id,name,phone,address,status)"
         )
         .eq("id", fromRequestId)
         .single();
@@ -235,6 +235,16 @@ function QuotesPageInner() {
         destination: reqData.destination || "",
         vehicle_type: reqData.vehicle_type || prev.vehicle_type,
         차량형태: reqData.body_type || prev.차량형태,
+        상차조건: reqData.load_condition || prev.상차조건,
+        하차조건: reqData.unload_condition || prev.하차조건,
+        물품특성: reqData.item_condition || prev.물품특성,
+        운송시간: reqData.transport_time || prev.운송시간,
+        긴급여부: reqData.urgency || prev.긴급여부,
+        "왕복/편도": reqData.trip_type || prev["왕복/편도"],
+        waitingMinutes:
+          reqData.waiting_minutes != null ? String(reqData.waiting_minutes) : prev.waitingMinutes,
+        waypointCount:
+          reqData.waypoint_count != null ? String(reqData.waypoint_count) : prev.waypointCount,
         item: reqData.item || "",
       }));
     }
@@ -325,7 +335,6 @@ function QuotesPageInner() {
 
     const selections: [string, string][] = [
       ["차량형태", form.차량형태],
-      ["상하차방식", form.상하차방식],
       ["물품특성", form.물품특성],
       ["운송시간", form.운송시간],
       ["긴급여부", form.긴급여부],
@@ -349,6 +358,26 @@ function QuotesPageInner() {
       if (found.flat_amount) {
         flatTotal += found.flat_amount;
         breakdown.push({ label: opt, amount: found.flat_amount });
+      }
+    }
+
+    // 상차조건 / 하차조건은 각각 별도 작업이라 상하차방식 가산기준을 양쪽에 개별 적용
+    for (const [prefix, opt] of [
+      ["상차", form.상차조건],
+      ["하차", form.하차조건],
+    ] as [string, string][]) {
+      const found = findOption("상하차방식", opt);
+      if (!found) continue;
+      if (found.rate_pct) {
+        ratePctTotal += found.rate_pct;
+        breakdown.push({
+          label: `${prefix} ${opt} (${(found.rate_pct * 100).toFixed(0)}%)`,
+          amount: base * found.rate_pct,
+        });
+      }
+      if (found.flat_amount) {
+        flatTotal += found.flat_amount;
+        breakdown.push({ label: `${prefix} ${opt}`, amount: found.flat_amount });
       }
     }
 
@@ -452,7 +481,8 @@ function QuotesPageInner() {
         selected_options: {
           톤수: form.vehicle_type,
           차량형태: form.차량형태,
-          상하차방식: form.상하차방식,
+          상차조건: form.상차조건,
+          하차조건: form.하차조건,
           물품특성: form.물품특성,
           운송시간: form.운송시간,
           긴급여부: form.긴급여부,
@@ -929,6 +959,37 @@ function QuotesPageInner() {
                       {v}
                     </option>
                   ))}
+                </select>
+              </div>
+
+              <div className="field">
+                <label>상차조건</label>
+                <select
+                  value={form.상차조건}
+                  onChange={(e) => setForm({ ...form, 상차조건: e.target.value })}
+                >
+                  {surcharges
+                    .filter((s) => s.category === "상하차방식")
+                    .map((o) => (
+                      <option key={o.option_name} value={o.option_name}>
+                        {o.option_name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>하차조건</label>
+                <select
+                  value={form.하차조건}
+                  onChange={(e) => setForm({ ...form, 하차조건: e.target.value })}
+                >
+                  {surcharges
+                    .filter((s) => s.category === "상하차방식")
+                    .map((o) => (
+                      <option key={o.option_name} value={o.option_name}>
+                        {o.option_name}
+                      </option>
+                    ))}
                 </select>
               </div>
 
