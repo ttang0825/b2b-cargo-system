@@ -61,7 +61,7 @@ export default function ChangePasswordPage() {
           비밀번호 변경
         </h1>
         <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 0, marginBottom: 20 }}>
-          최초 로그인입니다. 계속하려면 새 비밀번호를 설정해주세요.
+          새 비밀번호를 설정해주세요.
         </p>
         <form onSubmit={handleSubmit}>
           <div className="field" style={{ marginBottom: 12 }}>
