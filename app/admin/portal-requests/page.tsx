@@ -134,7 +134,7 @@ export default function PortalRequestsPage() {
                 <th>차량</th>
                 <th>희망 상차일</th>
                 <th>희망 하차일</th>
-                <th>메모</th>
+                <th>특이사항</th>
                 <th>상태</th>
                 <th></th>
               </tr>
