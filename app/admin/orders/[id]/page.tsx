@@ -6,7 +6,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { ORDER_STATUS_OPTIONS, getOrderStatusColor } from "@/lib/orderStatusColors";
 import { LOAD_UNLOAD_CONDITIONS } from "@/lib/constants";
-import DateTimePicker from "../DateTimePicker";
+import DateTimePicker from "@/components/DateTimePicker";
 
 type OrderDetail = {
   id: string;
