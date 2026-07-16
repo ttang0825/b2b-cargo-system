@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { generateDailyNumber } from "@/lib/generateNumber";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
@@ -84,8 +84,10 @@ function won(n: number) {
   return Math.round(n).toLocaleString("ko-KR") + "원";
 }
 
-export default function QuotesPage() {
+function QuotesPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const fromRequestId = searchParams.get("from_request");
   const [tiers, setTiers] = useState<Tier[]>([]);
   const [surcharges, setSurcharges] = useState<Surcharge[]>([]);
   const [extraFees, setExtraFees] = useState<ExtraFee[]>([]);
@@ -209,6 +211,36 @@ export default function QuotesPage() {
     loadQuotes(period);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period]);
+
+  // 화주 발주요청을 승인해서 넘어온 경우, 요청 내용을 견적 폼에 미리 채워줌
+  useEffect(() => {
+    async function prefillFromRequest() {
+      if (!fromRequestId) return;
+      const { data: reqData } = await supabase
+        .from("portal_order_requests")
+        .select(
+          "id,company_id,origin,destination,vehicle_type,body_type,item,companies(id,name,phone,address,status)"
+        )
+        .eq("id", fromRequestId)
+        .single();
+      if (!reqData) return;
+
+      setCustomerMode("company");
+      if (reqData.companies) {
+        setSelectedCompany(reqData.companies as any);
+      }
+      setForm((prev) => ({
+        ...prev,
+        origin: reqData.origin || "",
+        destination: reqData.destination || "",
+        vehicle_type: reqData.vehicle_type || prev.vehicle_type,
+        차량형태: reqData.body_type || prev.차량형태,
+        item: reqData.item || "",
+      }));
+    }
+    prefillFromRequest();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromRequestId]);
 
   useEffect(() => {
     let active = true;
@@ -480,6 +512,14 @@ export default function QuotesPage() {
       if (toSave.length > 0) {
         await supabase.from("customer_locations").insert(toSave);
       }
+    }
+
+    // 화주 발주요청에서 넘어온 경우, 요청 상태를 승인됨으로 갱신하고 이 견적과 연결
+    if (fromRequestId && newQuote) {
+      await supabase
+        .from("portal_order_requests")
+        .update({ status: "승인됨", quote_id: newQuote.id })
+        .eq("id", fromRequestId);
     }
 
     setSaving(false);
@@ -1106,5 +1146,19 @@ export default function QuotesPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function QuotesPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="container">
+          <div className="empty-state">불러오는 중...</div>
+        </main>
+      }
+    >
+      <QuotesPageInner />
+    </Suspense>
   );
 }
