@@ -4,13 +4,28 @@ import { useEffect, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import { formatPhoneNumber } from "@/lib/constants";
 
+function Field({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: 14.5 }}>{value || "-"}</div>
+    </div>
+  );
+}
+
 export default function PortalProfilePage() {
   const [companyName, setCompanyName] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
 
+  const [saved, setSaved] = useState({
+    contact_name: "",
+    contact_position: "",
+    contact_mobile: "",
+    contact_email: "",
+  });
   const [form, setForm] = useState({
     contact_name: "",
     contact_position: "",
@@ -18,38 +33,41 @@ export default function PortalProfilePage() {
     contact_email: "",
   });
 
-  useEffect(() => {
-    async function load() {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) {
-        setLoading(false);
-        return;
-      }
-      const { data: account } = await supabase
-        .from("customer_accounts")
-        .select("company_id")
-        .eq("auth_user_id", session.user.id)
-        .single();
-      if (account) {
-        const { data: company } = await supabase
-          .from("companies")
-          .select("name,contact_name,contact_position,contact_mobile,contact_email")
-          .eq("id", account.company_id)
-          .single();
-        if (company) {
-          setCompanyName(company.name || "");
-          setForm({
-            contact_name: company.contact_name || "",
-            contact_position: company.contact_position || "",
-            contact_mobile: company.contact_mobile || "",
-            contact_email: company.contact_email || "",
-          });
-        }
-      }
+  async function load() {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) {
       setLoading(false);
+      return;
     }
+    const { data: account } = await supabase
+      .from("customer_accounts")
+      .select("company_id")
+      .eq("auth_user_id", session.user.id)
+      .single();
+    if (account) {
+      const { data: company } = await supabase
+        .from("companies")
+        .select("name,contact_name,contact_position,contact_mobile,contact_email")
+        .eq("id", account.company_id)
+        .single();
+      if (company) {
+        setCompanyName(company.name || "");
+        const values = {
+          contact_name: company.contact_name || "",
+          contact_position: company.contact_position || "",
+          contact_mobile: company.contact_mobile || "",
+          contact_email: company.contact_email || "",
+        };
+        setSaved(values);
+        setForm(values);
+      }
+    }
+    setLoading(false);
+  }
+
+  useEffect(() => {
     load();
   }, []);
 
@@ -57,11 +75,10 @@ export default function PortalProfilePage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setError(null);
-    setSuccess(false);
 
     const {
       data: { session },
@@ -87,7 +104,8 @@ export default function PortalProfilePage() {
       setError(data.error || "저장에 실패했습니다.");
       return;
     }
-    setSuccess(true);
+    setSaved(form);
+    setEditing(false);
   }
 
   if (loading) {
@@ -102,57 +120,65 @@ export default function PortalProfilePage() {
     <main className="container" style={{ maxWidth: 520 }}>
       <div className="page-header">
         <div>
-          <h1 className="page-title">내 정보</h1>
-          <p className="page-desc">{companyName} 담당자 연락처를 직접 관리할 수 있습니다.</p>
+          <h1 className="page-title">담당자 정보</h1>
+          <p className="page-desc">{companyName} 담당자 연락처를 관리합니다.</p>
         </div>
+        {!editing && (
+          <button className="btn" onClick={() => setEditing(true)}>
+            수정
+          </button>
+        )}
       </div>
 
       <div className="card" style={{ padding: 24 }}>
-        <form onSubmit={handleSubmit}>
-          <div className="field" style={{ marginBottom: 14 }}>
-            <label>담당자명</label>
-            <input value={form.contact_name} onChange={(e) => setField("contact_name", e.target.value)} />
-          </div>
-          <div className="field" style={{ marginBottom: 14 }}>
-            <label>직책</label>
-            <input value={form.contact_position} onChange={(e) => setField("contact_position", e.target.value)} />
-          </div>
-          <div className="field" style={{ marginBottom: 14 }}>
-            <label>휴대폰</label>
-            <input
-              value={form.contact_mobile}
-              onChange={(e) => setField("contact_mobile", formatPhoneNumber(e.target.value))}
-              placeholder="숫자만 입력하면 자동으로 - 표시"
-            />
-          </div>
-          <div className="field" style={{ marginBottom: 18 }}>
-            <label>이메일</label>
-            <input
-              type="email"
-              value={form.contact_email}
-              onChange={(e) => setField("contact_email", e.target.value)}
-            />
-          </div>
-          {error && <div className="error-box">{error}</div>}
-          {success && (
-            <div
-              style={{
-                background: "var(--accent-soft)",
-                color: "var(--accent)",
-                padding: "10px 14px",
-                borderRadius: 10,
-                fontSize: 13,
-                fontWeight: 600,
-                marginBottom: 14,
-              }}
-            >
-              저장되었습니다.
+        {!editing ? (
+          <>
+            <Field label="담당자명" value={saved.contact_name} />
+            <Field label="직책" value={saved.contact_position} />
+            <Field label="휴대폰" value={saved.contact_mobile} />
+            <Field label="이메일" value={saved.contact_email} />
+          </>
+        ) : (
+          <form onSubmit={handleSave}>
+            <div className="field" style={{ marginBottom: 14 }}>
+              <label>담당자명</label>
+              <input value={form.contact_name} onChange={(e) => setField("contact_name", e.target.value)} />
             </div>
-          )}
-          <button className="btn" type="submit" disabled={saving} style={{ width: "100%", justifyContent: "center" }}>
-            {saving ? "저장 중..." : "저장"}
-          </button>
-        </form>
+            <div className="field" style={{ marginBottom: 14 }}>
+              <label>직책</label>
+              <input value={form.contact_position} onChange={(e) => setField("contact_position", e.target.value)} />
+            </div>
+            <div className="field" style={{ marginBottom: 14 }}>
+              <label>휴대폰</label>
+              <input
+                value={form.contact_mobile}
+                onChange={(e) => setField("contact_mobile", formatPhoneNumber(e.target.value))}
+                placeholder="숫자만 입력하면 자동으로 - 표시"
+              />
+            </div>
+            <div className="field" style={{ marginBottom: 18 }}>
+              <label>이메일</label>
+              <input type="email" value={form.contact_email} onChange={(e) => setField("contact_email", e.target.value)} />
+            </div>
+            {error && <div className="error-box">{error}</div>}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn" type="submit" disabled={saving}>
+                {saving ? "저장 중..." : "저장"}
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => {
+                  setForm(saved);
+                  setEditing(false);
+                  setError(null);
+                }}
+              >
+                취소
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </main>
   );
