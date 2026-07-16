@@ -22,6 +22,25 @@ const SINGLE_SELECT_CATEGORIES = ["차량형태", "물품특성", "운송시간"
 type SavedLocation = { id: string; address: string | null; location_type: string | null };
 type Surcharge = { category: string; option_name: string };
 
+// 저장된 배송지 주소 뱃지 - 길어도 칸을 넘어가지 않고 줄바꿈되도록
+function AddressBadge({ address, onClick }: { address: string; onClick: () => void }) {
+  return (
+    <span
+      className="badge"
+      onClick={onClick}
+      style={{
+        cursor: "pointer",
+        whiteSpace: "normal",
+        wordBreak: "break-word",
+        textAlign: "left",
+        maxWidth: "100%",
+      }}
+    >
+      {address}
+    </span>
+  );
+}
+
 export default function PortalRequestPage() {
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [accountId, setAccountId] = useState<string | null>(null);
@@ -57,7 +76,6 @@ export default function PortalRequestPage() {
     notes: "",
   });
 
-  // 다음(Daum) 우편번호 서비스 스크립트 로드
   useEffect(() => {
     if (document.getElementById("daum-postcode-script")) {
       setPostcodeReady(true);
@@ -88,7 +106,7 @@ export default function PortalRequestPage() {
     const { data } = await supabase
       .from("portal_order_requests")
       .select(
-        "id,origin,destination,vehicle_type,body_type,item,requested_pickup_at,requested_dropoff_at,status,staff_note,created_at"
+        "id,origin,destination,vehicle_type,body_type,item,notes,requested_pickup_at,requested_dropoff_at,status,staff_note,created_at"
       )
       .eq("company_id", cid)
       .order("created_at", { ascending: false })
@@ -105,11 +123,9 @@ export default function PortalRequestPage() {
   }
 
   async function loadSurcharges() {
-    // 운임기준표의 가산기준 옵션을 그대로 재사용 - 견적관리와 동일한 선택지
     const { data } = await supabase.from("rate_surcharges").select("category,option_name");
     const list = (data as Surcharge[]) || [];
     setSurcharges(list);
-    // 각 항목의 첫 번째 옵션을 기본값으로 채워줌
     setForm((prev) => {
       const next = { ...prev };
       for (const cat of [...SINGLE_SELECT_CATEGORIES, "상하차방식"]) {
@@ -281,98 +297,111 @@ export default function PortalRequestPage() {
 
       <div className="card" style={{ padding: 20, marginBottom: 24 }}>
         <form onSubmit={handleSubmit}>
+          {/* 출발지 - 전체 너비, 저장 체크박스는 바로 아래에 */}
+          <div className="field" style={{ marginBottom: 16 }}>
+            <label>출발지 *</label>
+            <div style={{ display: "flex", gap: 6 }}>
+              <input
+                value={form.origin}
+                onChange={(e) => setField("origin", e.target.value)}
+                placeholder="도로명주소 검색 또는 직접 입력"
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                className="btn-ghost"
+                style={{ padding: "0 10px", borderRadius: 6, fontSize: 12, whiteSpace: "nowrap", cursor: "pointer" }}
+                onClick={() => openAddressSearch("origin")}
+              >
+                주소검색
+              </button>
+            </div>
+            <input
+              value={form.originDetail}
+              onChange={(e) => setField("originDetail", e.target.value)}
+              placeholder="상세주소 (동/층/호수, 창고 위치 등)"
+              style={{ marginTop: 6 }}
+            />
+            {pickupBadges.length > 0 && (
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 8 }}>
+                {pickupBadges.map((l) => (
+                  <AddressBadge
+                    key={l.id}
+                    address={l.address || ""}
+                    onClick={() => setForm((prev) => ({ ...prev, origin: l.address || "", originDetail: "" }))}
+                  />
+                ))}
+              </div>
+            )}
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                marginTop: 8,
+                fontSize: 12,
+                color: "var(--text-muted)",
+                cursor: "pointer",
+              }}
+            >
+              <input type="checkbox" checked={saveOrigin} onChange={(e) => setSaveOrigin(e.target.checked)} style={{ margin: 0 }} />
+              이 출발지를 배송지 목록에 저장
+            </label>
+          </div>
+
+          {/* 도착지 - 전체 너비, 저장 체크박스는 바로 아래에 */}
+          <div className="field" style={{ marginBottom: 16 }}>
+            <label>도착지 *</label>
+            <div style={{ display: "flex", gap: 6 }}>
+              <input
+                value={form.destination}
+                onChange={(e) => setField("destination", e.target.value)}
+                placeholder="도로명주소 검색 또는 직접 입력"
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                className="btn-ghost"
+                style={{ padding: "0 10px", borderRadius: 6, fontSize: 12, whiteSpace: "nowrap", cursor: "pointer" }}
+                onClick={() => openAddressSearch("destination")}
+              >
+                주소검색
+              </button>
+            </div>
+            <input
+              value={form.destinationDetail}
+              onChange={(e) => setField("destinationDetail", e.target.value)}
+              placeholder="상세주소 (동/층/호수, 하차장 위치 등)"
+              style={{ marginTop: 6 }}
+            />
+            {dropoffBadges.length > 0 && (
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 8 }}>
+                {dropoffBadges.map((l) => (
+                  <AddressBadge
+                    key={l.id}
+                    address={l.address || ""}
+                    onClick={() => setForm((prev) => ({ ...prev, destination: l.address || "", destinationDetail: "" }))}
+                  />
+                ))}
+              </div>
+            )}
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                marginTop: 8,
+                fontSize: 12,
+                color: "var(--text-muted)",
+                cursor: "pointer",
+              }}
+            >
+              <input type="checkbox" checked={saveDestination} onChange={(e) => setSaveDestination(e.target.checked)} style={{ margin: 0 }} />
+              이 도착지를 배송지 목록에 저장
+            </label>
+          </div>
+
           <div className="form-grid" style={{ padding: 0 }}>
-            <div className="field">
-              <label>출발지 *</label>
-              <div style={{ display: "flex", gap: 6 }}>
-                <input
-                  value={form.origin}
-                  onChange={(e) => setField("origin", e.target.value)}
-                  placeholder="도로명주소 검색 또는 직접 입력"
-                  style={{ flex: 1 }}
-                />
-                <button
-                  type="button"
-                  className="btn-ghost"
-                  style={{ padding: "0 10px", borderRadius: 6, fontSize: 12, whiteSpace: "nowrap", cursor: "pointer" }}
-                  onClick={() => openAddressSearch("origin")}
-                >
-                  주소검색
-                </button>
-              </div>
-              <input
-                value={form.originDetail}
-                onChange={(e) => setField("originDetail", e.target.value)}
-                placeholder="상세주소 (동/층/호수, 창고 위치 등)"
-                style={{ marginTop: 6 }}
-              />
-              {pickupBadges.length > 0 && (
-                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 8 }}>
-                  {pickupBadges.map((l) => (
-                    <span
-                      key={l.id}
-                      className="badge"
-                      style={{ cursor: "pointer" }}
-                      onClick={() => setForm((prev) => ({ ...prev, origin: l.address || "", originDetail: "" }))}
-                    >
-                      {l.address}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="field">
-              <label>도착지 *</label>
-              <div style={{ display: "flex", gap: 6 }}>
-                <input
-                  value={form.destination}
-                  onChange={(e) => setField("destination", e.target.value)}
-                  placeholder="도로명주소 검색 또는 직접 입력"
-                  style={{ flex: 1 }}
-                />
-                <button
-                  type="button"
-                  className="btn-ghost"
-                  style={{ padding: "0 10px", borderRadius: 6, fontSize: 12, whiteSpace: "nowrap", cursor: "pointer" }}
-                  onClick={() => openAddressSearch("destination")}
-                >
-                  주소검색
-                </button>
-              </div>
-              <input
-                value={form.destinationDetail}
-                onChange={(e) => setField("destinationDetail", e.target.value)}
-                placeholder="상세주소 (동/층/호수, 하차장 위치 등)"
-                style={{ marginTop: 6 }}
-              />
-              {dropoffBadges.length > 0 && (
-                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 8 }}>
-                  {dropoffBadges.map((l) => (
-                    <span
-                      key={l.id}
-                      className="badge"
-                      style={{ cursor: "pointer" }}
-                      onClick={() => setForm((prev) => ({ ...prev, destination: l.address || "", destinationDetail: "" }))}
-                    >
-                      {l.address}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-muted)", cursor: "pointer", whiteSpace: "nowrap" }}>
-                <input type="checkbox" checked={saveOrigin} onChange={(e) => setSaveOrigin(e.target.checked)} style={{ margin: 0 }} />
-                이 출발지를 배송지 목록에 저장
-              </label>
-              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-muted)", cursor: "pointer", whiteSpace: "nowrap" }}>
-                <input type="checkbox" checked={saveDestination} onChange={(e) => setSaveDestination(e.target.checked)} style={{ margin: 0 }} />
-                이 도착지를 배송지 목록에 저장
-              </label>
-            </div>
-
             <div className="field">
               <label>희망 톤수</label>
               <select value={form.vehicle_type} onChange={(e) => setField("vehicle_type", e.target.value)}>
@@ -444,8 +473,8 @@ export default function PortalRequestPage() {
               <input value={form.item} onChange={(e) => setField("item", e.target.value)} />
             </div>
             <div className="field" style={{ gridColumn: "1 / -1" }}>
-              <label>요청 메모</label>
-              <textarea rows={2} value={form.notes} onChange={(e) => setField("notes", e.target.value)} placeholder="기타 특이사항" />
+              <label>특이사항</label>
+              <textarea rows={2} value={form.notes} onChange={(e) => setField("notes", e.target.value)} placeholder="상하차 조건 관련 요청, 기타 참고사항" />
             </div>
           </div>
           {error && <div className="error-box">{error}</div>}
@@ -469,13 +498,14 @@ export default function PortalRequestPage() {
         ) : requests.length === 0 ? (
           <div className="empty-state">아직 보낸 요청이 없습니다.</div>
         ) : (
-          <table style={{ minWidth: 780 }}>
+          <table style={{ minWidth: 880 }}>
             <thead>
               <tr>
                 <th>구간</th>
                 <th>차량</th>
                 <th>희망 상차일</th>
                 <th>상태</th>
+                <th>특이사항</th>
                 <th>담당자 메모</th>
                 <th></th>
               </tr>
@@ -497,7 +527,8 @@ export default function PortalRequestPage() {
                       {r.status}
                     </span>
                   </td>
-                  <td>{r.staff_note || "-"}</td>
+                  <td style={{ maxWidth: 160 }}>{r.notes || "-"}</td>
+                  <td style={{ maxWidth: 160 }}>{r.staff_note || "-"}</td>
                   <td className="cell-nowrap">
                     {r.status === "대기중" && (
                       <button className="btn-danger" style={{ padding: "4px 10px", borderRadius: 6, fontSize: 11, cursor: "pointer" }} onClick={() => handleDeleteRequest(r.id)}>
