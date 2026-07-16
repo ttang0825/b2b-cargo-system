@@ -25,6 +25,15 @@ export default function CustomerInvoicesPage() {
       setLoading(false);
     }
     load();
+
+    const channel = supabase
+      .channel("customer_invoices_list")
+      .on("postgres_changes", { event: "*", schema: "public", table: "invoices" }, () => load())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   return (
