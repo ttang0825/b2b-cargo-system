@@ -79,9 +79,16 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
           <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
             <nav style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <a href="/customer" className="nav-chip">대시보드</a>
+              <a href="/customer/request" className="nav-chip">발주 요청</a>
               <a href="/customer/quotes" className="nav-chip">견적 확인</a>
               <a href="/customer/dispatches" className="nav-chip">배차·운송 조회</a>
+              <a href="/customer/calendar" className="nav-chip">캘린더</a>
               <a href="/customer/invoices" className="nav-chip">정산·세금계산서</a>
+              <a href="/customer/stats" className="nav-chip">통계</a>
+              <a href="/customer/locations" className="nav-chip">배송지 관리</a>
+              <a href="/customer/announcements" className="nav-chip">공지사항</a>
+              <a href="/customer/profile" className="nav-chip">내 정보</a>
+              <a href="/customer/change-password" className="nav-chip">비밀번호 변경</a>
             </nav>
             <button
               onClick={handleLogout}
