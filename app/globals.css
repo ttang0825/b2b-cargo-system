@@ -380,3 +380,42 @@ tbody tr:hover {
     margin: 18mm;
   }
 }
+
+/* ============================================================
+   화주포털(customer) 전용 테마 — 관리자(블루)와 시각적으로 구분되는
+   브랜드 옐로우+블랙 톤. app/customer/layout.tsx 최상위에 이 클래스가
+   적용되어, 그 안의 모든 화면에 자동으로 반영됩니다.
+   ============================================================ */
+.portal-theme {
+  --accent: #8a6d00;
+  --accent-hover: #6b5500;
+  --accent-soft: #fff9d6;
+  --bg: #fffdf6;
+}
+.portal-theme .btn {
+  background: #1a1a1a;
+  color: #ffd833;
+  box-shadow: none;
+}
+.portal-theme .btn:hover {
+  background: #000000;
+  color: #ffd833;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18);
+}
+.portal-theme .nav-chip-active {
+  background: #ffd833;
+  color: #1a1a1a;
+  box-shadow: 0 4px 10px rgba(255, 216, 51, 0.5);
+}
+.portal-theme .nav-chip-active:hover {
+  background: #ffd833;
+  color: #1a1a1a;
+}
+.portal-theme .home-card-tag,
+.portal-theme .badge {
+  background: #fff9d6;
+  color: #8a6d00;
+}
+.portal-theme .home-card:hover {
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.1);
+}
