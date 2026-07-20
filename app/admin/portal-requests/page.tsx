@@ -224,7 +224,7 @@ export default function PortalRequestsPage() {
                     </span>
                   </td>
                   <td className="cell-nowrap">
-                    <div style={{ display: "flex", gap: 6 }}>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", maxWidth: 190 }}>
                       {r.status === "대기중" && (
                         <>
                           <button
@@ -236,20 +236,20 @@ export default function PortalRequestsPage() {
                             승인(견적작성)
                           </button>
                           <button
-                            className="btn-ghost"
-                            style={{ padding: "5px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
-                            disabled={processingId === r.id}
-                            onClick={() => handleManualApprove(r)}
-                          >
-                            수동 승인 처리
-                          </button>
-                          <button
                             className="btn-danger"
                             style={{ padding: "5px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
                             disabled={processingId === r.id}
                             onClick={() => handleReject(r)}
                           >
                             반려
+                          </button>
+                          <button
+                            className="btn-ghost"
+                            style={{ padding: "5px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                            disabled={processingId === r.id}
+                            onClick={() => handleManualApprove(r)}
+                          >
+                            수동 승인 처리
                           </button>
                         </>
                       )}
