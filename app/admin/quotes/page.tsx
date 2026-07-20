@@ -1137,6 +1137,7 @@ function QuotesPageInner() {
               첫거래지원 할인 적용 (10%)
             </label>
 
+            {error && <div className="error-box">{error}</div>}
             <button className="btn" type="submit" disabled={saving}>
               {saving ? "저장 중..." : "견적 저장"}
             </button>
