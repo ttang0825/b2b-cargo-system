@@ -62,6 +62,7 @@ function won(n: number | null) {
 export default function CustomersPage() {
   const router = useRouter();
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [portalCompanyIds, setPortalCompanyIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -100,6 +101,13 @@ export default function CustomersPage() {
         latestByCompany[companyId] = (row as any).dispatch_status;
       }
     }
+
+    // 화주포털 계정(활성)이 있는 회사 목록을 별도로 조회 - 회사명 옆 아이콘 표시용
+    const { data: portalAccounts } = await supabase
+      .from("customer_accounts")
+      .select("company_id")
+      .eq("is_active", true);
+    setPortalCompanyIds(new Set((portalAccounts || []).map((a: any) => a.company_id)));
 
     setCustomers(
       list.map((c) => ({ ...c, latestDispatchStatus: latestByCompany[c.id] || null }))
@@ -191,7 +199,8 @@ export default function CustomersPage() {
             <a href="/admin/companies" style={{ textDecoration: "underline" }}>
               화주 관리
             </a>{" "}
-            화면에서 확인할 수 있습니다.
+            화면에서 확인할 수 있습니다. 🔑 표시는 화주포털 계정이 발급된
+            업체입니다.
           </p>
         </div>
       </div>
@@ -298,7 +307,14 @@ export default function CustomersPage() {
                   onClick={() => router.push(`/admin/companies/${c.id}`)}
                   style={{ cursor: "pointer" }}
                 >
-                  <td className="cell-nowrap" style={{ minWidth: 110 }}>{c.name}</td>
+                  <td className="cell-nowrap" style={{ minWidth: 110 }}>
+                    {c.name}
+                    {portalCompanyIds.has(c.id) && (
+                      <span title="화주포털 계정 발급됨" style={{ marginLeft: 5, fontSize: 11 }}>
+                        🔑
+                      </span>
+                    )}
+                  </td>
                   <td style={{ maxWidth: 170 }}>{formatIndustry(c)}</td>
                   <td className="cell-nowrap">
                     <div>{c.metro_region || "-"}</div>
