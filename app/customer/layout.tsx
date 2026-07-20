@@ -6,11 +6,121 @@ import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 
 const PUBLIC_PATHS = ["/customer/login"];
 
-export default function CustomerLayout({ children }: { children: React.ReactNode }) {  const router = useRouter();
+type NavItem = { href: string; label: string; key?: "quotes" | "dispatches" | "invoices" };
+type NavGroup = { label: string; items: NavItem[] };
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    label: "운송 현황",
+    items: [
+      { href: "/customer/request", label: "발주 요청" },
+      { href: "/customer/quotes", label: "견적 확인", key: "quotes" },
+      { href: "/customer/dispatches", label: "배차·운송 조회", key: "dispatches" },
+      { href: "/customer/calendar", label: "캘린더" },
+    ],
+  },
+  {
+    label: "정산",
+    items: [
+      { href: "/customer/invoices", label: "정산·세금계산서", key: "invoices" },
+      { href: "/customer/stats", label: "월별 통계" },
+    ],
+  },
+  {
+    label: "내 계정",
+    items: [
+      { href: "/customer/locations", label: "배송지 관리" },
+      { href: "/customer/profile", label: "담당자 정보" },
+      { href: "/customer/change-password", label: "비밀번호 변경" },
+    ],
+  },
+];
+
+function NavDropdown({
+  group,
+  pathname,
+  hasNotice,
+  open,
+  onToggle,
+}: {
+  group: NavGroup;
+  pathname: string | null;
+  hasNotice: boolean;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const isActiveGroup = group.items.some((i) => pathname?.startsWith(i.href));
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={onToggle}
+        className={isActiveGroup ? "nav-chip nav-chip-active" : "nav-chip"}
+        style={{ border: "none", cursor: "pointer", position: "relative" }}
+      >
+        {group.label}
+        <span style={{ marginLeft: 5, fontSize: 9 }}>{open ? "▲" : "▼"}</span>
+        {hasNotice && (
+          <span
+            style={{
+              position: "absolute",
+              top: 4,
+              right: 4,
+              width: 7,
+              height: 7,
+              borderRadius: "50%",
+              background: "var(--danger)",
+            }}
+          />
+        )}
+      </button>
+      {open && (
+        <div
+          className="card"
+          style={{
+            position: "absolute",
+            top: "calc(100% + 6px)",
+            left: 0,
+            minWidth: 180,
+            padding: 6,
+            zIndex: 30,
+          }}
+        >
+          {group.items.map((item) => {
+            const active = pathname?.startsWith(item.href);
+            return (
+              <a
+                key={item.href}
+                href={item.href}
+                style={{
+                  display: "block",
+                  padding: "9px 12px",
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: active ? 700 : 500,
+                  color: active ? "var(--accent)" : "var(--text)",
+                  background: active ? "var(--accent-soft)" : "transparent",
+                  textDecoration: "none",
+                }}
+              >
+                {item.label}
+              </a>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function CustomerLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const pathname = usePathname();
   const [checking, setChecking] = useState(true);
   const [companyName, setCompanyName] = useState("");
   const [notified, setNotified] = useState({ quotes: false, dispatches: false, invoices: false });
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
 
   useEffect(() => {
     async function check() {
@@ -48,15 +158,14 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
       setCompanyName((account.companies as any)?.name || "");
       setChecking(false);
 
-      // 지금 보고 있는 메뉴의 알림은 해제
       if (pathname === "/customer/quotes") setNotified((prev) => ({ ...prev, quotes: false }));
       if (pathname === "/customer/dispatches") setNotified((prev) => ({ ...prev, dispatches: false }));
       if (pathname === "/customer/invoices") setNotified((prev) => ({ ...prev, invoices: false }));
     }
     check();
+    setOpenGroup(null);
   }, [pathname, router]);
 
-  // 견적/배차/정산 변경사항을 실시간으로 감지해서 해당 메뉴에 알림 표시
   useEffect(() => {
     if (PUBLIC_PATHS.includes(pathname || "")) return;
 
@@ -85,54 +194,44 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
   }
 
   if (PUBLIC_PATHS.includes(pathname || "")) {
-    return <>{children}</>;
+    return <div className="portal-theme">{children}</div>;
   }
 
   if (checking) {
     return (
-      <main className="container">
-        <div className="empty-state">확인 중...</div>
-      </main>
+      <div className="portal-theme">
+        <main className="container">
+          <div className="empty-state">확인 중...</div>
+        </main>
+      </div>
     );
   }
 
   return (
-    <div>
+    <div className="portal-theme" style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       <div className="top-nav">
         <div className="top-nav-inner" style={{ flexWrap: "wrap", gap: 16 }}>
-          <div>
+          <a href="/customer" className="brand-link">
             <div className="brand">{companyName || "화주"} 포털</div>
-            <div className="brand-sub">EGG 운송 통합 운영 시스템</div>
-          </div>
-          <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-            <nav style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <a href="/customer" className="nav-chip">대시보드</a>
-              <a href="/customer/request" className="nav-chip">발주 요청</a>
-              <a href="/customer/quotes" className="nav-chip" style={{ position: "relative" }}>
-                견적 확인
-                {notified.quotes && (
-                  <span style={{ position: "absolute", top: 4, right: 4, width: 7, height: 7, borderRadius: "50%", background: "var(--danger)" }} />
-                )}
-              </a>
-              <a href="/customer/dispatches" className="nav-chip" style={{ position: "relative" }}>
-                배차·운송 조회
-                {notified.dispatches && (
-                  <span style={{ position: "absolute", top: 4, right: 4, width: 7, height: 7, borderRadius: "50%", background: "var(--danger)" }} />
-                )}
-              </a>
-              <a href="/customer/calendar" className="nav-chip">캘린더</a>
-              <a href="/customer/invoices" className="nav-chip" style={{ position: "relative" }}>
-                정산·세금계산서
-                {notified.invoices && (
-                  <span style={{ position: "absolute", top: 4, right: 4, width: 7, height: 7, borderRadius: "50%", background: "var(--danger)" }} />
-                )}
-              </a>
-              <a href="/customer/stats" className="nav-chip">통계</a>
-              <a href="/customer/locations" className="nav-chip">배송지 관리</a>
-              <a href="/customer/announcements" className="nav-chip">공지사항</a>
-              <a href="/customer/profile" className="nav-chip">담당자 정보</a>
-              <a href="/customer/change-password" className="nav-chip">비밀번호 변경</a>
-            </nav>
+            <div className="brand-sub">EGG 운송 통합 운영 시스템 · 홈으로</div>
+          </a>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            {NAV_GROUPS.map((group) => (
+              <NavDropdown
+                key={group.label}
+                group={group}
+                pathname={pathname}
+                hasNotice={group.items.some((i) => i.key && (notified as any)[i.key])}
+                open={openGroup === group.label}
+                onToggle={() => setOpenGroup((g) => (g === group.label ? null : group.label))}
+              />
+            ))}
+            <a
+              href="/customer/announcements"
+              className={pathname === "/customer/announcements" ? "nav-chip nav-chip-active" : "nav-chip"}
+            >
+              공지사항
+            </a>
             <button
               onClick={handleLogout}
               className="guide-link"
@@ -143,7 +242,33 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
           </div>
         </div>
       </div>
-      {children}
+
+      <div style={{ flex: 1 }}>{children}</div>
+
+      <footer style={{ borderTop: "1px solid var(--border)", background: "var(--surface)", marginTop: 40 }}>
+        <div
+          className="container"
+          style={{
+            padding: "24px 24px",
+            display: "flex",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 16,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>
+              고객센터
+            </div>
+            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+              1588-0000 · 평일 09:00~18:00 (주말·공휴일 휴무)
+            </div>
+          </div>
+          <div style={{ fontSize: 12, color: "var(--text-muted)", alignSelf: "center" }}>
+            EGG 운송 통합 운영 시스템 · 화주 포털
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
