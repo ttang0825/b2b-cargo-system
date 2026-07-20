@@ -280,6 +280,11 @@ export default function DispatchesPage() {
     ) {
       await adjustDriverTripCount(target.driver_id, -1);
     }
+
+    // "운송완료"로 새로 바뀌면 정산이 없을 경우 자동 등록
+    if (status === "운송완료" && prevStatus !== "운송완료" && target) {
+      await autoCreateInvoiceIfNeeded(target);
+    }
   }
 
   async function adjustDriverTripCount(driverId: string, delta: number) {
@@ -299,6 +304,42 @@ export default function DispatchesPage() {
         })
         .eq("id", driverId);
     }
+  }
+
+  // 운송완료로 바뀐 오더에 정산이 아직 등록되어 있지 않으면 자동으로 등록
+  // (화주 실적은 DB 트리거가 알아서 재계산하므로 여기서 따로 안 건드림)
+  async function autoCreateInvoiceIfNeeded(target: DispatchRow) {
+    if (!target.order_id) return;
+
+    const { data: existing } = await supabase
+      .from("invoices")
+      .select("id")
+      .eq("order_id", target.order_id)
+      .maybeSingle();
+    if (existing) return;
+
+    const { data: order } = await supabase
+      .from("orders")
+      .select("company_id")
+      .eq("id", target.order_id)
+      .single();
+
+    const charge = target.customer_charge || 0;
+    const payout = target.driver_payout || 0;
+    const now = new Date();
+    const billingPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+    await supabase.from("invoices").insert({
+      order_id: target.order_id,
+      company_id: order?.company_id || null,
+      billing_period: billingPeriod,
+      customer_charge_total: charge || null,
+      driver_payout_total: payout || null,
+      commission_total: charge - payout || null,
+      receivable_amount: charge || null,
+      payable_amount: payout || null,
+      status: "정산대기",
+    });
   }
 
   const filtered = useMemo(() => {
