@@ -65,17 +65,38 @@ export default function InvoiceDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // 화주 입금완료 + 차주 지급완료가 둘 다 체크되면 정산상태를 자동으로 "입금완료"로 전환
+  // 화주 입금완료 + 차주 지급완료가 둘 다 체크되면 "입금완료"로,
+  // 둘 중 하나라도 체크 해제되면(자동으로 입금완료가 된 상태였을 때만) "정산대기"로 되돌림
   useEffect(() => {
-    if (editForm.payment_received && editForm.driver_paid && editForm.status !== "입금완료") {
-      setEditForm((prev) => ({ ...prev, status: "입금완료" }));
+    if (editForm.payment_received && editForm.driver_paid) {
+      if (editForm.status !== "입금완료") {
+        setEditForm((prev) => ({ ...prev, status: "입금완료" }));
+      }
+    } else {
+      if (editForm.status === "입금완료") {
+        setEditForm((prev) => ({ ...prev, status: "정산대기" }));
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editForm.payment_received, editForm.driver_paid]);
 
   async function handleSave() {
-    setSaving(true);
     setError(null);
+
+    if (editForm.tax_invoice_issued && !editForm.tax_invoice_date) {
+      setError("세금계산서 발행완료를 체크하셨습니다. 발행일을 입력해주세요.");
+      return;
+    }
+    if (editForm.payment_received && !editForm.payment_received_date) {
+      setError("화주 입금완료를 체크하셨습니다. 입금일을 입력해주세요.");
+      return;
+    }
+    if (editForm.driver_paid && !editForm.driver_paid_date) {
+      setError("차주 지급완료를 체크하셨습니다. 지급일을 입력해주세요.");
+      return;
+    }
+
+    setSaving(true);
 
     const wasReceived = invoice.payment_received;
     const nowReceived = editForm.payment_received;
