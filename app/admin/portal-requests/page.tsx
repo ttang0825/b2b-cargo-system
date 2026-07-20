@@ -243,14 +243,6 @@ export default function PortalRequestsPage() {
                           >
                             반려
                           </button>
-                          <button
-                            className="btn-ghost"
-                            style={{ padding: "5px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
-                            disabled={processingId === r.id}
-                            onClick={() => handleManualApprove(r)}
-                          >
-                            수동 승인 처리
-                          </button>
                         </>
                       )}
                       {r.status === "승인됨" && r.quote_id && (
@@ -270,6 +262,16 @@ export default function PortalRequestsPage() {
                       >
                         삭제
                       </button>
+                      {r.status === "대기중" && (
+                        <button
+                          className="btn-ghost"
+                          style={{ padding: "5px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                          disabled={processingId === r.id}
+                          onClick={() => handleManualApprove(r)}
+                        >
+                          수동 승인 처리
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
