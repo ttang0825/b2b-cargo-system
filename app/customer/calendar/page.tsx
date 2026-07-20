@@ -162,7 +162,7 @@ export default function PortalCalendarPage() {
                           className="num"
                           style={{
                             fontSize: 11.5,
-                            color: isSelected ? "var(--accent)" : isToday ? "var(--text)" : "var(--text-muted)",
+                            color: isSelected ? "var(--accent)" : isToday ? "#1a1a1a" : "var(--text-muted)",
                             fontWeight: isSelected || isToday ? 800 : 400,
                             display: "inline-flex",
                             alignItems: "center",
@@ -171,7 +171,6 @@ export default function PortalCalendarPage() {
                             height: isToday ? 18 : "auto",
                             borderRadius: "50%",
                             background: isToday && !isSelected ? "#ffd833" : "transparent",
-                            color: isToday && !isSelected ? "#1a1a1a" : undefined,
                           }}
                         >
                           {day}
