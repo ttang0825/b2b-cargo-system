@@ -56,6 +56,25 @@ export default function PortalRequestsPage() {
     router.push(`/admin/quotes?from_request=${req.id}`);
   }
 
+  async function handleManualApprove(req: any) {
+    const confirmed = window.confirm(
+      "이 요청을 이미 다른 방식으로 처리하셨나요? 견적과 연결하지 않고 상태만 '승인됨'으로 표시합니다."
+    );
+    if (!confirmed) return;
+    setProcessingId(req.id);
+    setError(null);
+    const { error: updateError } = await supabase
+      .from("portal_order_requests")
+      .update({ status: "승인됨" })
+      .eq("id", req.id);
+    setProcessingId(null);
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+    loadRequests();
+  }
+
   async function handleReject(req: any) {
     const reason = window.prompt("반려 사유를 입력해주세요 (화주에게 표시됩니다, 선택사항)");
     if (reason === null) return; // 취소
@@ -215,6 +234,14 @@ export default function PortalRequestsPage() {
                             onClick={() => handleApprove(r)}
                           >
                             승인(견적작성)
+                          </button>
+                          <button
+                            className="btn-ghost"
+                            style={{ padding: "5px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                            disabled={processingId === r.id}
+                            onClick={() => handleManualApprove(r)}
+                          >
+                            수동 승인 처리
                           </button>
                           <button
                             className="btn-danger"
