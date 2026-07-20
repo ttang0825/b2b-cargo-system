@@ -175,6 +175,18 @@ export default function CompanyDetailPage() {
   const [issuingAccount, setIssuingAccount] = useState(false);
   const [issuedCredentials, setIssuedCredentials] = useState<{ email: string; password: string } | null>(null);
   const [portalError, setPortalError] = useState<string | null>(null);
+  const [portalUrl, setPortalUrl] = useState("");
+  const [copiedLabel, setCopiedLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPortalUrl(`${window.location.origin}/customer/login`);
+  }, []);
+
+  function handleCopy(text: string, label: string) {
+    navigator.clipboard.writeText(text);
+    setCopiedLabel(label);
+    setTimeout(() => setCopiedLabel(null), 1500);
+  }
 
   function set(key: string, value: any) {
     setEditForm((prev) => ({ ...prev, [key]: value }));
@@ -281,6 +293,29 @@ export default function CompanyDetailPage() {
       .update({ is_active: !isActive })
       .eq("id", accountId);
     loadPortalAccounts();
+  }
+
+  async function handleDeleteAccount(authUserId: string, email: string) {
+    const confirmed = window.confirm(
+      `"${email}" 계정을 완전히 삭제하시겠습니까? 로그인 계정 자체가 삭제되며 되돌릴 수 없습니다.`
+    );
+    if (!confirmed) return;
+    setPortalError(null);
+    try {
+      const res = await fetch("/api/admin/delete-portal-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ auth_user_id: authUserId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPortalError(data.error || "계정 삭제에 실패했습니다.");
+        return;
+      }
+      loadPortalAccounts();
+    } catch {
+      setPortalError("계정 삭제 중 오류가 발생했습니다.");
+    }
   }
 
   async function handleResetPassword(authUserId: string, email: string) {
@@ -1052,6 +1087,32 @@ export default function CompanyDetailPage() {
           보통 첫 운송오더가 등록되는 시점에 발급하는 것을 권장합니다.
         </p>
 
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            background: "var(--bg)",
+            borderRadius: 10,
+            padding: "10px 14px",
+            marginBottom: 16,
+            flexWrap: "wrap",
+          }}
+        >
+          <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>포털 접속 주소</span>
+          <span className="num" style={{ fontSize: 12.5, flex: 1, minWidth: 160 }}>
+            {portalUrl}
+          </span>
+          <button
+            type="button"
+            className="btn-ghost"
+            style={{ padding: "4px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+            onClick={() => handleCopy(portalUrl, "url")}
+          >
+            {copiedLabel === "url" ? "복사됨 ✓" : "복사"}
+          </button>
+        </div>
+
         {portalAccounts.length > 0 && (
           <div style={{ marginBottom: 16 }}>
             {portalAccounts.map((acc) => (
@@ -1108,6 +1169,16 @@ export default function CompanyDetailPage() {
                   >
                     {acc.is_active ? "비활성화" : "다시 활성화"}
                   </button>
+                  {!acc.is_active && (
+                    <button
+                      type="button"
+                      className="btn-danger"
+                      style={{ padding: "4px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                      onClick={() => handleDeleteAccount(acc.auth_user_id, acc.email)}
+                    >
+                      완전삭제
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -1124,11 +1195,42 @@ export default function CompanyDetailPage() {
               fontSize: 13,
             }}
           >
-            <div style={{ fontWeight: 700, marginBottom: 6, color: "var(--accent)" }}>
-              아래 로그인 정보를 화주에게 전달해주세요 (한 번만 표시됩니다)
+            <div style={{ fontWeight: 700, marginBottom: 8, color: "var(--accent)" }}>
+              아래 정보를 화주에게 전달해주세요 (한 번만 표시됩니다)
             </div>
-            <div>이메일: <span className="num">{issuedCredentials.email}</span></div>
-            <div>임시 비밀번호: <span className="num">{issuedCredentials.password}</span></div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+              <span>포털 주소: <span className="num">{portalUrl}</span></span>
+              <button
+                type="button"
+                className="btn-ghost"
+                style={{ padding: "2px 8px", borderRadius: 6, fontSize: 10.5, cursor: "pointer" }}
+                onClick={() => handleCopy(portalUrl, "issued-url")}
+              >
+                {copiedLabel === "issued-url" ? "복사됨" : "복사"}
+              </button>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+              <span>이메일: <span className="num">{issuedCredentials.email}</span></span>
+              <button
+                type="button"
+                className="btn-ghost"
+                style={{ padding: "2px 8px", borderRadius: 6, fontSize: 10.5, cursor: "pointer" }}
+                onClick={() => handleCopy(issuedCredentials.email, "issued-email")}
+              >
+                {copiedLabel === "issued-email" ? "복사됨" : "복사"}
+              </button>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span>임시 비밀번호: <span className="num">{issuedCredentials.password}</span></span>
+              <button
+                type="button"
+                className="btn-ghost"
+                style={{ padding: "2px 8px", borderRadius: 6, fontSize: 10.5, cursor: "pointer" }}
+                onClick={() => handleCopy(issuedCredentials.password, "issued-password")}
+              >
+                {copiedLabel === "issued-password" ? "복사됨" : "복사"}
+              </button>
+            </div>
             <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 6 }}>
               최초 로그인 시 비밀번호를 새로 설정하도록 되어 있습니다.
             </div>
