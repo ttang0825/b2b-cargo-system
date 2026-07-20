@@ -11,14 +11,14 @@ function won(n: number | null) {
 
 const MENU = [
   { href: "/customer/request", tag: "요청", title: "발주 요청", desc: "새로운 운송을 요청합니다." },
-  { href: "/customer/quotes", tag: "견적", title: "견적 확인", desc: "받으신 견적 내역을 확인합니다." },
-  { href: "/customer/dispatches", tag: "배차", title: "배차·운송 조회", desc: "진행 중인 운송 상태를 확인합니다." },
+  { href: "/customer/quotes", tag: "견적", title: "견적 확인", desc: "받으신 견적 내역을 확인합니다.", key: "quotes" },
+  { href: "/customer/dispatches", tag: "배차", title: "배차·운송 조회", desc: "진행 중인 운송 상태를 확인합니다.", key: "dispatches" },
   { href: "/customer/calendar", tag: "일정", title: "캘린더", desc: "상차 예정일을 달력으로 확인합니다." },
-  { href: "/customer/invoices", tag: "정산", title: "정산·세금계산서", desc: "청구내역과 발행 여부를 확인합니다." },
+  { href: "/customer/invoices", tag: "정산", title: "정산·세금계산서", desc: "청구내역과 발행 여부를 확인합니다.", key: "invoices" },
   { href: "/customer/stats", tag: "통계", title: "월별 통계", desc: "운송 건수와 청구금액 추이를 확인합니다." },
   { href: "/customer/locations", tag: "배송지", title: "배송지 관리", desc: "자주 쓰는 상·하차지를 등록합니다." },
   { href: "/customer/profile", tag: "계정", title: "담당자 정보", desc: "담당자 연락처를 관리합니다." },
-];
+] as const;
 
 export default function CustomerHomePage() {
   const [loading, setLoading] = useState(true);
@@ -26,6 +26,7 @@ export default function CustomerHomePage() {
   const [recentQuotes, setRecentQuotes] = useState<any[]>([]);
   const [activeDispatch, setActiveDispatch] = useState<any | null>(null);
   const [latestAnnouncement, setLatestAnnouncement] = useState<any | null>(null);
+  const [cardNotified, setCardNotified] = useState({ quotes: false, dispatches: false, invoices: false });
 
   async function load() {
     const [{ count: quoteCount }, { data: dispatchRows }, { count: invoiceCount }, { data: recent }, { data: announcement }] =
@@ -66,9 +67,18 @@ export default function CustomerHomePage() {
 
     const channel = supabase
       .channel("customer_home_all")
-      .on("postgres_changes", { event: "*", schema: "public", table: "quotes" }, () => load())
-      .on("postgres_changes", { event: "*", schema: "public", table: "dispatches" }, () => load())
-      .on("postgres_changes", { event: "*", schema: "public", table: "invoices" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "quotes" }, () => {
+        load();
+        setCardNotified((prev) => ({ ...prev, quotes: true }));
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "dispatches" }, () => {
+        load();
+        setCardNotified((prev) => ({ ...prev, dispatches: true }));
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "invoices" }, () => {
+        load();
+        setCardNotified((prev) => ({ ...prev, invoices: true }));
+      })
       .subscribe();
 
     return () => {
@@ -191,7 +201,20 @@ export default function CustomerHomePage() {
 
       <div className="home-grid" style={{ marginBottom: 24 }}>
         {MENU.map((m) => (
-          <a key={m.href} href={m.href} className="card home-card">
+          <a key={m.href} href={m.href} className="card home-card" style={{ position: "relative" }}>
+            {"key" in m && (m.key as string) && (cardNotified as any)[m.key as string] && (
+              <span
+                style={{
+                  position: "absolute",
+                  top: 16,
+                  right: 16,
+                  width: 9,
+                  height: 9,
+                  borderRadius: "50%",
+                  background: "var(--danger)",
+                }}
+              />
+            )}
             <span className="home-card-tag">{m.tag}</span>
             <h3 className="home-card-title">{m.title}</h3>
             <p className="home-card-desc">{m.desc}</p>
