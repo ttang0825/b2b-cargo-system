@@ -20,6 +20,7 @@ export default function TopNav() {
   const pathname = usePathname();
   const router = useRouter();
   const [pendingRequests, setPendingRequests] = useState(0);
+  const [pendingPublicQuotes, setPendingPublicQuotes] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -33,6 +34,19 @@ export default function TopNav() {
       setPendingRequests(count || 0);
     }
     loadPendingCount();
+
+    async function loadPendingPublicQuotes() {
+      try {
+        const res = await fetch("/api/admin/public-quote-requests");
+        const data = await res.json();
+        if (res.ok) {
+          setPendingPublicQuotes((data.data || []).filter((r: any) => r.status === "신규").length);
+        }
+      } catch {
+        // 무시 - 배지 표시만 실패, 페이지 이동에는 영향 없음
+      }
+    }
+    loadPendingPublicQuotes();
 
     const channel = supabase
       .channel("topnav_portal_requests")
@@ -112,6 +126,35 @@ export default function TopNav() {
                 </span>
               )}
             </Link>
+            <Link
+              href="/admin/public-quotes"
+              className={
+                pathname?.startsWith("/admin/public-quotes") ? "nav-chip nav-chip-active" : "nav-chip"
+              }
+              style={{ position: "relative" }}
+            >
+              공개문의
+              {pendingPublicQuotes > 0 && (
+                <span
+                  style={{
+                    marginLeft: 6,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    minWidth: 16,
+                    height: 16,
+                    padding: "0 4px",
+                    borderRadius: 999,
+                    background: "var(--danger)",
+                    color: "#fff",
+                    fontSize: 10,
+                    fontWeight: 800,
+                  }}
+                >
+                  {pendingPublicQuotes}
+                </span>
+              )}
+            </Link>
           </nav>
           <Link href="/admin/guide" className="guide-link">
             이용가이드
@@ -136,7 +179,7 @@ export default function TopNav() {
           style={{ position: "relative" }}
         >
           {mobileMenuOpen ? "✕" : "☰"}
-          {!mobileMenuOpen && pendingRequests > 0 && (
+          {!mobileMenuOpen && (pendingRequests > 0 || pendingPublicQuotes > 0) && (
             <span
               style={{
                 position: "absolute",
@@ -211,6 +254,40 @@ export default function TopNav() {
                 }}
               >
                 {pendingRequests}
+              </span>
+            )}
+          </Link>
+          <Link
+            href="/admin/public-quotes"
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: "10px 4px",
+              fontSize: 14,
+              fontWeight: pathname?.startsWith("/admin/public-quotes") ? 700 : 500,
+              color: pathname?.startsWith("/admin/public-quotes") ? "var(--accent)" : "var(--text)",
+              textDecoration: "none",
+            }}
+          >
+            공개문의
+            {pendingPublicQuotes > 0 && (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minWidth: 16,
+                  height: 16,
+                  padding: "0 4px",
+                  borderRadius: 999,
+                  background: "var(--danger)",
+                  color: "#fff",
+                  fontSize: 10,
+                  fontWeight: 800,
+                }}
+              >
+                {pendingPublicQuotes}
               </span>
             )}
           </Link>
