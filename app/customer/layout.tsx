@@ -217,7 +217,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
             <div className="brand">{companyName || "화주"} 포털</div>
             <div className="brand-sub">EGG 운송 통합 운영 시스템 · 홈으로</div>
           </a>
-          <div className="portal-nav-desktop" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <div className="nav-desktop-group" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             {NAV_GROUPS.map((group) => (
               <NavDropdown
                 key={group.label}
@@ -245,7 +245,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
 
           <button
             type="button"
-            className="portal-nav-toggle"
+            className="nav-mobile-toggle"
             onClick={() => setMobileMenuOpen((o) => !o)}
             aria-label="메뉴 열기"
           >
