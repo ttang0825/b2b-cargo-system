@@ -121,6 +121,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
   const [companyName, setCompanyName] = useState("");
   const [notified, setNotified] = useState({ quotes: false, dispatches: false, invoices: false });
   const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     async function check() {
@@ -164,6 +165,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
     }
     check();
     setOpenGroup(null);
+    setMobileMenuOpen(false);
   }, [pathname, router]);
 
   useEffect(() => {
@@ -215,7 +217,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
             <div className="brand">{companyName || "화주"} 포털</div>
             <div className="brand-sub">EGG 운송 통합 운영 시스템 · 홈으로</div>
           </a>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <div className="portal-nav-desktop" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             {NAV_GROUPS.map((group) => (
               <NavDropdown
                 key={group.label}
@@ -240,7 +242,90 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
               로그아웃
             </button>
           </div>
+
+          <button
+            type="button"
+            className="portal-nav-toggle"
+            onClick={() => setMobileMenuOpen((o) => !o)}
+            aria-label="메뉴 열기"
+          >
+            {mobileMenuOpen ? "✕" : "☰"}
+          </button>
         </div>
+
+        {mobileMenuOpen && (
+          <div
+            className="mobile-only"
+            style={{
+              borderTop: "1px solid var(--border)",
+              padding: "8px 20px 16px",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            {NAV_GROUPS.map((group) => (
+              <div key={group.label} style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 4 }}>
+                  {group.label}
+                </div>
+                {group.items.map((item) => {
+                  const active = pathname?.startsWith(item.href);
+                  const hasDot = item.key && (notified as any)[item.key];
+                  return (
+                    <a
+                      key={item.href}
+                      href={item.href}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "10px 4px",
+                        fontSize: 14,
+                        fontWeight: active ? 700 : 500,
+                        color: active ? "var(--accent)" : "var(--text)",
+                        textDecoration: "none",
+                      }}
+                    >
+                      {item.label}
+                      {hasDot && (
+                        <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--danger)" }} />
+                      )}
+                    </a>
+                  );
+                })}
+              </div>
+            ))}
+            <a
+              href="/customer/announcements"
+              style={{
+                padding: "10px 4px",
+                marginTop: 10,
+                fontSize: 14,
+                fontWeight: pathname === "/customer/announcements" ? 700 : 500,
+                color: pathname === "/customer/announcements" ? "var(--accent)" : "var(--text)",
+                textDecoration: "none",
+                borderTop: "1px solid var(--border)",
+              }}
+            >
+              공지사항
+            </a>
+            <button
+              onClick={handleLogout}
+              style={{
+                marginTop: 10,
+                padding: "10px 4px",
+                fontSize: 14,
+                textAlign: "left",
+                border: "none",
+                background: "none",
+                color: "var(--text-muted)",
+                cursor: "pointer",
+              }}
+            >
+              로그아웃
+            </button>
+          </div>
+        )}
       </div>
 
       <div style={{ flex: 1 }}>{children}</div>
