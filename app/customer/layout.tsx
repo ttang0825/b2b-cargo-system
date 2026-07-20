@@ -249,22 +249,38 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
         <div
           className="container"
           style={{
-            padding: "24px 24px",
+            padding: "32px 24px",
             display: "flex",
             justifyContent: "space-between",
+            alignItems: "center",
             flexWrap: "wrap",
-            gap: 16,
+            gap: 20,
           }}
         >
           <div>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>
-              고객센터
+            <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>
+              📞 고객센터
             </div>
-            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-              1588-0000 · 평일 09:00~18:00 (주말·공휴일 휴무)
+            <a
+              href="tel:1588-0000"
+              className="num"
+              style={{
+                display: "block",
+                fontSize: 24,
+                fontWeight: 800,
+                color: "#8a6d00",
+                textDecoration: "none",
+                marginBottom: 6,
+              }}
+            >
+              1588-0000
+            </a>
+            <div style={{ fontSize: 14, color: "var(--text)", fontWeight: 600 }}>
+              평일 09:00 ~ 18:00
+              <span style={{ color: "var(--text-muted)", fontWeight: 500 }}> (주말·공휴일 휴무)</span>
             </div>
           </div>
-          <div style={{ fontSize: 12, color: "var(--text-muted)", alignSelf: "center" }}>
+          <div style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 500 }}>
             EGG 운송 통합 운영 시스템 · 화주 포털
           </div>
         </div>
