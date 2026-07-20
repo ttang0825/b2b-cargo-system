@@ -24,6 +24,7 @@ export default function InvoiceDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const [editForm, setEditForm] = useState({
     status: "정산대기",
@@ -81,18 +82,18 @@ export default function InvoiceDetailPage() {
   }, [editForm.payment_received, editForm.driver_paid]);
 
   async function handleSave() {
-    setError(null);
+    setSaveError(null);
 
     if (editForm.tax_invoice_issued && !editForm.tax_invoice_date) {
-      setError("세금계산서 발행완료를 체크하셨습니다. 발행일을 입력해주세요.");
+      setSaveError("세금계산서 발행완료를 체크하셨습니다. 발행일을 입력해주세요.");
       return;
     }
     if (editForm.payment_received && !editForm.payment_received_date) {
-      setError("화주 입금완료를 체크하셨습니다. 입금일을 입력해주세요.");
+      setSaveError("화주 입금완료를 체크하셨습니다. 입금일을 입력해주세요.");
       return;
     }
     if (editForm.driver_paid && !editForm.driver_paid_date) {
-      setError("차주 지급완료를 체크하셨습니다. 지급일을 입력해주세요.");
+      setSaveError("차주 지급완료를 체크하셨습니다. 지급일을 입력해주세요.");
       return;
     }
 
@@ -116,7 +117,7 @@ export default function InvoiceDetailPage() {
 
     if (error) {
       setSaving(false);
-      setError(error.message);
+      setSaveError(error.message);
       return;
     }
 
@@ -153,7 +154,7 @@ export default function InvoiceDetailPage() {
     const { error } = await supabase.from("invoices").delete().eq("id", id);
     setDeleting(false);
     if (error) {
-      setError(error.message);
+      setSaveError(error.message);
       return;
     }
     router.push("/admin/invoices");
@@ -216,7 +217,7 @@ export default function InvoiceDetailPage() {
         </button>
       </div>
 
-      {error && <div className="error-box">오류: {error}</div>}
+      {saveError && <div className="error-box">오류: {saveError}</div>}
 
       <div className="card" style={{ padding: 20, marginBottom: 20 }}>
         <div style={{ marginBottom: 14 }}>
@@ -418,7 +419,7 @@ export default function InvoiceDetailPage() {
         </p>
       </div>
 
-      {error && <div className="error-box">오류: {error}</div>}
+      {saveError && <div className="error-box">오류: {saveError}</div>}
       <button className="btn" onClick={handleSave} disabled={saving}>
         {saving ? "저장 중..." : "변경사항 저장"}
       </button>
