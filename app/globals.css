@@ -463,8 +463,8 @@ tbody tr:hover {
   flex-shrink: 0;
 }
 
-/* 화주포털 모바일 메뉴 토글 버튼 - 데스크탑에서는 숨김 */
-.portal-nav-toggle {
+/* 모바일 메뉴 토글 버튼 - 데스크탑에서는 숨김 (관리자/화주포털 공용) */
+.nav-mobile-toggle {
   display: none;
 }
 
@@ -491,11 +491,11 @@ tbody tr:hover {
     display: block;
   }
 
-  /* 화주포털 상단 메뉴: 데스크탑 드롭다운은 숨기고 햄버거 버튼으로 전환 */
-  .portal-nav-desktop {
+  /* 상단 메뉴: 데스크탑 메뉴는 숨기고 햄버거 버튼으로 전환 (관리자/화주포털 공용) */
+  .nav-desktop-group {
     display: none !important;
   }
-  .portal-nav-toggle {
+  .nav-mobile-toggle {
     display: inline-flex;
     align-items: center;
     justify-content: center;
