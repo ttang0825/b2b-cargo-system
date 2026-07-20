@@ -418,6 +418,7 @@ export default function InvoiceDetailPage() {
         </p>
       </div>
 
+      {error && <div className="error-box">오류: {error}</div>}
       <button className="btn" onClick={handleSave} disabled={saving}>
         {saving ? "저장 중..." : "변경사항 저장"}
       </button>
