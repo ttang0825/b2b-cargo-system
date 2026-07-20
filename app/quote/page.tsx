@@ -12,6 +12,13 @@ declare global {
   }
 }
 
+const LOADING_METHODS = [
+  { value: "기본운송", desc: "차량 적재함에서 물품을 상하차합니다" },
+  { value: "지게차 상하차", desc: "파렛트로 작업된 제품을 지게차로 상하차합니다" },
+  { value: "기사님 도움", desc: "일반화물·소형가전을 기사님과 함께 운반합니다" },
+  { value: "협의 필요", desc: "현장 상황에 따라 별도로 협의합니다" },
+];
+
 export default function PublicQuotePage() {
   const [postcodeReady, setPostcodeReady] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -25,10 +32,17 @@ export default function PublicQuotePage() {
     email: "",
     origin: "",
     originDetail: "",
+    origin_company: "",
+    origin_contact: "",
+    origin_department: "",
     destination: "",
     destinationDetail: "",
+    destination_company: "",
+    destination_contact: "",
+    destination_department: "",
     vehicle_type: VEHICLE_TYPES[0],
     item: "",
+    loading_method: LOADING_METHODS[0].value,
     requested_pickup_at: "",
     notes: "",
   });
@@ -88,8 +102,15 @@ export default function PublicQuotePage() {
       email: form.email || null,
       origin: fullOrigin,
       destination: fullDestination,
+      origin_company: form.origin_company || null,
+      origin_contact: form.origin_contact || null,
+      origin_department: form.origin_department || null,
+      destination_company: form.destination_company || null,
+      destination_contact: form.destination_contact || null,
+      destination_department: form.destination_department || null,
       vehicle_type: form.vehicle_type,
       item: form.item || null,
+      loading_method: form.loading_method || null,
       requested_pickup_at: form.requested_pickup_at || null,
       notes: form.notes || null,
       status: "신규",
@@ -110,9 +131,27 @@ export default function PublicQuotePage() {
           <div className="card" style={{ padding: 40 }}>
             <div style={{ fontSize: 40, marginBottom: 16 }}>✅</div>
             <h1 style={{ fontSize: 19, fontWeight: 800, marginBottom: 10 }}>문의가 접수되었습니다</h1>
-            <p style={{ fontSize: 13.5, color: "var(--text-muted)", marginBottom: 24, lineHeight: 1.6 }}>
+            <p style={{ fontSize: 13.5, color: "var(--text-muted)", marginBottom: 20, lineHeight: 1.6 }}>
               담당자가 확인 후 남겨주신 연락처로 빠르게 안내드리겠습니다.
             </p>
+            <div
+              style={{
+                background: "var(--accent-soft)",
+                borderRadius: 10,
+                padding: 14,
+                fontSize: 12.5,
+                color: "var(--text)",
+                marginBottom: 24,
+                textAlign: "left",
+                lineHeight: 1.6,
+              }}
+            >
+              💡 입력하신 연락처(<span className="num">{form.phone}</span>)로 나중에 언제든{" "}
+              <Link href="/quote/status" style={{ color: "var(--accent)", fontWeight: 700, textDecoration: "underline" }}>
+                문의 현황 조회
+              </Link>
+              에서 진행 상황을 확인하실 수 있습니다.
+            </div>
             <Link href="/" className="btn">
               홈으로 돌아가기
             </Link>
@@ -125,9 +164,15 @@ export default function PublicQuotePage() {
   return (
     <div className="portal-theme">
       <header style={{ borderBottom: "1px solid var(--border)", background: "var(--surface)" }}>
-        <div className="container" style={{ padding: "18px 24px" }}>
+        <div
+          className="container"
+          style={{ padding: "18px 24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+        >
           <Link href="/" className="brand" style={{ fontSize: 17, textDecoration: "none" }}>
             EGG 운송
+          </Link>
+          <Link href="/quote/status" className="guide-link">
+            내 문의 조회
           </Link>
         </div>
       </header>
@@ -146,11 +191,11 @@ export default function PublicQuotePage() {
           <form onSubmit={handleSubmit}>
             <div className="form-grid" style={{ padding: 0, marginBottom: 4 }}>
               <div className="field">
-                <label>성함 / 업체명 *</label>
+                <label>신청자 성함 / 업체명 *</label>
                 <input value={form.name} onChange={(e) => setField("name", e.target.value)} />
               </div>
               <div className="field">
-                <label>연락처 *</label>
+                <label>신청자 연락처 *</label>
                 <input
                   value={form.phone}
                   onChange={(e) => setField("phone", formatPhoneNumber(e.target.value))}
@@ -163,7 +208,8 @@ export default function PublicQuotePage() {
               </div>
             </div>
 
-            <div className="field" style={{ marginTop: 14, marginBottom: 6 }}>
+            {/* 출발지 */}
+            <div className="field" style={{ marginTop: 14, marginBottom: 8 }}>
               <label>출발지 *</label>
               <div style={{ display: "flex", gap: 6 }}>
                 <input
@@ -188,8 +234,29 @@ export default function PublicQuotePage() {
                 style={{ marginTop: 6 }}
               />
             </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 8, marginBottom: 18 }}>
+              <input
+                value={form.origin_company}
+                onChange={(e) => setField("origin_company", e.target.value)}
+                placeholder="출발지 상호/이름 (선택)"
+                style={{ fontSize: 12.5, padding: "8px 10px" }}
+              />
+              <input
+                value={form.origin_contact}
+                onChange={(e) => setField("origin_contact", formatPhoneNumber(e.target.value))}
+                placeholder="출발지 연락처 (선택)"
+                style={{ fontSize: 12.5, padding: "8px 10px" }}
+              />
+              <input
+                value={form.origin_department}
+                onChange={(e) => setField("origin_department", e.target.value)}
+                placeholder="출발지 담당 부서 (선택)"
+                style={{ fontSize: 12.5, padding: "8px 10px" }}
+              />
+            </div>
 
-            <div className="field" style={{ marginBottom: 14 }}>
+            {/* 도착지 */}
+            <div className="field" style={{ marginBottom: 8 }}>
               <label>도착지 *</label>
               <div style={{ display: "flex", gap: 6 }}>
                 <input
@@ -214,6 +281,26 @@ export default function PublicQuotePage() {
                 style={{ marginTop: 6 }}
               />
             </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 8, marginBottom: 18 }}>
+              <input
+                value={form.destination_company}
+                onChange={(e) => setField("destination_company", e.target.value)}
+                placeholder="도착지 상호/이름 (선택)"
+                style={{ fontSize: 12.5, padding: "8px 10px" }}
+              />
+              <input
+                value={form.destination_contact}
+                onChange={(e) => setField("destination_contact", formatPhoneNumber(e.target.value))}
+                placeholder="도착지 연락처 (선택)"
+                style={{ fontSize: 12.5, padding: "8px 10px" }}
+              />
+              <input
+                value={form.destination_department}
+                onChange={(e) => setField("destination_department", e.target.value)}
+                placeholder="도착지 담당 부서 (선택)"
+                style={{ fontSize: 12.5, padding: "8px 10px" }}
+              />
+            </div>
 
             <div className="form-grid" style={{ padding: 0 }}>
               <div className="field">
@@ -228,6 +315,38 @@ export default function PublicQuotePage() {
                 <label>품목</label>
                 <input value={form.item} onChange={(e) => setField("item", e.target.value)} />
               </div>
+            </div>
+
+            <div style={{ marginTop: 14, marginBottom: 4 }}>
+              <label style={{ display: "block", fontSize: 12.5, color: "var(--text-muted)", marginBottom: 8, fontWeight: 600 }}>
+                상하차 방법
+              </label>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8 }}>
+                {LOADING_METHODS.map((m) => {
+                  const active = form.loading_method === m.value;
+                  return (
+                    <button
+                      key={m.value}
+                      type="button"
+                      onClick={() => setField("loading_method", m.value)}
+                      className="card"
+                      style={{
+                        padding: 12,
+                        textAlign: "left",
+                        cursor: "pointer",
+                        border: active ? "1.5px solid var(--accent)" : "1px solid var(--border)",
+                        background: active ? "var(--accent-soft)" : "var(--surface)",
+                      }}
+                    >
+                      <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 3 }}>{m.value}</div>
+                      <div style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.4 }}>{m.desc}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="form-grid" style={{ padding: 0 }}>
               <div style={{ gridColumn: "1 / -1" }}>
                 <DateTimePicker
                   label="희망 상차 일시 (선택)"
@@ -237,7 +356,7 @@ export default function PublicQuotePage() {
               </div>
               <div className="field" style={{ gridColumn: "1 / -1" }}>
                 <label>문의 내용</label>
-                <textarea rows={3} value={form.notes} onChange={(e) => setField("notes", e.target.value)} placeholder="상하차 조건, 반복 여부 등 자유롭게 남겨주세요" />
+                <textarea rows={3} value={form.notes} onChange={(e) => setField("notes", e.target.value)} placeholder="반복 여부, 기타 참고사항 등 자유롭게 남겨주세요" />
               </div>
             </div>
 
@@ -261,8 +380,8 @@ export default function PublicQuotePage() {
                 style={{ margin: "2px 0 0", width: "auto", flexShrink: 0 }}
               />
               <span>
-                [필수] 입력하신 성함, 연락처, 이메일은 견적 상담 목적으로만 이용되며, 상담 완료 후
-                별도 보관 기간 없이 처리됩니다. 개인정보 수집·이용에 동의합니다.
+                [필수] 입력하신 정보는 견적 상담 목적으로만 이용되며, 상담 완료 후 별도 보관 기간
+                없이 처리됩니다. 개인정보 수집·이용에 동의합니다.
               </span>
             </label>
 
