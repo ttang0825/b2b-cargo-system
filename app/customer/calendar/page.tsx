@@ -142,9 +142,9 @@ export default function PortalCalendarPage() {
                     key={i}
                     type="button"
                     disabled={!day}
+                    className="calendar-cell"
                     onClick={() => day && setSelectedDay(isSelected ? null : day)}
                     style={{
-                      height: 56,
                       border: isSelected ? "1.5px solid var(--accent)" : "1px solid var(--border)",
                       borderRadius: 8,
                       padding: 6,
@@ -154,6 +154,7 @@ export default function PortalCalendarPage() {
                       flexDirection: "column",
                       alignItems: "flex-start",
                       justifyContent: "space-between",
+                      width: "100%",
                     }}
                   >
                     {day && (
