@@ -508,48 +508,108 @@ export default function PortalRequestPage() {
         ) : requests.length === 0 ? (
           <div className="empty-state">아직 보낸 요청이 없습니다.</div>
         ) : (
-          <table style={{ minWidth: 880 }}>
-            <thead>
-              <tr>
-                <th>구간</th>
-                <th>차량</th>
-                <th>희망 상차일</th>
-                <th>상태</th>
-                <th>특이사항</th>
-                <th>반려 사유</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            <table className="desktop-only" style={{ minWidth: 880 }}>
+              <thead>
+                <tr>
+                  <th>구간</th>
+                  <th>차량</th>
+                  <th>희망 상차일</th>
+                  <th>상태</th>
+                  <th>특이사항</th>
+                  <th>반려 사유</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {requests.map((r) => (
+                  <tr key={r.id}>
+                    <td>{r.origin} → {r.destination}</td>
+                    <td className="cell-nowrap">{[r.vehicle_type, r.body_type].filter(Boolean).join(" ") || "-"}</td>
+                    <td className="cell-nowrap">
+                      <span className="num">
+                        {r.requested_pickup_at
+                          ? new Date(r.requested_pickup_at).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+                          : "-"}
+                      </span>
+                    </td>
+                    <td className="cell-nowrap">
+                      <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 999, fontSize: 12, fontWeight: 600, background: (REQUEST_STATUS_COLORS[r.status] || {}).bg, color: (REQUEST_STATUS_COLORS[r.status] || {}).text }}>
+                        {r.status}
+                      </span>
+                    </td>
+                    <td style={{ maxWidth: 160 }}>{r.notes || "-"}</td>
+                    <td style={{ maxWidth: 160 }}>{r.staff_note || "-"}</td>
+                    <td className="cell-nowrap">
+                      {r.status === "대기중" && (
+                        <button className="btn-danger" style={{ padding: "4px 10px", borderRadius: 6, fontSize: 11, cursor: "pointer" }} onClick={() => handleDeleteRequest(r.id)}>
+                          삭제
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <div className="mobile-only">
               {requests.map((r) => (
-                <tr key={r.id}>
-                  <td>{r.origin} → {r.destination}</td>
-                  <td className="cell-nowrap">{[r.vehicle_type, r.body_type].filter(Boolean).join(" ") || "-"}</td>
-                  <td className="cell-nowrap">
+                <div key={r.id} className="mobile-row-card">
+                  <div className="mobile-row-top">
+                    <span style={{ fontSize: 13, fontWeight: 700 }}>
+                      {r.origin} → {r.destination}
+                    </span>
+                    <span
+                      style={{
+                        display: "inline-block",
+                        padding: "3px 10px",
+                        borderRadius: 999,
+                        fontSize: 11.5,
+                        fontWeight: 700,
+                        background: (REQUEST_STATUS_COLORS[r.status] || {}).bg,
+                        color: (REQUEST_STATUS_COLORS[r.status] || {}).text,
+                      }}
+                    >
+                      {r.status}
+                    </span>
+                  </div>
+                  <div className="mobile-row-line">
+                    <span className="mobile-row-label">차량</span>
+                    <span>{[r.vehicle_type, r.body_type].filter(Boolean).join(" ") || "-"}</span>
+                  </div>
+                  <div className="mobile-row-line">
+                    <span className="mobile-row-label">희망 상차일</span>
                     <span className="num">
                       {r.requested_pickup_at
                         ? new Date(r.requested_pickup_at).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
                         : "-"}
                     </span>
-                  </td>
-                  <td className="cell-nowrap">
-                    <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 999, fontSize: 12, fontWeight: 600, background: (REQUEST_STATUS_COLORS[r.status] || {}).bg, color: (REQUEST_STATUS_COLORS[r.status] || {}).text }}>
-                      {r.status}
-                    </span>
-                  </td>
-                  <td style={{ maxWidth: 160 }}>{r.notes || "-"}</td>
-                  <td style={{ maxWidth: 160 }}>{r.staff_note || "-"}</td>
-                  <td className="cell-nowrap">
-                    {r.status === "대기중" && (
-                      <button className="btn-danger" style={{ padding: "4px 10px", borderRadius: 6, fontSize: 11, cursor: "pointer" }} onClick={() => handleDeleteRequest(r.id)}>
-                        삭제
-                      </button>
-                    )}
-                  </td>
-                </tr>
+                  </div>
+                  {r.notes && (
+                    <div className="mobile-row-line">
+                      <span className="mobile-row-label">특이사항</span>
+                      <span>{r.notes}</span>
+                    </div>
+                  )}
+                  {r.staff_note && (
+                    <div className="mobile-row-line">
+                      <span className="mobile-row-label">반려 사유</span>
+                      <span>{r.staff_note}</span>
+                    </div>
+                  )}
+                  {r.status === "대기중" && (
+                    <button
+                      className="btn-danger"
+                      style={{ marginTop: 8, padding: "5px 12px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                      onClick={() => handleDeleteRequest(r.id)}
+                    >
+                      삭제
+                    </button>
+                  )}
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+          </>
         )}
       </div>
     </main>
