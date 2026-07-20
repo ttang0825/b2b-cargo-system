@@ -20,6 +20,7 @@ export default function TopNav() {
   const pathname = usePathname();
   const router = useRouter();
   const [pendingRequests, setPendingRequests] = useState(0);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     if (pathname === "/admin/login" || pathname?.startsWith("/customer")) return;
@@ -47,6 +48,10 @@ export default function TopNav() {
     };
   }, [pathname]);
 
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
   // 로그인 화면과 화주포털 영역에서는 admin 헤더 자체를 숨김
   if (pathname === "/admin/login" || pathname?.startsWith("/customer")) return null;
 
@@ -63,7 +68,8 @@ export default function TopNav() {
           <div className="brand">EGG 운송 통합 운영 시스템</div>
           <div className="brand-sub">내부 관리자 (admin)</div>
         </Link>
-        <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+
+        <div className="nav-desktop-group" style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
           <nav style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {MENU.map((m) => {
               const active = pathname?.startsWith(m.href);
@@ -121,7 +127,125 @@ export default function TopNav() {
             로그아웃
           </button>
         </div>
+
+        <button
+          type="button"
+          className="nav-mobile-toggle"
+          onClick={() => setMobileMenuOpen((o) => !o)}
+          aria-label="메뉴 열기"
+          style={{ position: "relative" }}
+        >
+          {mobileMenuOpen ? "✕" : "☰"}
+          {!mobileMenuOpen && pendingRequests > 0 && (
+            <span
+              style={{
+                position: "absolute",
+                top: 2,
+                right: 2,
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: "var(--danger)",
+              }}
+            />
+          )}
+        </button>
       </div>
+
+      {mobileMenuOpen && (
+        <div
+          className="mobile-only"
+          style={{
+            borderTop: "1px solid var(--border)",
+            padding: "8px 20px 16px",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          {MENU.map((m) => {
+            const active = pathname?.startsWith(m.href);
+            return (
+              <Link
+                key={m.href}
+                href={m.href}
+                style={{
+                  padding: "10px 4px",
+                  fontSize: 14,
+                  fontWeight: active ? 700 : 500,
+                  color: active ? "var(--accent)" : "var(--text)",
+                  textDecoration: "none",
+                }}
+              >
+                {m.label}
+              </Link>
+            );
+          })}
+          <Link
+            href="/admin/portal-requests"
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: "10px 4px",
+              fontSize: 14,
+              fontWeight: pathname?.startsWith("/admin/portal-requests") ? 700 : 500,
+              color: pathname?.startsWith("/admin/portal-requests") ? "var(--accent)" : "var(--text)",
+              textDecoration: "none",
+            }}
+          >
+            화주 요청
+            {pendingRequests > 0 && (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minWidth: 16,
+                  height: 16,
+                  padding: "0 4px",
+                  borderRadius: 999,
+                  background: "var(--danger)",
+                  color: "#fff",
+                  fontSize: 10,
+                  fontWeight: 800,
+                }}
+              >
+                {pendingRequests}
+              </span>
+            )}
+          </Link>
+          <div style={{ borderTop: "1px solid var(--border)", marginTop: 8, paddingTop: 8 }}>
+            <Link
+              href="/admin/guide"
+              style={{ display: "block", padding: "8px 4px", fontSize: 13.5, color: "var(--text-muted)", textDecoration: "none" }}
+            >
+              이용가이드
+            </Link>
+            <Link
+              href="/admin/announcements"
+              style={{ display: "block", padding: "8px 4px", fontSize: 13.5, color: "var(--text-muted)", textDecoration: "none" }}
+            >
+              공지사항 관리
+            </Link>
+            <button
+              onClick={handleLogout}
+              style={{
+                display: "block",
+                width: "100%",
+                textAlign: "left",
+                padding: "8px 4px",
+                fontSize: 13.5,
+                color: "var(--text-muted)",
+                border: "none",
+                background: "none",
+                cursor: "pointer",
+              }}
+            >
+              로그아웃
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
