@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
+import { getOrderStatusColor } from "@/lib/orderStatusColors";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -15,20 +16,33 @@ export default function PortalCalendarPage() {
     async function load() {
       const { data } = await supabase
         .from("orders")
-        .select("id,order_no,origin,destination,requested_pickup_at")
+        .select("id,order_no,origin,destination,requested_pickup_at,status")
         .not("requested_pickup_at", "is", null)
         .order("requested_pickup_at", { ascending: true });
       setOrders(data || []);
       setLoading(false);
     }
     load();
+
+    const channel = supabase
+      .channel("customer_calendar_orders")
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => load())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
+  const today = new Date();
   const baseDate = new Date();
   baseDate.setDate(1);
   baseDate.setMonth(baseDate.getMonth() + monthOffset);
   const year = baseDate.getFullYear();
   const month = baseDate.getMonth();
+
+  const isCurrentMonthView =
+    year === today.getFullYear() && month === today.getMonth();
 
   const startWeekday = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -52,6 +66,11 @@ export default function PortalCalendarPage() {
 
   const selectedOrders = selectedDay ? ordersByDay[selectedDay] || [] : [];
 
+  function goToToday() {
+    setMonthOffset(0);
+    setSelectedDay(today.getDate());
+  }
+
   return (
     <main className="container">
       <div className="page-header">
@@ -62,13 +81,20 @@ export default function PortalCalendarPage() {
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <button
             className="btn-ghost"
+            style={{ padding: "8px 14px", borderRadius: 8, cursor: "pointer", fontWeight: 700 }}
+            onClick={goToToday}
+          >
+            오늘
+          </button>
+          <button
+            className="btn-ghost"
             style={{ padding: "8px 14px", borderRadius: 8, cursor: "pointer" }}
             onClick={() => {
               setMonthOffset((m) => m - 1);
               setSelectedDay(null);
             }}
           >
-            이전
+            ← 이전
           </button>
           <span className="num" style={{ fontWeight: 700, fontSize: 15, minWidth: 80, textAlign: "center" }}>
             {year}.{String(month + 1).padStart(2, "0")}
@@ -81,7 +107,7 @@ export default function PortalCalendarPage() {
               setSelectedDay(null);
             }}
           >
-            다음
+            다음 →
           </button>
         </div>
       </div>
@@ -109,7 +135,8 @@ export default function PortalCalendarPage() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6 }}>
               {cells.map((day, i) => {
                 const dayOrders = day ? ordersByDay[day] || [] : [];
-                const isSelected = day === selectedDay;
+                const isSelected = day !== null && day === selectedDay;
+                const isToday = day !== null && isCurrentMonthView && day === today.getDate();
                 return (
                   <button
                     key={i}
@@ -135,8 +162,16 @@ export default function PortalCalendarPage() {
                           className="num"
                           style={{
                             fontSize: 11.5,
-                            color: isSelected ? "var(--accent)" : "var(--text-muted)",
-                            fontWeight: isSelected ? 700 : 400,
+                            color: isSelected ? "var(--accent)" : isToday ? "var(--text)" : "var(--text-muted)",
+                            fontWeight: isSelected || isToday ? 800 : 400,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            width: isToday ? 18 : "auto",
+                            height: isToday ? 18 : "auto",
+                            borderRadius: "50%",
+                            background: isToday && !isSelected ? "#ffd833" : "transparent",
+                            color: isToday && !isSelected ? "#1a1a1a" : undefined,
                           }}
                         >
                           {day}
@@ -168,7 +203,7 @@ export default function PortalCalendarPage() {
           {selectedDay && (
             <div className="card" style={{ padding: 20 }}>
               <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 12 }}>
-                {year}.{String(month + 1).padStart(2, "0")}.{String(selectedDay).padStart(2, "0")} 상차 예정
+                {year}.{String(month + 1).padStart(2, "0")}.{String(selectedDay).padStart(2, "0")} 상차 일정
               </div>
               {selectedOrders.length === 0 ? (
                 <p style={{ fontSize: 12.5, color: "var(--text-muted)" }}>이 날짜에 예정된 운송이 없습니다.</p>
@@ -179,13 +214,16 @@ export default function PortalCalendarPage() {
                     style={{
                       display: "flex",
                       justifyContent: "space-between",
-                      padding: "8px 0",
+                      alignItems: "center",
+                      padding: "10px 0",
                       borderBottom: "1px solid var(--border)",
                       fontSize: 13,
+                      gap: 10,
+                      flexWrap: "wrap",
                     }}
                   >
                     <span className="num">{o.order_no}</span>
-                    <span>
+                    <span style={{ flex: 1, minWidth: 120 }}>
                       {o.origin} → {o.destination}
                     </span>
                     <span className="num" style={{ color: "var(--text-muted)" }}>
@@ -193,6 +231,19 @@ export default function PortalCalendarPage() {
                         hour: "2-digit",
                         minute: "2-digit",
                       })}
+                    </span>
+                    <span
+                      style={{
+                        display: "inline-block",
+                        padding: "3px 10px",
+                        borderRadius: 999,
+                        fontSize: 11.5,
+                        fontWeight: 700,
+                        background: getOrderStatusColor(o.status).bg,
+                        color: getOrderStatusColor(o.status).text,
+                      }}
+                    >
+                      {o.status}
                     </span>
                   </div>
                 ))
