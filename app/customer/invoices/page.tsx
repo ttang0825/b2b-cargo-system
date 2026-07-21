@@ -8,6 +8,11 @@ function won(n: number | null) {
   return Math.round(n).toLocaleString("ko-KR") + "원";
 }
 
+function formatDate(d: string | null) {
+  if (!d) return "-";
+  return new Date(d).toLocaleDateString("ko-KR");
+}
+
 export default function CustomerInvoicesPage() {
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -17,7 +22,7 @@ export default function CustomerInvoicesPage() {
       const { data } = await supabase
         .from("invoices")
         .select(
-          "id,billing_period,customer_charge_total,tax_invoice_issued,payment_received,status,created_at,orders(order_no)"
+          "id,billing_period,customer_charge_total,tax_invoice_issued,tax_invoice_date,payment_received,payment_received_date,status,created_at,orders(order_no)"
         )
         .order("created_at", { ascending: false })
         .limit(100);
@@ -58,14 +63,16 @@ export default function CustomerInvoicesPage() {
           <div className="empty-state">정산 내역이 없습니다.</div>
         ) : (
           <>
-            <table className="desktop-only" style={{ minWidth: 720 }}>
+            <table className="desktop-only" style={{ minWidth: 860 }}>
               <thead>
                 <tr>
                   <th>오더번호</th>
                   <th>정산월</th>
                   <th>청구금액</th>
                   <th>세금계산서</th>
+                  <th>발행일</th>
                   <th>입금</th>
+                  <th>입금일</th>
                   <th>상태</th>
                 </tr>
               </thead>
@@ -82,7 +89,13 @@ export default function CustomerInvoicesPage() {
                       <span className="num">{won(i.customer_charge_total)}</span>
                     </td>
                     <td className="cell-nowrap">{i.tax_invoice_issued ? "발행완료" : "미발행"}</td>
+                    <td className="cell-nowrap">
+                      <span className="num">{formatDate(i.tax_invoice_date)}</span>
+                    </td>
                     <td className="cell-nowrap">{i.payment_received ? "완료" : "대기"}</td>
+                    <td className="cell-nowrap">
+                      <span className="num">{formatDate(i.payment_received_date)}</span>
+                    </td>
                     <td className="cell-nowrap">{i.status}</td>
                   </tr>
                 ))}
@@ -120,11 +133,13 @@ export default function CustomerInvoicesPage() {
                   </div>
                   <div className="mobile-row-line">
                     <span className="mobile-row-label">세금계산서</span>
-                    <span>{i.tax_invoice_issued ? "발행완료" : "미발행"}</span>
+                    <span>
+                      {i.tax_invoice_issued ? `발행완료 (${formatDate(i.tax_invoice_date)})` : "미발행"}
+                    </span>
                   </div>
                   <div className="mobile-row-line">
                     <span className="mobile-row-label">입금</span>
-                    <span>{i.payment_received ? "완료" : "대기"}</span>
+                    <span>{i.payment_received ? `완료 (${formatDate(i.payment_received_date)})` : "대기"}</span>
                   </div>
                 </div>
               ))}
