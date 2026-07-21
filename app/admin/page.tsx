@@ -56,7 +56,7 @@ export default function AdminHomePage() {
     <main className="container">
       <div className="page-header">
         <div>
-          <h1 className="page-title">EGG 운송 통합 운영 시스템</h1>
+          <h1 className="page-title">WeCarry 운송 통합 운영 시스템</h1>
           <p className="page-desc">원하는 업무를 선택해 바로 이동하세요.</p>
         </div>
       </div>
