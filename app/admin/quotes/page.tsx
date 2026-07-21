@@ -100,6 +100,8 @@ function QuotesPageInner() {
   const [calculatingDistance, setCalculatingDistance] = useState(false);
   const [distanceAutoCalculated, setDistanceAutoCalculated] = useState(false);
   const [allowManualDistance, setAllowManualDistance] = useState(false);
+  const [useManualFinalAmount, setUseManualFinalAmount] = useState(false);
+  const [finalAmountOverride, setFinalAmountOverride] = useState("");
   const [ratesLoading, setRatesLoading] = useState(true);
 
   const [savedLocations, setSavedLocations] = useState<
@@ -497,7 +499,8 @@ function QuotesPageInner() {
         base_fare: calc.base,
         surcharge_amount: calc.surchargeTotal,
         discount_amount: 0,
-        final_amount: calc.final,
+        final_amount:
+          useManualFinalAmount && finalAmountOverride ? Number(finalAmountOverride) : calc.final,
         status: "상담중",
         requested_pickup_at: form.requested_pickup_at || null,
         requested_dropoff_at: form.requested_dropoff_at || null,
@@ -601,6 +604,8 @@ function QuotesPageInner() {
     });
     setDistanceAutoCalculated(false);
     setAllowManualDistance(false);
+    setUseManualFinalAmount(false);
+    setFinalAmountOverride("");
     loadQuotes(period);
   }
 
@@ -628,7 +633,6 @@ function QuotesPageInner() {
             기존 화주 또는 개인/신규 고객 모두 견적 가능합니다. (부가세 별도)
           </p>
         </div>
-        <DateRangeFilter value={period} onChange={setPeriod} />
       </div>
 
       {error && <div className="error-box">오류: {error}</div>}
@@ -1145,7 +1149,7 @@ function QuotesPageInner() {
         </div>
 
         {/* 실시간 계산 결과 */}
-        <div className="card" style={{ padding: 20 }}>
+        <div className="card" style={{ padding: 20, position: "sticky", top: 20, alignSelf: "start" }}>
           <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
             자동 계산 결과
           </h3>
@@ -1194,14 +1198,64 @@ function QuotesPageInner() {
                 }}
               >
                 <span>최종 견적금액</span>
-                <span className="num">{won(calc.final)}</span>
+                <span className="num">
+                  {won(useManualFinalAmount && finalAmountOverride ? Number(finalAmountOverride) : calc.final)}
+                </span>
               </div>
-              <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 6 }}>
+              <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 6, marginBottom: 0 }}>
                 부가세 별도
+                {useManualFinalAmount && finalAmountOverride && (
+                  <> · 자동계산값 {won(calc.final)}에서 직접 수정됨</>
+                )}
               </p>
+
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  marginTop: 14,
+                  paddingTop: 12,
+                  borderTop: "1px dashed var(--border)",
+                  fontSize: 12,
+                  color: "var(--text-muted)",
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={useManualFinalAmount}
+                  onChange={(e) => setUseManualFinalAmount(e.target.checked)}
+                  style={{ width: "auto", margin: 0 }}
+                />
+                최종금액 직접 입력
+              </label>
+              {useManualFinalAmount && (
+                <input
+                  type="number"
+                  value={finalAmountOverride}
+                  onChange={(e) => setFinalAmountOverride(e.target.value)}
+                  placeholder="직접 입력할 최종금액"
+                  style={{ marginTop: 6 }}
+                />
+              )}
             </div>
           )}
         </div>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 12,
+          flexWrap: "wrap",
+          gap: 10,
+        }}
+      >
+        <h2 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>견적 목록</h2>
+        <DateRangeFilter value={period} onChange={setPeriod} />
       </div>
 
       <div className="card" style={{ overflowX: "auto" }}>
