@@ -235,7 +235,17 @@ export default function CustomerQuotesPage() {
                         <span>최종 견적금액</span>
                         <span className="num">{won(q.final_amount)}</span>
                       </div>
-                      <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>부가세 별도</p>
+                      <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, marginBottom: 14 }}>부가세 별도</p>
+                      <button
+                        className="btn-ghost"
+                        style={{ padding: "8px 16px", borderRadius: 8, fontSize: 12.5, cursor: "pointer" }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.open(`/customer/quotes/${q.id}/print`, "_blank");
+                        }}
+                      >
+                        견적서 출력 (PDF)
+                      </button>
                     </div>
                   </div>
                 )}
