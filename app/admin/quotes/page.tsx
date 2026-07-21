@@ -84,6 +84,11 @@ function won(n: number) {
   return Math.round(n).toLocaleString("ko-KR") + "원";
 }
 
+// 거리 기준 최소 상차→하차 간격 (2~5시간, 100km당 1시간씩 증가)
+function calcMinGapHours(distanceKm: number) {
+  return Math.min(5, Math.max(2, 2 + Math.floor(distanceKm / 100)));
+}
+
 function QuotesPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -436,6 +441,45 @@ function QuotesPageInner() {
     return { base, surchargeTotal, final, breakdown, tierMatch };
   }, [tiers, surcharges, extraFees, form]);
 
+  // 거리 기준 최소 하차일시 (희망 상차일시가 있어야 계산됨)
+  const minDropoffDateTime = useMemo(() => {
+    if (!form.requested_pickup_at) return undefined;
+    const gapHours = calcMinGapHours(Number(form.distance_km) || 0);
+    const pickup = new Date(form.requested_pickup_at);
+    pickup.setHours(pickup.getHours() + gapHours);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${pickup.getFullYear()}-${pad(pickup.getMonth() + 1)}-${pad(pickup.getDate())}T${pad(
+      pickup.getHours()
+    )}:${pad(pickup.getMinutes())}`;
+  }, [form.requested_pickup_at, form.distance_km]);
+
+  const minDropoffLabel = form.requested_pickup_at
+    ? `거리 기준 상차 후 최소 ${calcMinGapHours(Number(form.distance_km) || 0)}시간 이후로 선택해주세요`
+    : undefined;
+
+  // 희망 상차일시를 정하면, 요일/시간대를 보고 운송시간을 자동으로 맞춰줌 (직접 변경 가능)
+  useEffect(() => {
+    if (!form.requested_pickup_at) return;
+    const options = surcharges
+      .filter((s) => s.category === "운송시간")
+      .map((s) => s.option_name);
+    if (options.length === 0) return;
+
+    const dt = new Date(form.requested_pickup_at);
+    const day = dt.getDay();
+    const hour = dt.getHours();
+    const isWeekend = day === 0 || day === 6;
+    const isNight = hour < 8 || hour >= 20;
+
+    let matched: string | undefined;
+    if (isWeekend) matched = options.find((o) => o.includes("주말") || o.includes("휴일"));
+    if (!matched && isNight) matched = options.find((o) => o.includes("야간"));
+    if (!matched) matched = options.find((o) => o.includes("평일") || o.includes("주간"));
+
+    if (matched) setForm((prev) => ({ ...prev, 운송시간: matched! }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.requested_pickup_at, surcharges]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -465,6 +509,15 @@ function QuotesPageInner() {
         "거리 자동계산을 먼저 실행해주세요. 직접 입력한 값을 쓰시려면 거리 입력창 아래 체크박스를 선택해주세요."
       );
       return;
+    }
+    if (form.requested_pickup_at && form.requested_dropoff_at) {
+      const gapHours = calcMinGapHours(Number(form.distance_km) || 0);
+      const diffMs =
+        new Date(form.requested_dropoff_at).getTime() - new Date(form.requested_pickup_at).getTime();
+      if (diffMs < gapHours * 60 * 60 * 1000) {
+        setError(`거리 기준 상차 후 최소 ${gapHours}시간 이후로 하차일시를 설정해주세요.`);
+        return;
+      }
     }
     if (!calc) {
       setError("해당 거리에 맞는 운임기준을 찾지 못했습니다. 거리를 확인해주세요.");
@@ -765,6 +818,45 @@ function QuotesPageInner() {
             )}
 
             <div className="form-grid" style={{ padding: 0 }}>
+              <div className="field" style={{ gridColumn: "1 / -1" }}>
+                <label>품목</label>
+                <input
+                  value={form.item}
+                  onChange={(e) => setForm({ ...form, item: e.target.value })}
+                  placeholder="운송할 물품을 입력하세요"
+                />
+              </div>
+              <div className="field">
+                <label>물품특성</label>
+                <select
+                  value={form.물품특성}
+                  onChange={(e) => setForm({ ...form, 물품특성: e.target.value })}
+                >
+                  {surcharges
+                    .filter((s) => s.category === "물품특성")
+                    .map((o) => (
+                      <option key={o.option_name} value={o.option_name}>
+                        {o.option_name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>톤수 *</label>
+                <select
+                  value={form.vehicle_type}
+                  onChange={(e) =>
+                    setForm({ ...form, vehicle_type: e.target.value })
+                  }
+                >
+                  {VEHICLES.map((v) => (
+                    <option key={v} value={v}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="field">
                 <label>출발지 *</label>
                 <div style={{ display: "flex", gap: 6 }}>
@@ -951,7 +1043,7 @@ function QuotesPageInner() {
                 </div>
               )}
 
-              <div className="field">
+              <div className="field" style={{ gridColumn: "1 / -1" }}>
                 <label>거리(km) *</label>
                 <div style={{ display: "flex", gap: 6 }}>
                   <input
@@ -1001,19 +1093,72 @@ function QuotesPageInner() {
                   </label>
                 )}
               </div>
+
+              <div style={{ gridColumn: "1 / -1" }}>
+                <DateTimePicker
+                  label="희망 상차 일시"
+                  value={form.requested_pickup_at}
+                  onChange={(v) => setForm({ ...form, requested_pickup_at: v })}
+                />
+              </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <DateTimePicker
+                  label="희망 하차 일시"
+                  value={form.requested_dropoff_at}
+                  onChange={(v) => setForm({ ...form, requested_dropoff_at: v })}
+                  minDateTime={minDropoffDateTime}
+                  minDateTimeLabel={minDropoffLabel}
+                />
+              </div>
+
               <div className="field">
-                <label>톤수 *</label>
+                <label>긴급여부</label>
                 <select
-                  value={form.vehicle_type}
-                  onChange={(e) =>
-                    setForm({ ...form, vehicle_type: e.target.value })
-                  }
+                  value={form.긴급여부}
+                  onChange={(e) => setForm({ ...form, 긴급여부: e.target.value })}
                 >
-                  {VEHICLES.map((v) => (
-                    <option key={v} value={v}>
-                      {v}
-                    </option>
-                  ))}
+                  {surcharges
+                    .filter((s) => s.category === "긴급여부")
+                    .map((o) => (
+                      <option key={o.option_name} value={o.option_name}>
+                        {o.option_name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>운송시간</label>
+                <select
+                  value={form.운송시간}
+                  onChange={(e) => setForm({ ...form, 운송시간: e.target.value })}
+                >
+                  {surcharges
+                    .filter((s) => s.category === "운송시간")
+                    .map((o) => (
+                      <option key={o.option_name} value={o.option_name}>
+                        {o.option_name}
+                      </option>
+                    ))}
+                </select>
+                {form.requested_pickup_at && (
+                  <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 5 }}>
+                    희망 상차 일시 기준으로 자동 선택됨 — 필요 시 직접 변경 가능
+                  </p>
+                )}
+              </div>
+              <div className="field">
+                <label>왕복/편도</label>
+                <select
+                  value={form["왕복/편도"]}
+                  onChange={(e) => setForm({ ...form, "왕복/편도": e.target.value })}
+                >
+                  {surcharges
+                    .filter((s) => s.category === "왕복/편도")
+                    .map((o) => (
+                      <option key={o.option_name} value={o.option_name}>
+                        {o.option_name}
+                      </option>
+                    ))}
                 </select>
               </div>
 
@@ -1047,27 +1192,21 @@ function QuotesPageInner() {
                     ))}
                 </select>
               </div>
-
-              {SINGLE_SELECT_CATEGORIES.map((cat) => {
-                const options = surcharges.filter((s) => s.category === cat);
-                return (
-                  <div className="field" key={cat}>
-                    <label>{cat}</label>
-                    <select
-                      value={(form as any)[cat]}
-                      onChange={(e) =>
-                        setForm({ ...form, [cat]: e.target.value })
-                      }
-                    >
-                      {options.map((o) => (
-                        <option key={o.option_name} value={o.option_name}>
-                          {o.option_name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                );
-              })}
+              <div className="field">
+                <label>차량형태</label>
+                <select
+                  value={form.차량형태}
+                  onChange={(e) => setForm({ ...form, 차량형태: e.target.value })}
+                >
+                  {surcharges
+                    .filter((s) => s.category === "차량형태")
+                    .map((o) => (
+                      <option key={o.option_name} value={o.option_name}>
+                        {o.option_name}
+                      </option>
+                    ))}
+                </select>
+              </div>
 
               <div className="field">
                 <label>대기시간(분)</label>
@@ -1090,27 +1229,7 @@ function QuotesPageInner() {
                   }
                 />
               </div>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <DateTimePicker
-                  label="희망 상차 일시"
-                  value={form.requested_pickup_at}
-                  onChange={(v) => setForm({ ...form, requested_pickup_at: v })}
-                />
-              </div>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <DateTimePicker
-                  label="희망 하차 일시"
-                  value={form.requested_dropoff_at}
-                  onChange={(v) => setForm({ ...form, requested_dropoff_at: v })}
-                />
-              </div>
-              <div className="field" style={{ gridColumn: "1 / -1" }}>
-                <label>품목</label>
-                <input
-                  value={form.item}
-                  onChange={(e) => setForm({ ...form, item: e.target.value })}
-                />
-              </div>
+
               <div className="field" style={{ gridColumn: "1 / -1" }}>
                 <label>특이사항</label>
                 <textarea
