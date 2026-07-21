@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
+import PasswordInput from "@/components/PasswordInput";
 
 export default function CustomerLoginPage() {
   const router = useRouter();
@@ -64,11 +65,7 @@ export default function CustomerLoginPage() {
           </div>
           <div className="field" style={{ marginBottom: 16 }}>
             <label>비밀번호</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
+            <PasswordInput value={password} onChange={setPassword} />
           </div>
           {error && <div className="error-box">{error}</div>}
           <button
