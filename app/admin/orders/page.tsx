@@ -76,6 +76,17 @@ function OrdersPageInner() {
     quote_id: "",
   });
 
+  // 거리 정보가 없는 화면이라, 상차 후 고정 2시간 이후로만 하차일시를 선택하게 함
+  const minDeliveryDateTime = (() => {
+    if (!form.requested_pickup_at) return undefined;
+    const d = new Date(form.requested_pickup_at);
+    d.setHours(d.getHours() + 2);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
+      d.getMinutes()
+    )}`;
+  })();
+
   async function loadOrders(preset: DatePreset = period) {
     setLoading(true);
     const { from } = getDateRange(preset);
@@ -183,6 +194,14 @@ function OrdersPageInner() {
     if (!form.origin.trim() || !form.destination.trim()) {
       setError("출발지와 도착지를 입력해주세요.");
       return;
+    }
+    if (form.requested_pickup_at && form.requested_delivery_at) {
+      const diffMs =
+        new Date(form.requested_delivery_at).getTime() - new Date(form.requested_pickup_at).getTime();
+      if (diffMs < 2 * 60 * 60 * 1000) {
+        setError("하차 예정일시는 상차 후 최소 2시간 이후로 설정해주세요.");
+        return;
+      }
     }
 
     setSaving(true);
@@ -438,6 +457,8 @@ function OrdersPageInner() {
                   onChange={(v) =>
                     setForm({ ...form, requested_delivery_at: v })
                   }
+                  minDateTime={minDeliveryDateTime}
+                  minDateTimeLabel="상차 후 최소 2시간 이후로 선택해주세요"
                 />
               </div>
               <div className="field">
