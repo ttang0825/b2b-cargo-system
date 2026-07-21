@@ -169,7 +169,7 @@ export default function PublicQuotePage() {
           style={{ padding: "18px 24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}
         >
           <Link href="/" className="brand" style={{ fontSize: 17, textDecoration: "none" }}>
-            EGG 운송
+            WeCarry 운송
           </Link>
           <Link href="/quote/status" className="guide-link">
             내 문의 조회
