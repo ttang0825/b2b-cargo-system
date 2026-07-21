@@ -119,7 +119,7 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
   const pathname = usePathname();
   const [checking, setChecking] = useState(true);
   const [companyName, setCompanyName] = useState("");
-  const [notified, setNotified] = useState({ quotes: false, dispatches: false, invoices: false });
+  const [notified, setNotified] = useState({ quotes: false, dispatches: false, invoices: false, announcements: false });
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -162,6 +162,7 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
       if (pathname === "/customer/quotes") setNotified((prev) => ({ ...prev, quotes: false }));
       if (pathname === "/customer/dispatches") setNotified((prev) => ({ ...prev, dispatches: false }));
       if (pathname === "/customer/invoices") setNotified((prev) => ({ ...prev, invoices: false }));
+      if (pathname === "/customer/announcements") setNotified((prev) => ({ ...prev, announcements: false }));
     }
     check();
     setOpenGroup(null);
@@ -181,6 +182,9 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "invoices" }, () => {
         setNotified((prev) => (pathname === "/customer/invoices" ? prev : { ...prev, invoices: true }));
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "announcements" }, () => {
+        setNotified((prev) => (pathname === "/customer/announcements" ? prev : { ...prev, announcements: true }));
       })
       .subscribe();
 
@@ -231,8 +235,12 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
             <a
               href="/customer/announcements"
               className={pathname === "/customer/announcements" ? "nav-chip nav-chip-active" : "nav-chip"}
+              style={{ position: "relative" }}
             >
               공지사항
+              {notified.announcements && (
+                <span style={{ position: "absolute", top: 4, right: 4, width: 7, height: 7, borderRadius: "50%", background: "var(--danger)" }} />
+              )}
             </a>
             <button
               onClick={handleLogout}
@@ -305,9 +313,15 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
                 color: pathname === "/customer/announcements" ? "var(--accent)" : "var(--text)",
                 textDecoration: "none",
                 borderTop: "1px solid var(--border)",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
               }}
             >
               공지사항
+              {notified.announcements && (
+                <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--danger)" }} />
+              )}
             </a>
             <button
               onClick={handleLogout}
