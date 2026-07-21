@@ -1,22 +1,44 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 
 export default function ChangePasswordPage() {
   const router = useRouter();
+  const [isForced, setIsForced] = useState(false); // 최초 로그인 강제변경인지 여부
+  const [checking, setChecking] = useState(true);
   const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    async function check() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) {
+        setChecking(false);
+        return;
+      }
+      const { data: account } = await supabase
+        .from("customer_accounts")
+        .select("must_change_password")
+        .eq("auth_user_id", session.user.id)
+        .single();
+      setIsForced(!!account?.must_change_password);
+      setChecking(false);
+    }
+    check();
+  }, []);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
-    if (!currentPassword) {
+    if (!isForced && !currentPassword) {
       setError("기존 비밀번호를 입력해주세요.");
       return;
     }
@@ -40,15 +62,18 @@ export default function ChangePasswordPage() {
       return;
     }
 
-    // 기존 비밀번호가 맞는지 재로그인 방식으로 검증 (안전장치)
-    const { error: verifyError } = await supabase.auth.signInWithPassword({
-      email: session.user.email,
-      password: currentPassword,
-    });
-    if (verifyError) {
-      setLoading(false);
-      setError("기존 비밀번호가 올바르지 않습니다.");
-      return;
+    // 최초 로그인(강제변경)이 아닐 때만 기존 비밀번호를 재확인합니다.
+    // 최초 로그인 상황은 방금 그 비밀번호로 로그인에 이미 성공한 직후라 다시 물어볼 필요가 없습니다.
+    if (!isForced) {
+      const { error: verifyError } = await supabase.auth.signInWithPassword({
+        email: session.user.email,
+        password: currentPassword,
+      });
+      if (verifyError) {
+        setLoading(false);
+        setError("기존 비밀번호가 올바르지 않습니다.");
+        return;
+      }
     }
 
     const { error: updateError } = await supabase.auth.updateUser({ password });
@@ -58,8 +83,6 @@ export default function ChangePasswordPage() {
       return;
     }
 
-    // must_change_password 표시는 화주 계정에 쓰기 권한이 없으므로,
-    // 서버 API를 통해 본인 인증 후 안전하게 갱신합니다.
     const res = await fetch("/api/customer/confirm-password-change", {
       method: "POST",
       headers: { Authorization: `Bearer ${session.access_token}` },
@@ -75,6 +98,14 @@ export default function ChangePasswordPage() {
     router.refresh();
   }
 
+  if (checking) {
+    return (
+      <main className="container" style={{ maxWidth: 420, paddingTop: 60 }}>
+        <div className="empty-state">확인 중...</div>
+      </main>
+    );
+  }
+
   return (
     <main className="container" style={{ maxWidth: 420, paddingTop: 60 }}>
       <div className="card" style={{ padding: 32 }}>
@@ -82,24 +113,29 @@ export default function ChangePasswordPage() {
           비밀번호 변경
         </h1>
         <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 0, marginBottom: 20 }}>
-          기존 비밀번호 확인 후 새 비밀번호를 설정해주세요.
+          {isForced
+            ? "최초 로그인입니다. 계속하려면 새 비밀번호를 설정해주세요."
+            : "기존 비밀번호 확인 후 새 비밀번호를 설정해주세요."}
         </p>
         <form onSubmit={handleSubmit}>
-          <div className="field" style={{ marginBottom: 12 }}>
-            <label>기존 비밀번호</label>
-            <input
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              autoFocus
-            />
-          </div>
+          {!isForced && (
+            <div className="field" style={{ marginBottom: 12 }}>
+              <label>기존 비밀번호</label>
+              <input
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                autoFocus
+              />
+            </div>
+          )}
           <div className="field" style={{ marginBottom: 12 }}>
             <label>새 비밀번호 (8자 이상)</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              autoFocus={isForced}
             />
           </div>
           <div className="field" style={{ marginBottom: 16 }}>
