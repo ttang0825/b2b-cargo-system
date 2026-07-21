@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
-import { getExportPeriodFrom, exportMultiSheetExcel, ExportPeriod } from "@/lib/exportExcel";
+import { getExportPeriodFrom, exportMultiSheetExcel, buildExportFilename, ExportPeriod } from "@/lib/exportExcel";
 
 const PERIOD_LABELS: Record<ExportPeriod, string> = {
   week: "이번 주",
@@ -30,11 +30,6 @@ function getFileDateLabel(period: ExportPeriod) {
     return `${year}년 ${month}월 ${weekOfMonth}째주`;
   }
   return "";
-}
-
-// 파일명에 못 쓰는 특수문자 제거
-function sanitizeFilename(s: string) {
-  return s.replace(/[\\/:*?"<>|]/g, "").trim();
 }
 
 export default function PortalStatsPage() {
@@ -159,8 +154,7 @@ export default function PortalStatsPage() {
       return;
     }
 
-    const namePart = companyName ? sanitizeFilename(companyName) + "_" : "";
-    const filename = `${namePart}운송정산내역_${getFileDateLabel(exportPeriod)}.xlsx`;
+    const filename = buildExportFilename(companyName, "운송정산내역", getFileDateLabel(exportPeriod));
 
     exportMultiSheetExcel(filename, [
       { name: "운송내역", rows: dispatchRows.length > 0 ? dispatchRows : [{ 안내: "해당 기간 운송내역 없음" }] },
