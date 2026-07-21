@@ -1,5 +1,9 @@
 import Link from "next/link";
 
+export const metadata = {
+  title: "WeCarry 운송 | 화물 배차 파트너",
+};
+
 const TARGETS = [
   { title: "중소 제조업체", desc: "부품·원자재·완제품 납품, 공장 간 이동" },
   { title: "도매·유통·자재 업체", desc: "거래처 납품, 창고 이동, 긴급 출고" },
@@ -42,7 +46,7 @@ export default function LandingPage() {
           }}
         >
           <span className="brand" style={{ fontSize: 17 }}>
-            EGG 운송
+            WeCarry 운송
           </span>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <Link href="/customer/login" className="guide-link">
@@ -215,7 +219,7 @@ export default function LandingPage() {
               <span style={{ color: "var(--text-muted)", fontWeight: 500 }}> (주말·공휴일 휴무)</span>
             </div>
           </div>
-          <div style={{ fontSize: 13, color: "var(--text-muted)" }}>EGG 운송 통합 운영 시스템</div>
+          <div style={{ fontSize: 13, color: "var(--text-muted)" }}>WeCarry 운송 통합 운영 시스템</div>
         </div>
       </footer>
     </div>
