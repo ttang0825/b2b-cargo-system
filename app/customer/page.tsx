@@ -15,7 +15,7 @@ const MENU = [
   { href: "/customer/dispatches", tag: "배차", title: "배차·운송 조회", desc: "진행 중인 운송 상태를 확인합니다.", key: "dispatches" },
   { href: "/customer/calendar", tag: "일정", title: "캘린더", desc: "상차 예정일을 달력으로 확인합니다." },
   { href: "/customer/invoices", tag: "정산", title: "정산·세금계산서", desc: "청구내역과 발행 여부를 확인합니다.", key: "invoices" },
-  { href: "/customer/stats", tag: "통계", title: "월별 통계", desc: "운송 건수와 청구금액 추이를 확인합니다." },
+  { href: "/customer/stats", tag: "통계", title: "월별 통계", desc: "운송 건수와 청구금액 추이 확인, 운송·정산내역 엑셀 다운로드." },
   { href: "/customer/locations", tag: "배송지", title: "배송지 관리", desc: "자주 쓰는 상·하차지를 등록합니다." },
   { href: "/customer/profile", tag: "계정", title: "담당자 정보", desc: "담당자 연락처를 관리합니다." },
 ] as const;
