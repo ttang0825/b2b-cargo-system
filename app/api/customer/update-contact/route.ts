@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const ALLOWED_FIELDS = ["contact_name", "contact_position", "contact_mobile", "contact_email"];
+const ALLOWED_FIELDS = ["name", "contact_position", "contact_mobile", "email"];
 
 export async function POST(req: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -25,26 +25,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "인증에 실패했습니다." }, { status: 401 });
   }
 
-  const { data: account } = await admin
-    .from("customer_accounts")
-    .select("company_id")
-    .eq("auth_user_id", userData.user.id)
-    .single();
-  if (!account) {
-    return NextResponse.json({ error: "계정 정보를 찾을 수 없습니다." }, { status: 404 });
-  }
-
   const body = await req.json();
-  // 화이트리스트에 있는 필드만 반영 - 영업상태, 등급 등 민감한 값은 절대 못 바꿈
+  // 화이트리스트에 있는 필드만 반영 - 본인 계정(customer_accounts)의 정보만 수정, 회사 정보는 안 건드림
   const payload: Record<string, any> = {};
   for (const key of ALLOWED_FIELDS) {
     if (key in body) payload[key] = body[key] || null;
   }
 
   const { error: updateError } = await admin
-    .from("companies")
+    .from("customer_accounts")
     .update(payload)
-    .eq("id", account.company_id);
+    .eq("auth_user_id", userData.user.id);
 
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 400 });
