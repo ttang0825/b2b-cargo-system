@@ -50,7 +50,7 @@ export default function QuoteStatusPage() {
       <header style={{ borderBottom: "1px solid var(--border)", background: "var(--surface)" }}>
         <div className="container" style={{ padding: "18px 24px" }}>
           <Link href="/" className="brand" style={{ fontSize: 17, textDecoration: "none" }}>
-            EGG 운송
+            WeCarry 운송
           </Link>
         </div>
       </header>
