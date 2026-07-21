@@ -22,6 +22,9 @@ type QuoteDetail = {
   guest_name: string | null;
   guest_phone: string | null;
   selected_options: Record<string, any> | null;
+  notes: string | null;
+  requested_pickup_at: string | null;
+  requested_dropoff_at: string | null;
   companies: { id: string; name: string; phone: string | null; address: string | null } | null;
 };
 
@@ -35,6 +38,16 @@ function formatDate(d: string) {
     year: "numeric",
     month: "long",
     day: "numeric",
+  });
+}
+
+function formatDateTime(v: string | null) {
+  if (!v) return null;
+  return new Date(v).toLocaleString("ko-KR", {
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
@@ -205,6 +218,18 @@ export default function QuotePrintPage() {
           </tbody>
         </table>
 
+        {(formatDateTime(quote.requested_pickup_at) || formatDateTime(quote.requested_dropoff_at)) && (
+          <p style={{ fontSize: 12.5, color: "#555", marginTop: 0, marginBottom: 12 }}>
+            {formatDateTime(quote.requested_pickup_at) && (
+              <>희망 상차: {formatDateTime(quote.requested_pickup_at)}</>
+            )}
+            {formatDateTime(quote.requested_pickup_at) && formatDateTime(quote.requested_dropoff_at) && "  ·  "}
+            {formatDateTime(quote.requested_dropoff_at) && (
+              <>희망 하차: {formatDateTime(quote.requested_dropoff_at)}</>
+            )}
+          </p>
+        )}
+
         {optionEntries.length > 0 && (
           <p style={{ fontSize: 12, color: "#777", marginTop: 0, marginBottom: 24 }}>
             {optionEntries
@@ -266,6 +291,15 @@ export default function QuotePrintPage() {
           <p style={{ fontSize: 12, color: "#888", marginTop: 8 }}>
             입금계좌: {COMPANY_INFO.bankAccount}
           </p>
+        )}
+
+        {quote.notes && (
+          <div style={{ marginTop: 24 }}>
+            <div style={{ fontSize: 11.5, color: "#888", marginBottom: 4 }}>특이사항</div>
+            <p style={{ fontSize: 12.5, color: "#333", margin: 0, whiteSpace: "pre-wrap" }}>
+              {quote.notes}
+            </p>
+          </div>
         )}
 
         <p style={{ fontSize: 11.5, color: "#999", marginTop: 32, lineHeight: 1.6 }}>
