@@ -37,8 +37,22 @@ type QuoteDetail = {
   guest_email: string | null;
   company_id: string | null;
   selected_options: Record<string, any> | null;
+  notes: string | null;
+  requested_pickup_at: string | null;
+  requested_dropoff_at: string | null;
   companies: { id: string; name: string; phone: string | null } | null;
 };
+
+function formatDateTime(v: string | null) {
+  if (!v) return null;
+  return new Date(v).toLocaleString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 function won(n: number | null) {
   if (n === null || n === undefined) return "-";
@@ -263,6 +277,22 @@ export default function QuoteDetailPage() {
             <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>품목</div>
             <div style={{ fontSize: 13.5 }}>{quote.item || "-"}</div>
           </div>
+          {formatDateTime(quote.requested_pickup_at) && (
+            <div>
+              <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>희망 상차일시</div>
+              <div style={{ fontSize: 13.5 }} className="num">
+                {formatDateTime(quote.requested_pickup_at)}
+              </div>
+            </div>
+          )}
+          {formatDateTime(quote.requested_dropoff_at) && (
+            <div>
+              <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>희망 하차일시</div>
+              <div style={{ fontSize: 13.5 }} className="num">
+                {formatDateTime(quote.requested_dropoff_at)}
+              </div>
+            </div>
+          )}
           {quote.guest_phone && (
             <div>
               <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
@@ -310,6 +340,13 @@ export default function QuoteDetailPage() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {quote.notes && (
+        <div className="card" style={{ padding: 20, marginBottom: 20 }}>
+          <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 10 }}>특이사항</h3>
+          <p style={{ fontSize: 13.5, whiteSpace: "pre-wrap", margin: 0 }}>{quote.notes}</p>
         </div>
       )}
 
