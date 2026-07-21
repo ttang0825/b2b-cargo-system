@@ -19,12 +19,17 @@ export default function DateTimePicker({
   label,
   value,
   onChange,
+  minDateTime,
+  minDateTimeLabel,
 }: {
   label: string;
   value: string; // "YYYY-MM-DDTHH:mm" 형식 또는 빈 문자열
   onChange: (v: string) => void;
+  minDateTime?: string; // 이 시점 이전은 선택할 수 없게 제한 ("YYYY-MM-DDTHH:mm")
+  minDateTimeLabel?: string; // 제한 이유를 알려주는 안내 문구
 }) {
   const [datePart, timePart] = value ? value.split("T") : ["", ""];
+  const [minDatePart, minTimePart] = minDateTime ? minDateTime.split("T") : ["", ""];
 
   function applyDate(d: string) {
     onChange(d ? `${d}T${timePart || "09:00"}` : "");
@@ -44,6 +49,12 @@ export default function DateTimePicker({
   );
   const isToday = datePart === today;
   const isTomorrow = datePart === tomorrow;
+
+  // 선택한 날짜가 최소 날짜와 같은 날이면, 그 시각 이후 시간만 고를 수 있게 필터링
+  const timeOptions =
+    minDatePart && datePart === minDatePart
+      ? TIME_OPTIONS.filter((t) => t >= minTimePart)
+      : TIME_OPTIONS;
 
   return (
     <div className="field">
@@ -80,6 +91,7 @@ export default function DateTimePicker({
         <input
           type="date"
           value={datePart}
+          min={minDatePart || undefined}
           onChange={(e) => applyDate(e.target.value)}
           style={{ flex: 1 }}
         />
@@ -89,13 +101,18 @@ export default function DateTimePicker({
           style={{ flex: 1 }}
         >
           <option value="">시간 선택</option>
-          {TIME_OPTIONS.map((t) => (
+          {timeOptions.map((t) => (
             <option key={t} value={t}>
               {t}
             </option>
           ))}
         </select>
       </div>
+      {minDateTimeLabel && (
+        <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 5 }}>
+          {minDateTimeLabel}
+        </div>
+      )}
     </div>
   );
 }
