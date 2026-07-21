@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 
 export type ExportPeriod = "week" | "month" | "year" | "all";
 
@@ -15,6 +15,17 @@ export function getExportPeriodFrom(period: ExportPeriod): string | null {
   }
   from.setHours(0, 0, 0, 0);
   return from.toISOString();
+}
+
+// 화주포털 엑셀 파일명 규칙: "화주명_위캐리_운송정산내역_날짜.xlsx"
+export function buildExportFilename(companyName: string, label: string, dateLabel: string) {
+  const namePart = companyName ? sanitizeFilename(companyName) + "_" : "";
+  return `${namePart}위캐리_${label}_${dateLabel}.xlsx`;
+}
+
+// 파일명에 못 쓰는 특수문자 제거
+export function sanitizeFilename(s: string) {
+  return s.replace(/[\\/:*?"<>|]/g, "").trim();
 }
 
 // 한글(전각 문자)은 영문보다 넓게 보이므로 2배로 계산해서 더 정확한 너비를 구함
@@ -38,6 +49,29 @@ function autoFitColumns(worksheet: XLSX.WorkSheet, rows: Record<string, any>[]) 
   });
 }
 
+// 1행(헤더)에 은은한 배경색 + 굵은 글씨 적용, 1행 틀고정
+function styleHeaderAndFreeze(worksheet: XLSX.WorkSheet, rows: Record<string, any>[]) {
+  if (rows.length === 0) return;
+  const headers = Object.keys(rows[0]);
+  headers.forEach((_, col) => {
+    const cellRef = XLSX.utils.encode_cell({ r: 0, c: col });
+    if (!worksheet[cellRef]) return;
+    worksheet[cellRef].s = {
+      font: { bold: true, color: { rgb: "1A1A1A" } },
+      fill: { fgColor: { rgb: "FFF3C4" } }, // 브랜드 톤에 맞춘 은은한 옐로우
+      alignment: { vertical: "center" },
+    };
+  });
+  // 1행 고정 (스크롤해도 헤더가 계속 보임)
+  (worksheet as any)["!freeze"] = {
+    xSplit: 0,
+    ySplit: 1,
+    topLeftCell: "A2",
+    activePane: "bottomLeft",
+    state: "frozen",
+  };
+}
+
 // 시트 하나짜리 파일
 export function exportRowsToExcel(
   filename: string,
@@ -46,6 +80,7 @@ export function exportRowsToExcel(
 ) {
   const worksheet = XLSX.utils.json_to_sheet(rows);
   autoFitColumns(worksheet, rows);
+  styleHeaderAndFreeze(worksheet, rows);
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
   XLSX.writeFile(workbook, filename);
@@ -60,6 +95,7 @@ export function exportMultiSheetExcel(
   sheets.forEach(({ name, rows }) => {
     const worksheet = XLSX.utils.json_to_sheet(rows);
     autoFitColumns(worksheet, rows);
+    styleHeaderAndFreeze(worksheet, rows);
     XLSX.utils.book_append_sheet(workbook, worksheet, name);
   });
   XLSX.writeFile(workbook, filename);
