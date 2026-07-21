@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import PasswordInput from "@/components/PasswordInput";
 
 function LoginInner() {
   const router = useRouter();
@@ -66,12 +67,7 @@ function LoginInner() {
         <form onSubmit={handleSubmit}>
           <div className="field" style={{ marginBottom: 16 }}>
             <label>비밀번호</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoFocus
-            />
+            <PasswordInput value={password} onChange={setPassword} autoFocus />
           </div>
           {error && <div className="error-box">{error}</div>}
           <button
