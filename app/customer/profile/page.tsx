@@ -21,16 +21,16 @@ export default function PortalProfilePage() {
   const [error, setError] = useState<string | null>(null);
 
   const [saved, setSaved] = useState({
-    contact_name: "",
+    name: "",
     contact_position: "",
     contact_mobile: "",
-    contact_email: "",
+    email: "",
   });
   const [form, setForm] = useState({
-    contact_name: "",
+    name: "",
     contact_position: "",
     contact_mobile: "",
-    contact_email: "",
+    email: "",
   });
 
   async function load() {
@@ -43,26 +43,19 @@ export default function PortalProfilePage() {
     }
     const { data: account } = await supabase
       .from("customer_accounts")
-      .select("company_id")
+      .select("name,contact_position,contact_mobile,email,companies(name)")
       .eq("auth_user_id", session.user.id)
       .single();
     if (account) {
-      const { data: company } = await supabase
-        .from("companies")
-        .select("name,contact_name,contact_position,contact_mobile,contact_email")
-        .eq("id", account.company_id)
-        .single();
-      if (company) {
-        setCompanyName(company.name || "");
-        const values = {
-          contact_name: company.contact_name || "",
-          contact_position: company.contact_position || "",
-          contact_mobile: company.contact_mobile || "",
-          contact_email: company.contact_email || "",
-        };
-        setSaved(values);
-        setForm(values);
-      }
+      setCompanyName((account.companies as any)?.name || "");
+      const values = {
+        name: account.name || "",
+        contact_position: account.contact_position || "",
+        contact_mobile: account.contact_mobile || "",
+        email: account.email || "",
+      };
+      setSaved(values);
+      setForm(values);
     }
     setLoading(false);
   }
@@ -121,7 +114,10 @@ export default function PortalProfilePage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">담당자 정보</h1>
-          <p className="page-desc">{companyName} 담당자 연락처를 관리합니다.</p>
+          <p className="page-desc">
+            {companyName} · 이 계정으로 로그인한 담당자 본인의 정보입니다. 같은 회사의 다른
+            담당자 계정에는 영향을 주지 않습니다.
+          </p>
         </div>
         {!editing && (
           <button className="btn" onClick={() => setEditing(true)}>
@@ -133,16 +129,16 @@ export default function PortalProfilePage() {
       <div className="card" style={{ padding: 24 }}>
         {!editing ? (
           <>
-            <Field label="담당자명" value={saved.contact_name} />
+            <Field label="담당자명" value={saved.name} />
             <Field label="직책" value={saved.contact_position} />
             <Field label="휴대폰" value={saved.contact_mobile} />
-            <Field label="이메일" value={saved.contact_email} />
+            <Field label="이메일" value={saved.email} />
           </>
         ) : (
           <form onSubmit={handleSave}>
             <div className="field" style={{ marginBottom: 14 }}>
               <label>담당자명</label>
-              <input value={form.contact_name} onChange={(e) => setField("contact_name", e.target.value)} />
+              <input value={form.name} onChange={(e) => setField("name", e.target.value)} />
             </div>
             <div className="field" style={{ marginBottom: 14 }}>
               <label>직책</label>
@@ -158,7 +154,7 @@ export default function PortalProfilePage() {
             </div>
             <div className="field" style={{ marginBottom: 18 }}>
               <label>이메일</label>
-              <input type="email" value={form.contact_email} onChange={(e) => setField("contact_email", e.target.value)} />
+              <input type="email" value={form.email} onChange={(e) => setField("email", e.target.value)} />
             </div>
             {error && <div className="error-box">{error}</div>}
             <div style={{ display: "flex", gap: 8 }}>
