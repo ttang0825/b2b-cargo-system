@@ -85,7 +85,7 @@ export default function TopNav() {
     <div className="top-nav">
       <div className="top-nav-inner" style={{ flexWrap: "wrap", gap: 16 }}>
         <Link href="/admin" className="brand-link">
-          <div className="brand">EGG 운송 통합 운영 시스템</div>
+          <div className="brand">WeCarry 운송 통합 운영 시스템</div>
           <div className="brand-sub">내부 관리자 (admin)</div>
         </Link>
 
