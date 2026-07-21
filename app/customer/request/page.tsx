@@ -117,7 +117,7 @@ export default function PortalRequestPage() {
     const { data } = await supabase
       .from("portal_order_requests")
       .select(
-        "id,origin,destination,vehicle_type,body_type,item,notes,requested_pickup_at,requested_dropoff_at,status,staff_note,created_at"
+        "id,origin,destination,vehicle_type,body_type,item,notes,requested_pickup_at,requested_dropoff_at,status,staff_note,quote_id,created_at,quotes(quote_no,status,final_amount)"
       )
       .eq("company_id", cid)
       .order("created_at", { ascending: false })
@@ -537,6 +537,7 @@ export default function PortalRequestPage() {
                   <th>차량</th>
                   <th>희망 상차일</th>
                   <th>상태</th>
+                  <th>진행상황</th>
                   <th>특이사항</th>
                   <th>반려 사유</th>
                   <th></th>
@@ -558,6 +559,19 @@ export default function PortalRequestPage() {
                       <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 999, fontSize: 12, fontWeight: 600, background: (REQUEST_STATUS_COLORS[r.status] || {}).bg, color: (REQUEST_STATUS_COLORS[r.status] || {}).text }}>
                         {r.status}
                       </span>
+                    </td>
+                    <td className="cell-nowrap">
+                      {r.quotes ? (
+                        <>
+                          <span className="num">{r.quotes.quote_no}</span>
+                          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                            {r.quotes.status}
+                            {r.quotes.final_amount ? ` · ${Math.round(r.quotes.final_amount).toLocaleString("ko-KR")}원` : ""}
+                          </div>
+                        </>
+                      ) : (
+                        "-"
+                      )}
                     </td>
                     <td style={{ maxWidth: 160 }}>{r.notes || "-"}</td>
                     <td style={{ maxWidth: 160 }}>{r.staff_note || "-"}</td>
@@ -606,6 +620,14 @@ export default function PortalRequestPage() {
                         : "-"}
                     </span>
                   </div>
+                  {r.quotes && (
+                    <div className="mobile-row-line">
+                      <span className="mobile-row-label">진행상황</span>
+                      <span className="num">
+                        {r.quotes.quote_no} · {r.quotes.status}
+                      </span>
+                    </div>
+                  )}
                   {r.notes && (
                     <div className="mobile-row-line">
                       <span className="mobile-row-label">특이사항</span>
