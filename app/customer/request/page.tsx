@@ -76,6 +76,17 @@ export default function PortalRequestPage() {
     notes: "",
   });
 
+  // 거리 정보가 없는 화면이라, 상차 후 고정 2시간 이후로만 하차일시를 선택하게 함
+  const minDropoffDateTime = (() => {
+    if (!form.requested_pickup_at) return undefined;
+    const d = new Date(form.requested_pickup_at);
+    d.setHours(d.getHours() + 2);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
+      d.getMinutes()
+    )}`;
+  })();
+
   useEffect(() => {
     if (document.getElementById("daum-postcode-script")) {
       setPostcodeReady(true);
@@ -207,6 +218,14 @@ export default function PortalRequestPage() {
     if (!companyId) {
       setError("계정 정보를 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.");
       return;
+    }
+    if (form.requested_pickup_at && form.requested_dropoff_at) {
+      const diffMs =
+        new Date(form.requested_dropoff_at).getTime() - new Date(form.requested_pickup_at).getTime();
+      if (diffMs < 2 * 60 * 60 * 1000) {
+        setError("희망 하차 일시는 상차 후 최소 2시간 이후로 설정해주세요.");
+        return;
+      }
     }
     setSaving(true);
     setError(null);
@@ -475,6 +494,8 @@ export default function PortalRequestPage() {
                 label="희망 하차 일시"
                 value={form.requested_dropoff_at}
                 onChange={(v) => setField("requested_dropoff_at", v)}
+                minDateTime={minDropoffDateTime}
+                minDateTimeLabel="상차 후 최소 2시간 이후로 선택해주세요"
               />
             </div>
 
