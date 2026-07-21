@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 
+const LAST_SEEN_KEY = "wecarry_announcements_last_seen";
+
 export default function PortalAnnouncementsPage() {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -15,8 +17,22 @@ export default function PortalAnnouncementsPage() {
         .select("id,title,content,created_at")
         .order("created_at", { ascending: false })
         .limit(50);
-      setItems(data || []);
+
+      const lastSeenStr = typeof window !== "undefined" ? localStorage.getItem(LAST_SEEN_KEY) : null;
+      const lastSeen = lastSeenStr ? new Date(lastSeenStr) : null;
+
+      const withNewFlag = (data || []).map((a) => ({
+        ...a,
+        isNew: lastSeen ? new Date(a.created_at) > lastSeen : true,
+      }));
+
+      setItems(withNewFlag);
       setLoading(false);
+
+      // 이번 방문을 "확인함"으로 기록 (다음 방문부터는 지금까지 글이 NEW로 안 보임)
+      if (typeof window !== "undefined") {
+        localStorage.setItem(LAST_SEEN_KEY, new Date().toISOString());
+      }
     }
     load();
   }, []);
@@ -56,7 +72,23 @@ export default function PortalAnnouncementsPage() {
                     textAlign: "left",
                   }}
                 >
-                  <span style={{ fontSize: 14, fontWeight: 700 }}>{a.title}</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    {a.isNew && (
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 800,
+                          color: "#fff",
+                          background: "var(--danger)",
+                          padding: "2px 6px",
+                          borderRadius: 4,
+                        }}
+                      >
+                        NEW
+                      </span>
+                    )}
+                    <span style={{ fontSize: 14, fontWeight: 700 }}>{a.title}</span>
+                  </span>
                   <span style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
                     <span className="num" style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
                       {new Date(a.created_at).toLocaleDateString("ko-KR")}
