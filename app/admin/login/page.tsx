@@ -58,7 +58,7 @@ function LoginInner() {
             letterSpacing: "-0.02em",
           }}
         >
-          EGG 운송 통합 운영 시스템
+          WeCarry 운송 통합 운영 시스템
         </h1>
         <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 0, marginBottom: 24 }}>
           내부 관리자 전용 화면입니다. 비밀번호를 입력해주세요.
