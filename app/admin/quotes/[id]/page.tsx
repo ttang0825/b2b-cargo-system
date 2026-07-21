@@ -277,22 +277,6 @@ export default function QuoteDetailPage() {
             <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>품목</div>
             <div style={{ fontSize: 13.5 }}>{quote.item || "-"}</div>
           </div>
-          {formatDateTime(quote.requested_pickup_at) && (
-            <div>
-              <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>희망 상차일시</div>
-              <div style={{ fontSize: 13.5 }} className="num">
-                {formatDateTime(quote.requested_pickup_at)}
-              </div>
-            </div>
-          )}
-          {formatDateTime(quote.requested_dropoff_at) && (
-            <div>
-              <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>희망 하차일시</div>
-              <div style={{ fontSize: 13.5 }} className="num">
-                {formatDateTime(quote.requested_dropoff_at)}
-              </div>
-            </div>
-          )}
           {quote.guest_phone && (
             <div>
               <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
@@ -315,6 +299,32 @@ export default function QuoteDetailPage() {
             </div>
           )}
         </div>
+
+        {(formatDateTime(quote.requested_pickup_at) || formatDateTime(quote.requested_dropoff_at)) && (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 10,
+              marginTop: 16,
+              paddingTop: 16,
+              borderTop: "1px solid var(--border)",
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>희망 상차일시</div>
+              <div className="num" style={{ fontSize: 14, fontWeight: 700 }}>
+                {formatDateTime(quote.requested_pickup_at) || "-"}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>희망 하차일시</div>
+              <div className="num" style={{ fontSize: 14, fontWeight: 700 }}>
+                {formatDateTime(quote.requested_dropoff_at) || "-"}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {quote.selected_options && (
