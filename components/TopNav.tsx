@@ -24,7 +24,7 @@ export default function TopNav() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    if (pathname === "/admin/login" || pathname?.startsWith("/customer")) return;
+    if (pathname === "/admin/login" || pathname?.startsWith("/customer") || pathname === "/" || pathname?.startsWith("/quote")) return;
 
     async function loadPendingCount() {
       const { count } = await supabase
@@ -66,8 +66,14 @@ export default function TopNav() {
     setMobileMenuOpen(false);
   }, [pathname]);
 
-  // 로그인 화면과 화주포털 영역에서는 admin 헤더 자체를 숨김
-  if (pathname === "/admin/login" || pathname?.startsWith("/customer")) return null;
+  // 로그인 화면, 화주포털, 랜딩페이지, 공개 견적문의에서는 admin 헤더 자체를 숨김
+  if (
+    pathname === "/admin/login" ||
+    pathname?.startsWith("/customer") ||
+    pathname === "/" ||
+    pathname?.startsWith("/quote")
+  )
+    return null;
 
   async function handleLogout() {
     await fetch("/api/admin-logout", { method: "POST" });
