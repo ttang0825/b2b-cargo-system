@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
+import PasswordInput from "@/components/PasswordInput";
 
 export default function ChangePasswordPage() {
   const router = useRouter();
@@ -121,30 +122,16 @@ export default function ChangePasswordPage() {
           {!isForced && (
             <div className="field" style={{ marginBottom: 12 }}>
               <label>기존 비밀번호</label>
-              <input
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                autoFocus
-              />
+              <PasswordInput value={currentPassword} onChange={setCurrentPassword} autoFocus />
             </div>
           )}
           <div className="field" style={{ marginBottom: 12 }}>
             <label>새 비밀번호 (8자 이상)</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoFocus={isForced}
-            />
+            <PasswordInput value={password} onChange={setPassword} autoFocus={isForced} />
           </div>
           <div className="field" style={{ marginBottom: 16 }}>
             <label>새 비밀번호 확인</label>
-            <input
-              type="password"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-            />
+            <PasswordInput value={confirm} onChange={setConfirm} />
           </div>
           {error && <div className="error-box">{error}</div>}
           <button
