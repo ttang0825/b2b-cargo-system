@@ -441,6 +441,15 @@ function QuotesPageInner() {
     return { base, surchargeTotal, final, breakdown, tierMatch };
   }, [tiers, surcharges, extraFees, form]);
 
+  // 희망 상차일시는 현재 시각 이후로만 선택 가능
+  const nowDateTime = (() => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
+      d.getMinutes()
+    )}`;
+  })();
+
   // 거리 기준 최소 하차일시 (희망 상차일시가 있어야 계산됨)
   const minDropoffDateTime = useMemo(() => {
     if (!form.requested_pickup_at) return undefined;
@@ -480,6 +489,28 @@ function QuotesPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.requested_pickup_at, surcharges]);
 
+  // 희망 상차일시가 "오늘"이면 긴급여부를 자동으로 당일/긴급 옵션으로 맞춰줌 (직접 변경 가능)
+  useEffect(() => {
+    if (!form.requested_pickup_at) return;
+    const options = surcharges
+      .filter((s) => s.category === "긴급여부")
+      .map((s) => s.option_name);
+    if (options.length === 0) return;
+
+    const pickupDate = new Date(form.requested_pickup_at);
+    const today = new Date();
+    const isToday =
+      pickupDate.getFullYear() === today.getFullYear() &&
+      pickupDate.getMonth() === today.getMonth() &&
+      pickupDate.getDate() === today.getDate();
+
+    if (isToday) {
+      const matched = options.find((o) => o.includes("당일") || o.includes("긴급"));
+      if (matched) setForm((prev) => ({ ...prev, 긴급여부: matched! }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.requested_pickup_at, surcharges]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -508,6 +539,10 @@ function QuotesPageInner() {
       setError(
         "거리 자동계산을 먼저 실행해주세요. 직접 입력한 값을 쓰시려면 거리 입력창 아래 체크박스를 선택해주세요."
       );
+      return;
+    }
+    if (form.requested_pickup_at && new Date(form.requested_pickup_at).getTime() < Date.now() - 60000) {
+      setError("희망 상차일시는 현재 시각 이후로 설정해주세요.");
       return;
     }
     if (form.requested_pickup_at && form.requested_dropoff_at) {
@@ -1099,6 +1134,8 @@ function QuotesPageInner() {
                   label="희망 상차 일시"
                   value={form.requested_pickup_at}
                   onChange={(v) => setForm({ ...form, requested_pickup_at: v })}
+                  minDateTime={nowDateTime}
+                  minDateTimeLabel="현재 시각 이후로만 선택 가능합니다"
                 />
               </div>
               <div style={{ gridColumn: "1 / -1" }}>
