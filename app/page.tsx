@@ -88,13 +88,31 @@ export default function LandingPage() {
             <br />
             예비 배차처로 편하게 이용해보세요.
           </p>
-          <Link
-            href="/quote"
-            className="btn"
-            style={{ padding: "15px 32px", fontSize: 15.5, display: "inline-flex" }}
-          >
-            무료 견적 받기 →
-          </Link>
+          <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+            <Link
+              href="/quote"
+              className="btn"
+              style={{ padding: "15px 32px", fontSize: 15.5, display: "inline-flex" }}
+            >
+              무료 견적 받기 →
+            </Link>
+            <Link
+              href="/apply"
+              style={{
+                padding: "15px 32px",
+                fontSize: 15.5,
+                display: "inline-flex",
+                alignItems: "center",
+                borderRadius: 12,
+                border: "1.5px solid #FFD833",
+                color: "#FFD833",
+                fontWeight: 700,
+                textDecoration: "none",
+              }}
+            >
+              화주 등록 신청 →
+            </Link>
+          </div>
         </div>
       </section>
 
