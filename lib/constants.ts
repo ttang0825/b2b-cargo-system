@@ -68,3 +68,11 @@ export function formatPhoneNumber(raw: string): string {
   }
   return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7, 11)}`;
 }
+
+// 입력값에서 숫자만 뽑아 사업자등록번호 형식(000-00-00000)으로 자동 하이픈 삽입
+export function formatBizRegNo(raw: string): string {
+  const digits = raw.replace(/[^0-9]/g, "").slice(0, 10);
+  if (digits.length < 4) return digits;
+  if (digits.length < 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`;
+}
