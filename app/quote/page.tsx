@@ -156,6 +156,18 @@ export default function PublicQuotePage() {
               홈으로 돌아가기
             </Link>
           </div>
+          <div className="card" style={{ padding: 24, marginTop: 16, textAlign: "left" }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 6 }}>
+              계속 거래하실 계획이신가요?
+            </div>
+            <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginBottom: 14, lineHeight: 1.6 }}>
+              정식 화주로 등록하시면 화주포털에서 견적·배차·정산 현황을 직접 확인하실 수
+              있습니다.
+            </p>
+            <Link href="/apply" className="btn-ghost" style={{ padding: "10px 18px", borderRadius: 10, display: "inline-flex" }}>
+              화주 등록 신청하기 →
+            </Link>
+          </div>
         </main>
       </div>
     );
