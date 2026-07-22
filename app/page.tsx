@@ -49,6 +49,9 @@ export default function LandingPage() {
             WeCarry 운송
           </span>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <Link href="/status" className="guide-link">
+              문의·신청 현황
+            </Link>
             <Link href="/customer/login" className="guide-link">
               화주 로그인
             </Link>
