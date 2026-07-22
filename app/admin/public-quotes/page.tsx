@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 
 const STATUS_OPTIONS = ["신규", "연락완료", "종료"];
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
@@ -14,6 +15,7 @@ export default function AdminPublicQuotesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("신규");
+  const [period, setPeriod] = useState<DatePreset>("all");
 
   async function loadItems() {
     setLoading(true);
@@ -72,7 +74,13 @@ export default function AdminPublicQuotesPage() {
     loadItems();
   }
 
-  const filtered = items.filter((i) => filter === "전체" || i.status === filter);
+  const periodFiltered = useMemo(() => {
+    const { from } = getDateRange(period);
+    if (!from) return items;
+    return items.filter((i) => new Date(i.created_at) >= new Date(from));
+  }, [items, period]);
+
+  const filtered = periodFiltered.filter((i) => filter === "전체" || i.status === filter);
 
   return (
     <main className="container">
@@ -83,17 +91,20 @@ export default function AdminPublicQuotesPage() {
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        {["신규", "연락완료", "종료", "전체"].map((s) => (
-          <button
-            key={s}
-            className={filter === s ? "btn" : "btn btn-ghost"}
-            style={{ fontSize: 12.5, padding: "7px 12px" }}
-            onClick={() => setFilter(s)}
-          >
-            {s} ({s === "전체" ? items.length : items.filter((i) => i.status === s).length})
-          </button>
-        ))}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {["신규", "연락완료", "종료", "전체"].map((s) => (
+            <button
+              key={s}
+              className={filter === s ? "btn" : "btn btn-ghost"}
+              style={{ fontSize: 12.5, padding: "7px 12px" }}
+              onClick={() => setFilter(s)}
+            >
+              {s} ({s === "전체" ? periodFiltered.length : periodFiltered.filter((i) => i.status === s).length})
+            </button>
+          ))}
+        </div>
+        <DateRangeFilter value={period} onChange={setPeriod} />
       </div>
 
       {error && <div className="error-box">오류: {error}</div>}
