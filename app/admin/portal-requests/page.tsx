@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   대기중: { bg: "#fff1e2", text: "#d9730d" },
@@ -17,6 +18,7 @@ export default function PortalRequestsPage() {
   const [error, setError] = useState<string | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [filter, setFilter] = useState("대기중");
+  const [period, setPeriod] = useState<DatePreset>("all");
 
   async function loadRequests() {
     setLoading(true);
@@ -110,7 +112,13 @@ export default function PortalRequestsPage() {
     loadRequests();
   }
 
-  const filtered = requests.filter((r) => filter === "전체" || r.status === filter);
+  const periodFiltered = useMemo(() => {
+    const { from } = getDateRange(period);
+    if (!from) return requests;
+    return requests.filter((r) => new Date(r.created_at) >= new Date(from));
+  }, [requests, period]);
+
+  const filtered = periodFiltered.filter((r) => filter === "전체" || r.status === filter);
 
   return (
     <main className="container">
@@ -124,17 +132,20 @@ export default function PortalRequestsPage() {
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        {["대기중", "승인됨", "반려", "전체"].map((s) => (
-          <button
-            key={s}
-            className={filter === s ? "btn" : "btn btn-ghost"}
-            style={{ fontSize: 12.5, padding: "7px 12px" }}
-            onClick={() => setFilter(s)}
-          >
-            {s} ({s === "전체" ? requests.length : requests.filter((r) => r.status === s).length})
-          </button>
-        ))}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {["대기중", "승인됨", "반려", "전체"].map((s) => (
+            <button
+              key={s}
+              className={filter === s ? "btn" : "btn btn-ghost"}
+              style={{ fontSize: 12.5, padding: "7px 12px" }}
+              onClick={() => setFilter(s)}
+            >
+              {s} ({s === "전체" ? periodFiltered.length : periodFiltered.filter((r) => r.status === s).length})
+            </button>
+          ))}
+        </div>
+        <DateRangeFilter value={period} onChange={setPeriod} />
       </div>
 
       {error && <div className="error-box">오류: {error}</div>}
