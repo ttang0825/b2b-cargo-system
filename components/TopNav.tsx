@@ -62,6 +62,12 @@ export default function TopNav() {
     }
     loadPendingApplications();
 
+    // 공개문의·화주신청은 anon으로 직접 실시간 구독이 안 되는 테이블이라, 15초마다 조용히 재조회
+    const pollInterval = setInterval(() => {
+      loadPendingPublicQuotes();
+      loadPendingApplications();
+    }, 15000);
+
     const channel = supabase
       .channel("topnav_portal_requests")
       .on(
@@ -73,6 +79,7 @@ export default function TopNav() {
 
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(pollInterval);
     };
   }, [pathname]);
 
@@ -126,26 +133,25 @@ export default function TopNav() {
               style={{ position: "relative" }}
             >
               화주 요청
-              {pendingRequests > 0 && (
-                <span
-                  style={{
-                    marginLeft: 6,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    minWidth: 16,
-                    height: 16,
-                    padding: "0 4px",
-                    borderRadius: 999,
-                    background: "var(--danger)",
-                    color: "#fff",
-                    fontSize: 10,
-                    fontWeight: 800,
-                  }}
-                >
-                  {pendingRequests}
-                </span>
-              )}
+              <span
+                style={{
+                  marginLeft: 6,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minWidth: 16,
+                  height: 16,
+                  padding: "0 4px",
+                  borderRadius: 999,
+                  background: "var(--danger)",
+                  color: "#fff",
+                  fontSize: 10,
+                  fontWeight: 800,
+                  visibility: pendingRequests > 0 ? "visible" : "hidden",
+                }}
+              >
+                {pendingRequests}
+              </span>
             </Link>
             <Link
               href="/admin/public-quotes"
@@ -155,26 +161,25 @@ export default function TopNav() {
               style={{ position: "relative" }}
             >
               공개문의
-              {pendingPublicQuotes > 0 && (
-                <span
-                  style={{
-                    marginLeft: 6,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    minWidth: 16,
-                    height: 16,
-                    padding: "0 4px",
-                    borderRadius: 999,
-                    background: "var(--danger)",
-                    color: "#fff",
-                    fontSize: 10,
-                    fontWeight: 800,
-                  }}
-                >
-                  {pendingPublicQuotes}
-                </span>
-              )}
+              <span
+                style={{
+                  marginLeft: 6,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minWidth: 16,
+                  height: 16,
+                  padding: "0 4px",
+                  borderRadius: 999,
+                  background: "var(--danger)",
+                  color: "#fff",
+                  fontSize: 10,
+                  fontWeight: 800,
+                  visibility: pendingPublicQuotes > 0 ? "visible" : "hidden",
+                }}
+              >
+                {pendingPublicQuotes}
+              </span>
             </Link>
             <Link
               href="/admin/applications"
@@ -184,26 +189,25 @@ export default function TopNav() {
               style={{ position: "relative" }}
             >
               화주신청
-              {pendingApplications > 0 && (
-                <span
-                  style={{
-                    marginLeft: 6,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    minWidth: 16,
-                    height: 16,
-                    padding: "0 4px",
-                    borderRadius: 999,
-                    background: "var(--danger)",
-                    color: "#fff",
-                    fontSize: 10,
-                    fontWeight: 800,
-                  }}
-                >
-                  {pendingApplications}
-                </span>
-              )}
+              <span
+                style={{
+                  marginLeft: 6,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minWidth: 16,
+                  height: 16,
+                  padding: "0 4px",
+                  borderRadius: 999,
+                  background: "var(--danger)",
+                  color: "#fff",
+                  fontSize: 10,
+                  fontWeight: 800,
+                  visibility: pendingApplications > 0 ? "visible" : "hidden",
+                }}
+              >
+                {pendingApplications}
+              </span>
             </Link>
           </nav>
           <Link href="/admin/guide" className="guide-link">
