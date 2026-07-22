@@ -44,7 +44,6 @@ export async function POST(req: Request) {
 
   // 2. 화주 회사 신규 등록
   const extraNoteParts = [
-    application.business_reg_no ? `사업자등록번호: ${application.business_reg_no}` : null,
     application.main_origin ? `주요 출발지: ${application.main_origin}` : null,
     application.main_destination ? `주요 도착지: ${application.main_destination}` : null,
     application.monthly_volume_estimate ? `월 예상 운송건수: ${application.monthly_volume_estimate}` : null,
@@ -55,6 +54,7 @@ export async function POST(req: Request) {
     .from("companies")
     .insert({
       name: application.company_name,
+      biz_reg_no: application.business_reg_no || null,
       contact_name: application.contact_name,
       contact_mobile: application.contact_phone,
       contact_email: application.contact_email || null,
