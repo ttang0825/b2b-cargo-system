@@ -10,6 +10,17 @@ function randomPassword(length = 10) {
   return pw;
 }
 
+function translateAuthError(message: string, email: string): string {
+  const lower = message.toLowerCase();
+  if (lower.includes("already been registered") || lower.includes("already registered")) {
+    return `이미 등록된 이메일입니다 (${email}). 화주 관리에서 같은 이메일의 기존 계정이 있는지 먼저 확인해주세요.`;
+  }
+  if (lower.includes("invalid") && lower.includes("email")) {
+    return "올바르지 않은 이메일 형식입니다.";
+  }
+  return message;
+}
+
 export async function POST(req: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -38,8 +49,12 @@ export async function POST(req: Request) {
   if (fetchError || !application) {
     return NextResponse.json({ error: "신청 정보를 찾을 수 없습니다." }, { status: 404 });
   }
-  if (application.status === "승인됨") {
-    return NextResponse.json({ error: "이미 승인 처리된 신청입니다." }, { status: 400 });
+  // 이미 처리된 신청은 다시 승인 못 하도록 차단 (중복 화주 생성 방지)
+  if (application.status === "승인됨" || application.company_id) {
+    return NextResponse.json(
+      { error: "이미 승인 처리된 신청입니다. 화주 관리에서 해당 회사를 확인해주세요." },
+      { status: 400 }
+    );
   }
 
   // 2. 화주 회사 신규 등록
@@ -81,8 +96,10 @@ export async function POST(req: Request) {
   });
 
   if (userError || !userData?.user) {
+    // 실패 시 방금 만든 화주 회사를 롤백(삭제) - 고아 데이터/중복 방지
+    await admin.from("companies").delete().eq("id", company.id);
     return NextResponse.json(
-      { error: userError?.message || "포털 계정 생성에 실패했습니다. (이미 등록된 이메일일 수 있습니다)" },
+      { error: translateAuthError(userError?.message || "포털 계정 생성에 실패했습니다.", portal_email) },
       { status: 400 }
     );
   }
@@ -97,11 +114,13 @@ export async function POST(req: Request) {
   });
 
   if (linkError) {
+    // 여기서 실패해도 마찬가지로 전부 롤백
     await admin.auth.admin.deleteUser(userData.user.id);
+    await admin.from("companies").delete().eq("id", company.id);
     return NextResponse.json({ error: linkError.message }, { status: 400 });
   }
 
-  // 4. 신청서 상태 갱신
+  // 4. 신청서 상태 갱신 (모든 단계가 성공했을 때만 도달)
   await admin
     .from("customer_applications")
     .update({ status: "승인됨", company_id: company.id, processed_by: processed_by || null })
