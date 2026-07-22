@@ -52,6 +52,9 @@ export default function LandingPage() {
             <Link href="/customer/login" className="guide-link">
               화주 로그인
             </Link>
+            <Link href="/apply" className="guide-link">
+              화주 등록 신청
+            </Link>
             <Link href="/quote" className="btn" style={{ padding: "9px 16px", fontSize: 13 }}>
               견적 문의
             </Link>
