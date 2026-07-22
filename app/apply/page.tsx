@@ -119,8 +119,8 @@ export default function ApplyPage() {
               }}
             >
               💡 입력하신 연락처(<span className="num">{form.contact_phone}</span>)로 언제든{" "}
-              <Link href="/apply/status" style={{ color: "var(--accent)", fontWeight: 700, textDecoration: "underline" }}>
-                신청 현황 조회
+              <Link href="/status" style={{ color: "var(--accent)", fontWeight: 700, textDecoration: "underline" }}>
+                문의·신청 현황 조회
               </Link>
               에서 진행 상황을 확인하실 수 있습니다.
             </div>
@@ -143,8 +143,19 @@ export default function ApplyPage() {
           <Link href="/" className="brand" style={{ fontSize: 17, textDecoration: "none" }}>
             WeCarry 운송
           </Link>
-          <Link href="/apply/status" className="guide-link">
-            신청 현황 조회
+          <Link
+            href="/status"
+            style={{
+              fontSize: 13,
+              fontWeight: 700,
+              color: "var(--accent)",
+              padding: "8px 14px",
+              borderRadius: 8,
+              background: "var(--accent-soft)",
+              textDecoration: "none",
+            }}
+          >
+            문의·신청 현황 조회
           </Link>
         </div>
       </header>
