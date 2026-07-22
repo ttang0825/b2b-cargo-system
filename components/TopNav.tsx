@@ -21,10 +21,11 @@ export default function TopNav() {
   const router = useRouter();
   const [pendingRequests, setPendingRequests] = useState(0);
   const [pendingPublicQuotes, setPendingPublicQuotes] = useState(0);
+  const [pendingApplications, setPendingApplications] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    if (pathname === "/admin/login" || pathname?.startsWith("/customer") || pathname === "/" || pathname?.startsWith("/quote")) return;
+    if (pathname === "/admin/login" || pathname?.startsWith("/customer") || pathname === "/" || pathname?.startsWith("/quote") || pathname?.startsWith("/apply")) return;
 
     async function loadPendingCount() {
       const { count } = await supabase
@@ -48,6 +49,19 @@ export default function TopNav() {
     }
     loadPendingPublicQuotes();
 
+    async function loadPendingApplications() {
+      try {
+        const res = await fetch("/api/admin/applications");
+        const data = await res.json();
+        if (res.ok) {
+          setPendingApplications((data.data || []).filter((r: any) => r.status === "검토중").length);
+        }
+      } catch {
+        // 무시
+      }
+    }
+    loadPendingApplications();
+
     const channel = supabase
       .channel("topnav_portal_requests")
       .on(
@@ -66,12 +80,13 @@ export default function TopNav() {
     setMobileMenuOpen(false);
   }, [pathname]);
 
-  // 로그인 화면, 화주포털, 랜딩페이지, 공개 견적문의에서는 admin 헤더 자체를 숨김
+  // 로그인 화면, 화주포털, 랜딩페이지, 공개 견적문의/등록신청에서는 admin 헤더 자체를 숨김
   if (
     pathname === "/admin/login" ||
     pathname?.startsWith("/customer") ||
     pathname === "/" ||
-    pathname?.startsWith("/quote")
+    pathname?.startsWith("/quote") ||
+    pathname?.startsWith("/apply")
   )
     return null;
 
@@ -161,6 +176,35 @@ export default function TopNav() {
                 </span>
               )}
             </Link>
+            <Link
+              href="/admin/applications"
+              className={
+                pathname?.startsWith("/admin/applications") ? "nav-chip nav-chip-active" : "nav-chip"
+              }
+              style={{ position: "relative" }}
+            >
+              화주신청
+              {pendingApplications > 0 && (
+                <span
+                  style={{
+                    marginLeft: 6,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    minWidth: 16,
+                    height: 16,
+                    padding: "0 4px",
+                    borderRadius: 999,
+                    background: "var(--danger)",
+                    color: "#fff",
+                    fontSize: 10,
+                    fontWeight: 800,
+                  }}
+                >
+                  {pendingApplications}
+                </span>
+              )}
+            </Link>
           </nav>
           <Link href="/admin/guide" className="guide-link">
             이용가이드
@@ -185,7 +229,7 @@ export default function TopNav() {
           style={{ position: "relative" }}
         >
           {mobileMenuOpen ? "✕" : "☰"}
-          {!mobileMenuOpen && (pendingRequests > 0 || pendingPublicQuotes > 0) && (
+          {!mobileMenuOpen && (pendingRequests > 0 || pendingPublicQuotes > 0 || pendingApplications > 0) && (
             <span
               style={{
                 position: "absolute",
@@ -294,6 +338,40 @@ export default function TopNav() {
                 }}
               >
                 {pendingPublicQuotes}
+              </span>
+            )}
+          </Link>
+          <Link
+            href="/admin/applications"
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: "10px 4px",
+              fontSize: 14,
+              fontWeight: pathname?.startsWith("/admin/applications") ? 700 : 500,
+              color: pathname?.startsWith("/admin/applications") ? "var(--accent)" : "var(--text)",
+              textDecoration: "none",
+            }}
+          >
+            화주신청
+            {pendingApplications > 0 && (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minWidth: 16,
+                  height: 16,
+                  padding: "0 4px",
+                  borderRadius: 999,
+                  background: "var(--danger)",
+                  color: "#fff",
+                  fontSize: 10,
+                  fontWeight: 800,
+                }}
+              >
+                {pendingApplications}
               </span>
             )}
           </Link>
