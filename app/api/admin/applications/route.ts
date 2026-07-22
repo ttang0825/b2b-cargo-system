@@ -41,16 +41,41 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json();
+  const { action } = body;
+
+  // 개별 삭제
+  if (action === "delete") {
+    const { id } = body;
+    if (!id) return NextResponse.json({ error: "id가 필요합니다." }, { status: 400 });
+    const { error } = await admin.from("customer_applications").delete().eq("id", id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ ok: true });
+  }
+
+  // 오래된 거절/보류 건 일괄 삭제 (기본 90일 이전)
+  if (action === "bulk_cleanup") {
+    const days = body.days || 90;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    const { data, error } = await admin
+      .from("customer_applications")
+      .delete()
+      .in("status", ["거절", "보류"])
+      .lt("created_at", cutoff.toISOString())
+      .select("id");
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ ok: true, deletedCount: data?.length || 0 });
+  }
+
+  // 상태 변경 (승인/거절/보류)
   const { id, status, staff_note, processed_by } = body;
   if (!id || !status) {
     return NextResponse.json({ error: "id와 status가 필요합니다." }, { status: 400 });
   }
-
   const { error } = await admin
     .from("customer_applications")
     .update({ status, staff_note: staff_note || null, processed_by: processed_by || null })
     .eq("id", id);
-
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
