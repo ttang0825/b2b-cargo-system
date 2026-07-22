@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 
-const STATUS_OPTIONS = ["검토중", "승인됨", "거절", "보류"];
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   검토중: { bg: "#fff1e2", text: "#d9730d" },
   승인됨: { bg: "#e6f7ec", text: "#1b9c57" },
@@ -11,13 +11,33 @@ const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   보류: { bg: "#f2f4f6", text: "#8b95a1" },
 };
 
+const REJECT_REASONS = [
+  "서비스 권역/노선 불일치",
+  "최소 거래조건 미충족 (예상 물량 과소)",
+  "취급 불가 품목",
+  "사업자 정보 확인 불가",
+  "연락 두절",
+  "중복 신청",
+  "기타 (직접 입력)",
+];
+const HOLD_REASONS = [
+  "추가 확인 필요 (전화 상담 예정)",
+  "서류·정보 보완 필요",
+  "성수기 등 일시적 사유",
+  "내부 검토 중",
+  "기타 (직접 입력)",
+];
+
 export default function AdminApplicationsPage() {
   const router = useRouter();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("검토중");
+  const [period, setPeriod] = useState<DatePreset>("all");
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [cleaningUp, setCleaningUp] = useState(false);
+
   const [issuedCredentials, setIssuedCredentials] = useState<{
     email: string;
     password: string;
@@ -26,7 +46,15 @@ export default function AdminApplicationsPage() {
   } | null>(null);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
-  const [cleaningUp, setCleaningUp] = useState(false);
+
+  // 거절/보류 처리용 모달 상태
+  const [decisionTarget, setDecisionTarget] = useState<{ item: any; type: "거절" | "보류" } | null>(null);
+  const [decisionReason, setDecisionReason] = useState("");
+  const [decisionCustomNote, setDecisionCustomNote] = useState("");
+  const [decisionProcessedBy, setDecisionProcessedBy] = useState("");
+  const [decisionResultEmail, setDecisionResultEmail] = useState<{ email: string; companyName: string; contactName: string; status: string; reason: string } | null>(null);
+  const [decisionSendingEmail, setDecisionSendingEmail] = useState(false);
+  const [decisionEmailSent, setDecisionEmailSent] = useState(false);
 
   async function loadItems(silent = false) {
     if (!silent) setLoading(true);
@@ -48,7 +76,6 @@ export default function AdminApplicationsPage() {
 
   useEffect(() => {
     loadItems();
-    // 실시간 구독이 안 되는 테이블이라, 15초마다 자동으로 조용히 새로고침
     const interval = setInterval(() => loadItems(true), 15000);
     return () => clearInterval(interval);
   }, []);
@@ -108,13 +135,7 @@ export default function AdminApplicationsPage() {
       const res = await fetch("/api/admin/send-portal-credentials-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: issuedCredentials.email,
-          password: issuedCredentials.password,
-          companyName: issuedCredentials.companyName,
-          contactName: issuedCredentials.contactName,
-          portalUrl,
-        }),
+        body: JSON.stringify({ ...issuedCredentials, portalUrl }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -129,19 +150,35 @@ export default function AdminApplicationsPage() {
     setSendingEmail(false);
   }
 
-  async function handleStatusChange(item: any, status: "거절" | "보류") {
-    const reason = window.prompt(`${status} 사유를 입력해주세요 (선택사항)`);
-    if (reason === null) return;
-    const processedBy = window.prompt("처리자 이름을 입력해주세요 (기록용)");
-    if (processedBy === null) return;
+  function openDecisionModal(item: any, type: "거절" | "보류") {
+    setDecisionTarget({ item, type });
+    setDecisionReason("");
+    setDecisionCustomNote("");
+    setDecisionProcessedBy("");
+    setDecisionResultEmail(null);
+    setDecisionEmailSent(false);
+  }
 
-    setProcessingId(item.id);
+  async function submitDecision() {
+    if (!decisionTarget) return;
+    const reasonText = decisionReason === "기타 (직접 입력)" ? decisionCustomNote : decisionReason;
+    if (!decisionProcessedBy.trim()) {
+      alert("처리자 이름을 입력해주세요.");
+      return;
+    }
+
+    setProcessingId(decisionTarget.item.id);
     setError(null);
     try {
       const res = await fetch("/api/admin/applications", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: item.id, status, staff_note: reason, processed_by: processedBy }),
+        body: JSON.stringify({
+          id: decisionTarget.item.id,
+          status: decisionTarget.type,
+          staff_note: reasonText || null,
+          processed_by: decisionProcessedBy,
+        }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -149,11 +186,51 @@ export default function AdminApplicationsPage() {
         setProcessingId(null);
         return;
       }
+      if (decisionTarget.item.contact_email) {
+        setDecisionResultEmail({
+          email: decisionTarget.item.contact_email,
+          companyName: decisionTarget.item.company_name,
+          contactName: decisionTarget.item.contact_name,
+          status: decisionTarget.type,
+          reason: reasonText,
+        });
+      } else {
+        setDecisionTarget(null);
+      }
       loadItems();
     } catch {
       setError("처리 중 오류가 발생했습니다.");
     }
     setProcessingId(null);
+  }
+
+  async function handleSendDecisionEmail() {
+    if (!decisionResultEmail) return;
+    setDecisionSendingEmail(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/send-application-status-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: decisionResultEmail.email,
+          companyName: decisionResultEmail.companyName,
+          contactName: decisionResultEmail.contactName,
+          status: decisionResultEmail.status,
+          reason: decisionResultEmail.reason,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "이메일 발송에 실패했습니다.");
+        setDecisionSendingEmail(false);
+        return;
+      }
+      setDecisionEmailSent(true);
+    } catch {
+      setError("이메일 발송 중 오류가 발생했습니다.");
+    }
+    setDecisionSendingEmail(false);
   }
 
   async function handleDelete(item: any) {
@@ -179,12 +256,7 @@ export default function AdminApplicationsPage() {
   }
 
   async function handleBulkCleanup() {
-    if (
-      !window.confirm(
-        "90일이 지난 '거절'/'보류' 상태 신청을 전부 삭제하시겠습니까? 되돌릴 수 없습니다."
-      )
-    )
-      return;
+    if (!window.confirm("90일이 지난 '거절'/'보류' 상태 신청을 전부 삭제하시겠습니까? 되돌릴 수 없습니다.")) return;
     setCleaningUp(true);
     setError(null);
     try {
@@ -207,7 +279,13 @@ export default function AdminApplicationsPage() {
     setCleaningUp(false);
   }
 
-  const filtered = items.filter((i) => filter === "전체" || i.status === filter);
+  const periodFiltered = useMemo(() => {
+    const { from } = getDateRange(period);
+    if (!from) return items;
+    return items.filter((i) => new Date(i.created_at) >= new Date(from));
+  }, [items, period]);
+
+  const filtered = periodFiltered.filter((i) => filter === "전체" || i.status === filter);
 
   return (
     <main className="container">
@@ -228,32 +306,32 @@ export default function AdminApplicationsPage() {
         </button>
       </div>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        {["검토중", "승인됨", "거절", "보류", "전체"].map((s) => (
-          <button
-            key={s}
-            className={filter === s ? "btn" : "btn btn-ghost"}
-            style={{ fontSize: 12.5, padding: "7px 12px" }}
-            onClick={() => setFilter(s)}
-          >
-            {s} ({s === "전체" ? items.length : items.filter((i) => i.status === s).length})
-          </button>
-        ))}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {["검토중", "승인됨", "거절", "보류", "전체"].map((s) => (
+            <button
+              key={s}
+              className={filter === s ? "btn" : "btn btn-ghost"}
+              style={{ fontSize: 12.5, padding: "7px 12px" }}
+              onClick={() => setFilter(s)}
+            >
+              {s} ({s === "전체" ? periodFiltered.length : periodFiltered.filter((i) => i.status === s).length})
+            </button>
+          ))}
+        </div>
+        <DateRangeFilter value={period} onChange={setPeriod} />
       </div>
 
       {error && <div className="error-box">오류: {error}</div>}
 
       {issuedCredentials && (
-        <div
-          className="card"
-          style={{ padding: 16, marginBottom: 16, background: "var(--accent-soft)", border: "none" }}
-        >
+        <div className="card" style={{ padding: 16, marginBottom: 16, background: "var(--accent-soft)", border: "none" }}>
           <div style={{ fontWeight: 700, marginBottom: 6, color: "var(--accent)" }}>
             승인 완료 — 아래 정보를 화주에게 전달해주세요 (한 번만 표시됩니다)
           </div>
           <div>이메일: <span className="num">{issuedCredentials.email}</span></div>
           <div>임시 비밀번호: <span className="num">{issuedCredentials.password}</span></div>
-          <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center" }}>
+          <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <button
               className="btn"
               style={{ padding: "7px 14px", fontSize: 12.5 }}
@@ -275,7 +353,7 @@ export default function AdminApplicationsPage() {
         ) : filtered.length === 0 ? (
           <div className="empty-state">해당하는 신청이 없습니다.</div>
         ) : (
-          <table style={{ minWidth: 1020 }}>
+          <table style={{ minWidth: 1080 }}>
             <thead>
               <tr>
                 <th>회사명</th>
@@ -285,7 +363,8 @@ export default function AdminApplicationsPage() {
                 <th>월예상건수</th>
                 <th>접수일</th>
                 <th>상태</th>
-                <th style={{ minWidth: 210 }}>처리</th>
+                <th style={{ minWidth: 160 }}>처리</th>
+                <th style={{ width: 70 }}></th>
               </tr>
             </thead>
             <tbody>
@@ -310,14 +389,10 @@ export default function AdminApplicationsPage() {
                   <td className="cell-nowrap">{item.contact_name}</td>
                   <td className="cell-nowrap">
                     <div className="num">{item.contact_phone}</div>
-                    {item.contact_email && (
-                      <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{item.contact_email}</div>
-                    )}
+                    {item.contact_email && <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{item.contact_email}</div>}
                   </td>
                   <td>
-                    {item.main_origin || item.main_destination
-                      ? `${item.main_origin || "-"} → ${item.main_destination || "-"}`
-                      : "-"}
+                    {item.main_origin || item.main_destination ? `${item.main_origin || "-"} → ${item.main_destination || "-"}` : "-"}
                   </td>
                   <td className="cell-nowrap">{item.monthly_volume_estimate || "-"}</td>
                   <td className="cell-nowrap">
@@ -338,50 +413,48 @@ export default function AdminApplicationsPage() {
                       {item.status}
                     </span>
                     {item.staff_note && (
-                      <div style={{ fontSize: 10.5, color: "var(--text-muted)", marginTop: 3, maxWidth: 140 }}>
-                        {item.staff_note}
+                      <div style={{ fontSize: 10.5, color: "var(--text-muted)", marginTop: 3, maxWidth: 140 }}>{item.staff_note}</div>
+                    )}
+                  </td>
+                  <td style={{ minWidth: 160 }}>
+                    {item.status === "검토중" && (
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        <button
+                          className="btn"
+                          style={{ padding: "5px 10px", fontSize: 11.5 }}
+                          disabled={processingId === item.id}
+                          onClick={() => handleApprove(item)}
+                        >
+                          승인
+                        </button>
+                        <button
+                          className="btn-danger"
+                          style={{ padding: "5px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                          disabled={processingId === item.id}
+                          onClick={() => openDecisionModal(item, "거절")}
+                        >
+                          거절
+                        </button>
+                        <button
+                          className="btn-ghost"
+                          style={{ padding: "5px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                          disabled={processingId === item.id}
+                          onClick={() => openDecisionModal(item, "보류")}
+                        >
+                          보류
+                        </button>
                       </div>
                     )}
                   </td>
-                  <td style={{ minWidth: 210 }}>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      {item.status === "검토중" && (
-                        <>
-                          <button
-                            className="btn"
-                            style={{ padding: "5px 10px", fontSize: 11.5 }}
-                            disabled={processingId === item.id}
-                            onClick={() => handleApprove(item)}
-                          >
-                            승인
-                          </button>
-                          <button
-                            className="btn-danger"
-                            style={{ padding: "5px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
-                            disabled={processingId === item.id}
-                            onClick={() => handleStatusChange(item, "거절")}
-                          >
-                            거절
-                          </button>
-                          <button
-                            className="btn-ghost"
-                            style={{ padding: "5px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
-                            disabled={processingId === item.id}
-                            onClick={() => handleStatusChange(item, "보류")}
-                          >
-                            보류
-                          </button>
-                        </>
-                      )}
-                      <button
-                        className="btn-danger"
-                        style={{ padding: "5px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
-                        disabled={processingId === item.id}
-                        onClick={() => handleDelete(item)}
-                      >
-                        삭제
-                      </button>
-                    </div>
+                  <td style={{ width: 70 }}>
+                    <button
+                      className="btn-danger"
+                      style={{ padding: "5px 10px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}
+                      disabled={processingId === item.id}
+                      onClick={() => handleDelete(item)}
+                    >
+                      삭제
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -389,6 +462,74 @@ export default function AdminApplicationsPage() {
           </table>
         )}
       </div>
+
+      {/* 거절/보류 처리 모달 */}
+      {decisionTarget && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100,
+            padding: 20,
+          }}
+        >
+          <div className="card" style={{ padding: 24, maxWidth: 420, width: "100%" }}>
+            {!decisionResultEmail ? (
+              <>
+                <h3 style={{ marginTop: 0, fontSize: 15 }}>
+                  "{decisionTarget.item.company_name}" {decisionTarget.type} 처리
+                </h3>
+                <div className="field" style={{ marginBottom: 12 }}>
+                  <label>사유 선택</label>
+                  <select value={decisionReason} onChange={(e) => setDecisionReason(e.target.value)}>
+                    <option value="">선택해주세요</option>
+                    {(decisionTarget.type === "거절" ? REJECT_REASONS : HOLD_REASONS).map((r) => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
+                  </select>
+                </div>
+                {decisionReason === "기타 (직접 입력)" && (
+                  <div className="field" style={{ marginBottom: 12 }}>
+                    <label>사유 직접 입력</label>
+                    <textarea rows={2} value={decisionCustomNote} onChange={(e) => setDecisionCustomNote(e.target.value)} />
+                  </div>
+                )}
+                <div className="field" style={{ marginBottom: 18 }}>
+                  <label>처리자 이름</label>
+                  <input value={decisionProcessedBy} onChange={(e) => setDecisionProcessedBy(e.target.value)} />
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button className="btn" onClick={submitDecision} disabled={processingId === decisionTarget.item.id}>
+                    {decisionTarget.type} 처리
+                  </button>
+                  <button className="btn btn-ghost" onClick={() => setDecisionTarget(null)}>
+                    취소
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 style={{ marginTop: 0, fontSize: 15 }}>처리 완료</h3>
+                <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                  담당자 이메일({decisionResultEmail.email})로 사유를 안내하는 메일을 보낼까요?
+                </p>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button className="btn" onClick={handleSendDecisionEmail} disabled={decisionSendingEmail || decisionEmailSent}>
+                    {decisionEmailSent ? "발송 완료 ✓" : decisionSendingEmail ? "발송 중..." : "메일 발송"}
+                  </button>
+                  <button className="btn btn-ghost" onClick={() => setDecisionTarget(null)}>
+                    닫기
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </main>
   );
 }
