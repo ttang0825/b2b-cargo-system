@@ -147,7 +147,7 @@ export default function PublicQuotePage() {
               }}
             >
               💡 입력하신 연락처(<span className="num">{form.phone}</span>)로 나중에 언제든{" "}
-              <Link href="/quote/status" style={{ color: "var(--accent)", fontWeight: 700, textDecoration: "underline" }}>
+              <Link href="/status" style={{ color: "var(--accent)", fontWeight: 700, textDecoration: "underline" }}>
                 문의 현황 조회
               </Link>
               에서 진행 상황을 확인하실 수 있습니다.
@@ -183,8 +183,19 @@ export default function PublicQuotePage() {
           <Link href="/" className="brand" style={{ fontSize: 17, textDecoration: "none" }}>
             WeCarry 운송
           </Link>
-          <Link href="/quote/status" className="guide-link">
-            내 문의 조회
+          <Link
+            href="/status"
+            style={{
+              fontSize: 13,
+              fontWeight: 700,
+              color: "var(--accent)",
+              padding: "8px 14px",
+              borderRadius: 8,
+              background: "var(--accent-soft)",
+              textDecoration: "none",
+            }}
+          >
+            문의·신청 현황 조회
           </Link>
         </div>
       </header>
