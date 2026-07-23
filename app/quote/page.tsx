@@ -74,6 +74,15 @@ export default function PublicQuotePage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  // 희망 상차일시는 현재 시각 이후로만 선택 가능
+  const nowDateTime = (() => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
+      d.getMinutes()
+    )}`;
+  })();
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -147,7 +156,7 @@ export default function PublicQuotePage() {
               }}
             >
               💡 입력하신 연락처(<span className="num">{form.phone}</span>)로 나중에 언제든{" "}
-              <Link href="/status" style={{ color: "var(--accent)", fontWeight: 700, textDecoration: "underline" }}>
+              <Link href="/status" style={{ color: "var(--accent)", fontWeight: 700, textDecoration: "underline", whiteSpace: "nowrap" }}>
                 문의 현황 조회
               </Link>
               에서 진행 상황을 확인하실 수 있습니다.
@@ -239,6 +248,7 @@ export default function PublicQuotePage() {
                   value={form.origin}
                   onChange={(e) => setField("origin", e.target.value)}
                   placeholder="도로명주소 검색 또는 직접 입력"
+                  autoComplete="off"
                   style={{ flex: 1 }}
                 />
                 <button
@@ -286,6 +296,7 @@ export default function PublicQuotePage() {
                   value={form.destination}
                   onChange={(e) => setField("destination", e.target.value)}
                   placeholder="도로명주소 검색 또는 직접 입력"
+                  autoComplete="off"
                   style={{ flex: 1 }}
                 />
                 <button
@@ -375,6 +386,8 @@ export default function PublicQuotePage() {
                   label="희망 상차 일시 (선택)"
                   value={form.requested_pickup_at}
                   onChange={(v) => setField("requested_pickup_at", v)}
+                  minDateTime={nowDateTime}
+                  minDateTimeLabel="현재 시각 이후로만 선택 가능합니다"
                 />
               </div>
               <div className="field" style={{ gridColumn: "1 / -1" }}>

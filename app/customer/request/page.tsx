@@ -324,6 +324,7 @@ export default function PortalRequestPage() {
                 value={form.origin}
                 onChange={(e) => setField("origin", e.target.value)}
                 placeholder="도로명주소 검색 또는 직접 입력"
+                autoComplete="off"
                 style={{ flex: 1 }}
               />
               <button
@@ -381,6 +382,7 @@ export default function PortalRequestPage() {
                 value={form.destination}
                 onChange={(e) => setField("destination", e.target.value)}
                 placeholder="도로명주소 검색 또는 직접 입력"
+                autoComplete="off"
                 style={{ flex: 1 }}
               />
               <button
