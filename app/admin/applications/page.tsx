@@ -47,6 +47,11 @@ export default function AdminApplicationsPage() {
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
 
+  // 승인 처리용 모달 상태
+  const [approveTarget, setApproveTarget] = useState<any | null>(null);
+  const [approveEmail, setApproveEmail] = useState("");
+  const [approveProcessedBy, setApproveProcessedBy] = useState("");
+
   // 거절/보류 처리용 모달 상태
   const [decisionTarget, setDecisionTarget] = useState<{ item: any; type: "거절" | "보류" } | null>(null);
   const [decisionReason, setDecisionReason] = useState("");
@@ -80,24 +85,25 @@ export default function AdminApplicationsPage() {
     return () => clearInterval(interval);
   }, []);
 
-  async function handleApprove(item: any) {
-    let email = item.contact_email;
+  function openApproveModal(item: any) {
+    setApproveTarget(item);
+    setApproveEmail(item.contact_email || "");
+    setApproveProcessedBy("");
+  }
+
+  async function submitApprove() {
+    if (!approveTarget) return;
+    const email = approveEmail.trim();
     if (!email) {
-      const entered = window.prompt(
-        "이 신청에는 담당자 이메일이 없습니다. 포털 계정 로그인용 이메일을 입력해주세요."
-      );
-      if (!entered) return;
-      email = entered;
+      alert("포털 계정 로그인용 이메일을 입력해주세요.");
+      return;
     }
-    const processedBy = window.prompt("처리자 이름을 입력해주세요 (기록용)");
-    if (processedBy === null) return;
+    if (!approveProcessedBy.trim()) {
+      alert("처리자 이름을 입력해주세요.");
+      return;
+    }
 
-    const confirmed = window.confirm(
-      `"${item.company_name}"을(를) 승인하시겠습니까?\n화주 회사가 등록되고, ${email}로 포털 계정이 즉시 발급됩니다.`
-    );
-    if (!confirmed) return;
-
-    setProcessingId(item.id);
+    setProcessingId(approveTarget.id);
     setError(null);
     setIssuedCredentials(null);
     setEmailSent(false);
@@ -105,7 +111,7 @@ export default function AdminApplicationsPage() {
       const res = await fetch("/api/admin/approve-application", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ application_id: item.id, portal_email: email, processed_by: processedBy }),
+        body: JSON.stringify({ application_id: approveTarget.id, portal_email: email, processed_by: approveProcessedBy }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -116,9 +122,10 @@ export default function AdminApplicationsPage() {
       setIssuedCredentials({
         email: data.email,
         password: data.password,
-        companyName: item.company_name,
-        contactName: item.contact_name,
+        companyName: approveTarget.company_name,
+        contactName: approveTarget.contact_name,
       });
+      setApproveTarget(null);
       loadItems();
     } catch {
       setError("승인 처리 중 오류가 발생했습니다.");
@@ -423,7 +430,7 @@ export default function AdminApplicationsPage() {
                           className="btn"
                           style={{ padding: "5px 10px", fontSize: 11.5 }}
                           disabled={processingId === item.id}
-                          onClick={() => handleApprove(item)}
+                          onClick={() => openApproveModal(item)}
                         >
                           승인
                         </button>
@@ -462,6 +469,47 @@ export default function AdminApplicationsPage() {
           </table>
         )}
       </div>
+
+      {/* 승인 처리 모달 */}
+      {approveTarget && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100,
+            padding: 20,
+          }}
+        >
+          <div className="card" style={{ padding: 24, maxWidth: 420, width: "100%" }}>
+            <h3 style={{ marginTop: 0, fontSize: 15 }}>
+              "{approveTarget.company_name}" 승인 처리
+            </h3>
+            <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginBottom: 14, lineHeight: 1.6 }}>
+              화주 회사가 등록되고, 아래 이메일로 포털 계정이 즉시 발급됩니다.
+            </p>
+            <div className="field" style={{ marginBottom: 12 }}>
+              <label>포털 계정 로그인용 이메일</label>
+              <input value={approveEmail} onChange={(e) => setApproveEmail(e.target.value)} />
+            </div>
+            <div className="field" style={{ marginBottom: 18 }}>
+              <label>처리자 이름</label>
+              <input value={approveProcessedBy} onChange={(e) => setApproveProcessedBy(e.target.value)} />
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn" onClick={submitApprove} disabled={processingId === approveTarget.id}>
+                승인
+              </button>
+              <button className="btn btn-ghost" onClick={() => setApproveTarget(null)}>
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 거절/보류 처리 모달 */}
       {decisionTarget && (

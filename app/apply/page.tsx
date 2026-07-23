@@ -119,7 +119,7 @@ export default function ApplyPage() {
               }}
             >
               💡 입력하신 연락처(<span className="num">{form.contact_phone}</span>)로 언제든{" "}
-              <Link href="/status" style={{ color: "var(--accent)", fontWeight: 700, textDecoration: "underline" }}>
+              <Link href="/status" style={{ color: "var(--accent)", fontWeight: 700, textDecoration: "underline", whiteSpace: "nowrap" }}>
                 문의·신청 현황 조회
               </Link>
               에서 진행 상황을 확인하실 수 있습니다.
@@ -213,6 +213,7 @@ export default function ApplyPage() {
                     value={form.main_origin}
                     onChange={(e) => setField("main_origin", e.target.value)}
                     placeholder="도로명주소 검색 또는 직접 입력"
+                    autoComplete="off"
                     style={{ flex: 1 }}
                   />
                   <button
@@ -232,6 +233,7 @@ export default function ApplyPage() {
                     value={form.main_destination}
                     onChange={(e) => setField("main_destination", e.target.value)}
                     placeholder="도로명주소 검색 또는 직접 입력"
+                    autoComplete="off"
                     style={{ flex: 1 }}
                   />
                   <button
