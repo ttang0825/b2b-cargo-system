@@ -22,6 +22,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/admin/customers", label: "활성 화주 (CRM)" },
       { href: "/admin/portal-requests", label: "화주요청", key: "portalRequests" },
+      { href: "/admin/account-cleanup", label: "포털 계정 정리" },
     ],
   },
   {

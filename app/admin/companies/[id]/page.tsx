@@ -467,9 +467,13 @@ export default function CompanyDetailPage() {
       return;
     }
 
+    const accountWarning =
+      portalAccounts.length > 0
+        ? `\n이 업체의 포털 계정 ${portalAccounts.length}개도 함께 삭제되어 로그인할 수 없게 됩니다.`
+        : "";
     const confirmed = window.confirm(
       `"${company.name}" 업체를 정말 완전히 삭제하시겠습니까?\n` +
-        `이 작업은 절대 되돌릴 수 없습니다 (백업이 없습니다). ` +
+        `이 작업은 절대 되돌릴 수 없습니다 (백업이 없습니다).${accountWarning} ` +
         `단순히 목록에서 빼고 싶다면 취소 후 영업상태를 "거래중단" 또는 "휴면화주"로 바꿔주세요.`
     );
     if (!confirmed) {
@@ -477,11 +481,21 @@ export default function CompanyDetailPage() {
       return;
     }
 
-    const { error } = await supabase.from("companies").delete().eq("id", id);
-    setDeleting(false);
-
-    if (error) {
-      setError(error.message);
+    try {
+      const res = await fetch("/api/admin/delete-company", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company_id: id }),
+      });
+      const data = await res.json();
+      setDeleting(false);
+      if (!res.ok) {
+        setError(data.error || "삭제에 실패했습니다.");
+        return;
+      }
+    } catch {
+      setDeleting(false);
+      setError("삭제 중 오류가 발생했습니다.");
       return;
     }
 
