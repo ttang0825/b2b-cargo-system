@@ -44,6 +44,13 @@
 ### npm 의존성 중 특이사항
 `xlsx-js-style`(xlsx 아님! 스타일링 위해 교체함) — 화주포털 엑셀 다운로드용.
 
+### 최근 추가된 컬럼 (Supabase SQL 편집기에서 수동으로 추가함, 코드 저장소엔 마이그레이션
+파일이 없어 여기 기록)
+- `customer_applications`: `industry`(업종, 자유텍스트), `preferred_regions`(이용지역,
+  REGIONS 다중선택 콤마구분 문자열), `preferred_vehicle`(이용차량, VEHICLE_TYPES 단일값)
+- `public_quote_requests`: `quote_id`(uuid, quotes 참조 — 견적전환 연결),
+  `processed_by`(text, 답변 처리자 이름)
+
 ---
 
 ## 3. 핵심 설계 원칙 (반드시 유지할 것)
@@ -113,6 +120,23 @@
 20. **상단메뉴 드롭다운은 열려있는 상태에서 바깥 빈 곳을 클릭하면 닫히게** 되어 있음
     (`document`에 `mousedown` 리스너, `TopNav.tsx`·`CustomerPortalShell.tsx` 둘 다
     적용) — 새로운 드롭다운 UI 만들 때도 이 패턴 재사용
+21. **관리자용 GET API 라우트(`app/api/admin/*`)는 반드시 `export const dynamic =
+    "force-dynamic"` 추가할 것** — 요청 파라미터를 안 읽는 GET 핸들러는 Next.js가
+    응답(및 내부 supabase-js fetch 호출)을 캐시해버릴 수 있음. 저장 직후 재조회해도
+    캐시된 예전 데이터가 나오는 버그를 실제로 겪었음 (`applications`,
+    `public-quote-requests` GET 라우트에서 발견, 새 GET 라우트 만들 때마다 빠뜨리지
+    말 것)
+22. **anon-locked 테이블(`public_quote_requests`, `customer_applications`)을 anon
+    클라이언트로 직접 SELECT하면 에러 없이 조용히 빈 결과만 돌아옴** (RLS가 막지만
+    에러를 던지지 않음) — admin 쪽 어느 컴포넌트에서든 이 테이블을 조회할 땐 예외
+    없이 서버 API(`SUPABASE_SERVICE_ROLE_KEY`)를 거칠 것. 실제로 견적전환 프리필
+    기능에서 이 실수로 데이터가 하나도 안 채워지는 버그가 있었음 (원칙 3번 위반 시
+    증상이 바로 이렇게 나타남 — 참고용으로 기록)
+23. **알림 배지를 즉시 갱신해야 하면 `lib/notifyBadgeRefresh.ts`의
+    `notifyBadgeRefresh()`를 처리 완료 시점에 호출할 것** — anon-locked 테이블은
+    Realtime이 안 돼서 `TopNav.tsx`가 15초 폴링에만 의존하는데, 이 함수를 호출하면
+    폴링을 기다리지 않고 바로 배지를 재조회함. 새로운 처리 액션(승인/거절/답변저장
+    등)을 추가할 때도 이 호출을 빠뜨리지 말 것
 
 ---
 
@@ -146,6 +170,22 @@
 - **완전공개 폼 정리**: 견적문의(`/quote`)에서 출발지/도착지 상호·연락처·담당부서
   같은 잘 안 쓰이던 선택 입력 6개 제거, 희망 상차일시도 과거 시각 선택 불가하도록
   제한. 주소검색 입력창의 브라우저 자동완성 테두리 버그도 수정
+- **공개 견적문의 화면도 목록+상세모달 개편**: `PublicQuoteDetailModal.tsx` 신규
+  (원칙 18번 패턴 재사용), 답변 작성 시 처리자 이름 입력(필수) 추가, 저장 시 상태도
+  같이 갱신
+- **공개 견적문의 → 견적관리 전환**: 상세 모달의 "견적관리로 전환" 버튼으로
+  `/admin/quotes?from_quote_request=<id>`로 이동해 문의 내용을 견적 폼에 자동
+  프리필(기존 화주 연락처 매칭 시도 포함), 저장 시 원본 문의에 `quote_id` 연결되어
+  "연결된 견적 보기"로 바뀜 (발주요청의 기존 승인 연동 패턴과 동일)
+- **`/apply` 폼에 업종/이용지역/이용차량 선택 입력 추가**: 승인 시
+  `approve-application` API가 이 값들을 `companies.industry` /
+  `main_pickup_region`+`main_dropoff_region` / `recommended_vehicle`에 자동
+  매핑해서 관리자 이중입력을 줄임
+- **알림 배지 즉시 갱신**: `lib/notifyBadgeRefresh.ts` 추가로, 처리 완료 시 15초
+  폴링을 기다리지 않고 바로 배지 재조회 (원칙 23번)
+- **관리자 GET API 캐싱 버그 수정**: `applications`/`public-quote-requests` GET
+  라우트에 `force-dynamic` 추가 — 저장 직후 재조회 시 예전 데이터가 보이던 버그
+  해결 (원칙 21번)
 
 ---
 
