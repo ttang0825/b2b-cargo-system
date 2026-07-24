@@ -27,8 +27,11 @@ export default function AdminStaffPage() {
   const [inviting, setInviting] = useState(false);
   const [issuedCredentials, setIssuedCredentials] = useState<{ email: string; password: string } | null>(null);
 
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState("");
+  const [editItem, setEditItem] = useState<any | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   async function loadItems() {
     setLoading(true);
@@ -84,37 +87,39 @@ export default function AdminStaffPage() {
     setInviting(false);
   }
 
-  function startEditName(item: any) {
-    setEditingId(item.id);
-    setEditingName(item.name);
-    setError(null);
+  function openEditModal(item: any) {
+    setEditItem(item);
+    setEditName(item.name);
+    setEditEmail(item.email);
+    setEditError(null);
   }
 
-  async function handleSaveName(id: string) {
-    if (!editingName.trim()) {
-      setError("이름을 입력해주세요.");
+  async function handleSaveProfile() {
+    if (!editItem) return;
+    if (!editName.trim() || !editEmail.trim()) {
+      setEditError("이름과 이메일을 모두 입력해주세요.");
       return;
     }
-    setProcessingId(id);
-    setError(null);
+    setSavingEdit(true);
+    setEditError(null);
     try {
       const res = await fetch("/api/admin/staff", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "update_name", id, name: editingName }),
+        body: JSON.stringify({ action: "update_profile", id: editItem.id, name: editName, email: editEmail }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "이름 수정에 실패했습니다.");
-        setProcessingId(null);
+        setEditError(data.error || "정보 수정에 실패했습니다.");
+        setSavingEdit(false);
         return;
       }
-      setEditingId(null);
+      setEditItem(null);
       loadItems();
     } catch {
-      setError("이름 수정 중 오류가 발생했습니다.");
+      setEditError("정보 수정 중 오류가 발생했습니다.");
     }
-    setProcessingId(null);
+    setSavingEdit(false);
   }
 
   async function handleRoleChange(id: string, role: string) {
@@ -239,44 +244,7 @@ export default function AdminStaffPage() {
               <tbody>
                 {items.map((item) => (
                   <tr key={item.id}>
-                    <td className="cell-nowrap" style={{ fontWeight: 700 }}>
-                      {editingId === item.id ? (
-                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                          <input
-                            value={editingName}
-                            onChange={(e) => setEditingName(e.target.value)}
-                            style={{ fontSize: 13, padding: "4px 6px", width: 100 }}
-                            autoFocus
-                          />
-                          <button
-                            className="btn-ghost"
-                            style={{ padding: "3px 8px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
-                            disabled={processingId === item.id}
-                            onClick={() => handleSaveName(item.id)}
-                          >
-                            저장
-                          </button>
-                          <button
-                            className="btn-ghost"
-                            style={{ padding: "3px 8px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
-                            onClick={() => setEditingId(null)}
-                          >
-                            취소
-                          </button>
-                        </div>
-                      ) : (
-                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                          {item.name}
-                          <button
-                            className="btn-ghost"
-                            style={{ padding: "2px 6px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}
-                            onClick={() => startEditName(item)}
-                          >
-                            수정
-                          </button>
-                        </div>
-                      )}
-                    </td>
+                    <td className="cell-nowrap" style={{ fontWeight: 700 }}>{item.name}</td>
                     <td className="cell-nowrap">{item.email}</td>
                     <td className="cell-nowrap">
                       <select
@@ -308,14 +276,23 @@ export default function AdminStaffPage() {
                       <span className="num">{item.created_at ? formatDate(item.created_at) : "-"}</span>
                     </td>
                     <td className="cell-nowrap">
-                      <button
-                        className={item.status === "active" ? "btn-danger" : "btn-ghost"}
-                        style={{ padding: "5px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
-                        disabled={processingId === item.id}
-                        onClick={() => handleStatusToggle(item)}
-                      >
-                        {item.status === "active" ? "퇴사 처리" : "재직 전환"}
-                      </button>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button
+                          className="btn-ghost"
+                          style={{ padding: "5px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                          onClick={() => openEditModal(item)}
+                        >
+                          수정
+                        </button>
+                        <button
+                          className={item.status === "active" ? "btn-danger" : "btn-ghost"}
+                          style={{ padding: "5px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                          disabled={processingId === item.id}
+                          onClick={() => handleStatusToggle(item)}
+                        >
+                          {item.status === "active" ? "퇴사 처리" : "재직 전환"}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -326,42 +303,7 @@ export default function AdminStaffPage() {
               {items.map((item) => (
                 <div key={item.id} className="mobile-row-card">
                   <div className="mobile-row-top">
-                    {editingId === item.id ? (
-                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                        <input
-                          value={editingName}
-                          onChange={(e) => setEditingName(e.target.value)}
-                          style={{ fontSize: 13, padding: "4px 6px", width: 90 }}
-                          autoFocus
-                        />
-                        <button
-                          className="btn-ghost"
-                          style={{ padding: "3px 8px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
-                          disabled={processingId === item.id}
-                          onClick={() => handleSaveName(item.id)}
-                        >
-                          저장
-                        </button>
-                        <button
-                          className="btn-ghost"
-                          style={{ padding: "3px 8px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
-                          onClick={() => setEditingId(null)}
-                        >
-                          취소
-                        </button>
-                      </div>
-                    ) : (
-                      <span style={{ fontSize: 13, fontWeight: 700, display: "flex", gap: 6, alignItems: "center" }}>
-                        {item.name}
-                        <button
-                          className="btn-ghost"
-                          style={{ padding: "2px 6px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}
-                          onClick={() => startEditName(item)}
-                        >
-                          수정
-                        </button>
-                      </span>
-                    )}
+                    <span style={{ fontSize: 13, fontWeight: 700 }}>{item.name}</span>
                     <span
                       style={{
                         display: "inline-block",
@@ -396,20 +338,73 @@ export default function AdminStaffPage() {
                     <span className="mobile-row-label">가입일</span>
                     <span className="num">{item.created_at ? formatDate(item.created_at) : "-"}</span>
                   </div>
-                  <button
-                    className={item.status === "active" ? "btn-danger" : "btn-ghost"}
-                    style={{ marginTop: 8, padding: "6px 14px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
-                    disabled={processingId === item.id}
-                    onClick={() => handleStatusToggle(item)}
-                  >
-                    {item.status === "active" ? "퇴사 처리" : "재직 전환"}
-                  </button>
+                  <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                    <button
+                      className="btn-ghost"
+                      style={{ padding: "6px 14px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                      onClick={() => openEditModal(item)}
+                    >
+                      수정
+                    </button>
+                    <button
+                      className={item.status === "active" ? "btn-danger" : "btn-ghost"}
+                      style={{ padding: "6px 14px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                      disabled={processingId === item.id}
+                      onClick={() => handleStatusToggle(item)}
+                    >
+                      {item.status === "active" ? "퇴사 처리" : "재직 전환"}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
           </>
         )}
       </div>
+
+      {editItem && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100,
+            padding: 20,
+          }}
+          onClick={() => !savingEdit && setEditItem(null)}
+        >
+          <div
+            className="card"
+            style={{ padding: 24, maxWidth: 400, width: "100%" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ marginTop: 0, fontSize: 15 }}>직원 정보 수정</h3>
+            <div className="field" style={{ marginBottom: 12 }}>
+              <label>이름</label>
+              <input value={editName} onChange={(e) => setEditName(e.target.value)} />
+            </div>
+            <div className="field" style={{ marginBottom: 18 }}>
+              <label>이메일 (로그인 아이디)</label>
+              <input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} />
+            </div>
+            <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: -10, marginBottom: 16 }}>
+              이메일을 바꾸면 이후 로그인도 새 이메일로 해야 합니다.
+            </p>
+            {editError && <div className="error-box" style={{ marginBottom: 12 }}>{editError}</div>}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn" onClick={handleSaveProfile} disabled={savingEdit}>
+                {savingEdit ? "저장 중..." : "저장"}
+              </button>
+              <button className="btn btn-ghost" onClick={() => setEditItem(null)} disabled={savingEdit}>
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
