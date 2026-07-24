@@ -32,14 +32,8 @@ export default function PublicQuotePage() {
     email: "",
     origin: "",
     originDetail: "",
-    origin_company: "",
-    origin_contact: "",
-    origin_department: "",
     destination: "",
     destinationDetail: "",
-    destination_company: "",
-    destination_contact: "",
-    destination_department: "",
     vehicle_type: VEHICLE_TYPES[0],
     item: "",
     loading_method: LOADING_METHODS[0].value,
@@ -111,12 +105,6 @@ export default function PublicQuotePage() {
       email: form.email || null,
       origin: fullOrigin,
       destination: fullDestination,
-      origin_company: form.origin_company || null,
-      origin_contact: form.origin_contact || null,
-      origin_department: form.origin_department || null,
-      destination_company: form.destination_company || null,
-      destination_contact: form.destination_contact || null,
-      destination_department: form.destination_department || null,
       vehicle_type: form.vehicle_type,
       item: form.item || null,
       loading_method: form.loading_method || null,
@@ -241,7 +229,7 @@ export default function PublicQuotePage() {
             </div>
 
             {/* 출발지 */}
-            <div className="field" style={{ marginTop: 14, marginBottom: 8 }}>
+            <div className="field" style={{ marginTop: 14, marginBottom: 18 }}>
               <label>출발지 *</label>
               <div style={{ display: "flex", gap: 6 }}>
                 <input
@@ -267,29 +255,9 @@ export default function PublicQuotePage() {
                 style={{ marginTop: 6 }}
               />
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 8, marginBottom: 18 }}>
-              <input
-                value={form.origin_company}
-                onChange={(e) => setField("origin_company", e.target.value)}
-                placeholder="출발지 상호/이름 (선택)"
-                style={{ fontSize: 12.5, padding: "8px 10px" }}
-              />
-              <input
-                value={form.origin_contact}
-                onChange={(e) => setField("origin_contact", formatPhoneNumber(e.target.value))}
-                placeholder="출발지 연락처 (선택)"
-                style={{ fontSize: 12.5, padding: "8px 10px" }}
-              />
-              <input
-                value={form.origin_department}
-                onChange={(e) => setField("origin_department", e.target.value)}
-                placeholder="출발지 담당 부서 (선택)"
-                style={{ fontSize: 12.5, padding: "8px 10px" }}
-              />
-            </div>
 
             {/* 도착지 */}
-            <div className="field" style={{ marginBottom: 8 }}>
+            <div className="field" style={{ marginBottom: 18 }}>
               <label>도착지 *</label>
               <div style={{ display: "flex", gap: 6 }}>
                 <input
@@ -313,26 +281,6 @@ export default function PublicQuotePage() {
                 onChange={(e) => setField("destinationDetail", e.target.value)}
                 placeholder="상세주소 (선택)"
                 style={{ marginTop: 6 }}
-              />
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 8, marginBottom: 18 }}>
-              <input
-                value={form.destination_company}
-                onChange={(e) => setField("destination_company", e.target.value)}
-                placeholder="도착지 상호/이름 (선택)"
-                style={{ fontSize: 12.5, padding: "8px 10px" }}
-              />
-              <input
-                value={form.destination_contact}
-                onChange={(e) => setField("destination_contact", formatPhoneNumber(e.target.value))}
-                placeholder="도착지 연락처 (선택)"
-                style={{ fontSize: 12.5, padding: "8px 10px" }}
-              />
-              <input
-                value={form.destination_department}
-                onChange={(e) => setField("destination_department", e.target.value)}
-                placeholder="도착지 담당 부서 (선택)"
-                style={{ fontSize: 12.5, padding: "8px 10px" }}
               />
             </div>
 
