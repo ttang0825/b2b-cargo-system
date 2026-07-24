@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { onBadgeRefresh } from "@/lib/notifyBadgeRefresh";
 
 type NavItem = { href: string; label: string; key?: "applications" | "publicQuotes" | "portalRequests" };
 type NavGroup = { label: string; items: NavItem[] };
@@ -185,9 +186,17 @@ export default function TopNav() {
       .on("postgres_changes", { event: "*", schema: "public", table: "portal_order_requests" }, () => loadPortalRequests())
       .subscribe();
 
+    // 관리자가 화주신청/공개문의를 방금 처리했으면 15초를 기다리지 않고 바로 배지 재조회
+    const offBadgeRefresh = onBadgeRefresh(() => {
+      loadPublicQuotes();
+      loadApplications();
+      loadPortalRequests();
+    });
+
     return () => {
       supabase.removeChannel(channel);
       clearInterval(pollInterval);
+      offBadgeRefresh();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);

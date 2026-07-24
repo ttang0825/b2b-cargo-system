@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
+import { notifyBadgeRefresh } from "@/lib/notifyBadgeRefresh";
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   대기중: { bg: "#fff1e2", text: "#d9730d" },
@@ -75,6 +76,7 @@ export default function PortalRequestsPage() {
       return;
     }
     loadRequests();
+    notifyBadgeRefresh();
   }
 
   async function handleReject(req: any) {
@@ -92,6 +94,7 @@ export default function PortalRequestsPage() {
       return;
     }
     loadRequests();
+    notifyBadgeRefresh();
   }
 
   async function handleDelete(req: any) {
@@ -110,6 +113,7 @@ export default function PortalRequestsPage() {
       return;
     }
     loadRequests();
+    notifyBadgeRefresh();
   }
 
   const periodFiltered = useMemo(() => {
