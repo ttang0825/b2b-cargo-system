@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 
@@ -122,6 +122,7 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
   const [notified, setNotified] = useState({ quotes: false, dispatches: false, invoices: false, announcements: false });
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const navGroupRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     async function check() {
@@ -168,6 +169,18 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
     setOpenGroup(null);
     setMobileMenuOpen(false);
   }, [pathname, router]);
+
+  // 드롭다운이 열려있을 때 메뉴 바깥의 빈 곳을 클릭하면 닫히게 함
+  useEffect(() => {
+    if (!openGroup) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (navGroupRef.current && !navGroupRef.current.contains(e.target as Node)) {
+        setOpenGroup(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [openGroup]);
 
   useEffect(() => {
     if (PUBLIC_PATHS.includes(pathname || "")) return;
@@ -221,7 +234,11 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
             <div className="brand">{companyName || "화주"} 포털</div>
             <div className="brand-sub">WeCarry 운송 통합 운영 시스템 · 홈으로</div>
           </a>
-          <div className="nav-desktop-group" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <div
+            ref={navGroupRef}
+            className="nav-desktop-group"
+            style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}
+          >
             {NAV_GROUPS.map((group) => (
               <NavDropdown
                 key={group.label}
