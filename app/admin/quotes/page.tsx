@@ -277,11 +277,12 @@ function QuotesPageInner() {
   useEffect(() => {
     async function prefillFromQuoteRequest() {
       if (!fromQuoteRequestId) return;
-      const { data: reqData } = await supabase
-        .from("public_quote_requests")
-        .select("id,name,phone,email,origin,destination,vehicle_type,item,requested_pickup_at,notes")
-        .eq("id", fromQuoteRequestId)
-        .single();
+      // public_quote_requests는 anon SELECT 정책이 없는 테이블이라, 서비스 롤 키를 쓰는
+      // 서버 API를 통해서만 조회 가능 (anon 클라이언트로 직접 조회하면 항상 빈 결과가 옴)
+      const res = await fetch("/api/admin/public-quote-requests");
+      if (!res.ok) return;
+      const { data: allRequests } = await res.json();
+      const reqData = (allRequests || []).find((r: any) => r.id === fromQuoteRequestId);
       if (!reqData) return;
 
       // 연락처로 기존 화주가 있는지 확인해서 있으면 기존 화주 모드로, 없으면 개인/신규 고객으로 프리필
