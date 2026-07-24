@@ -74,6 +74,10 @@ export async function POST(req: Request) {
       contact_mobile: application.contact_phone,
       contact_email: application.contact_email || null,
       status: "견적요청",
+      industry: application.industry || null,
+      main_pickup_region: application.preferred_regions || null,
+      main_dropoff_region: application.preferred_regions || null,
+      recommended_vehicle: application.preferred_vehicle || null,
       manual_source_type: "온라인 등록신청",
       manual_source_note: extraNoteParts.length > 0 ? extraNoteParts.join(" / ") : null,
     })

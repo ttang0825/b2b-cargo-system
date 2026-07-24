@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { formatPhoneNumber, formatBizRegNo } from "@/lib/constants";
+import { formatPhoneNumber, formatBizRegNo, REGIONS, VEHICLE_TYPES } from "@/lib/constants";
+import MultiSelectTags from "@/components/MultiSelectTags";
 
 declare global {
   interface Window {
@@ -27,6 +28,9 @@ export default function ApplyPage() {
     main_origin: "",
     main_destination: "",
     monthly_volume_estimate: "",
+    industry: "",
+    preferred_regions: "",
+    preferred_vehicle: "",
     notes: "",
   });
 
@@ -255,6 +259,27 @@ export default function ApplyPage() {
                   onChange={(e) => setField("monthly_volume_estimate", e.target.value)}
                   placeholder="예: 월 5~10건"
                 />
+              </div>
+              <div className="field">
+                <label>업종 (선택)</label>
+                <input
+                  value={form.industry}
+                  onChange={(e) => setField("industry", e.target.value)}
+                  placeholder="예: 제조업, 유통업"
+                />
+              </div>
+              <div className="field">
+                <label>이용 차량 (선택)</label>
+                <select value={form.preferred_vehicle} onChange={(e) => setField("preferred_vehicle", e.target.value)}>
+                  <option value="">선택 안 함</option>
+                  {VEHICLE_TYPES.map((v) => (
+                    <option key={v} value={v}>{v}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="field" style={{ gridColumn: "1 / -1" }}>
+                <label>이용 지역 (선택, 중복 선택 가능)</label>
+                <MultiSelectTags options={REGIONS} value={form.preferred_regions} onChange={(v) => setField("preferred_regions", v)} />
               </div>
               <div className="field" style={{ gridColumn: "1 / -1" }}>
                 <label>메모</label>
