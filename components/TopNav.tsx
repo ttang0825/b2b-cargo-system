@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -121,6 +121,7 @@ export default function TopNav() {
   const [counts, setCounts] = useState({ portalRequests: 0, publicQuotes: 0, applications: 0 });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const navGroupRef = useRef<HTMLDivElement>(null);
 
   const isPublicPath =
     pathname === "/admin/login" ||
@@ -196,6 +197,18 @@ export default function TopNav() {
     setOpenGroup(null);
   }, [pathname]);
 
+  // 드롭다운이 열려있을 때 메뉴 바깥의 빈 곳을 클릭하면 닫히게 함
+  useEffect(() => {
+    if (!openGroup) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (navGroupRef.current && !navGroupRef.current.contains(e.target as Node)) {
+        setOpenGroup(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [openGroup]);
+
   if (isPublicPath) return null;
 
   async function handleLogout() {
@@ -214,7 +227,11 @@ export default function TopNav() {
           <div className="brand-sub">내부 관리자 (admin)</div>
         </Link>
 
-        <div className="nav-desktop-group" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <div
+          ref={navGroupRef}
+          className="nav-desktop-group"
+          style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}
+        >
           {NAV_GROUPS.map((group) => (
             <NavDropdown
               key={group.label}
