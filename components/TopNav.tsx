@@ -102,39 +102,10 @@ function NavDropdown({
               <a
                 key={item.href}
                 href={item.href}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "9px 12px",
-                  borderRadius: 8,
-                  fontSize: 13,
-                  fontWeight: active ? 700 : 500,
-                  color: active ? "var(--accent)" : "var(--text)",
-                  background: active ? "var(--accent-soft)" : "transparent",
-                  textDecoration: "none",
-                }}
+                className={active ? "nav-dropdown-item nav-dropdown-item-active" : "nav-dropdown-item"}
               >
                 {item.label}
-                {count > 0 && (
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      minWidth: 16,
-                      height: 16,
-                      padding: "0 4px",
-                      borderRadius: 999,
-                      background: "var(--danger)",
-                      color: "#fff",
-                      fontSize: 10,
-                      fontWeight: 800,
-                    }}
-                  >
-                    {count}
-                  </span>
-                )}
+                <Badge count={count} />
               </a>
             );
           })}
@@ -322,25 +293,7 @@ export default function TopNav() {
                     }}
                   >
                     {item.label}
-                    {count > 0 && (
-                      <span
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          minWidth: 16,
-                          height: 16,
-                          padding: "0 4px",
-                          borderRadius: 999,
-                          background: "var(--danger)",
-                          color: "#fff",
-                          fontSize: 10,
-                          fontWeight: 800,
-                        }}
-                      >
-                        {count}
-                      </span>
-                    )}
+                    <Badge count={count} />
                   </Link>
                 );
               })}
