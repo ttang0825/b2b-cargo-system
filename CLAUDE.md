@@ -4,7 +4,8 @@
 > 최종 버전입니다. 앞으로는 이 문서(또는 `CLAUDE.md`)를 참고해서 Claude Code가
 > 작업을 이어갑니다.
 
-**작성일: 2026-07-23** (최종 갱신: 2026-07-24, Claude Code 세션에서 직접 갱신)
+**작성일: 2026-07-23** (최종 갱신: 2026-07-24, Claude Code 세션에서 직접 갱신 — 직원 계정
+재구조화 1~5단계 진행 중)
 
 ---
 
@@ -31,18 +32,24 @@
 - **Next.js 14 (App Router)** + **Supabase (Postgres, Auth, Realtime)** + **Vercel** 배포
 - GitHub 저장소: `ttang0825/b2b-cargo-system` (main 브랜치)
 - 4중 구조:
-  - `/admin/*` — 내부 관리자 (공유 비밀번호, middleware.ts로 게이트. 아직 직원별 계정 없음)
+  - `/admin/*` — 내부 관리자. **직원별 Supabase Auth 개별 계정 체계로 전환 완료**
+    (`staff_accounts` 테이블, role=`admin`/`staff`, middleware.ts가 세션+재직상태 확인).
+    공유 `ADMIN_PASSWORD` 방식은 더 이상 안 씀 (env var는 등록만 남아있고 코드에서 미사용)
   - `/customer/*` — 화주포털 (Supabase Auth 개별 계정 + RLS)
   - `/`, `/quote`, `/apply`, `/status` — 완전 공개(비회원), anon INSERT 전용 + 서버 API 조회
-  - 향후: 직원 개별 로그인 체계 (아직 미착수, 아래 로드맵 참고)
 
 ### 환경변수 (Vercel)
 `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`,
-`KAKAO_REST_API_KEY`, `ADMIN_PASSWORD`. **보류 중(아직 미등록)**: `RESEND_API_KEY` (이메일
-발송용 — 아래 6번 참고).
+`KAKAO_REST_API_KEY`. **보류 중(아직 미등록)**: `RESEND_API_KEY` (이메일 발송용 — 아래
+6번 참고). `ADMIN_PASSWORD`는 예전 공유 비밀번호 로그인 방식의 흔적으로 Vercel엔 남아있지만
+코드에서는 더 이상 참조하지 않음(직원 계정 재구조화로 대체됨).
 
 ### npm 의존성 중 특이사항
-`xlsx-js-style`(xlsx 아님! 스타일링 위해 교체함) — 화주포털 엑셀 다운로드용.
+- `xlsx-js-style`(xlsx 아님! 스타일링 위해 교체함) — 화주포털 엑셀 다운로드용.
+- `@supabase/ssr` — 관리자 개별 로그인(Supabase Auth 세션을 쿠키에 저장해서
+  `middleware.ts`(서버)와 브라우저가 같은 세션을 공유) 구현에 사용. `lib/supabaseClient.ts`
+  (anon, localStorage 기반 데이터 조회/수정용)와는 완전히 다른 용도라 섞어 쓰면 안 됨
+  (원칙 24번 참고)
 
 ### 최근 추가된 컬럼 (Supabase SQL 편집기에서 수동으로 추가함, 코드 저장소엔 마이그레이션
 파일이 없어 여기 기록)
@@ -50,6 +57,15 @@
   REGIONS 다중선택 콤마구분 문자열), `preferred_vehicle`(이용차량, VEHICLE_TYPES 단일값)
 - `public_quote_requests`: `quote_id`(uuid, quotes 참조 — 견적전환 연결),
   `processed_by`(text, 답변 처리자 이름)
+- `staff_accounts`(신규 테이블): `id`(uuid, Auth 유저 id와 동일), `name`, `email`,
+  `role`(`admin`|`staff`), `status`(`active`|`inactive`), `created_at`. RLS: 본인 행은
+  `auth.uid() = id`로 조회 가능 + `anon` 전체 조회 정책도 있음(관리자 화면에서 "처리자
+  이름" 표시하려면 다른 직원 이름도 조회해야 해서)
+- `companies`/`quotes`/`orders`/`dispatches`/`invoices`/`customer_applications`/
+  `public_quote_requests` 7개 테이블에 `created_by`/`updated_by`(uuid,
+  `staff_accounts(id)` 참조)/`updated_at`(자동 갱신 트리거) 추가 — 원칙 25번 참고
+- `invoices.company_id`를 nullable로 변경 — 게스트(비회원) 고객 오더도 정산 등록이
+  되도록 하기 위함 (예전엔 NOT NULL이라 게스트 오더는 정산 자동등록이 조용히 실패했음)
 
 ---
 
@@ -137,6 +153,38 @@
     Realtime이 안 돼서 `TopNav.tsx`가 15초 폴링에만 의존하는데, 이 함수를 호출하면
     폴링을 기다리지 않고 바로 배지를 재조회함. 새로운 처리 액션(승인/거절/답변저장
     등)을 추가할 때도 이 호출을 빠뜨리지 말 것
+24. **관리자 로그인/권한 확인용 클라이언트는 `lib/supabaseAdminAuthClient.ts`
+    (`supabaseAdminAuth`, 쿠키 기반 세션) 딱 하나만 사용** — `lib/supabaseClient.ts`(anon,
+    localStorage)와 절대 섞지 말 것. "지금 로그인한 직원이 누구/무슨 role인지" 필요할 때는
+    새로 만들지 말고 기존 헬퍼 재사용: 클라이언트 컴포넌트는 `lib/currentStaff.ts`의
+    `getCurrentStaffId()`(id만)/`getCurrentStaffRole()`(role만, "admin"|"staff"|null),
+    서버 API 라우트는 `lib/getCurrentStaff.ts`의 `getCurrentStaff()`(id+name+role+status,
+    쿠키 기반)
+25. **직원 계정 관련 권한/이력 체크는 반드시 "화면단 + 서버단" 이중 체크**: 화면에서
+    버튼을 숨기거나 비활성화하는 것만으로는 브라우저 콘솔에서 직접 fetch를 호출해
+    우회할 수 있음. 삭제·운임기준표 수정처럼 관리자 전용이어야 하는 기능은 반드시
+    서버 API 라우트에서도 `getCurrentStaff().role === "admin"` 확인 후에만 처리하도록
+    구현할 것 (`app/api/admin/delete-record/route.ts`, `app/api/admin/rates/route.ts`,
+    `app/api/admin/staff/route.ts`가 이 패턴의 예시). 등록/수정 시 처리자를 자동 기록할
+    때도 마찬가지로 클라이언트 컴포넌트는 `getCurrentStaffId()`로 `created_by`/
+    `updated_by`를 채우고, 화면에는 `components/ProcessedByFooter.tsx`로 "등록: 이름
+    (날짜) · 최종수정: 이름 (날짜)"를 표시
+26. **여러 화면의 단순 레코드 삭제는 `app/api/admin/delete-record/route.ts` 공용
+    API를 거칠 것** (`{ table, id }` POST, 허용된 테이블 목록으로 제한) — 매번 새
+    라우트를 만들지 않아도 되고, 관리자 권한 체크가 한 곳에 모여있어 빠뜨릴 위험이
+    적음. 화주(`delete-company`)나 포털계정(`delete-portal-account`)처럼 Auth 유저
+    정리 등 부가 로직이 필요한 삭제는 기존처럼 전용 라우트를 쓰되, 그 라우트 안에도
+    반드시 관리자 체크를 넣을 것
+27. **`alter table X add column if not exists Y ... references Z(id)`는 컬럼이
+    이미 존재하면 REFERENCES 절이 조용히 무시됨** — 예전부터 남아있던 레거시 컬럼이
+    있으면 새 마이그레이션의 외래키가 실제로는 안 걸려서, 엉뚱한 테이블을 참조하는
+    옛날 제약조건이 그대로 남는 버그가 생김 (실제로 `quotes.created_by`가 안 쓰던
+    `profiles` 테이블을 참조하고 있어서 `created_by` 자동기록 기능이 FK 위반으로
+    막혔던 사고 있었음). 새 컬럼을 추가하는 마이그레이션을 쓰기 전에는 `select
+    column_name, data_type from information_schema.columns where table_name = '...'`
+    로 그 컬럼이 이미 있는지, `select conname, pg_get_constraintdef(oid) from
+    pg_constraint where conname = '..._fkey'`로 기존 제약조건이 뭘 참조하는지 먼저
+    확인하는 습관을 들일 것
 
 ---
 
@@ -186,24 +234,48 @@
 - **관리자 GET API 캐싱 버그 수정**: `applications`/`public-quote-requests` GET
   라우트에 `force-dynamic` 추가 — 저장 직후 재조회 시 예전 데이터가 보이던 버그
   해결 (원칙 21번)
+- **직원 계정·권한·이력 재구조화 (1~5단계, 아래 5번 "다음 예정 작업" 참고)**:
+  - 1단계: `staff_accounts` 테이블 + 초기 관리자 계정 (완료)
+  - 2단계: 관리자 로그인을 공유 `ADMIN_PASSWORD`에서 Supabase Auth 개별 계정으로
+    전환 (`middleware.ts` 재작성, `lib/supabaseAdminAuthClient.ts` 신규) (완료, merge됨)
+  - 3단계: "직원 계정 관리" 화면(`/admin/staff`, 관리자 전용) — 계정 발급, 역할
+    지정, 재직 상태 관리, **이름+이메일 통합 수정 모달**(이메일 변경 시 Auth 계정
+    이메일도 함께 갱신) (완료, merge됨)
+  - 4단계: `companies`/`quotes`/`orders`/`dispatches`/`invoices`/
+    `customer_applications`/`public_quote_requests` 7개 테이블에 등록/수정 처리자
+    자동 기록(`created_by`/`updated_by`) + 각 상세화면에 `ProcessedByFooter`로 표시
+    (완료, merge됨). 이 작업 중 발견/수정한 부수 버그: 게스트(비회원) 오더 정산
+    등록 안 되던 문제(`invoices.company_id` nullable로 변경), 정산 목록에 개인고객
+    이름 미표시, 배차 없이 오더 상태만 바꾼 경우 청구금액 자동입력 안 되던 문제,
+    금액 미입력 상태로 정산 등록되던 문제 — 전부 수정 완료
+  - 5단계: 권한 매트릭스(삭제는 관리자만, 운임기준표 수정은 관리자만) —
+    화면단+서버단 이중 체크로 구현 (원칙 25, 26번). **PR #17로 올라가 있고 아직
+    사용자 테스트/merge 전 상태** — 다음 세션에서 여기부터 확인 필요
+  - 6~8단계(처리자 이름 자동화, 동시편집 감지, 지원접속)는 아직 미착수
 
 ---
 
 ## 5. 다음 예정 작업 (우선순위 순)
 
-1. **직원 계정 · 권한 · 이력** — 가장 큰 재구조화 작업. admin 전체를 공유 비밀번호에서
-   Supabase Auth 개별 계정 체계로 전환 + role(관리자/직원) 구분 + 화면별 권한
-   (직원은 삭제·운임기준표 수정 불가) + 모든 데이터에 처리자 기록. **별도 설계
-   세션으로 진행 권장**
-2. 관리자의 화주포털 "고객지원용 접속"(화주 계정으로 임시 로그인) — Supabase Auth
-   Admin API의 magic link 방식으로 구현 가능해 보임, 1번과 함께 진행 검토
-3. 동시 편집 처리 — 현재는 "나중에 저장한 사람이 이김"(경고 없음). 최소 저장 시점
-   경고 정도는 1번과 별개로 먼저 가능
-4. 카카오 알림톡 자동화 — 사업자 인증·발신프로필 심사가 필요해 **미리 신청 절차부터
+0. **[진행 중] 직원 계정·권한·이력 재구조화 5단계 테스트/merge** — PR #17(권한
+   매트릭스: 삭제는 관리자만, 운임기준표 수정은 관리자만)이 아직 사용자 테스트 전
+   상태로 대기 중. 다음 세션은 여기서부터 시작: ① 관리자 계정으로 기존처럼 삭제·
+   운임기준표 수정이 되는지, ② 직원(staff) 계정으로는 삭제 버튼이 안 보이고
+   운임기준표가 조회 전용인지 확인 → 문제없으면 merge
+1. **직원 계정·권한·이력 6~8단계** (0번 merge 후 이어서, 스펙의 "단계별로 나눠서
+   진행" 원칙 유지):
+   - 6단계: "처리자 이름" 수동 텍스트 입력들(견적/화주등록신청/공개문의 처리 시
+     직접 타이핑하던 이름)을 로그인한 직원 정보로 자동 대체
+   - 7단계: 동시 편집 처리 — 현재는 "나중에 저장한 사람이 이김"(경고 없음). 최소
+     저장 시점 경고 정도부터
+   - 8단계: 관리자의 화주포털 "고객지원용 접속"(화주 계정으로 임시 로그인) —
+     Supabase Auth Admin API의 magic link 방식으로 구현 가능해 보임,
+     `support_access_logs` 이력 테이블도 필요
+2. 카카오 알림톡 자동화 — 사업자 인증·발신프로필 심사가 필요해 **미리 신청 절차부터
    시작하는 것을 권장** (승인에 시간 걸림)
-5. 화주포털 발주요청 2차 기능(화주 직접 오더 입력)
-6. 커스텀 도메인 연결, 공개 화면 UX 고도화 — 보류 중
-7. 유료 플랜 전환 / 페이지네이션·대시보드
+3. 화주포털 발주요청 2차 기능(화주 직접 오더 입력)
+4. 커스텀 도메인 연결, 공개 화면 UX 고도화 — 보류 중
+5. 유료 플랜 전환 / 페이지네이션·대시보드
 
 ## 6. 보류 중인 작업 (나중에 이어서 진행)
 
@@ -240,6 +312,21 @@
 - **git push 직후 곧바로 PR을 merge하면 마지막 커밋이 반영 안 될 수 있음** (실제로
   한 번 겪음 — GitHub이 최신 push를 미처 인식하기 전에 merge가 실행된 것으로 추정).
   merge 전에 PR의 head 커밋 sha가 방금 push한 커밋과 일치하는지 확인하고 merge할 것
+- **`created_by`/`updated_by` 같은 새 외래키 컬럼을 여러 테이블에 한 번에 추가하는
+  마이그레이션을 짤 때**: 그중 한 테이블에 레거시로 남아있던 동명의 컬럼이 있으면
+  `add column if not exists`가 조용히 아무것도 안 하고 넘어가서, 새로 의도한
+  참조(`staff_accounts`)가 아니라 예전 참조가 그대로 남을 수 있음 (원칙 27번,
+  `quotes.created_by`가 실제로 이렇게 `profiles` 테이블을 참조하고 있어서 FK 위반
+  에러가 났던 사고 있었음). insert/update가 "FK violates constraint" 에러를 내는데
+  값 자체는 멀쩡해 보인다면, `pg_get_constraintdef`로 그 제약조건이 진짜 어디를
+  참조하는지부터 확인할 것
+- **정산(`invoices`) 관련 화면 작업할 때**: `company_id`는 nullable이라 게스트
+  (비회원) 고객 오더도 정산이 가능함 — 화면에서 화주명을 표시할 때
+  `companies?.name`만 보지 말고 반드시 `orders.guest_name`도 fallback으로 같이
+  처리할 것 (안 그러면 개인고객 정산 건은 목록에 이름이 안 뜸)
+- **직원(staff) 권한 관련 기능을 테스트할 때**: 관리자 계정만 테스트하면 권한 체크가
+  실제로 걸리는지 확인이 안 됨 — 반드시 role이 `staff`인 계정으로도 로그인해서
+  삭제 버튼이 안 보이는지, 운임기준표가 조회 전용인지 등을 같이 확인할 것
 
 ---
 
@@ -259,6 +346,7 @@
 ## 9. 새 세션에서 이어가는 방법
 
 Claude Code에서: 저장소를 열고 "인수인계 문서(CLAUDE.md 또는 HANDOFF.md)를 참고해서
-5번(직원 계정·권한·이력)부터 이어서 진행해줘" 같은 식으로 시작하면 됩니다.
+5번의 0번(직원 계정 5단계 PR #17 테스트/merge)부터 이어서 진행해줘" 같은 식으로
+시작하면 됩니다. PR #17이 이미 merge되어 있다면 6단계부터 이어가면 됩니다.
 
 실제 저장소 코드가 이 문서와 다르면 **저장소가 항상 맞습니다.**
