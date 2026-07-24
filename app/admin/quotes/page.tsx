@@ -93,6 +93,7 @@ function QuotesPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const fromRequestId = searchParams.get("from_request");
+  const fromQuoteRequestId = searchParams.get("from_quote_request");
   const [tiers, setTiers] = useState<Tier[]>([]);
   const [surcharges, setSurcharges] = useState<Surcharge[]>([]);
   const [extraFees, setExtraFees] = useState<ExtraFee[]>([]);
@@ -271,6 +272,53 @@ function QuotesPageInner() {
     prefillFromRequest();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fromRequestId]);
+
+  // 공개 견적문의를 견적관리로 전환해서 넘어온 경우, 문의 내용을 견적 폼에 미리 채워줌
+  useEffect(() => {
+    async function prefillFromQuoteRequest() {
+      if (!fromQuoteRequestId) return;
+      const { data: reqData } = await supabase
+        .from("public_quote_requests")
+        .select("id,name,phone,email,origin,destination,vehicle_type,item,requested_pickup_at,notes")
+        .eq("id", fromQuoteRequestId)
+        .single();
+      if (!reqData) return;
+
+      // 연락처로 기존 화주가 있는지 확인해서 있으면 기존 화주 모드로, 없으면 개인/신규 고객으로 프리필
+      const [byPhone, byContactMobile] = await Promise.all([
+        supabase.from("companies").select("id,name,phone,address,status").eq("phone", reqData.phone).limit(1),
+        supabase.from("companies").select("id,name,phone,address,status").eq("contact_mobile", reqData.phone).limit(1),
+      ]);
+      const matchedCompany = byPhone.data?.[0] || byContactMobile.data?.[0] || null;
+
+      if (matchedCompany) {
+        setCustomerMode("company");
+        setSelectedCompany(matchedCompany as any);
+      } else {
+        setCustomerMode("guest");
+        setForm((prev) => ({
+          ...prev,
+          guest_name: reqData.name || "",
+          guest_phone: reqData.phone || "",
+          guest_email: reqData.email || "",
+        }));
+      }
+
+      setForm((prev) => ({
+        ...prev,
+        origin: reqData.origin || "",
+        destination: reqData.destination || "",
+        vehicle_type: reqData.vehicle_type || prev.vehicle_type,
+        item: reqData.item || "",
+        requested_pickup_at: reqData.requested_pickup_at
+          ? reqData.requested_pickup_at.slice(0, 16)
+          : prev.requested_pickup_at,
+        notes: reqData.notes || prev.notes,
+      }));
+    }
+    prefillFromQuoteRequest();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromQuoteRequestId]);
 
   useEffect(() => {
     let active = true;
@@ -665,6 +713,14 @@ function QuotesPageInner() {
         .from("portal_order_requests")
         .update({ status: "승인됨", quote_id: newQuote.id })
         .eq("id", fromRequestId);
+    }
+
+    // 공개 견적문의에서 전환해 넘어온 경우, 문의 상태를 연락완료로 갱신하고 이 견적과 연결
+    if (fromQuoteRequestId && newQuote) {
+      await supabase
+        .from("public_quote_requests")
+        .update({ status: "연락완료", quote_id: newQuote.id })
+        .eq("id", fromQuoteRequestId);
     }
 
     setSaving(false);

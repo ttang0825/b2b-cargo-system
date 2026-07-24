@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { formatDate } from "@/components/ApplicationDetailModal";
 import { notifyBadgeRefresh } from "@/lib/notifyBadgeRefresh";
 
@@ -43,6 +44,7 @@ export default function PublicQuoteDetailModal({
   onClose: () => void;
   onChanged: () => void;
 }) {
+  const router = useRouter();
   const [status, setStatus] = useState(item.status);
   const [note, setNote] = useState(item.staff_note || "");
   const [saving, setSaving] = useState(false);
@@ -155,6 +157,26 @@ export default function PublicQuoteDetailModal({
 
         <SectionTitle>접수정보</SectionTitle>
         <DetailRow label="접수일" value={item.created_at ? formatDateTime(item.created_at) : "-"} />
+
+        <div style={{ marginTop: 10 }}>
+          {item.quote_id ? (
+            <button
+              className="btn-ghost"
+              style={{ padding: "7px 14px", borderRadius: 8, fontSize: 12.5, cursor: "pointer" }}
+              onClick={() => router.push(`/admin/quotes/${item.quote_id}`)}
+            >
+              연결된 견적 보기 →
+            </button>
+          ) : (
+            <button
+              className="btn-ghost"
+              style={{ padding: "7px 14px", borderRadius: 8, fontSize: 12.5, cursor: "pointer" }}
+              onClick={() => router.push(`/admin/quotes?from_quote_request=${item.id}`)}
+            >
+              견적관리로 전환 →
+            </button>
+          )}
+        </div>
 
         <SectionTitle>답변 작성</SectionTitle>
         <div className="field" style={{ marginBottom: 12 }}>
