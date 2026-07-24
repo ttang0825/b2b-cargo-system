@@ -9,11 +9,13 @@ import {
   getInvoiceStatusColor,
 } from "@/lib/invoiceStatusColors";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
+import { getCurrentStaffId } from "@/lib/currentStaff";
 
 type OrderLite = {
   id: string;
   order_no: string | null;
   company_id: string | null;
+  quote_id: string | null;
   companies: { name: string } | null;
   guest_name: string | null;
 };
@@ -29,7 +31,7 @@ type InvoiceRow = {
   driver_paid: boolean;
   status: string;
   created_at: string;
-  orders: { order_no: string | null } | null;
+  orders: { order_no: string | null; guest_name: string | null } | null;
   companies: { name: string } | null;
 };
 
@@ -71,7 +73,7 @@ export default function InvoicesPage() {
     let query = supabase
       .from("invoices")
       .select(
-        "id,billing_period,customer_charge_total,driver_payout_total,commission_total,tax_invoice_issued,payment_received,driver_paid,status,created_at,orders(order_no),companies(name)"
+        "id,billing_period,customer_charge_total,driver_payout_total,commission_total,tax_invoice_issued,payment_received,driver_paid,status,created_at,orders(order_no,guest_name),companies(name)"
       )
       .order("created_at", { ascending: false })
       .limit(preset === "all" ? ALL_PERIOD_LIMIT : FILTERED_PERIOD_LIMIT);
@@ -92,7 +94,7 @@ export default function InvoicesPage() {
     );
     const { data } = await supabase
       .from("orders")
-      .select("id,order_no,company_id,companies(name),guest_name")
+      .select("id,order_no,company_id,quote_id,companies(name),guest_name")
       .eq("status", "운송완료")
       .order("created_at", { ascending: false });
     setAvailableOrders(
@@ -116,18 +118,36 @@ export default function InvoicesPage() {
 
   async function handleSelectOrder(orderId: string) {
     setSelectedOrderId(orderId);
+    setCustomerChargeTotal("");
+    setDriverPayoutTotal("");
+
     const { data: dispatch } = await supabase
       .from("dispatches")
       .select("customer_charge, driver_payout")
       .eq("order_id", orderId)
       .maybeSingle();
-    if (dispatch) {
+    if (dispatch && (dispatch.customer_charge || dispatch.driver_payout)) {
       setCustomerChargeTotal(
         dispatch.customer_charge ? String(Math.round(dispatch.customer_charge)) : ""
       );
       setDriverPayoutTotal(
         dispatch.driver_payout ? String(Math.round(dispatch.driver_payout)) : ""
       );
+      return;
+    }
+
+    // 배차 기록에 청구운임이 없으면(배차 관리를 거치지 않고 오더 상태만 바로
+    // 운송완료로 바꾼 경우 등), 연결된 견적의 최종금액으로 화주 청구금액만이라도 채워줌
+    const order = availableOrders.find((o) => o.id === orderId);
+    if (order?.quote_id) {
+      const { data: quote } = await supabase
+        .from("quotes")
+        .select("final_amount")
+        .eq("id", order.quote_id)
+        .maybeSingle();
+      if (quote?.final_amount) {
+        setCustomerChargeTotal(String(Math.round(quote.final_amount)));
+      }
     }
   }
 
@@ -136,6 +156,10 @@ export default function InvoicesPage() {
     setError(null);
     if (!selectedOrderId) {
       setError("정산할 운송오더를 선택해주세요.");
+      return;
+    }
+    if (!customerChargeTotal.trim() || !driverPayoutTotal.trim()) {
+      setError("화주 청구금액과 차주 지급금액을 모두 입력해주세요.");
       return;
     }
     setSaving(true);
@@ -156,6 +180,7 @@ export default function InvoicesPage() {
       receivable_amount: chargeNum || null,
       payable_amount: payoutNum || null,
       status: "정산대기",
+      created_by: await getCurrentStaffId(),
     });
 
     if (error) {
@@ -242,7 +267,8 @@ export default function InvoicesPage() {
         const q = search.trim().toLowerCase();
         return (
           (i.orders?.order_no || "").toLowerCase().includes(q) ||
-          (i.companies?.name || "").toLowerCase().includes(q)
+          (i.companies?.name || "").toLowerCase().includes(q) ||
+          (i.orders?.guest_name || "").toLowerCase().includes(q)
         );
       });
   }, [invoices, search, statusFilter]);
@@ -315,7 +341,7 @@ export default function InvoicesPage() {
                 />
               </div>
               <div className="field">
-                <label>화주 청구금액(원)</label>
+                <label>화주 청구금액(원) *</label>
                 <input
                   type="number"
                   value={customerChargeTotal}
@@ -323,7 +349,7 @@ export default function InvoicesPage() {
                 />
               </div>
               <div className="field">
-                <label>차주 지급금액(원)</label>
+                <label>차주 지급금액(원) *</label>
                 <input
                   type="number"
                   value={driverPayoutTotal}
@@ -448,7 +474,14 @@ export default function InvoicesPage() {
                   <td>
                     <span className="num">{i.orders?.order_no || "-"}</span>
                   </td>
-                  <td>{i.companies?.name || "-"}</td>
+                  <td>
+                    {i.companies?.name || i.orders?.guest_name || "-"}
+                    {!i.companies?.name && i.orders?.guest_name && (
+                      <span className="badge" style={{ marginLeft: 6 }}>
+                        개인
+                      </span>
+                    )}
+                  </td>
                   <td>
                     <span className="num">{i.billing_period || "-"}</span>
                   </td>

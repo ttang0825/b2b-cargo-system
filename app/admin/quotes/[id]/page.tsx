@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { STATUS_OPTIONS as COMPANY_STATUS_ORDER } from "@/lib/statusColors";
+import { getCurrentStaffId } from "@/lib/currentStaff";
+import ProcessedByFooter from "@/components/ProcessedByFooter";
 
 const STATUS_OPTIONS = ["상담중", "견적제출", "수주", "보류", "실패"];
 
@@ -32,6 +34,9 @@ type QuoteDetail = {
   final_amount: number | null;
   status: string;
   created_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+  updated_at: string | null;
   guest_name: string | null;
   guest_phone: string | null;
   guest_email: string | null;
@@ -100,9 +105,10 @@ export default function QuoteDetailPage() {
   }, [id]);
 
   async function handleStatusChange(status: string) {
+    const staffId = await getCurrentStaffId();
     const { error } = await supabase
       .from("quotes")
-      .update({ status })
+      .update({ status, updated_by: staffId })
       .eq("id", id);
     if (error) {
       setError(error.message);
@@ -125,7 +131,7 @@ export default function QuoteDetailPage() {
         if (currentIdx === -1 || currentIdx < targetIdx) {
           await supabase
             .from("companies")
-            .update({ status: "견적발송" })
+            .update({ status: "견적발송", updated_by: staffId })
             .eq("id", quote.company_id);
         }
       }
@@ -424,6 +430,13 @@ export default function QuoteDetailPage() {
           견적서 출력 (PDF)
         </button>
       </div>
+
+      <ProcessedByFooter
+        createdBy={quote.created_by}
+        createdAt={quote.created_at}
+        updatedBy={quote.updated_by}
+        updatedAt={quote.updated_at}
+      />
     </main>
   );
 }

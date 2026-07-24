@@ -14,6 +14,8 @@ import {
 } from "@/lib/constants";
 import { MANUAL_SOURCE_OPTIONS, getSourceChips } from "@/lib/sourceColors";
 import MultiSelectTags from "@/components/MultiSelectTags";
+import { getCurrentStaffId } from "@/lib/currentStaff";
+import ProcessedByFooter from "@/components/ProcessedByFooter";
 
 type CompanyDetail = { [key: string]: any };
 
@@ -421,6 +423,8 @@ export default function CompanyDetailPage() {
     if (payload.manual_source_type !== "기타") {
       payload.manual_source_note = null;
     }
+
+    payload.updated_by = await getCurrentStaffId();
 
     const { error } = await supabase
       .from("companies")
@@ -1286,6 +1290,13 @@ export default function CompanyDetailPage() {
           견적서, 거래내역이 이 자리에 표시됩니다.
         </p>
       </div>
+
+      <ProcessedByFooter
+        createdBy={company.created_by}
+        createdAt={company.created_at}
+        updatedBy={company.updated_by}
+        updatedAt={company.updated_at}
+      />
     </main>
   );
 }

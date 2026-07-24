@@ -9,6 +9,8 @@ import {
   getDispatchStatusColor,
   DISPATCH_TO_ORDER_STATUS,
 } from "@/lib/dispatchStatusColors";
+import { getCurrentStaffId } from "@/lib/currentStaff";
+import ProcessedByFooter from "@/components/ProcessedByFooter";
 
 function won(n: number | null) {
   if (n === null || n === undefined) return "-";
@@ -72,7 +74,7 @@ export default function DispatchDetailPage() {
     const prevStatus = dispatch?.dispatch_status;
     const { error } = await supabase
       .from("dispatches")
-      .update({ dispatch_status: status })
+      .update({ dispatch_status: status, updated_by: await getCurrentStaffId() })
       .eq("id", id);
     if (error) {
       setError(error.message);
@@ -147,7 +149,7 @@ export default function DispatchDetailPage() {
     const now = new Date();
     const billingPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-    await supabase.from("invoices").insert({
+    const { error: invoiceError } = await supabase.from("invoices").insert({
       order_id: orderId,
       company_id: order?.company_id || null,
       billing_period: billingPeriod,
@@ -157,7 +159,11 @@ export default function DispatchDetailPage() {
       receivable_amount: charge || null,
       payable_amount: payout || null,
       status: "정산대기",
+      created_by: await getCurrentStaffId(),
     });
+    if (invoiceError) {
+      setError(`정산 자동등록에 실패했습니다: ${invoiceError.message}`);
+    }
   }
 
   async function handleSave() {
@@ -177,6 +183,7 @@ export default function DispatchDetailPage() {
         issue_occurred: editForm.issue_occurred,
         issue_notes: editForm.issue_notes || null,
         memo: editForm.memo || null,
+        updated_by: await getCurrentStaffId(),
       })
       .eq("id", id);
     setSaving(false);
@@ -465,6 +472,13 @@ export default function DispatchDetailPage() {
       <button className="btn" onClick={handleSave} disabled={saving}>
         {saving ? "저장 중..." : "변경사항 저장"}
       </button>
+
+      <ProcessedByFooter
+        createdBy={dispatch.created_by}
+        createdAt={dispatch.created_at}
+        updatedBy={dispatch.updated_by}
+        updatedAt={dispatch.updated_at}
+      />
     </main>
   );
 }

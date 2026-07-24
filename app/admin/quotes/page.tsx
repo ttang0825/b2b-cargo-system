@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { generateDailyNumber } from "@/lib/generateNumber";
+import { getCurrentStaffId } from "@/lib/currentStaff";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import DateTimePicker from "@/components/DateTimePicker";
 
@@ -618,10 +619,12 @@ function QuotesPageInner() {
       .filter((v) => v.trim())
       .join(" ");
 
+    const staffId = await getCurrentStaffId();
     const { data: newQuote, error } = await supabase
       .from("quotes")
       .insert({
         quote_no: quoteNo,
+        created_by: staffId,
         company_id: customerMode === "company" ? selectedCompany!.id : null,
         guest_name: customerMode === "guest" ? form.guest_name : null,
         guest_phone:
@@ -720,7 +723,11 @@ function QuotesPageInner() {
     if (fromQuoteRequestId && newQuote) {
       await supabase
         .from("public_quote_requests")
-        .update({ status: "연락완료", quote_id: newQuote.id })
+        .update({
+          status: "연락완료",
+          quote_id: newQuote.id,
+          updated_by: staffId,
+        })
         .eq("id", fromQuoteRequestId);
     }
 

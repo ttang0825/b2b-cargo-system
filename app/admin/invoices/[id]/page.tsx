@@ -8,6 +8,8 @@ import {
   INVOICE_STATUS_OPTIONS,
   getInvoiceStatusColor,
 } from "@/lib/invoiceStatusColors";
+import { getCurrentStaffId } from "@/lib/currentStaff";
+import ProcessedByFooter from "@/components/ProcessedByFooter";
 
 function won(n: number | null) {
   if (n === null || n === undefined) return "-";
@@ -40,7 +42,7 @@ export default function InvoiceDetailPage() {
     setLoading(true);
     const { data, error } = await supabase
       .from("invoices")
-      .select("*, orders(id,order_no), companies(id,name)")
+      .select("*, orders(id,order_no,guest_name), companies(id,name)")
       .eq("id", id)
       .single();
     if (error) {
@@ -112,6 +114,7 @@ export default function InvoiceDetailPage() {
         payment_received_date: editForm.payment_received_date || null,
         driver_paid: editForm.driver_paid,
         driver_paid_date: editForm.driver_paid_date || null,
+        updated_by: await getCurrentStaffId(),
       })
       .eq("id", id);
 
@@ -198,7 +201,8 @@ export default function InvoiceDetailPage() {
             {invoice.orders?.order_no || "정산 상세"}
           </h1>
           <p className="page-desc">
-            {invoice.companies?.name || "-"} · {invoice.billing_period || "-"}
+            {invoice.companies?.name || invoice.orders?.guest_name || "-"} ·{" "}
+            {invoice.billing_period || "-"}
           </p>
         </div>
         <button
@@ -288,7 +292,7 @@ export default function InvoiceDetailPage() {
               </Link>
             </div>
           )}
-          {invoice.companies?.id && (
+          {invoice.companies?.id ? (
             <div>
               <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
                 화주
@@ -300,6 +304,20 @@ export default function InvoiceDetailPage() {
                 {invoice.companies.name} 페이지로 이동 →
               </Link>
             </div>
+          ) : (
+            invoice.orders?.guest_name && (
+              <div>
+                <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
+                  화주
+                </div>
+                <div style={{ fontSize: 13.5 }}>
+                  {invoice.orders.guest_name}{" "}
+                  <span className="badge" style={{ marginLeft: 4 }}>
+                    개인
+                  </span>
+                </div>
+              </div>
+            )
           )}
         </div>
       </div>
@@ -423,6 +441,13 @@ export default function InvoiceDetailPage() {
       <button className="btn" onClick={handleSave} disabled={saving}>
         {saving ? "저장 중..." : "변경사항 저장"}
       </button>
+
+      <ProcessedByFooter
+        createdBy={invoice.created_by}
+        createdAt={invoice.created_at}
+        updatedBy={invoice.updated_by}
+        updatedAt={invoice.updated_at}
+      />
     </main>
   );
 }
