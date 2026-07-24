@@ -42,7 +42,7 @@ export default function InvoiceDetailPage() {
     setLoading(true);
     const { data, error } = await supabase
       .from("invoices")
-      .select("*, orders(id,order_no), companies(id,name)")
+      .select("*, orders(id,order_no,guest_name), companies(id,name)")
       .eq("id", id)
       .single();
     if (error) {
@@ -201,7 +201,8 @@ export default function InvoiceDetailPage() {
             {invoice.orders?.order_no || "정산 상세"}
           </h1>
           <p className="page-desc">
-            {invoice.companies?.name || "-"} · {invoice.billing_period || "-"}
+            {invoice.companies?.name || invoice.orders?.guest_name || "-"} ·{" "}
+            {invoice.billing_period || "-"}
           </p>
         </div>
         <button
@@ -291,7 +292,7 @@ export default function InvoiceDetailPage() {
               </Link>
             </div>
           )}
-          {invoice.companies?.id && (
+          {invoice.companies?.id ? (
             <div>
               <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
                 화주
@@ -303,6 +304,20 @@ export default function InvoiceDetailPage() {
                 {invoice.companies.name} 페이지로 이동 →
               </Link>
             </div>
+          ) : (
+            invoice.orders?.guest_name && (
+              <div>
+                <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
+                  화주
+                </div>
+                <div style={{ fontSize: 13.5 }}>
+                  {invoice.orders.guest_name}{" "}
+                  <span className="badge" style={{ marginLeft: 4 }}>
+                    개인
+                  </span>
+                </div>
+              </div>
+            )
           )}
         </div>
       </div>
