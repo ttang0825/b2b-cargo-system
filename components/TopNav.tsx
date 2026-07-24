@@ -40,6 +40,13 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
+// 관리자(admin) role일 때만 노출되는 그룹 - middleware.ts에서도 /admin/staff는 관리자만
+// 접근 가능하도록 별도로 막고 있음 (여기서는 화면단 노출만 제어)
+const ADMIN_ONLY_GROUP: NavGroup = {
+  label: "시스템",
+  items: [{ href: "/admin/staff", label: "직원 계정 관리" }],
+};
+
 function Badge({ count }: { count: number }) {
   return (
     <span
@@ -123,6 +130,7 @@ export default function TopNav() {
   const [counts, setCounts] = useState({ portalRequests: 0, publicQuotes: 0, applications: 0 });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const navGroupRef = useRef<HTMLDivElement>(null);
 
   const isPublicPath =
@@ -207,6 +215,23 @@ export default function TopNav() {
     setOpenGroup(null);
   }, [pathname]);
 
+  useEffect(() => {
+    if (isPublicPath) return;
+    async function loadRole() {
+      const {
+        data: { user },
+      } = await supabaseAdminAuth.auth.getUser();
+      if (!user) return;
+      const { data: staff } = await supabaseAdminAuth
+        .from("staff_accounts")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+      setIsAdmin(staff?.role === "admin");
+    }
+    loadRole();
+  }, [isPublicPath]);
+
   // 드롭다운이 열려있을 때 메뉴 바깥의 빈 곳을 클릭하면 닫히게 함
   useEffect(() => {
     if (!openGroup) return;
@@ -228,6 +253,7 @@ export default function TopNav() {
   }
 
   const totalPending = counts.portalRequests + counts.publicQuotes + counts.applications;
+  const visibleGroups = isAdmin ? [...NAV_GROUPS, ADMIN_ONLY_GROUP] : NAV_GROUPS;
 
   return (
     <div className="top-nav">
@@ -242,7 +268,7 @@ export default function TopNav() {
           className="nav-desktop-group"
           style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}
         >
-          {NAV_GROUPS.map((group) => (
+          {visibleGroups.map((group) => (
             <NavDropdown
               key={group.label}
               group={group}
@@ -296,7 +322,7 @@ export default function TopNav() {
           className="mobile-only"
           style={{ borderTop: "1px solid var(--border)", padding: "8px 20px 16px", display: "flex", flexDirection: "column" }}
         >
-          {NAV_GROUPS.map((group) => (
+          {visibleGroups.map((group) => (
             <div key={group.label} style={{ marginTop: 10 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 4 }}>
                 {group.label}

@@ -51,13 +51,18 @@ export async function middleware(req: NextRequest) {
   // 직원 계정 테이블에서 재직 상태를 확인 - 퇴사(inactive) 처리된 계정은 세션이 있어도 차단
   const { data: staff } = await supabase
     .from("staff_accounts")
-    .select("status")
+    .select("status,role")
     .eq("id", user.id)
     .maybeSingle();
 
   if (!staff || staff.status !== "active") {
     await supabase.auth.signOut();
     return redirectToLogin("inactive");
+  }
+
+  // 직원 계정 관리 화면은 관리자만 접근 가능
+  if (pathname.startsWith("/admin/staff") && staff.role !== "admin") {
+    return NextResponse.redirect(new URL("/admin", req.url));
   }
 
   return response;
