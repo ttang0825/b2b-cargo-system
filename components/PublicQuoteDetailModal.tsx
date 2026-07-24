@@ -47,18 +47,23 @@ export default function PublicQuoteDetailModal({
   const router = useRouter();
   const [status, setStatus] = useState(item.status);
   const [note, setNote] = useState(item.staff_note || "");
+  const [processedBy, setProcessedBy] = useState(item.processed_by || "");
   const [saving, setSaving] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
   async function handleSave() {
+    if (!processedBy.trim()) {
+      setLocalError("처리자 이름을 입력해주세요.");
+      return;
+    }
     setSaving(true);
     setLocalError(null);
     try {
       const res = await fetch("/api/admin/public-quote-requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: item.id, action: "update", status, staff_note: note || null }),
+        body: JSON.stringify({ id: item.id, action: "update", status, staff_note: note || null, processed_by: processedBy }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -157,6 +162,7 @@ export default function PublicQuoteDetailModal({
 
         <SectionTitle>접수정보</SectionTitle>
         <DetailRow label="접수일" value={item.created_at ? formatDateTime(item.created_at) : "-"} />
+        {item.processed_by && <DetailRow label="처리자" value={item.processed_by} />}
 
         <div style={{ marginTop: 10 }}>
           {item.quote_id ? (
@@ -179,6 +185,10 @@ export default function PublicQuoteDetailModal({
         </div>
 
         <SectionTitle>답변 작성</SectionTitle>
+        <div className="field" style={{ marginBottom: 12 }}>
+          <label>처리자 이름</label>
+          <input value={processedBy} onChange={(e) => setProcessedBy(e.target.value)} />
+        </div>
         <div className="field" style={{ marginBottom: 12 }}>
           <label>상태</label>
           <select value={status} onChange={(e) => setStatus(e.target.value)}>
