@@ -9,6 +9,7 @@ import {
   DISPATCH_TO_ORDER_STATUS,
 } from "@/lib/dispatchStatusColors";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
+import { getCurrentStaffId } from "@/lib/currentStaff";
 
 type OrderLite = {
   id: string;
@@ -215,6 +216,7 @@ export default function DispatchesPage() {
       customer_charge: customerCharge ? Number(customerCharge) : null,
       driver_payout: driverPayout ? Number(driverPayout) : null,
       memo: memo || null,
+      created_by: await getCurrentStaffId(),
     });
 
     if (error) {
@@ -251,7 +253,7 @@ export default function DispatchesPage() {
 
     const { error } = await supabase
       .from("dispatches")
-      .update({ dispatch_status: status })
+      .update({ dispatch_status: status, updated_by: await getCurrentStaffId() })
       .eq("id", dispatchId);
     if (error) {
       setError(error.message);
@@ -339,6 +341,7 @@ export default function DispatchesPage() {
       receivable_amount: charge || null,
       payable_amount: payout || null,
       status: "정산대기",
+      created_by: await getCurrentStaffId(),
     });
   }
 

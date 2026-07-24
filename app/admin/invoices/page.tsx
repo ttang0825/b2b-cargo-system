@@ -9,6 +9,7 @@ import {
   getInvoiceStatusColor,
 } from "@/lib/invoiceStatusColors";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
+import { getCurrentStaffId } from "@/lib/currentStaff";
 
 type OrderLite = {
   id: string;
@@ -156,6 +157,7 @@ export default function InvoicesPage() {
       receivable_amount: chargeNum || null,
       payable_amount: payoutNum || null,
       status: "정산대기",
+      created_by: await getCurrentStaffId(),
     });
 
     if (error) {

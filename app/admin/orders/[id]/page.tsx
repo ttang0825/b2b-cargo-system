@@ -7,6 +7,8 @@ import { supabase } from "@/lib/supabaseClient";
 import { ORDER_STATUS_OPTIONS, getOrderStatusColor } from "@/lib/orderStatusColors";
 import { LOAD_UNLOAD_CONDITIONS } from "@/lib/constants";
 import DateTimePicker from "@/components/DateTimePicker";
+import { getCurrentStaffId } from "@/lib/currentStaff";
+import ProcessedByFooter from "@/components/ProcessedByFooter";
 
 type OrderDetail = {
   id: string;
@@ -22,6 +24,9 @@ type OrderDetail = {
   unload_condition: string | null;
   special_notes: string | null;
   created_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+  updated_at: string | null;
   guest_name: string | null;
   guest_phone: string | null;
   company_id: string | null;
@@ -125,6 +130,7 @@ export default function OrderDetailPage() {
         load_condition: editForm.load_condition || null,
         unload_condition: editForm.unload_condition || null,
         special_notes: editForm.special_notes || null,
+        updated_by: await getCurrentStaffId(),
       })
       .eq("id", id);
     setSaving(false);
@@ -487,6 +493,13 @@ export default function OrderDetailPage() {
           내역이 이 자리에 표시됩니다.
         </p>
       </div>
+
+      <ProcessedByFooter
+        createdBy={order.created_by}
+        createdAt={order.created_at}
+        updatedBy={order.updated_by}
+        updatedAt={order.updated_at}
+      />
     </main>
   );
 }

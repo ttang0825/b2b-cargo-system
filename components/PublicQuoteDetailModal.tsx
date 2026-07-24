@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatDate } from "@/components/ApplicationDetailModal";
 import { notifyBadgeRefresh } from "@/lib/notifyBadgeRefresh";
+import ProcessedByFooter from "@/components/ProcessedByFooter";
 
 export const STATUS_OPTIONS = ["신규", "연락완료", "종료"];
 export const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
@@ -201,6 +202,13 @@ export default function PublicQuoteDetailModal({
           <label>답변/안내 (고객이 "내 문의 조회"에서 확인할 수 있습니다)</label>
           <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
         </div>
+
+        <ProcessedByFooter
+          createdBy={item.created_by}
+          createdAt={item.created_at}
+          updatedBy={item.updated_by}
+          updatedAt={item.updated_at}
+        />
 
         {localError && <div className="error-box" style={{ marginBottom: 12 }}>{localError}</div>}
 

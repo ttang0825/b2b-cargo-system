@@ -13,6 +13,7 @@ import {
 } from "@/lib/constants";
 import { MANUAL_SOURCE_OPTIONS, getSourceChips } from "@/lib/sourceColors";
 import MultiSelectTags from "@/components/MultiSelectTags";
+import { getCurrentStaffId } from "@/lib/currentStaff";
 
 type Company = {
   id: string;
@@ -151,8 +152,10 @@ export default function CompaniesPage() {
         ? `${form.recommended_vehicle_tonnage} ${form.recommended_vehicle_bodytype}`
         : null;
 
+    const staffId = await getCurrentStaffId();
     const { error } = await supabase.from("companies").insert({
       name: form.name,
+      created_by: staffId,
       industry: form.industry || null,
       sub_industry: form.sub_industry || null,
       metro_region: form.metro_region || null,

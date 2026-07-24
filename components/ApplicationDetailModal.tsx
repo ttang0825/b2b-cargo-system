@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import ProcessedByFooter from "@/components/ProcessedByFooter";
 
 export const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   검토중: { bg: "#fff1e2", text: "#d9730d" },
@@ -350,6 +351,13 @@ export default function ApplicationDetailModal({
                 ))}
               </>
             )}
+
+            <ProcessedByFooter
+              createdBy={item.created_by}
+              createdAt={item.created_at}
+              updatedBy={item.updated_by}
+              updatedAt={item.updated_at}
+            />
 
             {localError && <div className="error-box" style={{ marginTop: 14 }}>{localError}</div>}
 

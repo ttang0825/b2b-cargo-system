@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getCurrentStaff } from "@/lib/getCurrentStaff";
 
 // Next.js가 GET 응답(및 그 안에서 호출되는 fetch)을 캐시해버리면, 방금 처리한 결과가
 // 재조회 시 예전 값으로 보이는 문제가 있을 수 있어 매 요청마다 실제 DB를 다시 조회하도록 강제
@@ -76,9 +77,15 @@ export async function POST(req: Request) {
   if (!id || !status) {
     return NextResponse.json({ error: "id와 status가 필요합니다." }, { status: 400 });
   }
+  const staff = await getCurrentStaff();
   const { error } = await admin
     .from("customer_applications")
-    .update({ status, staff_note: staff_note || null, processed_by: processed_by || null })
+    .update({
+      status,
+      staff_note: staff_note || null,
+      processed_by: processed_by || null,
+      updated_by: staff?.id || null,
+    })
     .eq("id", id);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });

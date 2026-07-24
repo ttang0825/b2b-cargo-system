@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getCurrentStaff } from "@/lib/getCurrentStaff";
 
 function randomPassword(length = 10) {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
@@ -39,6 +40,7 @@ export async function POST(req: Request) {
   const admin = createClient(url, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+  const staff = await getCurrentStaff();
 
   // 1. 신청서 조회
   const { data: application, error: fetchError } = await admin
@@ -80,6 +82,7 @@ export async function POST(req: Request) {
       recommended_vehicle: application.preferred_vehicle || null,
       manual_source_type: "온라인 등록신청",
       manual_source_note: extraNoteParts.length > 0 ? extraNoteParts.join(" / ") : null,
+      created_by: staff?.id || null,
     })
     .select("id")
     .single();
@@ -127,7 +130,12 @@ export async function POST(req: Request) {
   // 4. 신청서 상태 갱신 (모든 단계가 성공했을 때만 도달)
   await admin
     .from("customer_applications")
-    .update({ status: "승인됨", company_id: company.id, processed_by: processed_by || null })
+    .update({
+      status: "승인됨",
+      company_id: company.id,
+      processed_by: processed_by || null,
+      updated_by: staff?.id || null,
+    })
     .eq("id", application_id);
 
   return NextResponse.json({ email: portal_email, password: tempPassword, company_id: company.id });

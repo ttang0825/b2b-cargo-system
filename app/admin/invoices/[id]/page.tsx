@@ -8,6 +8,8 @@ import {
   INVOICE_STATUS_OPTIONS,
   getInvoiceStatusColor,
 } from "@/lib/invoiceStatusColors";
+import { getCurrentStaffId } from "@/lib/currentStaff";
+import ProcessedByFooter from "@/components/ProcessedByFooter";
 
 function won(n: number | null) {
   if (n === null || n === undefined) return "-";
@@ -112,6 +114,7 @@ export default function InvoiceDetailPage() {
         payment_received_date: editForm.payment_received_date || null,
         driver_paid: editForm.driver_paid,
         driver_paid_date: editForm.driver_paid_date || null,
+        updated_by: await getCurrentStaffId(),
       })
       .eq("id", id);
 
@@ -423,6 +426,13 @@ export default function InvoiceDetailPage() {
       <button className="btn" onClick={handleSave} disabled={saving}>
         {saving ? "저장 중..." : "변경사항 저장"}
       </button>
+
+      <ProcessedByFooter
+        createdBy={invoice.created_by}
+        createdAt={invoice.created_at}
+        updatedBy={invoice.updated_by}
+        updatedAt={invoice.updated_at}
+      />
     </main>
   );
 }

@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { ORDER_STATUS_OPTIONS, getOrderStatusColor } from "@/lib/orderStatusColors";
 import { LOAD_UNLOAD_CONDITIONS } from "@/lib/constants";
 import { generateDailyNumber } from "@/lib/generateNumber";
+import { getCurrentStaffId } from "@/lib/currentStaff";
 import DateTimePicker from "@/components/DateTimePicker";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 
@@ -209,6 +210,7 @@ function OrdersPageInner() {
 
     const { error } = await supabase.from("orders").insert({
       order_no: orderNo,
+      created_by: await getCurrentStaffId(),
       company_id: customerMode === "company" ? selectedCompany!.id : null,
       guest_name: customerMode === "guest" ? form.guest_name : null,
       guest_phone: customerMode === "guest" ? form.guest_phone || null : null,
@@ -255,7 +257,7 @@ function OrdersPageInner() {
   async function handleStatusChange(id: string, status: string) {
     const { error } = await supabase
       .from("orders")
-      .update({ status })
+      .update({ status, updated_by: await getCurrentStaffId() })
       .eq("id", id);
     if (error) {
       setError(error.message);
