@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
+import { getCurrentStaffRole } from "@/lib/currentStaff";
 
 export const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   검토중: { bg: "#fff1e2", text: "#d9730d" },
@@ -74,6 +75,11 @@ export default function ApplicationDetailModal({
   const [step, setStep] = useState<"view" | "reject" | "hold" | "approve" | "result">("view");
   const [submitting, setSubmitting] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
+  }, []);
 
   const [reason, setReason] = useState("");
   const [customNote, setCustomNote] = useState("");
@@ -387,22 +393,24 @@ export default function ApplicationDetailModal({
               </div>
             )}
 
-            <div style={{ marginTop: 18, paddingTop: 12, borderTop: "1px dashed var(--border)" }}>
-              <button
-                onClick={handleDelete}
-                disabled={submitting}
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "var(--danger)",
-                  fontSize: 11.5,
-                  cursor: "pointer",
-                  padding: 0,
-                }}
-              >
-                이 신청 기록 삭제
-              </button>
-            </div>
+            {isAdmin && (
+              <div style={{ marginTop: 18, paddingTop: 12, borderTop: "1px dashed var(--border)" }}>
+                <button
+                  onClick={handleDelete}
+                  disabled={submitting}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "var(--danger)",
+                    fontSize: 11.5,
+                    cursor: "pointer",
+                    padding: 0,
+                  }}
+                >
+                  이 신청 기록 삭제
+                </button>
+              </div>
+            )}
           </>
         )}
 

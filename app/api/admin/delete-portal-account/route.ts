@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getCurrentStaff } from "@/lib/getCurrentStaff";
 
 export async function POST(req: Request) {
+  const currentStaff = await getCurrentStaff();
+  if (!currentStaff || currentStaff.role !== "admin") {
+    return NextResponse.json({ error: "삭제는 관리자만 할 수 있습니다." }, { status: 403 });
+  }
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceKey) {

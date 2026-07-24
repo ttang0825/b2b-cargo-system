@@ -50,6 +50,10 @@ export async function POST(req: Request) {
 
   // 개별 삭제
   if (action === "delete") {
+    const staff = await getCurrentStaff();
+    if (!staff || staff.role !== "admin") {
+      return NextResponse.json({ error: "삭제는 관리자만 할 수 있습니다." }, { status: 403 });
+    }
     const { id } = body;
     if (!id) return NextResponse.json({ error: "id가 필요합니다." }, { status: 400 });
     const { error } = await admin.from("customer_applications").delete().eq("id", id);
@@ -59,6 +63,10 @@ export async function POST(req: Request) {
 
   // 오래된 거절/보류 건 일괄 삭제 (기본 90일 이전)
   if (action === "bulk_cleanup") {
+    const staff = await getCurrentStaff();
+    if (!staff || staff.role !== "admin") {
+      return NextResponse.json({ error: "삭제는 관리자만 할 수 있습니다." }, { status: 403 });
+    }
     const days = body.days || 90;
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
