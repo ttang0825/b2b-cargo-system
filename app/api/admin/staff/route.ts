@@ -100,12 +100,38 @@ export async function POST(req: Request) {
     return NextResponse.json({ email: email.trim(), password: tempPassword });
   }
 
-  if (action === "update_name") {
-    const { id, name } = body;
-    if (!id || !name?.trim()) {
-      return NextResponse.json({ error: "이름을 입력해주세요." }, { status: 400 });
+  if (action === "update_profile") {
+    const { id, name, email } = body;
+    if (!id || !name?.trim() || !email?.trim()) {
+      return NextResponse.json({ error: "이름과 이메일을 입력해주세요." }, { status: 400 });
     }
-    const { error } = await admin.from("staff_accounts").update({ name: name.trim() }).eq("id", id);
+
+    const { data: current } = await admin
+      .from("staff_accounts")
+      .select("email")
+      .eq("id", id)
+      .maybeSingle();
+
+    // 이메일이 바뀌는 경우, 로그인 계정(Auth)의 이메일도 같이 바꿔야
+    // 실제 로그인 이메일과 화면에 보이는 이메일이 어긋나지 않음
+    if (current && current.email !== email.trim()) {
+      const { error: authError } = await admin.auth.admin.updateUserById(id, {
+        email: email.trim(),
+        email_confirm: true,
+      });
+      if (authError) {
+        const message = (authError.message || "").toLowerCase();
+        const friendly = message.includes("already")
+          ? `이미 다른 계정에서 사용 중인 이메일입니다 (${email}).`
+          : authError.message;
+        return NextResponse.json({ error: friendly || "이메일 변경에 실패했습니다." }, { status: 400 });
+      }
+    }
+
+    const { error } = await admin
+      .from("staff_accounts")
+      .update({ name: name.trim(), email: email.trim() })
+      .eq("id", id);
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     return NextResponse.json({ ok: true });
   }
