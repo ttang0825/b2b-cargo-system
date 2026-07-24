@@ -331,7 +331,7 @@ export default function DispatchesPage() {
     const now = new Date();
     const billingPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-    await supabase.from("invoices").insert({
+    const { error: invoiceError } = await supabase.from("invoices").insert({
       order_id: target.order_id,
       company_id: order?.company_id || null,
       billing_period: billingPeriod,
@@ -343,6 +343,9 @@ export default function DispatchesPage() {
       status: "정산대기",
       created_by: await getCurrentStaffId(),
     });
+    if (invoiceError) {
+      setError(`정산 자동등록에 실패했습니다: ${invoiceError.message}`);
+    }
   }
 
   const filtered = useMemo(() => {
