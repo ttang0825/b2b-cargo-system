@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { getCurrentStaffRole } from "@/lib/currentStaff";
 
 const VEHICLES = ["1톤", "1.4톤", "2.5톤", "3.5톤", "5톤", "5톤 플러스/축"];
 
@@ -39,14 +40,20 @@ function EditableNumber({
   value,
   onSave,
   suffix = "원",
+  readOnly = false,
 }: {
   value: number | null;
   onSave: (v: number) => void;
   suffix?: string;
+  readOnly?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [temp, setTemp] = useState(String(value ?? ""));
   const step = suffix === "원" ? 1000 : 1;
+
+  if (readOnly) {
+    return <span>{value ? value.toLocaleString("ko-KR") + suffix : "-"}</span>;
+  }
 
   if (editing) {
     return (
@@ -100,6 +107,7 @@ export default function RatesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [pendingScale, setPendingScale] = useState<{
     vehicleType: string;
     ratio: number;
@@ -128,7 +136,21 @@ export default function RatesPage() {
 
   useEffect(() => {
     load();
+    getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
   }, []);
+
+  async function postRates(payload: Record<string, any>): Promise<string | null> {
+    const res = await fetch("/api/admin/rates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return data.error || "저장에 실패했습니다.";
+    }
+    return null;
+  }
 
   function flashSaved() {
     setSavedFlash(true);
@@ -139,12 +161,9 @@ export default function RatesPage() {
     const oldTier = tiers.find((t) => t.id === id);
     const oldValue = oldTier?.base_fare ?? 0;
 
-    const { error } = await supabase
-      .from("rate_distance_tiers")
-      .update({ base_fare })
-      .eq("id", id);
-    if (error) {
-      setError(error.message);
+    const errMsg = await postRates({ action: "update_tier", id, base_fare });
+    if (errMsg) {
+      setError(errMsg);
       return;
     }
     setTiers((prev) =>
@@ -172,20 +191,22 @@ export default function RatesPage() {
       return true;
     });
 
-    const updates = targets.map((t) => {
-      const newFare = Math.round((t.base_fare * ratio) / 100) * 100;
-      return supabase
-        .from("rate_distance_tiers")
-        .update({ base_fare: newFare })
-        .eq("id", t.id)
-        .then(() => ({ id: t.id, newFare }));
-    });
+    const updates = targets.map((t) => ({
+      id: t.id,
+      base_fare: Math.round((t.base_fare * ratio) / 100) * 100,
+    }));
 
-    const results = await Promise.all(updates);
+    const errMsg = await postRates({ action: "update_tier_scale", updates });
+    if (errMsg) {
+      setError(errMsg);
+      setPendingScale(null);
+      return;
+    }
+
     setTiers((prev) =>
       prev.map((t) => {
-        const found = results.find((r) => r.id === t.id);
-        return found ? { ...t, base_fare: found.newFare } : t;
+        const found = updates.find((u) => u.id === t.id);
+        return found ? { ...t, base_fare: found.base_fare } : t;
       })
     );
     setPendingScale(null);
@@ -197,20 +218,14 @@ export default function RatesPage() {
     field: "rate_pct" | "flat_amount",
     value: number
   ) {
-    const { error } = await supabase
-      .from("rate_surcharges")
-      .update({ [field]: field === "rate_pct" ? value / 100 : value })
-      .eq("id", id);
-    if (error) {
-      setError(error.message);
+    const dbValue = field === "rate_pct" ? value / 100 : value;
+    const errMsg = await postRates({ action: "update_surcharge", id, field, value: dbValue });
+    if (errMsg) {
+      setError(errMsg);
       return;
     }
     setSurcharges((prev) =>
-      prev.map((s) =>
-        s.id === id
-          ? { ...s, [field]: field === "rate_pct" ? value / 100 : value }
-          : s
-      )
+      prev.map((s) => (s.id === id ? { ...s, [field]: dbValue } : s))
     );
     flashSaved();
   }
@@ -220,12 +235,9 @@ export default function RatesPage() {
     field: "waiting_fee_per_unit" | "waypoint_fee" | "free_waiting_minutes",
     value: number
   ) {
-    const { error } = await supabase
-      .from("rate_vehicle_extra_fees")
-      .update({ [field]: value })
-      .eq("id", id);
-    if (error) {
-      setError(error.message);
+    const errMsg = await postRates({ action: "update_extra_fee", id, field, value });
+    if (errMsg) {
+      setError(errMsg);
       return;
     }
     setExtraFees((prev) =>
@@ -260,7 +272,9 @@ export default function RatesPage() {
         <div>
           <h1 className="page-title">운임기준표</h1>
           <p className="page-desc">
-            숫자를 클릭하면 바로 수정할 수 있습니다. (부가세 별도)
+            {isAdmin
+              ? "숫자를 클릭하면 바로 수정할 수 있습니다. (부가세 별도)"
+              : "조회 전용 화면입니다. 수정은 관리자만 가능합니다. (부가세 별도)"}
           </p>
         </div>
         {savedFlash && (
@@ -366,6 +380,7 @@ export default function RatesPage() {
                             <EditableNumber
                               value={cell.base_fare}
                               onSave={(val) => updateTierFare(cell.id, val)}
+                              readOnly={!isAdmin}
                             />
                           ) : (
                             "-"
@@ -413,6 +428,7 @@ export default function RatesPage() {
                               value={Math.round(s.rate_pct * 100)}
                               onSave={(v) => updateSurcharge(s.id, "rate_pct", v)}
                               suffix="%"
+                              readOnly={!isAdmin}
                             />
                           </td>
                           <td style={{ padding: "6px 4px" }}>
@@ -421,6 +437,7 @@ export default function RatesPage() {
                               onSave={(v) =>
                                 updateSurcharge(s.id, "flat_amount", v)
                               }
+                              readOnly={!isAdmin}
                             />
                           </td>
                         </tr>
@@ -452,6 +469,7 @@ export default function RatesPage() {
                           updateExtraFee(e.id, "free_waiting_minutes", v)
                         }
                         suffix="분"
+                        readOnly={!isAdmin}
                       />
                     </td>
                     <td>
@@ -460,12 +478,14 @@ export default function RatesPage() {
                         onSave={(v) =>
                           updateExtraFee(e.id, "waiting_fee_per_unit", v)
                         }
+                        readOnly={!isAdmin}
                       />
                     </td>
                     <td>
                       <EditableNumber
                         value={e.waypoint_fee}
                         onSave={(v) => updateExtraFee(e.id, "waypoint_fee", v)}
+                        readOnly={!isAdmin}
                       />
                     </td>
                   </tr>

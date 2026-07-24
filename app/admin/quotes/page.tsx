@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { generateDailyNumber } from "@/lib/generateNumber";
-import { getCurrentStaffId } from "@/lib/currentStaff";
+import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import DateTimePicker from "@/components/DateTimePicker";
 
@@ -110,6 +110,11 @@ function QuotesPageInner() {
   const [useManualFinalAmount, setUseManualFinalAmount] = useState(false);
   const [finalAmountOverride, setFinalAmountOverride] = useState("");
   const [ratesLoading, setRatesLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
+  }, []);
 
   const [savedLocations, setSavedLocations] = useState<
     { id: string; location_name: string | null; address: string | null; location_type: string | null }[]
@@ -766,10 +771,14 @@ function QuotesPageInner() {
       `견적 "${quoteNo}"을(를) 삭제하시겠습니까? 되돌릴 수 없습니다.`
     );
     if (!confirmed) return;
-    await supabase.from("quote_items").delete().eq("quote_id", id);
-    const { error } = await supabase.from("quotes").delete().eq("id", id);
-    if (error) {
-      setError(error.message);
+    const res = await fetch("/api/admin/delete-record", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ table: "quotes", id }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "삭제에 실패했습니다.");
       return;
     }
     loadQuotes(period);
@@ -1538,18 +1547,20 @@ function QuotesPageInner() {
                     </span>
                   </td>
                   <td className="cell-nowrap" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      className="btn-danger"
-                      style={{
-                        padding: "4px 10px",
-                        borderRadius: 6,
-                        fontSize: 12,
-                        cursor: "pointer",
-                      }}
-                      onClick={() => handleDeleteQuote(q.id, q.quote_no)}
-                    >
-                      삭제
-                    </button>
+                    {isAdmin && (
+                      <button
+                        className="btn-danger"
+                        style={{
+                          padding: "4px 10px",
+                          borderRadius: 6,
+                          fontSize: 12,
+                          cursor: "pointer",
+                        }}
+                        onClick={() => handleDeleteQuote(q.id, q.quote_no)}
+                      >
+                        삭제
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
