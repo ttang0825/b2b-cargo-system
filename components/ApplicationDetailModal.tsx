@@ -307,6 +307,9 @@ export default function ApplicationDetailModal({
             <DetailRow label="주요 출발지" value={item.main_origin || "미입력"} />
             <DetailRow label="주요 도착지" value={item.main_destination || "미입력"} />
             <DetailRow label="월 예상 운송건수" value={item.monthly_volume_estimate || "미입력"} />
+            <DetailRow label="업종" value={item.industry || "미입력"} />
+            <DetailRow label="이용 지역" value={item.preferred_regions || "미입력"} />
+            <DetailRow label="이용 차량" value={item.preferred_vehicle || "미입력"} />
             <DetailRow label="메모" value={item.notes || "미입력"} />
 
             <SectionTitle>신청정보</SectionTitle>

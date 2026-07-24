@@ -2,13 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
-
-const STATUS_OPTIONS = ["신규", "연락완료", "종료"];
-const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  신규: { bg: "#fff1e2", text: "#d9730d" },
-  연락완료: { bg: "#e6f7ec", text: "#1b9c57" },
-  종료: { bg: "var(--bg)", text: "var(--text-muted)" },
-};
+import { formatDate } from "@/components/ApplicationDetailModal";
+import PublicQuoteDetailModal, { STATUS_COLORS } from "@/components/PublicQuoteDetailModal";
 
 export default function AdminPublicQuotesPage() {
   const [items, setItems] = useState<any[]>([]);
@@ -16,6 +11,7 @@ export default function AdminPublicQuotesPage() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("신규");
   const [period, setPeriod] = useState<DatePreset>("all");
+  const [selectedItem, setSelectedItem] = useState<any | null>(null);
 
   async function loadItems() {
     setLoading(true);
@@ -39,41 +35,6 @@ export default function AdminPublicQuotesPage() {
     loadItems();
   }, []);
 
-  async function handleStatusChange(id: string, status: string) {
-    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, status } : i)));
-    await fetch("/api/admin/public-quote-requests", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, action: "update", status }),
-    });
-  }
-
-  async function handleWriteNote(id: string, currentNote: string | null) {
-    const note = window.prompt("이 문의에 대한 답변/안내를 입력해주세요 (고객이 '내 문의 조회'에서 확인할 수 있습니다)", currentNote || "");
-    if (note === null) return;
-    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, staff_note: note } : i)));
-    await fetch("/api/admin/public-quote-requests", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, action: "update", staff_note: note }),
-    });
-  }
-
-  async function handleDelete(id: string, name: string) {
-    if (!window.confirm(`"${name}"님의 문의를 삭제하시겠습니까?`)) return;
-    const res = await fetch("/api/admin/public-quote-requests", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, action: "delete" }),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setError(data.error || "삭제에 실패했습니다.");
-      return;
-    }
-    loadItems();
-  }
-
   const periodFiltered = useMemo(() => {
     const { from } = getDateRange(period);
     if (!from) return items;
@@ -87,7 +48,10 @@ export default function AdminPublicQuotesPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">공개 견적문의</h1>
-          <p className="page-desc">랜딩페이지(비회원)를 통해 접수된 문의입니다.</p>
+          <p className="page-desc">
+            랜딩페이지(비회원)를 통해 접수된 문의입니다. 행을 클릭하면 상세 정보와 답변 작성을
+            할 수 있습니다.
+          </p>
         </div>
       </div>
 
@@ -115,88 +79,124 @@ export default function AdminPublicQuotesPage() {
         ) : filtered.length === 0 ? (
           <div className="empty-state">해당하는 문의가 없습니다.</div>
         ) : (
-          <table style={{ minWidth: 920 }}>
-            <thead>
-              <tr>
-                <th>성함/업체명</th>
-                <th>연락처</th>
-                <th>구간</th>
-                <th>차량</th>
-                <th>문의내용</th>
-                <th>접수일</th>
-                <th>상태</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            <table className="desktop-only">
+              <thead>
+                <tr>
+                  <th style={{ width: 90 }}>접수일</th>
+                  <th>문의자</th>
+                  <th>연락처</th>
+                  <th>구간</th>
+                  <th style={{ width: 80 }}>상태</th>
+                  <th style={{ width: 100 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((r) => (
+                  <tr key={r.id} onClick={() => setSelectedItem(r)} style={{ cursor: "pointer" }}>
+                    <td className="cell-nowrap">
+                      <span className="num">{r.created_at ? formatDate(r.created_at) : "-"}</span>
+                    </td>
+                    <td className="cell-nowrap" style={{ fontWeight: 700 }}>{r.name}</td>
+                    <td className="cell-nowrap">
+                      <span className="num">{r.phone}</span>
+                    </td>
+                    <td style={{ whiteSpace: "normal" }}>
+                      <div>{r.origin || "-"}</div>
+                      <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>→ {r.destination || "-"}</div>
+                    </td>
+                    <td className="cell-nowrap">
+                      <span
+                        style={{
+                          display: "inline-block",
+                          padding: "3px 10px",
+                          borderRadius: 999,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          background: (STATUS_COLORS[r.status] || {}).bg,
+                          color: (STATUS_COLORS[r.status] || {}).text,
+                        }}
+                      >
+                        {r.status}
+                      </span>
+                    </td>
+                    <td className="cell-nowrap">
+                      <button
+                        className="btn-ghost"
+                        style={{ padding: "5px 12px", borderRadius: 6, fontSize: 11.5, minWidth: 78, cursor: "pointer" }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedItem(r);
+                        }}
+                      >
+                        상세보기
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <div className="mobile-only">
               {filtered.map((r) => (
-                <tr key={r.id}>
-                  <td className="cell-nowrap">{r.name}</td>
-                  <td className="cell-nowrap">
-                    <div className="num">{r.phone}</div>
-                    {r.email && <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{r.email}</div>}
-                  </td>
-                  <td>
-                    <div>{r.origin || "-"} → {r.destination || "-"}</div>
-                    {(r.origin_company || r.origin_contact) && (
-                      <div style={{ fontSize: 10.5, color: "var(--text-muted)", marginTop: 2 }}>
-                        출발: {[r.origin_company, r.origin_contact, r.origin_department].filter(Boolean).join(" / ")}
-                      </div>
-                    )}
-                    {(r.destination_company || r.destination_contact) && (
-                      <div style={{ fontSize: 10.5, color: "var(--text-muted)" }}>
-                        도착: {[r.destination_company, r.destination_contact, r.destination_department].filter(Boolean).join(" / ")}
-                      </div>
-                    )}
-                  </td>
-                  <td className="cell-nowrap">{r.vehicle_type || "-"}</td>
-                  <td style={{ maxWidth: 200 }}>{r.notes || r.item || "-"}</td>
-                  <td className="cell-nowrap">
-                    <span className="num">{new Date(r.created_at).toLocaleDateString("ko-KR")}</span>
-                  </td>
-                  <td className="cell-nowrap">
-                    <select
-                      value={r.status}
-                      onChange={(e) => handleStatusChange(r.id, e.target.value)}
+                <div
+                  key={r.id}
+                  className="mobile-row-card"
+                  onClick={() => setSelectedItem(r)}
+                  style={{ cursor: "pointer" }}
+                >
+                  <div className="mobile-row-top">
+                    <span style={{ fontSize: 13, fontWeight: 700 }}>{r.name}</span>
+                    <span
                       style={{
-                        fontSize: 12,
-                        padding: "4px 8px",
+                        display: "inline-block",
+                        padding: "3px 10px",
                         borderRadius: 999,
-                        border: "none",
-                        fontWeight: 600,
+                        fontSize: 11.5,
+                        fontWeight: 700,
                         background: (STATUS_COLORS[r.status] || {}).bg,
                         color: (STATUS_COLORS[r.status] || {}).text,
                       }}
                     >
-                      {STATUS_OPTIONS.map((s) => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="cell-nowrap">
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button
-                        className="btn-ghost"
-                        style={{ padding: "4px 10px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}
-                        onClick={() => handleWriteNote(r.id, r.staff_note)}
-                      >
-                        {r.staff_note ? "답변 수정" : "답변 남기기"}
-                      </button>
-                      <button
-                        className="btn-danger"
-                        style={{ padding: "4px 10px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}
-                        onClick={() => handleDelete(r.id, r.name)}
-                      >
-                        삭제
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+                      {r.status}
+                    </span>
+                  </div>
+                  <div className="mobile-row-line">
+                    <span className="mobile-row-label">연락처</span>
+                    <span className="num">{r.phone}</span>
+                  </div>
+                  <div className="mobile-row-line">
+                    <span className="mobile-row-label">구간</span>
+                    <span>{r.origin || "-"} → {r.destination || "-"}</span>
+                  </div>
+                  <div className="mobile-row-line">
+                    <span className="mobile-row-label">접수일</span>
+                    <span className="num">{r.created_at ? formatDate(r.created_at) : "-"}</span>
+                  </div>
+                  <button
+                    className="btn-ghost"
+                    style={{ marginTop: 8, padding: "6px 14px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedItem(r);
+                    }}
+                  >
+                    상세보기
+                  </button>
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+          </>
         )}
       </div>
+
+      {selectedItem && (
+        <PublicQuoteDetailModal
+          item={selectedItem}
+          onClose={() => setSelectedItem(null)}
+          onChanged={loadItems}
+        />
+      )}
     </main>
   );
 }

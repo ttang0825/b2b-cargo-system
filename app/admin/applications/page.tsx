@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import ApplicationDetailModal, { STATUS_COLORS, formatDate } from "@/components/ApplicationDetailModal";
+import { notifyBadgeRefresh } from "@/lib/notifyBadgeRefresh";
 
 export default function AdminApplicationsPage() {
   const router = useRouter();
@@ -289,7 +290,10 @@ export default function AdminApplicationsPage() {
           item={selectedItem}
           allItems={items}
           onClose={() => setSelectedItem(null)}
-          onChanged={() => loadItems(true)}
+          onChanged={() => {
+            loadItems(true);
+            notifyBadgeRefresh();
+          }}
         />
       )}
     </main>

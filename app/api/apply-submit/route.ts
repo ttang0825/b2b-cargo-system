@@ -18,6 +18,9 @@ export async function POST(req: Request) {
     main_origin,
     main_destination,
     monthly_volume_estimate,
+    industry,
+    preferred_regions,
+    preferred_vehicle,
     notes,
   } = body;
 
@@ -80,6 +83,9 @@ export async function POST(req: Request) {
     main_origin: main_origin || null,
     main_destination: main_destination || null,
     monthly_volume_estimate: monthly_volume_estimate || null,
+    industry: industry || null,
+    preferred_regions: preferred_regions || null,
+    preferred_vehicle: preferred_vehicle || null,
     notes: notes || null,
     status: "검토중",
   });
