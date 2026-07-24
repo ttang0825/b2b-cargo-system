@@ -100,6 +100,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ email: email.trim(), password: tempPassword });
   }
 
+  if (action === "update_name") {
+    const { id, name } = body;
+    if (!id || !name?.trim()) {
+      return NextResponse.json({ error: "이름을 입력해주세요." }, { status: 400 });
+    }
+    const { error } = await admin.from("staff_accounts").update({ name: name.trim() }).eq("id", id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ ok: true });
+  }
+
   if (action === "update_role") {
     const { id, role } = body;
     if (!id || (role !== "admin" && role !== "staff")) {

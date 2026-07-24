@@ -27,6 +27,9 @@ export default function AdminStaffPage() {
   const [inviting, setInviting] = useState(false);
   const [issuedCredentials, setIssuedCredentials] = useState<{ email: string; password: string } | null>(null);
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+
   async function loadItems() {
     setLoading(true);
     setError(null);
@@ -79,6 +82,39 @@ export default function AdminStaffPage() {
       setError("직원 계정 생성 중 오류가 발생했습니다.");
     }
     setInviting(false);
+  }
+
+  function startEditName(item: any) {
+    setEditingId(item.id);
+    setEditingName(item.name);
+    setError(null);
+  }
+
+  async function handleSaveName(id: string) {
+    if (!editingName.trim()) {
+      setError("이름을 입력해주세요.");
+      return;
+    }
+    setProcessingId(id);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/staff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update_name", id, name: editingName }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "이름 수정에 실패했습니다.");
+        setProcessingId(null);
+        return;
+      }
+      setEditingId(null);
+      loadItems();
+    } catch {
+      setError("이름 수정 중 오류가 발생했습니다.");
+    }
+    setProcessingId(null);
   }
 
   async function handleRoleChange(id: string, role: string) {
@@ -203,7 +239,44 @@ export default function AdminStaffPage() {
               <tbody>
                 {items.map((item) => (
                   <tr key={item.id}>
-                    <td className="cell-nowrap" style={{ fontWeight: 700 }}>{item.name}</td>
+                    <td className="cell-nowrap" style={{ fontWeight: 700 }}>
+                      {editingId === item.id ? (
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                          <input
+                            value={editingName}
+                            onChange={(e) => setEditingName(e.target.value)}
+                            style={{ fontSize: 13, padding: "4px 6px", width: 100 }}
+                            autoFocus
+                          />
+                          <button
+                            className="btn-ghost"
+                            style={{ padding: "3px 8px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                            disabled={processingId === item.id}
+                            onClick={() => handleSaveName(item.id)}
+                          >
+                            저장
+                          </button>
+                          <button
+                            className="btn-ghost"
+                            style={{ padding: "3px 8px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                            onClick={() => setEditingId(null)}
+                          >
+                            취소
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                          {item.name}
+                          <button
+                            className="btn-ghost"
+                            style={{ padding: "2px 6px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}
+                            onClick={() => startEditName(item)}
+                          >
+                            수정
+                          </button>
+                        </div>
+                      )}
+                    </td>
                     <td className="cell-nowrap">{item.email}</td>
                     <td className="cell-nowrap">
                       <select
@@ -253,7 +326,42 @@ export default function AdminStaffPage() {
               {items.map((item) => (
                 <div key={item.id} className="mobile-row-card">
                   <div className="mobile-row-top">
-                    <span style={{ fontSize: 13, fontWeight: 700 }}>{item.name}</span>
+                    {editingId === item.id ? (
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <input
+                          value={editingName}
+                          onChange={(e) => setEditingName(e.target.value)}
+                          style={{ fontSize: 13, padding: "4px 6px", width: 90 }}
+                          autoFocus
+                        />
+                        <button
+                          className="btn-ghost"
+                          style={{ padding: "3px 8px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                          disabled={processingId === item.id}
+                          onClick={() => handleSaveName(item.id)}
+                        >
+                          저장
+                        </button>
+                        <button
+                          className="btn-ghost"
+                          style={{ padding: "3px 8px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                          onClick={() => setEditingId(null)}
+                        >
+                          취소
+                        </button>
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: 13, fontWeight: 700, display: "flex", gap: 6, alignItems: "center" }}>
+                        {item.name}
+                        <button
+                          className="btn-ghost"
+                          style={{ padding: "2px 6px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}
+                          onClick={() => startEditName(item)}
+                        >
+                          수정
+                        </button>
+                      </span>
+                    )}
                     <span
                       style={{
                         display: "inline-block",
