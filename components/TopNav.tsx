@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { supabaseAdminAuth } from "@/lib/supabaseAdminAuthClient";
 import { onBadgeRefresh } from "@/lib/notifyBadgeRefresh";
 
 type NavItem = { href: string; label: string; key?: "applications" | "publicQuotes" | "portalRequests" };
@@ -221,7 +222,7 @@ export default function TopNav() {
   if (isPublicPath) return null;
 
   async function handleLogout() {
-    await fetch("/api/admin-logout", { method: "POST" });
+    await supabaseAdminAuth.auth.signOut();
     router.push("/admin/login");
     router.refresh();
   }
