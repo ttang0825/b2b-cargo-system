@@ -71,6 +71,27 @@ export default function AdminApplicationsPage() {
 
   const filtered = periodFiltered.filter((i) => filter === "전체" || i.status === filter);
 
+  // 같은 업체(이메일 또는 사업자등록번호 기준)의 이전 신청 이력이 있는 건에 "재신청" 표시
+  const repeatIds = useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    for (const it of items) {
+      const keys: string[] = [];
+      if (it.contact_email) keys.push(`email:${it.contact_email}`);
+      if (it.business_reg_no) keys.push(`biz:${it.business_reg_no}`);
+      for (const key of keys) {
+        (groups[key] = groups[key] || []).push(it);
+      }
+    }
+    const result = new Set<string>();
+    for (const key in groups) {
+      const sorted = [...groups[key]].sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+      sorted.slice(1).forEach((it) => result.add(it.id));
+    }
+    return result;
+  }, [items]);
+
   return (
     <main className="container">
       <div className="page-header">
@@ -149,6 +170,11 @@ export default function AdminApplicationsPage() {
                       ) : (
                         item.company_name
                       )}
+                      {repeatIds.has(item.id) && (
+                        <span className="badge" style={{ marginLeft: 6, fontWeight: 600 }}>
+                          재신청
+                        </span>
+                      )}
                     </td>
                     <td>
                       <div>{item.contact_name}</div>
@@ -203,7 +229,14 @@ export default function AdminApplicationsPage() {
                   style={{ cursor: "pointer" }}
                 >
                   <div className="mobile-row-top">
-                    <span style={{ fontSize: 13, fontWeight: 700 }}>{item.company_name}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700 }}>
+                      {item.company_name}
+                      {repeatIds.has(item.id) && (
+                        <span className="badge" style={{ marginLeft: 6, fontWeight: 600 }}>
+                          재신청
+                        </span>
+                      )}
+                    </span>
                     <span
                       style={{
                         display: "inline-block",
@@ -254,6 +287,7 @@ export default function AdminApplicationsPage() {
       {selectedItem && (
         <ApplicationDetailModal
           item={selectedItem}
+          allItems={items}
           onClose={() => setSelectedItem(null)}
           onChanged={() => loadItems(true)}
         />
