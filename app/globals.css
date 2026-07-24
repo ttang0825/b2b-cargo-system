@@ -121,6 +121,35 @@ a {
   color: var(--accent);
 }
 
+/* 상단메뉴 드롭다운 안 하위메뉴 항목 - hover/focus 시 옅은 배경으로 클릭 가능함을 표시 */
+.nav-dropdown-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  background: transparent;
+  text-decoration: none;
+  transition: background-color 0.15s ease;
+}
+.nav-dropdown-item:hover,
+.nav-dropdown-item:focus-visible {
+  background: rgba(0, 0, 0, 0.04);
+  outline: none;
+}
+.nav-dropdown-item-active {
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.nav-dropdown-item-active:hover,
+.nav-dropdown-item-active:focus-visible {
+  background: var(--accent-soft);
+}
+
 .page-header {
   display: flex;
   align-items: flex-end;
