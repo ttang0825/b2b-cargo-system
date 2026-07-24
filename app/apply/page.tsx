@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { supabase } from "@/lib/supabaseClient";
 import { formatPhoneNumber, formatBizRegNo } from "@/lib/constants";
 
 declare global {
@@ -14,6 +13,7 @@ declare global {
 export default function ApplyPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorReason, setErrorReason] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const [postcodeReady, setPostcodeReady] = useState(false);
@@ -59,6 +59,7 @@ export default function ApplyPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setErrorReason(null);
 
     if (!form.company_name.trim() || !form.contact_name.trim() || !form.contact_phone.trim()) {
       setError("회사명, 담당자명, 담당자 연락처는 필수입니다.");
@@ -74,21 +75,21 @@ export default function ApplyPage() {
     }
 
     setSaving(true);
-    const { error: insertError } = await supabase.from("customer_applications").insert({
-      company_name: form.company_name,
-      business_reg_no: form.business_reg_no || null,
-      contact_name: form.contact_name,
-      contact_phone: form.contact_phone,
-      contact_email: form.contact_email,
-      main_origin: form.main_origin || null,
-      main_destination: form.main_destination || null,
-      monthly_volume_estimate: form.monthly_volume_estimate || null,
-      notes: form.notes || null,
-      status: "검토중",
-    });
-
-    setSaving(false);
-    if (insertError) {
+    try {
+      const res = await fetch("/api/apply-submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const data = await res.json();
+      setSaving(false);
+      if (!res.ok) {
+        setError(data.error || "신청 접수 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+        setErrorReason(data.reason || null);
+        return;
+      }
+    } catch {
+      setSaving(false);
       setError("신청 접수 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
       return;
     }
@@ -291,7 +292,19 @@ export default function ApplyPage() {
               </span>
             </label>
 
-            {error && <div className="error-box">{error}</div>}
+            {error && (
+              <div className="error-box">
+                {error}
+                {errorReason === "approved" && (
+                  <>
+                    {" "}
+                    <Link href="/customer/login" style={{ color: "inherit", textDecoration: "underline", fontWeight: 700 }}>
+                      화주포털 로그인하기
+                    </Link>
+                  </>
+                )}
+              </div>
+            )}
             <button className="btn" type="submit" disabled={saving} style={{ width: "100%", justifyContent: "center" }}>
               {saving ? "접수 중..." : "등록 신청하기"}
             </button>

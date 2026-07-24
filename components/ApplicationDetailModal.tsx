@@ -61,10 +61,12 @@ type ResultData =
 
 export default function ApplicationDetailModal({
   item,
+  allItems,
   onClose,
   onChanged,
 }: {
   item: any;
+  allItems?: any[];
   onClose: () => void;
   onChanged: () => void;
 }) {
@@ -252,6 +254,16 @@ export default function ApplicationDetailModal({
 
   const statusColor: { bg?: string; text?: string } = STATUS_COLORS[item.status] || {};
 
+  // 같은 업체(이메일 또는 사업자등록번호 기준)의 다른 신청 건 — 재신청 판단 시 참고용
+  const relatedHistory = (allItems || [])
+    .filter(
+      (i) =>
+        i.id !== item.id &&
+        ((item.contact_email && i.contact_email === item.contact_email) ||
+          (item.business_reg_no && i.business_reg_no === item.business_reg_no))
+    )
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
   return (
     <div
       style={{
@@ -321,6 +333,18 @@ export default function ApplicationDetailModal({
                 <SectionTitle>처리 이력</SectionTitle>
                 <DetailRow label="처리자" value={item.processed_by || "-"} />
                 <DetailRow label="사유" value={item.staff_note || "-"} />
+              </>
+            )}
+
+            {relatedHistory.length > 0 && (
+              <>
+                <SectionTitle>이전 신청 이력</SectionTitle>
+                {relatedHistory.map((h) => (
+                  <div key={h.id} style={{ fontSize: 12.5, padding: "3px 0", color: "var(--text-muted)" }}>
+                    {h.created_at ? formatDate(h.created_at) : "-"} {h.status}
+                    {h.staff_note ? ` (사유: ${h.staff_note})` : ""}
+                  </div>
+                ))}
               </>
             )}
 
