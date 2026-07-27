@@ -5,7 +5,7 @@
 > 작업을 이어갑니다.
 
 **작성일: 2026-07-23** (최종 갱신: 2026-07-27, Claude Code 세션에서 직접 갱신 — 직원 계정
-재구조화 1~5단계 전부 완료·merge됨)
+재구조화 1~8단계 전부(스펙 전체) 완료·merge됨)
 
 ---
 
@@ -66,6 +66,11 @@
   `staff_accounts(id)` 참조)/`updated_at`(자동 갱신 트리거) 추가 — 원칙 25번 참고
 - `invoices.company_id`를 nullable로 변경 — 게스트(비회원) 고객 오더도 정산 등록이
   되도록 하기 위함 (예전엔 NOT NULL이라 게스트 오더는 정산 자동등록이 조용히 실패했음)
+- `support_access_logs`(신규 테이블, 8단계): `staff_id`/`staff_name`,
+  `company_id`/`company_name`, `customer_account_id`/`customer_email`, `accessed_at`.
+  관리자가 화주포털 계정으로 "지원접속"할 때마다 기록. `public_quote_requests`와
+  동일하게 anon 정책 없이 RLS만 켜둠 — 서버 API(`SUPABASE_SERVICE_ROLE_KEY`)로만
+  읽고 씀
 
 ---
 
@@ -185,6 +190,20 @@
     로 그 컬럼이 이미 있는지, `select conname, pg_get_constraintdef(oid) from
     pg_constraint where conname = '..._fkey'`로 기존 제약조건이 뭘 참조하는지 먼저
     확인하는 습관을 들일 것
+28. **여러 필드를 한 번에 수정하는 "정보 수정" 폼이 있는 상세화면(화주/오더/배차/
+    정산)은 `lib/optimisticUpdate.ts`의 `optimisticUpdate()`로 저장할 것** — 내가
+    불러온 시점의 `updated_at`과 실제 DB의 `updated_at`이 다르면(그 사이 다른 직원이
+    먼저 저장함) 조용히 덮어쓰지 않고 `components/ConflictWarning.tsx`로 경고 +
+    새로고침/그래도 덮어쓰기 선택지를 보여줌. 상태값 하나만 바꾸는 단순 드롭다운
+    (예: 견적 상태변경)에는 굳이 적용 안 해도 됨 — 여러 필드를 동시에 편집하는
+    화면 위주로 적용
+29. **Supabase magic link로 임시 로그인(관리자 지원접속 등)을 구현할 때는
+    `admin.auth.admin.generateLink({ type: "magiclink", email })`로 받은
+    `properties.hashed_token`을, 클라이언트에서 `auth.verifyOtp({ token_hash, type:
+    "magiclink" })`로만 검증할 것 — `email`을 같이 넘기면 "Only the token_hash and
+    type should be provided" 에러로 검증이 항상 실패함** (실제로 8단계 지원접속
+    기능에서 이 실수로 접속이 전혀 안 되는 버그가 있었음). `app/api/admin/
+    support-login/route.ts` + `app/customer/support-verify/page.tsx`가 참고 예시
 
 ---
 
@@ -234,44 +253,42 @@
 - **관리자 GET API 캐싱 버그 수정**: `applications`/`public-quote-requests` GET
   라우트에 `force-dynamic` 추가 — 저장 직후 재조회 시 예전 데이터가 보이던 버그
   해결 (원칙 21번)
-- **직원 계정·권한·이력 재구조화 (1~5단계, 아래 5번 "다음 예정 작업" 참고)**:
+- **직원 계정·권한·이력 재구조화 — 스펙 1~8단계 전부 완료·merge됨**:
   - 1단계: `staff_accounts` 테이블 + 초기 관리자 계정 (완료)
   - 2단계: 관리자 로그인을 공유 `ADMIN_PASSWORD`에서 Supabase Auth 개별 계정으로
-    전환 (`middleware.ts` 재작성, `lib/supabaseAdminAuthClient.ts` 신규) (완료, merge됨)
+    전환 (`middleware.ts` 재작성, `lib/supabaseAdminAuthClient.ts` 신규) (완료)
   - 3단계: "직원 계정 관리" 화면(`/admin/staff`, 관리자 전용) — 계정 발급, 역할
     지정, 재직 상태 관리, **이름+이메일 통합 수정 모달**(이메일 변경 시 Auth 계정
-    이메일도 함께 갱신) (완료, merge됨)
+    이메일도 함께 갱신) (완료)
   - 4단계: `companies`/`quotes`/`orders`/`dispatches`/`invoices`/
     `customer_applications`/`public_quote_requests` 7개 테이블에 등록/수정 처리자
     자동 기록(`created_by`/`updated_by`) + 각 상세화면에 `ProcessedByFooter`로 표시
-    (완료, merge됨). 이 작업 중 발견/수정한 부수 버그: 게스트(비회원) 오더 정산
-    등록 안 되던 문제(`invoices.company_id` nullable로 변경), 정산 목록에 개인고객
-    이름 미표시, 배차 없이 오더 상태만 바꾼 경우 청구금액 자동입력 안 되던 문제,
-    금액 미입력 상태로 정산 등록되던 문제 — 전부 수정 완료
+    (완료). 이 작업 중 발견/수정한 부수 버그: 게스트(비회원) 오더 정산 등록 안
+    되던 문제(`invoices.company_id` nullable로 변경), 정산 목록에 개인고객 이름
+    미표시, 배차 없이 오더 상태만 바꾼 경우 청구금액 자동입력 안 되던 문제, 금액
+    미입력 상태로 정산 등록되던 문제 — 전부 수정 완료
   - 5단계: 권한 매트릭스(삭제는 관리자만, 운임기준표 수정은 관리자만) —
-    화면단+서버단 이중 체크로 구현 (원칙 25, 26번). 관리자 계정·직원 계정 둘 다로
-    테스트 완료, PR #17 merge됨 (완료)
-  - 6~8단계(처리자 이름 자동화, 동시편집 감지, 지원접속)는 아직 미착수 — 다음
-    작업 우선순위 1번 참고
+    화면단+서버단 이중 체크로 구현 (원칙 25, 26번) (완료)
+  - 6단계: 견적/화주등록신청/공개문의 처리 시 직접 타이핑하던 "처리자 이름"을
+    로그인한 직원 정보로 자동 대체 (`getCurrentStaffName()`) (완료)
+  - 7단계: 동시 편집 감지(낙관적 잠금) — 화주/오더/배차/정산 상세화면에서 다른
+    직원이 먼저 저장한 경우 경고 + 새로고침/그래도 덮어쓰기 선택지 제공
+    (`lib/optimisticUpdate.ts`, `components/ConflictWarning.tsx`, 원칙 28번) (완료)
+  - 8단계: 관리자 "고객지원용 접속" — 화주 상세화면에서 활성 포털 계정에 임시
+    로그인(magic link 방식), `support_access_logs`에 접속 이력 기록, 조회 화면
+    `/admin/support-logs`(관리자 전용) (완료, 원칙 29번)
 
 ---
 
 ## 5. 다음 예정 작업 (우선순위 순)
 
-1. **직원 계정·권한·이력 6~8단계** (1~5단계는 전부 완료·merge됨. 스펙의 "단계별로
-   나눠서 진행" 원칙 유지):
-   - 6단계: "처리자 이름" 수동 텍스트 입력들(견적/화주등록신청/공개문의 처리 시
-     직접 타이핑하던 이름)을 로그인한 직원 정보로 자동 대체
-   - 7단계: 동시 편집 처리 — 현재는 "나중에 저장한 사람이 이김"(경고 없음). 최소
-     저장 시점 경고 정도부터
-   - 8단계: 관리자의 화주포털 "고객지원용 접속"(화주 계정으로 임시 로그인) —
-     Supabase Auth Admin API의 magic link 방식으로 구현 가능해 보임,
-     `support_access_logs` 이력 테이블도 필요
-2. 카카오 알림톡 자동화 — 사업자 인증·발신프로필 심사가 필요해 **미리 신청 절차부터
+직원 계정·권한·이력 재구조화 스펙(1~8단계)은 전부 완료되었습니다. 다음 우선순위는:
+
+1. 카카오 알림톡 자동화 — 사업자 인증·발신프로필 심사가 필요해 **미리 신청 절차부터
    시작하는 것을 권장** (승인에 시간 걸림)
-3. 화주포털 발주요청 2차 기능(화주 직접 오더 입력)
-4. 커스텀 도메인 연결, 공개 화면 UX 고도화 — 보류 중
-5. 유료 플랜 전환 / 페이지네이션·대시보드
+2. 화주포털 발주요청 2차 기능(화주 직접 오더 입력)
+3. 커스텀 도메인 연결, 공개 화면 UX 고도화 — 보류 중
+4. 유료 플랜 전환 / 페이지네이션·대시보드
 
 ## 6. 보류 중인 작업 (나중에 이어서 진행)
 
@@ -348,8 +365,9 @@
 
 ## 9. 새 세션에서 이어가는 방법
 
-직원 계정·권한·이력 재구조화 1~5단계는 전부 완료되어 main에 merge되었습니다.
+직원 계정·권한·이력 재구조화 스펙(1~8단계)은 전부 완료되어 main에 merge되었습니다.
 Claude Code에서: 저장소를 열고 "인수인계 문서(CLAUDE.md 또는 HANDOFF.md)를 참고해서
-직원 계정 6단계(처리자 이름 자동화)부터 이어서 진행해줘" 같은 식으로 시작하면 됩니다.
+5번 "다음 예정 작업" 1번(카카오 알림톡 자동화)부터 이어서 진행해줘" 같은 식으로
+시작하면 됩니다.
 
 실제 저장소 코드가 이 문서와 다르면 **저장소가 항상 맞습니다.**
