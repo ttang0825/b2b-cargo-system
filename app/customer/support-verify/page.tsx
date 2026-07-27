@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 
@@ -48,9 +49,9 @@ function SupportVerifyInner() {
         {error ? (
           <>
             <p style={{ fontSize: 13.5, color: "var(--danger)" }}>{error}</p>
-            <a href="/customer/login" style={{ fontSize: 13 }}>
+            <Link href="/customer/login" style={{ fontSize: 13 }}>
               화주포털 로그인으로 이동
-            </a>
+            </Link>
           </>
         ) : (
           <p style={{ fontSize: 13.5, color: "var(--text-muted)" }}>접속 확인 중...</p>

@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { generateDailyNumber } from "@/lib/generateNumber";
@@ -814,9 +815,9 @@ function QuotesPageInner() {
       {!ratesLoading && tiers.length === 0 && (
         <div className="error-box">
           운임기준 데이터가 아직 없습니다. 먼저{" "}
-          <a href="/admin/rates" style={{ textDecoration: "underline" }}>
+          <Link href="/admin/rates" style={{ textDecoration: "underline" }}>
             운임기준표
-          </a>
+          </Link>
           가 등록되어 있는지 확인해주세요.
         </div>
       )}

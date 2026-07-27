@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 
 function won(n: number | null) {
@@ -48,9 +49,9 @@ export default function CustomerInvoicesPage() {
           <h1 className="page-title">정산·세금계산서 확인</h1>
           <p className="page-desc">
             청구 내역과 세금계산서 발행 여부를 확인하세요. 엑셀로 내려받으시려면{" "}
-            <a href="/customer/stats" style={{ textDecoration: "underline" }}>
+            <Link href="/customer/stats" style={{ textDecoration: "underline" }}>
               월별 통계
-            </a>{" "}
+            </Link>{" "}
             페이지를 이용해주세요.
           </p>
         </div>
