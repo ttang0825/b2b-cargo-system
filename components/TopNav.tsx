@@ -213,8 +213,14 @@ export default function TopNav() {
       clearInterval(pollInterval);
       offBadgeRefresh();
     };
+    // 배지 개수는 특정 페이지에 속한 값이 아니라 전역 값이라 페이지 이동마다
+    // 다시 구독/폴링을 새로 만들 필요가 없음 (예전엔 [pathname]에 의존해서
+    // 페이지를 옮길 때마다 Realtime 채널을 매번 재연결 + API 3개를 다시 호출하고
+    // 있었음 — 관리자 화면 어디서든 페이지 전환이 느리게 느껴지던 원인).
+    // 공개 페이지 ↔ 관리자 화면 경계를 넘나들 때만 다시 설정하면 되므로
+    // isPublicPath로만 의존성을 좁힘
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
+  }, [isPublicPath]);
 
   useEffect(() => {
     setMobileMenuOpen(false);
