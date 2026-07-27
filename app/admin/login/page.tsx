@@ -25,7 +25,10 @@ function LoginInner() {
     setLoading(true);
     setError(null);
     try {
-      const { error: signInError } = await supabaseAdminAuth.auth.signInWithPassword({ email, password });
+      const { error: signInError } = await supabaseAdminAuth.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password: password.trim(),
+      });
       if (signInError) {
         setError("이메일 또는 비밀번호가 올바르지 않습니다.");
         setLoading(false);

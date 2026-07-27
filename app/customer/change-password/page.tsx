@@ -39,15 +39,20 @@ export default function ChangePasswordPage() {
     e.preventDefault();
     setError(null);
 
-    if (!isForced && !currentPassword) {
+    // 복사-붙여넣기 시 실수로 딸려온 앞뒤 공백만 제거 (중간 공백은 그대로 유지)
+    const trimmedCurrentPassword = currentPassword.trim();
+    const trimmedPassword = password.trim();
+    const trimmedConfirm = confirm.trim();
+
+    if (!isForced && !trimmedCurrentPassword) {
       setError("기존 비밀번호를 입력해주세요.");
       return;
     }
-    if (password.length < 8) {
+    if (trimmedPassword.length < 8) {
       setError("새 비밀번호는 8자 이상이어야 합니다.");
       return;
     }
-    if (password !== confirm) {
+    if (trimmedPassword !== trimmedConfirm) {
       setError("새 비밀번호가 서로 일치하지 않습니다.");
       return;
     }
@@ -68,7 +73,7 @@ export default function ChangePasswordPage() {
     if (!isForced) {
       const { error: verifyError } = await supabase.auth.signInWithPassword({
         email: session.user.email,
-        password: currentPassword,
+        password: trimmedCurrentPassword,
       });
       if (verifyError) {
         setLoading(false);
@@ -77,7 +82,7 @@ export default function ChangePasswordPage() {
       }
     }
 
-    const { error: updateError } = await supabase.auth.updateUser({ password });
+    const { error: updateError } = await supabase.auth.updateUser({ password: trimmedPassword });
     if (updateError) {
       setLoading(false);
       setError(updateError.message);
