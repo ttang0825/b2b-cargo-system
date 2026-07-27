@@ -145,6 +145,7 @@ export default function CompanyDetailPage() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [conflict, setConflict] = useState(false);
 
@@ -495,7 +496,7 @@ export default function CompanyDetailPage() {
   async function handleDelete() {
     if (!company) return;
     setDeleting(true);
-    setError(null);
+    setDeleteError(null);
 
     const [quoteRes, orderRes, invoiceRes] = await Promise.all([
       supabase
@@ -547,12 +548,12 @@ export default function CompanyDetailPage() {
       const data = await res.json();
       setDeleting(false);
       if (!res.ok) {
-        setError(data.error || "삭제에 실패했습니다.");
+        setDeleteError(data.error || "삭제에 실패했습니다.");
         return;
       }
     } catch {
       setDeleting(false);
-      setError("삭제 중 오류가 발생했습니다.");
+      setDeleteError("삭제 중 오류가 발생했습니다.");
       return;
     }
 
@@ -664,7 +665,7 @@ export default function CompanyDetailPage() {
         />
       )}
 
-      {error && <div className="error-box">오류: {error}</div>}
+      {deleteError && <div className="error-box">{deleteError}</div>}
 
       {/* 영업 상태 */}
       <div className="card" style={{ padding: 20, marginBottom: 20 }}>
