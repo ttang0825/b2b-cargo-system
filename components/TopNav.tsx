@@ -44,7 +44,10 @@ const NAV_GROUPS: NavGroup[] = [
 // 접근 가능하도록 별도로 막고 있음 (여기서는 화면단 노출만 제어)
 const ADMIN_ONLY_GROUP: NavGroup = {
   label: "시스템",
-  items: [{ href: "/admin/staff", label: "직원 계정 관리" }],
+  items: [
+    { href: "/admin/staff", label: "직원 계정 관리" },
+    { href: "/admin/support-logs", label: "지원접속 이력" },
+  ],
 };
 
 function Badge({ count }: { count: number }) {
