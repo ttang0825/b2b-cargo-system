@@ -18,6 +18,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/admin/companies", label: "화주 관리 (영업)" },
       { href: "/admin/applications", label: "화주신청", key: "applications" },
       { href: "/admin/public-quotes", label: "공개문의", key: "publicQuotes" },
+      { href: "/admin/individual-customers", label: "개인고객 관리" },
     ],
   },
   {

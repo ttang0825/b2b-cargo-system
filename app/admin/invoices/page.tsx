@@ -16,6 +16,7 @@ type OrderLite = {
   order_no: string | null;
   company_id: string | null;
   quote_id: string | null;
+  individual_customer_id: string | null;
   companies: { name: string } | null;
   guest_name: string | null;
 };
@@ -94,7 +95,7 @@ export default function InvoicesPage() {
     );
     const { data } = await supabase
       .from("orders")
-      .select("id,order_no,company_id,quote_id,companies(name),guest_name")
+      .select("id,order_no,company_id,quote_id,individual_customer_id,companies(name),guest_name")
       .eq("status", "운송완료")
       .order("created_at", { ascending: false });
     setAvailableOrders(
@@ -172,6 +173,7 @@ export default function InvoicesPage() {
     const { error } = await supabase.from("invoices").insert({
       order_id: selectedOrderId,
       company_id: order?.company_id || null,
+      individual_customer_id: order?.individual_customer_id || null,
       billing_period: billingPeriod || null,
       customer_charge_total: chargeNum || null,
       driver_payout_total: payoutNum || null,

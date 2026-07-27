@@ -322,7 +322,7 @@ export default function DispatchesPage() {
 
     const { data: order } = await supabase
       .from("orders")
-      .select("company_id")
+      .select("company_id,individual_customer_id")
       .eq("id", target.order_id)
       .single();
 
@@ -334,6 +334,7 @@ export default function DispatchesPage() {
     const { error: invoiceError } = await supabase.from("invoices").insert({
       order_id: target.order_id,
       company_id: order?.company_id || null,
+      individual_customer_id: order?.individual_customer_id || null,
       billing_period: billingPeriod,
       customer_charge_total: charge || null,
       driver_payout_total: payout || null,
