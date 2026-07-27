@@ -33,6 +33,7 @@ type OrderDetail = {
   guest_phone: string | null;
   company_id: string | null;
   quote_id: string | null;
+  individual_customer_id: string | null;
   companies: { id: string; name: string; phone: string | null } | null;
 };
 
@@ -257,6 +258,17 @@ export default function OrderDetailPage() {
               <span className="badge" style={{ marginLeft: 8 }}>
                 개인/신규
               </span>
+            )}
+            {order.individual_customer_id && (
+              <>
+                {" "}
+                <Link
+                  href={`/admin/individual-customers/${order.individual_customer_id}`}
+                  style={{ fontSize: 12, textDecoration: "underline" }}
+                >
+                  개인고객 상세 보기 →
+                </Link>
+              </>
             )}
           </p>
         </div>

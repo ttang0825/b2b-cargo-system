@@ -39,3 +39,20 @@ export async function getCurrentStaffName(): Promise<string | null> {
     .maybeSingle();
   return data?.name || null;
 }
+
+// id/이름/role을 한 번에 조회 — 상단메뉴 로그인 정보 표시, 내 계정 화면 등에서 사용
+export async function getCurrentStaffInfo(): Promise<
+  { id: string; name: string; role: "admin" | "staff" } | null
+> {
+  const {
+    data: { user },
+  } = await supabaseAdminAuth.auth.getUser();
+  if (!user) return null;
+  const { data } = await supabaseAdminAuth
+    .from("staff_accounts")
+    .select("name,role")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (!data) return null;
+  return { id: user.id, name: data.name, role: data.role as "admin" | "staff" };
+}
