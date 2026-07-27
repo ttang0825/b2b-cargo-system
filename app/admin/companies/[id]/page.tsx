@@ -322,9 +322,7 @@ export default function CompanyDetailPage() {
         setPortalError(data.error || "지원접속에 실패했습니다.");
         return;
       }
-      const verifyUrl = `/customer/support-verify?token_hash=${encodeURIComponent(
-        data.token_hash
-      )}&email=${encodeURIComponent(data.email)}`;
+      const verifyUrl = `/customer/support-verify?token_hash=${encodeURIComponent(data.token_hash)}`;
       window.open(verifyUrl, "_blank");
     } catch {
       setPortalError("지원접속 중 오류가 발생했습니다.");

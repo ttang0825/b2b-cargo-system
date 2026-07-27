@@ -15,19 +15,15 @@ function SupportVerifyInner() {
     verifyStarted.current = true;
     async function verify() {
       const tokenHash = searchParams.get("token_hash");
-      const email = searchParams.get("email");
-      if (!tokenHash || !email) {
+      if (!tokenHash) {
         setError("접속 정보가 올바르지 않습니다.");
         return;
       }
       const { error } = await supabase.auth.verifyOtp({
         token_hash: tokenHash,
         type: "magiclink",
-        email,
       });
       if (error) {
-        // TODO(임시 디버그): 지원접속 검증 실패 원인 확인 후 제거
-        console.error("[support-verify] verifyOtp error:", error);
         setError("접속 링크가 만료되었거나 이미 사용되었습니다. 관리자 화면에서 다시 시도해주세요.");
         return;
       }
