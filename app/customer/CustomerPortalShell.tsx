@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 
-const PUBLIC_PATHS = ["/customer/login"];
+const PUBLIC_PATHS = ["/customer/login", "/customer/support-verify"];
 
 type NavItem = { href: string; label: string; key?: "quotes" | "dispatches" | "invoices" };
 type NavGroup = { label: string; items: NavItem[] };

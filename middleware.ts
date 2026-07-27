@@ -60,8 +60,11 @@ export async function middleware(req: NextRequest) {
     return redirectToLogin("inactive");
   }
 
-  // 직원 계정 관리 화면은 관리자만 접근 가능
-  if (pathname.startsWith("/admin/staff") && staff.role !== "admin") {
+  // 직원 계정 관리 · 지원접속 이력 화면은 관리자만 접근 가능
+  if (
+    (pathname.startsWith("/admin/staff") || pathname.startsWith("/admin/support-logs")) &&
+    staff.role !== "admin"
+  ) {
     return NextResponse.redirect(new URL("/admin", req.url));
   }
 

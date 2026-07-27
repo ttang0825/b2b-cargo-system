@@ -305,6 +305,32 @@ export default function CompanyDetailPage() {
     loadPortalAccounts();
   }
 
+  async function handleSupportLogin(accountId: string, email: string) {
+    const confirmed = window.confirm(
+      `"${email}" 화주 계정으로 접속하시겠습니까? 접속 기록이 남습니다.`
+    );
+    if (!confirmed) return;
+    setPortalError(null);
+    try {
+      const res = await fetch("/api/admin/support-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customer_account_id: accountId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPortalError(data.error || "지원접속에 실패했습니다.");
+        return;
+      }
+      const verifyUrl = `/customer/support-verify?token_hash=${encodeURIComponent(
+        data.token_hash
+      )}&email=${encodeURIComponent(data.email)}`;
+      window.open(verifyUrl, "_blank");
+    } catch {
+      setPortalError("지원접속 중 오류가 발생했습니다.");
+    }
+  }
+
   async function handleDeleteAccount(authUserId: string, email: string) {
     const confirmed = window.confirm(
       `"${email}" 계정을 완전히 삭제하시겠습니까? 로그인 계정 자체가 삭제되며 되돌릴 수 없습니다.`
@@ -1224,6 +1250,16 @@ export default function CompanyDetailPage() {
                   >
                     비밀번호 재설정
                   </button>
+                  {isAdmin && acc.is_active && (
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      style={{ padding: "4px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                      onClick={() => handleSupportLogin(acc.id, acc.email)}
+                    >
+                      지원접속
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="btn-ghost"
