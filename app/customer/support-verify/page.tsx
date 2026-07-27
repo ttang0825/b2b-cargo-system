@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 
@@ -8,8 +8,11 @@ function SupportVerifyInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
+  const verifyStarted = useRef(false);
 
   useEffect(() => {
+    if (verifyStarted.current) return;
+    verifyStarted.current = true;
     async function verify() {
       const tokenHash = searchParams.get("token_hash");
       const email = searchParams.get("email");
@@ -23,6 +26,8 @@ function SupportVerifyInner() {
         email,
       });
       if (error) {
+        // TODO(임시 디버그): 지원접속 검증 실패 원인 확인 후 제거
+        console.error("[support-verify] verifyOtp error:", error);
         setError("접속 링크가 만료되었거나 이미 사용되었습니다. 관리자 화면에서 다시 시도해주세요.");
         return;
       }
