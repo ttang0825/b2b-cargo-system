@@ -16,6 +16,8 @@ import { MANUAL_SOURCE_OPTIONS, getSourceChips } from "@/lib/sourceColors";
 import MultiSelectTags from "@/components/MultiSelectTags";
 import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
+import ConflictWarning from "@/components/ConflictWarning";
+import { optimisticUpdate } from "@/lib/optimisticUpdate";
 
 type CompanyDetail = { [key: string]: any };
 
@@ -144,6 +146,7 @@ export default function CompanyDetailPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [conflict, setConflict] = useState(false);
 
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
@@ -401,9 +404,10 @@ export default function CompanyDetailPage() {
     loadLocations();
   }
 
-  async function handleSave() {
+  async function handleSave(force = false) {
     setSaving(true);
     setError(null);
+    setConflict(false);
 
     const uiOnlyKeys = ["recommended_vehicle_tonnage", "recommended_vehicle_bodytype"];
     const payload: Record<string, any> = {};
@@ -433,13 +437,31 @@ export default function CompanyDetailPage() {
 
     payload.updated_by = await getCurrentStaffId();
 
-    const { error } = await supabase
-      .from("companies")
-      .update(payload)
-      .eq("id", id);
+    if (force) {
+      const { error } = await supabase.from("companies").update(payload).eq("id", id);
+      setSaving(false);
+      if (error) {
+        setError(error.message);
+        return;
+      }
+      setEditing(false);
+      loadCompany();
+      return;
+    }
+
+    const { conflict: hasConflict, error } = await optimisticUpdate(
+      "companies",
+      id,
+      payload,
+      company?.updated_at
+    );
     setSaving(false);
     if (error) {
-      setError(error.message);
+      setError(error);
+      return;
+    }
+    if (hasConflict) {
+      setConflict(true);
       return;
     }
     setEditing(false);
@@ -589,13 +611,14 @@ export default function CompanyDetailPage() {
             </>
           ) : (
             <>
-              <button className="btn" onClick={handleSave} disabled={saving}>
+              <button className="btn" onClick={() => handleSave()} disabled={saving}>
                 {saving ? "저장 중..." : "저장"}
               </button>
               <button
                 className="btn btn-ghost"
                 onClick={() => {
                   setEditing(false);
+                  setConflict(false);
                   loadCompany();
                 }}
               >
@@ -605,6 +628,17 @@ export default function CompanyDetailPage() {
           )}
         </div>
       </div>
+
+      {conflict && (
+        <ConflictWarning
+          onReload={() => {
+            setConflict(false);
+            loadCompany();
+          }}
+          onForceSave={() => handleSave(true)}
+          saving={saving}
+        />
+      )}
 
       {error && <div className="error-box">오류: {error}</div>}
 

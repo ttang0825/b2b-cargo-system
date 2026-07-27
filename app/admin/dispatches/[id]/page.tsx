@@ -11,6 +11,8 @@ import {
 } from "@/lib/dispatchStatusColors";
 import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
+import ConflictWarning from "@/components/ConflictWarning";
+import { optimisticUpdate } from "@/lib/optimisticUpdate";
 
 function won(n: number | null) {
   if (n === null || n === undefined) return "-";
@@ -28,6 +30,7 @@ export default function DispatchDetailPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [conflict, setConflict] = useState(false);
 
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
@@ -171,29 +174,49 @@ export default function DispatchDetailPage() {
     }
   }
 
-  async function handleSave() {
+  async function handleSave(force = false) {
     setSaving(true);
     setError(null);
-    const { error } = await supabase
-      .from("dispatches")
-      .update({
-        customer_charge: editForm.customer_charge
-          ? Number(editForm.customer_charge)
-          : null,
-        driver_payout: editForm.driver_payout
-          ? Number(editForm.driver_payout)
-          : null,
-        pickup_confirmed: editForm.pickup_confirmed,
-        delivery_confirmed: editForm.delivery_confirmed,
-        issue_occurred: editForm.issue_occurred,
-        issue_notes: editForm.issue_notes || null,
-        memo: editForm.memo || null,
-        updated_by: await getCurrentStaffId(),
-      })
-      .eq("id", id);
+    setConflict(false);
+    const payload = {
+      customer_charge: editForm.customer_charge
+        ? Number(editForm.customer_charge)
+        : null,
+      driver_payout: editForm.driver_payout
+        ? Number(editForm.driver_payout)
+        : null,
+      pickup_confirmed: editForm.pickup_confirmed,
+      delivery_confirmed: editForm.delivery_confirmed,
+      issue_occurred: editForm.issue_occurred,
+      issue_notes: editForm.issue_notes || null,
+      memo: editForm.memo || null,
+      updated_by: await getCurrentStaffId(),
+    };
+
+    if (force) {
+      const { error } = await supabase.from("dispatches").update(payload).eq("id", id);
+      setSaving(false);
+      if (error) {
+        setError(error.message);
+        return;
+      }
+      router.push("/admin/dispatches");
+      return;
+    }
+
+    const { conflict: hasConflict, error } = await optimisticUpdate(
+      "dispatches",
+      id,
+      payload,
+      dispatch?.updated_at
+    );
     setSaving(false);
     if (error) {
-      setError(error.message);
+      setError(error);
+      return;
+    }
+    if (hasConflict) {
+      setConflict(true);
       return;
     }
     router.push("/admin/dispatches");
@@ -481,7 +504,18 @@ export default function DispatchDetailPage() {
         </div>
       </div>
 
-      <button className="btn" onClick={handleSave} disabled={saving}>
+      {conflict && (
+        <ConflictWarning
+          onReload={() => {
+            setConflict(false);
+            load();
+          }}
+          onForceSave={() => handleSave(true)}
+          saving={saving}
+        />
+      )}
+
+      <button className="btn" onClick={() => handleSave()} disabled={saving}>
         {saving ? "저장 중..." : "변경사항 저장"}
       </button>
 

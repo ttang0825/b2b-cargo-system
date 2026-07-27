@@ -9,6 +9,8 @@ import { LOAD_UNLOAD_CONDITIONS } from "@/lib/constants";
 import DateTimePicker from "@/components/DateTimePicker";
 import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
+import ConflictWarning from "@/components/ConflictWarning";
+import { optimisticUpdate } from "@/lib/optimisticUpdate";
 
 type OrderDetail = {
   id: string;
@@ -64,6 +66,7 @@ export default function OrderDetailPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [conflict, setConflict] = useState(false);
 
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
@@ -119,28 +122,49 @@ export default function OrderDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  async function handleSave() {
+  async function handleSave(force = false) {
     setSaving(true);
     setError(null);
-    const { error } = await supabase
-      .from("orders")
-      .update({
-        status: editForm.status,
-        origin: editForm.origin || null,
-        destination: editForm.destination || null,
-        vehicle_type: editForm.vehicle_type || null,
-        item: editForm.item || null,
-        requested_pickup_at: editForm.requested_pickup_at || null,
-        requested_delivery_at: editForm.requested_delivery_at || null,
-        load_condition: editForm.load_condition || null,
-        unload_condition: editForm.unload_condition || null,
-        special_notes: editForm.special_notes || null,
-        updated_by: await getCurrentStaffId(),
-      })
-      .eq("id", id);
+    setConflict(false);
+    const payload = {
+      status: editForm.status,
+      origin: editForm.origin || null,
+      destination: editForm.destination || null,
+      vehicle_type: editForm.vehicle_type || null,
+      item: editForm.item || null,
+      requested_pickup_at: editForm.requested_pickup_at || null,
+      requested_delivery_at: editForm.requested_delivery_at || null,
+      load_condition: editForm.load_condition || null,
+      unload_condition: editForm.unload_condition || null,
+      special_notes: editForm.special_notes || null,
+      updated_by: await getCurrentStaffId(),
+    };
+
+    if (force) {
+      const { error } = await supabase.from("orders").update(payload).eq("id", id);
+      setSaving(false);
+      if (error) {
+        setError(error.message);
+        return;
+      }
+      setEditing(false);
+      load();
+      return;
+    }
+
+    const { conflict: hasConflict, error } = await optimisticUpdate(
+      "orders",
+      id,
+      payload,
+      order?.updated_at
+    );
     setSaving(false);
     if (error) {
-      setError(error.message);
+      setError(error);
+      return;
+    }
+    if (hasConflict) {
+      setConflict(true);
       return;
     }
     setEditing(false);
@@ -261,13 +285,14 @@ export default function OrderDetailPage() {
             </>
           ) : (
             <>
-              <button className="btn" onClick={handleSave} disabled={saving}>
+              <button className="btn" onClick={() => handleSave()} disabled={saving}>
                 {saving ? "저장 중..." : "저장"}
               </button>
               <button
                 className="btn btn-ghost"
                 onClick={() => {
                   setEditing(false);
+                  setConflict(false);
                   load();
                 }}
               >
@@ -277,6 +302,17 @@ export default function OrderDetailPage() {
           )}
         </div>
       </div>
+
+      {conflict && (
+        <ConflictWarning
+          onReload={() => {
+            setConflict(false);
+            load();
+          }}
+          onForceSave={() => handleSave(true)}
+          saving={saving}
+        />
+      )}
 
       {error && <div className="error-box">오류: {error}</div>}
 

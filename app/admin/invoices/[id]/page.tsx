@@ -10,6 +10,8 @@ import {
 } from "@/lib/invoiceStatusColors";
 import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
+import ConflictWarning from "@/components/ConflictWarning";
+import { optimisticUpdate } from "@/lib/optimisticUpdate";
 
 function won(n: number | null) {
   if (n === null || n === undefined) return "-";
@@ -28,6 +30,7 @@ export default function InvoiceDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [conflict, setConflict] = useState(false);
 
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
@@ -88,8 +91,9 @@ export default function InvoiceDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editForm.payment_received, editForm.driver_paid]);
 
-  async function handleSave() {
+  async function handleSave(force = false) {
     setSaveError(null);
+    setConflict(false);
 
     if (editForm.tax_invoice_issued && !editForm.tax_invoice_date) {
       setSaveError("세금계산서 발행완료를 체크하셨습니다. 발행일을 입력해주세요.");
@@ -109,24 +113,41 @@ export default function InvoiceDetailPage() {
     const wasReceived = invoice.payment_received;
     const nowReceived = editForm.payment_received;
 
-    const { error } = await supabase
-      .from("invoices")
-      .update({
-        status: editForm.status,
-        tax_invoice_issued: editForm.tax_invoice_issued,
-        tax_invoice_date: editForm.tax_invoice_date || null,
-        payment_received: editForm.payment_received,
-        payment_received_date: editForm.payment_received_date || null,
-        driver_paid: editForm.driver_paid,
-        driver_paid_date: editForm.driver_paid_date || null,
-        updated_by: await getCurrentStaffId(),
-      })
-      .eq("id", id);
+    const payload = {
+      status: editForm.status,
+      tax_invoice_issued: editForm.tax_invoice_issued,
+      tax_invoice_date: editForm.tax_invoice_date || null,
+      payment_received: editForm.payment_received,
+      payment_received_date: editForm.payment_received_date || null,
+      driver_paid: editForm.driver_paid,
+      driver_paid_date: editForm.driver_paid_date || null,
+      updated_by: await getCurrentStaffId(),
+    };
 
-    if (error) {
-      setSaving(false);
-      setSaveError(error.message);
-      return;
+    if (force) {
+      const { error } = await supabase.from("invoices").update(payload).eq("id", id);
+      if (error) {
+        setSaving(false);
+        setSaveError(error.message);
+        return;
+      }
+    } else {
+      const { conflict: hasConflict, error } = await optimisticUpdate(
+        "invoices",
+        id,
+        payload,
+        invoice?.updated_at
+      );
+      if (error) {
+        setSaving(false);
+        setSaveError(error);
+        return;
+      }
+      if (hasConflict) {
+        setSaving(false);
+        setConflict(true);
+        return;
+      }
     }
 
     // 입금 확인 상태가 바뀌면, 연결된 화주의 미수금을 전체 재계산합니다
@@ -449,8 +470,19 @@ export default function InvoiceDetailPage() {
         </p>
       </div>
 
+      {conflict && (
+        <ConflictWarning
+          onReload={() => {
+            setConflict(false);
+            load();
+          }}
+          onForceSave={() => handleSave(true)}
+          saving={saving}
+        />
+      )}
+
       {saveError && <div className="error-box">오류: {saveError}</div>}
-      <button className="btn" onClick={handleSave} disabled={saving}>
+      <button className="btn" onClick={() => handleSave()} disabled={saving}>
         {saving ? "저장 중..." : "변경사항 저장"}
       </button>
 
