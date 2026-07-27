@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import { notifyBadgeRefresh } from "@/lib/notifyBadgeRefresh";
+import { getCurrentStaffRole } from "@/lib/currentStaff";
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   대기중: { bg: "#fff1e2", text: "#d9730d" },
@@ -20,6 +21,11 @@ export default function PortalRequestsPage() {
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [filter, setFilter] = useState("대기중");
   const [period, setPeriod] = useState<DatePreset>("all");
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
+  }, []);
 
   async function loadRequests() {
     setLoading(true);
@@ -103,13 +109,15 @@ export default function PortalRequestsPage() {
     );
     if (!confirmed) return;
     setProcessingId(req.id);
-    const { error: deleteError } = await supabase
-      .from("portal_order_requests")
-      .delete()
-      .eq("id", req.id);
+    const res = await fetch("/api/admin/delete-record", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ table: "portal_order_requests", id: req.id }),
+    });
     setProcessingId(null);
-    if (deleteError) {
-      setError(deleteError.message);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "삭제에 실패했습니다.");
       return;
     }
     loadRequests();
@@ -269,14 +277,16 @@ export default function PortalRequestsPage() {
                           견적 보기
                         </button>
                       )}
-                      <button
-                        className="btn-danger"
-                        style={{ padding: "5px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
-                        disabled={processingId === r.id}
-                        onClick={() => handleDelete(r)}
-                      >
-                        삭제
-                      </button>
+                      {isAdmin && (
+                        <button
+                          className="btn-danger"
+                          style={{ padding: "5px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                          disabled={processingId === r.id}
+                          onClick={() => handleDelete(r)}
+                        >
+                          삭제
+                        </button>
+                      )}
                       {r.status === "대기중" && (
                         <button
                           className="btn-ghost"

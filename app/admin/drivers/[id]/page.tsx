@@ -6,6 +6,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { REGIONS, formatPhoneNumber } from "@/lib/constants";
 import MultiSelectTags from "@/components/MultiSelectTags";
+import { getCurrentStaffRole } from "@/lib/currentStaff";
 
 const VEHICLE_TYPES = ["1톤", "1.4톤", "2.5톤", "3.5톤", "5톤", "5톤 플러스/축"];
 const BODY_TYPES = [
@@ -54,6 +55,11 @@ export default function DriverDetailPage() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
+  }, []);
 
   const [editForm, setEditForm] = useState({
     name: "",
@@ -228,11 +234,15 @@ export default function DriverDetailPage() {
       setDeleting(false);
       return;
     }
-    await supabase.from("vehicles").delete().eq("driver_id", id);
-    const { error } = await supabase.from("drivers").delete().eq("id", id);
+    const res = await fetch("/api/admin/delete-record", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ table: "drivers", id }),
+    });
     setDeleting(false);
-    if (error) {
-      setError(error.message);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "삭제에 실패했습니다.");
       return;
     }
     router.push("/admin/drivers");
@@ -282,20 +292,22 @@ export default function DriverDetailPage() {
               <button className="btn" onClick={() => setEditing(true)}>
                 정보 수정
               </button>
-              <button
-                className="btn-danger"
-                onClick={handleDelete}
-                disabled={deleting}
-                style={{
-                  padding: "9px 16px",
-                  borderRadius: "var(--radius)",
-                  fontSize: 13.5,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                {deleting ? "확인 중..." : "삭제"}
-              </button>
+              {isAdmin && (
+                <button
+                  className="btn-danger"
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  style={{
+                    padding: "9px 16px",
+                    borderRadius: "var(--radius)",
+                    fontSize: 13.5,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  {deleting ? "확인 중..." : "삭제"}
+                </button>
+              )}
             </>
           ) : (
             <>

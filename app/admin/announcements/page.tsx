@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { getCurrentStaffRole } from "@/lib/currentStaff";
 
 export default function AdminAnnouncementsPage() {
   const [items, setItems] = useState<any[]>([]);
@@ -10,6 +11,11 @@ export default function AdminAnnouncementsPage() {
   const [saving, setSaving] = useState(false);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
+  }, []);
 
   async function loadItems() {
     setLoading(true);
@@ -56,7 +62,16 @@ export default function AdminAnnouncementsPage() {
 
   async function handleDelete(id: string) {
     if (!window.confirm("이 공지사항을 삭제하시겠습니까?")) return;
-    await supabase.from("announcements").delete().eq("id", id);
+    const res = await fetch("/api/admin/delete-record", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ table: "announcements", id }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "삭제에 실패했습니다.");
+      return;
+    }
     loadItems();
   }
 
@@ -125,13 +140,15 @@ export default function AdminAnnouncementsPage() {
                     >
                       {a.is_active ? "숨기기" : "다시 게시"}
                     </button>
-                    <button
-                      className="btn-danger"
-                      style={{ padding: "4px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
-                      onClick={() => handleDelete(a.id)}
-                    >
-                      삭제
-                    </button>
+                    {isAdmin && (
+                      <button
+                        className="btn-danger"
+                        style={{ padding: "4px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                        onClick={() => handleDelete(a.id)}
+                      >
+                        삭제
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatDate } from "@/components/ApplicationDetailModal";
 import { notifyBadgeRefresh } from "@/lib/notifyBadgeRefresh";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
+import { getCurrentStaffRole } from "@/lib/currentStaff";
 
 export const STATUS_OPTIONS = ["신규", "연락완료", "종료"];
 export const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
@@ -52,6 +53,11 @@ export default function PublicQuoteDetailModal({
   const [saving, setSaving] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
+  }, []);
 
   async function handleSave() {
     if (!processedBy.trim()) {
@@ -221,15 +227,17 @@ export default function PublicQuoteDetailModal({
           </button>
         </div>
 
-        <div style={{ marginTop: 18, paddingTop: 12, borderTop: "1px dashed var(--border)" }}>
-          <button
-            onClick={handleDelete}
-            disabled={saving}
-            style={{ background: "none", border: "none", color: "var(--danger)", fontSize: 11.5, cursor: "pointer", padding: 0 }}
-          >
-            이 문의 삭제
-          </button>
-        </div>
+        {isAdmin && (
+          <div style={{ marginTop: 18, paddingTop: 12, borderTop: "1px dashed var(--border)" }}>
+            <button
+              onClick={handleDelete}
+              disabled={saving}
+              style={{ background: "none", border: "none", color: "var(--danger)", fontSize: 11.5, cursor: "pointer", padding: 0 }}
+            >
+              이 문의 삭제
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

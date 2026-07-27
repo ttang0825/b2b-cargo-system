@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getCurrentStaffRole } from "@/lib/currentStaff";
 
 type LookupResult = {
   found: boolean;
@@ -17,6 +18,11 @@ export default function AccountCleanupPage() {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<LookupResult | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
+  }, []);
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -132,14 +138,20 @@ export default function AccountCleanupPage() {
                 </span>
               )}
             </div>
-            <button
-              className="btn-danger"
-              style={{ padding: "7px 14px", borderRadius: 8, fontSize: 12.5, cursor: "pointer" }}
-              onClick={handleDelete}
-              disabled={deleting}
-            >
-              {deleting ? "삭제 중..." : "이 계정 완전 삭제"}
-            </button>
+            {isAdmin ? (
+              <button
+                className="btn-danger"
+                style={{ padding: "7px 14px", borderRadius: 8, fontSize: 12.5, cursor: "pointer" }}
+                onClick={handleDelete}
+                disabled={deleting}
+              >
+                {deleting ? "삭제 중..." : "이 계정 완전 삭제"}
+              </button>
+            ) : (
+              <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                계정 삭제는 관리자만 할 수 있습니다.
+              </p>
+            )}
           </div>
         )}
       </div>

@@ -8,7 +8,7 @@ import {
   INVOICE_STATUS_OPTIONS,
   getInvoiceStatusColor,
 } from "@/lib/invoiceStatusColors";
-import { getCurrentStaffId } from "@/lib/currentStaff";
+import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
 
 function won(n: number | null) {
@@ -27,6 +27,11 @@ export default function InvoiceDetailPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
+  }, []);
 
   const [editForm, setEditForm] = useState({
     status: "정산대기",
@@ -154,10 +159,15 @@ export default function InvoiceDetailPage() {
     );
     if (!confirmed) return;
     setDeleting(true);
-    const { error } = await supabase.from("invoices").delete().eq("id", id);
+    const res = await fetch("/api/admin/delete-record", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ table: "invoices", id }),
+    });
     setDeleting(false);
-    if (error) {
-      setSaveError(error.message);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setSaveError(data.error || "삭제에 실패했습니다.");
       return;
     }
     router.push("/admin/invoices");
@@ -205,20 +215,22 @@ export default function InvoiceDetailPage() {
             {invoice.billing_period || "-"}
           </p>
         </div>
-        <button
-          className="btn-danger"
-          onClick={handleDelete}
-          disabled={deleting}
-          style={{
-            padding: "9px 16px",
-            borderRadius: "var(--radius)",
-            fontSize: 13.5,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          {deleting ? "확인 중..." : "삭제"}
-        </button>
+        {isAdmin && (
+          <button
+            className="btn-danger"
+            onClick={handleDelete}
+            disabled={deleting}
+            style={{
+              padding: "9px 16px",
+              borderRadius: "var(--radius)",
+              fontSize: 13.5,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            {deleting ? "확인 중..." : "삭제"}
+          </button>
+        )}
       </div>
 
       {saveError && <div className="error-box">오류: {saveError}</div>}

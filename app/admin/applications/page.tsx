@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import ApplicationDetailModal, { STATUS_COLORS, formatDate } from "@/components/ApplicationDetailModal";
 import { notifyBadgeRefresh } from "@/lib/notifyBadgeRefresh";
+import { getCurrentStaffRole } from "@/lib/currentStaff";
 
 export default function AdminApplicationsPage() {
   const router = useRouter();
@@ -15,6 +16,11 @@ export default function AdminApplicationsPage() {
   const [period, setPeriod] = useState<DatePreset>("all");
   const [cleaningUp, setCleaningUp] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
+  }, []);
 
   async function loadItems(silent = false) {
     if (!silent) setLoading(true);
@@ -103,14 +109,16 @@ export default function AdminApplicationsPage() {
             행을 클릭하면 상세 정보와 처리 버튼을 볼 수 있습니다.
           </p>
         </div>
-        <button
-          className="btn-ghost"
-          style={{ padding: "8px 14px", borderRadius: 8, fontSize: 12.5, cursor: "pointer" }}
-          onClick={handleBulkCleanup}
-          disabled={cleaningUp}
-        >
-          {cleaningUp ? "정리 중..." : "오래된 거절·보류건 일괄정리"}
-        </button>
+        {isAdmin && (
+          <button
+            className="btn-ghost"
+            style={{ padding: "8px 14px", borderRadius: 8, fontSize: 12.5, cursor: "pointer" }}
+            onClick={handleBulkCleanup}
+            disabled={cleaningUp}
+          >
+            {cleaningUp ? "정리 중..." : "오래된 거절·보류건 일괄정리"}
+          </button>
+        )}
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>

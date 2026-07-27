@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { STATUS_OPTIONS as COMPANY_STATUS_ORDER } from "@/lib/statusColors";
-import { getCurrentStaffId } from "@/lib/currentStaff";
+import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
 
 const STATUS_OPTIONS = ["상담중", "견적제출", "수주", "보류", "실패"];
@@ -74,6 +74,11 @@ export default function QuoteDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
+  }, []);
 
   async function load() {
     setLoading(true);
@@ -145,11 +150,15 @@ export default function QuoteDetailPage() {
     );
     if (!confirmed) return;
     setDeleting(true);
-    await supabase.from("quote_items").delete().eq("quote_id", id);
-    const { error } = await supabase.from("quotes").delete().eq("id", id);
+    const res = await fetch("/api/admin/delete-record", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ table: "quotes", id }),
+    });
     setDeleting(false);
-    if (error) {
-      setError(error.message);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "삭제에 실패했습니다.");
       return;
     }
     router.push("/admin/quotes");
@@ -202,20 +211,22 @@ export default function QuoteDetailPage() {
             )}
           </p>
         </div>
-        <button
-          className="btn-danger"
-          onClick={handleDelete}
-          disabled={deleting}
-          style={{
-            padding: "9px 16px",
-            borderRadius: "var(--radius)",
-            fontSize: 13.5,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          {deleting ? "삭제 중..." : "삭제"}
-        </button>
+        {isAdmin && (
+          <button
+            className="btn-danger"
+            onClick={handleDelete}
+            disabled={deleting}
+            style={{
+              padding: "9px 16px",
+              borderRadius: "var(--radius)",
+              fontSize: 13.5,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            {deleting ? "삭제 중..." : "삭제"}
+          </button>
+        )}
       </div>
 
       {error && <div className="error-box">오류: {error}</div>}

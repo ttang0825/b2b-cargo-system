@@ -14,7 +14,7 @@ import {
 } from "@/lib/constants";
 import { MANUAL_SOURCE_OPTIONS, getSourceChips } from "@/lib/sourceColors";
 import MultiSelectTags from "@/components/MultiSelectTags";
-import { getCurrentStaffId } from "@/lib/currentStaff";
+import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
 
 type CompanyDetail = { [key: string]: any };
@@ -143,6 +143,11 @@ export default function CompanyDetailPage() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
+  }, []);
 
   type Location = {
     id: string;
@@ -383,12 +388,14 @@ export default function CompanyDetailPage() {
   async function handleDeleteLocation(locId: string) {
     const confirmed = window.confirm("이 주소를 삭제하시겠습니까?");
     if (!confirmed) return;
-    const { error } = await supabase
-      .from("customer_locations")
-      .delete()
-      .eq("id", locId);
-    if (error) {
-      setError(error.message);
+    const res = await fetch("/api/admin/delete-record", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ table: "customer_locations", id: locId }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "삭제에 실패했습니다.");
       return;
     }
     loadLocations();
@@ -563,20 +570,22 @@ export default function CompanyDetailPage() {
               <button className="btn" onClick={() => setEditing(true)}>
                 정보 수정
               </button>
-              <button
-                className="btn-danger"
-                onClick={handleDelete}
-                disabled={deleting}
-                style={{
-                  padding: "9px 16px",
-                  borderRadius: "var(--radius)",
-                  fontSize: 13.5,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                {deleting ? "확인 중..." : "완전삭제"}
-              </button>
+              {isAdmin && (
+                <button
+                  className="btn-danger"
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  style={{
+                    padding: "9px 16px",
+                    borderRadius: "var(--radius)",
+                    fontSize: 13.5,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  {deleting ? "확인 중..." : "완전삭제"}
+                </button>
+              )}
             </>
           ) : (
             <>
@@ -1049,19 +1058,21 @@ export default function CompanyDetailPage() {
                         {loc.address}
                       </span>
                     )}
-                    <button
-                      className="btn-danger"
-                      style={{
-                        padding: "2px 8px",
-                        borderRadius: 6,
-                        fontSize: 11,
-                        cursor: "pointer",
-                        flexShrink: 0,
-                      }}
-                      onClick={() => handleDeleteLocation(loc.id)}
-                    >
-                      삭제
-                    </button>
+                    {isAdmin && (
+                      <button
+                        className="btn-danger"
+                        style={{
+                          padding: "2px 8px",
+                          borderRadius: 6,
+                          fontSize: 11,
+                          cursor: "pointer",
+                          flexShrink: 0,
+                        }}
+                        onClick={() => handleDeleteLocation(loc.id)}
+                      >
+                        삭제
+                      </button>
+                    )}
                   </div>
                 ))
               )}
@@ -1187,7 +1198,7 @@ export default function CompanyDetailPage() {
                   >
                     {acc.is_active ? "비활성화" : "다시 활성화"}
                   </button>
-                  {!acc.is_active && (
+                  {!acc.is_active && isAdmin && (
                     <button
                       type="button"
                       className="btn-danger"

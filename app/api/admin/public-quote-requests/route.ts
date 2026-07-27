@@ -52,6 +52,10 @@ export async function POST(req: Request) {
   }
 
   if (action === "delete") {
+    const staff = await getCurrentStaff();
+    if (!staff || staff.role !== "admin") {
+      return NextResponse.json({ error: "삭제는 관리자만 할 수 있습니다." }, { status: 403 });
+    }
     const { error } = await admin.from("public_quote_requests").delete().eq("id", id);
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     return NextResponse.json({ ok: true });
