@@ -8,7 +8,8 @@
 재구조화 1~8단계 전부(스펙 전체) 완료·merge됨 + 수정 스펙 3건(견적 거리 자동계산 /
 로그인 정보 표시·본인 비밀번호 변경 / 개인고객 관리) 완료·merge됨 + 페이지 전환 성능
 개선(로그인정보/권한체크 캐싱, middleware 최적화, `<a href>` 하드 리로드 버그 수정)
-완료·merge됨)
+완료·merge됨 + 업체/포털계정 삭제 FK 오류 수정 + 개인고객 삭제 기능 완료·merge됨 +
+Enter키 자동제출 방지 완료·merge됨)
 
 ---
 
@@ -234,6 +235,33 @@
     `#해시` 앵커(`admin/guide`)처럼 원래 하드 네비게이션이 필요한 경우만 예외.
     새 링크를 추가할 때 `<a href=`로 시작하는 코드를 쓰고 있다면 내부 경로가
     아닌지 반드시 확인할 것
+32. **`support_access_logs`처럼 순수 이력(로그) 목적의 테이블이 `companies`/
+    `customer_accounts` 등 실제 데이터를 참조할 때는 FK에 `on delete set null`을
+    걸고, 표시용 텍스트 스냅샷 컬럼(`company_name`/`customer_email`처럼)을 같이
+    저장해둘 것** — `on delete` 옵션 없이(기본 RESTRICT) FK를 걸면, 원본이 삭제될
+    때 이 로그 테이블이 참조를 잡고 있다는 이유만으로 업체/계정 삭제 자체가 막혀버림
+    (실제로 겪은 버그: 지원접속 이력이 하나라도 있는 업체는 완전삭제가 FK 위반으로
+    실패했음). 반대로 `orders`/`quotes`/`invoices`처럼 실제 업무 기록이 있는 테이블은
+    이렇게 풀지 말 것 — 그 경우엔 삭제가 막히는 게 의도된 동작(화주 상세화면도
+    삭제 전에 관련 견적/오더/정산 건수를 확인해서 있으면 완전삭제를 막고 "거래중단"
+    상태변경을 안내함). "이 데이터가 지워질 때 삭제를 막아야 하는지 vs 로그만
+    남기고 통과시켜야 하는지"를 테이블 성격에 따라 판단할 것
+33. **삭제/저장 등 액션 실패 시 에러를 표시할 state는 페이지 최초 로딩 실패용
+    state와 반드시 분리할 것** — 화주 상세화면(`companies/[id]/page.tsx`)이
+    `handleDelete()` 실패 시 로딩 실패용 `error` state를 그대로 재사용하고 있어서,
+    `if (error || !company) return <전체화면 에러>` 가드에 걸려 이미 불러온 상세
+    화면 전체가 "정보를 불러오지 못했습니다"로 덮여버리는 버그가 있었음(개인고객
+    상세화면에도 같은 패턴이 있어서 같이 수정함). 액션 실패는 항상 별도 state(예:
+    `deleteError`/`actionError`)로 받아서 인라인 에러 배너로만 보여줄 것 — 이미
+    로드된 화면 데이터를 오류 메시지로 통째로 덮어쓰면 안 됨
+34. **저장/등록 폼(`<form onSubmit={...}>`)에는 `lib/preventEnterSubmit.ts`의
+    `handleFormKeyDown`을 `onKeyDown`으로 붙일 것** — 입력 중 습관적으로 누르는
+    Enter키가 브라우저 기본 동작으로 폼을 그대로 제출시켜서, 아직 다 작성하지 않은
+    정보가 실수로 저장/등록되는 문제를 막기 위함(`textarea`는 줄바꿈 용도라 예외).
+    다만 **로그인 폼**(Enter로 로그인은 일반적인 관례)과 **전화번호/이메일로
+    조회하는 검색 폼**(`/status`, `/quote/status`, `/apply/status`,
+    `/admin/account-cleanup` — 저장이 아니라 단순 조회라 Enter 실행이 자연스러움)은
+    예외로 붙이지 않음. 새 등록/수정 폼을 추가할 때도 이 핸들러를 빠뜨리지 말 것
 
 ---
 
@@ -347,6 +375,23 @@
     `<a href>`로 되어 있어서 메뉴 클릭마다 브라우저 전체 새로고침(하드 리로드)이
     발생하고 있었음 — 위의 캐싱/최적화 작업들이 체감 속도를 크게 못 바꾼 실제
     이유였음. 전부 `Link`로 교체 (원칙 31번)
+- **업체/포털계정 삭제 FK 오류 수정 + 개인고객 삭제 기능**:
+  - `support_access_logs.company_id`/`customer_account_id` FK에 `on delete`
+    옵션이 없어서, 지원접속 이력이 하나라도 있는 업체/포털계정은 완전삭제가
+    FK 위반으로 막히던 버그 수정 — `on delete set null`로 교체(SQL, 원칙 32번).
+    `company_name`/`customer_email` 텍스트 스냅샷이 이미 있어 원본이 지워져도
+    `/admin/support-logs`의 로그 가독성엔 문제 없음
+  - 화주 상세화면(`companies/[id]/page.tsx`)에서 삭제 실패 시 페이지 전체가
+    "정보를 불러오지 못했습니다" 오류로 덮이던 버그도 같이 발견해 수정
+    (`deleteError`로 상태 분리, 원칙 33번)
+  - `/admin/individual-customers/[id]`에 "완전삭제" 버튼 신규(관리자 전용,
+    `app/api/admin/delete-record` 공용 API 재사용). `orders`/`invoices`의
+    `individual_customer_id` FK를 `on delete set null`로 바꿔서 주문/정산
+    이력이 있는 개인고객도 삭제 가능(이력 자체는 남고 연결만 해제, 화면은
+    `guest_name` 등 자체 텍스트로 표시하므로 영향 없음)
+- **입력 중 Enter키 자동제출 방지**: `lib/preventEnterSubmit.ts`의
+  `handleFormKeyDown`을 내부시스템·화주포털·완전공개 전체 등록/수정 폼에 적용
+  (원칙 34번). 로그인 폼과 전화번호/이메일 조회용 검색 폼은 의도적으로 제외
 
 ---
 
@@ -423,6 +468,12 @@
   그 링크를 쓰는 화면 전체가 하드 리로드되어 다른 모든 성능 최적화가 무색해짐.
   실제로 이 프로젝트에서 캐싱·middleware 최적화를 다 하고도 체감 개선이 없었던
   이유가 결국 이것이었음
+- **삭제 API가 "violates foreign key constraint" 에러를 내는데 화면에 그 이유가
+  안 보인다면**: 실제 업무 데이터(견적/오더/정산 등)가 남아있어서 막힌 게 맞는지,
+  아니면 `support_access_logs`처럼 순수 이력용 테이블이 `on delete` 옵션 없는
+  FK로 걸려있어서 불필요하게 막힌 건지부터 구분할 것 (원칙 32번). 후자라면 로그
+  테이블 쪽 FK를 `on delete set null`로 바꾸는 게 맞고, 전자라면 막히는 게
+  의도된 동작이니 건드리지 말 것
 
 ---
 
