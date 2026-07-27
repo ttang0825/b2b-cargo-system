@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { supabaseAdminAuth } from "@/lib/supabaseAdminAuthClient";
 import { onBadgeRefresh } from "@/lib/notifyBadgeRefresh";
-import { getCurrentStaffInfo } from "@/lib/currentStaff";
+import { getCurrentStaffInfo, onCurrentStaffChange, clearCurrentStaffCache } from "@/lib/currentStaff";
 
 type NavItem = { href: string; label: string; key?: "applications" | "publicQuotes" | "portalRequests" };
 type NavGroup = { label: string; items: NavItem[] };
@@ -223,12 +223,14 @@ export default function TopNav() {
 
   useEffect(() => {
     if (isPublicPath) return;
-    async function loadRole() {
-      const info = await getCurrentStaffInfo();
+    function applyInfo(info: { name: string; role: "admin" | "staff" } | null) {
       setIsAdmin(info?.role === "admin");
       setStaffName(info?.name || null);
     }
-    loadRole();
+    getCurrentStaffInfo().then(applyInfo);
+    // 본인 정보 수정(/admin/my-account)·role 변경(/admin/staff) 직후 바로 반영되도록 구독
+    const off = onCurrentStaffChange(applyInfo);
+    return off;
   }, [isPublicPath]);
 
   // 드롭다운이 열려있을 때 메뉴 바깥의 빈 곳을 클릭하면 닫히게 함
@@ -247,6 +249,7 @@ export default function TopNav() {
 
   async function handleLogout() {
     await supabaseAdminAuth.auth.signOut();
+    clearCurrentStaffCache();
     router.push("/admin/login");
     router.refresh();
   }
