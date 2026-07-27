@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
-import { getCurrentStaffId } from "@/lib/currentStaff";
+import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
 
 type Customer = {
@@ -59,6 +59,16 @@ export default function IndividualCustomerDetailPage() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editForm, setEditForm] = useState({ name: "", phone: "", email: "", memo: "" });
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  // 목록을 못 불러온 경우(위 error)와 저장/삭제 중 실패한 경우를 분리 — 저장/삭제
+  // 실패를 error에 같이 쓰면 이미 불러온 화면 전체가 "불러오지 못했습니다" 오류
+  // 화면으로 덮여버리는 문제가 있었음(화주 상세화면에서 실제로 겪었던 버그와 동일)
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
+  }, []);
 
   async function load() {
     setLoading(true);
@@ -106,11 +116,11 @@ export default function IndividualCustomerDetailPage() {
 
   async function handleSave() {
     if (!editForm.name.trim() || !editForm.phone.trim()) {
-      setError("이름과 연락처를 입력해주세요.");
+      setActionError("이름과 연락처를 입력해주세요.");
       return;
     }
     setSaving(true);
-    setError(null);
+    setActionError(null);
     const { error } = await supabase
       .from("individual_customers")
       .update({
@@ -123,11 +133,43 @@ export default function IndividualCustomerDetailPage() {
       .eq("id", id);
     setSaving(false);
     if (error) {
-      setError(error.message);
+      setActionError(error.message);
       return;
     }
     setEditing(false);
     load();
+  }
+
+  async function handleDelete() {
+    if (!customer) return;
+    const historyWarning =
+      orders.length > 0 || invoices.length > 0
+        ? `\n주문 ${orders.length}건 · 정산 ${invoices.length}건은 삭제되지 않고, 개인고객 연결만 해제됩니다.`
+        : "";
+    const confirmed = window.confirm(
+      `"${customer.name}" 개인고객 정보를 완전히 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.${historyWarning}`
+    );
+    if (!confirmed) return;
+    setDeleting(true);
+    setActionError(null);
+    try {
+      const res = await fetch("/api/admin/delete-record", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ table: "individual_customers", id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setDeleting(false);
+        setActionError(data.error || "삭제에 실패했습니다.");
+        return;
+      }
+    } catch {
+      setDeleting(false);
+      setActionError("삭제 중 오류가 발생했습니다.");
+      return;
+    }
+    router.push("/admin/individual-customers");
   }
 
   if (loading) {
@@ -165,9 +207,21 @@ export default function IndividualCustomerDetailPage() {
           </p>
         </div>
         {!editing ? (
-          <button className="btn" onClick={() => setEditing(true)}>
-            정보 수정
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn" onClick={() => setEditing(true)}>
+              정보 수정
+            </button>
+            {isAdmin && (
+              <button
+                className="btn-danger"
+                onClick={handleDelete}
+                disabled={deleting}
+                style={{ padding: "9px 16px", borderRadius: "var(--radius)", fontSize: 13.5, fontWeight: 600, cursor: "pointer" }}
+              >
+                {deleting ? "확인 중..." : "완전삭제"}
+              </button>
+            )}
+          </div>
         ) : (
           <div style={{ display: "flex", gap: 8 }}>
             <button className="btn" onClick={handleSave} disabled={saving}>
@@ -186,7 +240,7 @@ export default function IndividualCustomerDetailPage() {
         )}
       </div>
 
-      {error && <div className="error-box">오류: {error}</div>}
+      {actionError && <div className="error-box">{actionError}</div>}
 
       <div className="card" style={{ padding: 20, marginBottom: 20 }}>
         <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>기본 정보</h3>

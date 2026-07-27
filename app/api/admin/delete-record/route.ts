@@ -22,6 +22,7 @@ const ALLOWED_TABLES = new Set([
   "announcements",
   "portal_order_requests",
   "customer_locations",
+  "individual_customers",
 ]);
 
 function getAdminClient() {
