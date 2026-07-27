@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 
@@ -90,7 +91,7 @@ function NavDropdown({
           {group.items.map((item) => {
             const active = pathname?.startsWith(item.href);
             return (
-              <a
+              <Link
                 key={item.href}
                 href={item.href}
                 style={{
@@ -105,7 +106,7 @@ function NavDropdown({
                 }}
               >
                 {item.label}
-              </a>
+              </Link>
             );
           })}
         </div>
@@ -230,10 +231,10 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
     <div className="portal-theme" style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       <div className="top-nav">
         <div className="top-nav-inner" style={{ flexWrap: "wrap", gap: 16 }}>
-          <a href="/customer" className="brand-link">
+          <Link href="/customer" className="brand-link">
             <div className="brand">{companyName || "화주"} 포털</div>
             <div className="brand-sub">WeCarry 운송 통합 운영 시스템 · 홈으로</div>
-          </a>
+          </Link>
           <div
             ref={navGroupRef}
             className="nav-desktop-group"
@@ -249,7 +250,7 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
                 onToggle={() => setOpenGroup((g) => (g === group.label ? null : group.label))}
               />
             ))}
-            <a
+            <Link
               href="/customer/announcements"
               className={pathname === "/customer/announcements" ? "nav-chip nav-chip-active" : "nav-chip"}
               style={{ position: "relative" }}
@@ -258,7 +259,7 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
               {notified.announcements && (
                 <span style={{ position: "absolute", top: 4, right: 4, width: 7, height: 7, borderRadius: "50%", background: "var(--danger)" }} />
               )}
-            </a>
+            </Link>
             <button
               onClick={handleLogout}
               className="guide-link"
@@ -297,7 +298,7 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
                   const active = pathname?.startsWith(item.href);
                   const hasDot = item.key && (notified as any)[item.key];
                   return (
-                    <a
+                    <Link
                       key={item.href}
                       href={item.href}
                       style={{
@@ -315,12 +316,12 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
                       {hasDot && (
                         <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--danger)" }} />
                       )}
-                    </a>
+                    </Link>
                   );
                 })}
               </div>
             ))}
-            <a
+            <Link
               href="/customer/announcements"
               style={{
                 padding: "10px 4px",
@@ -339,7 +340,7 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
               {notified.announcements && (
                 <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--danger)" }} />
               )}
-            </a>
+            </Link>
             <button
               onClick={handleLogout}
               style={{

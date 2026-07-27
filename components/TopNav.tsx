@@ -113,14 +113,14 @@ function NavDropdown({
             const active = pathname?.startsWith(item.href);
             const count = item.key ? counts[item.key] || 0 : 0;
             return (
-              <a
+              <Link
                 key={item.href}
                 href={item.href}
                 className={active ? "nav-dropdown-item nav-dropdown-item-active" : "nav-dropdown-item"}
               >
                 {item.label}
                 <Badge count={count} />
-              </a>
+              </Link>
             );
           })}
         </div>

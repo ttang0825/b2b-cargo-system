@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import { getDispatchStatusColor } from "@/lib/dispatchStatusColors";
 
@@ -40,9 +41,9 @@ export default function CustomerDispatchesPage() {
           <h1 className="page-title">배차·운송 조회</h1>
           <p className="page-desc">
             진행 중인 운송의 실시간 상태를 확인하세요. 엑셀로 내려받으시려면{" "}
-            <a href="/customer/stats" style={{ textDecoration: "underline" }}>
+            <Link href="/customer/stats" style={{ textDecoration: "underline" }}>
               월별 통계
-            </a>{" "}
+            </Link>{" "}
             페이지를 이용해주세요.
           </p>
         </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import { getDispatchStatusColor } from "@/lib/dispatchStatusColors";
 
@@ -171,9 +172,9 @@ export default function CustomerHomePage() {
           {latestAnnouncement.content && (
             <div style={{ fontSize: 12.5, color: "var(--text-muted)" }}>{latestAnnouncement.content}</div>
           )}
-          <a href="/customer/announcements" style={{ fontSize: 11.5, color: "var(--accent)", textDecoration: "underline" }}>
+          <Link href="/customer/announcements" style={{ fontSize: 11.5, color: "var(--accent)", textDecoration: "underline" }}>
             전체 공지사항 보기 →
-          </a>
+          </Link>
         </div>
       )}
 

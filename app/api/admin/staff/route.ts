@@ -13,6 +13,24 @@ function getAdminClient() {
   });
 }
 
+// staff_accounts의 role/status가 바뀔 때마다 auth 쪽 user_metadata도 같이 갱신 —
+// middleware가 이 값을 getUser() 응답에서 바로 읽어서 매 페이지 이동마다 staff_accounts를
+// 따로 조회하지 않아도 되게 함 (원칙: role/status가 바뀐 직후 같은 요청 안에서 동기화되므로
+// 신선도 손실 없음). 실패해도 staff_accounts가 원본이라 middleware가 자동으로 DB 조회로
+// 폴백하니 요청 자체를 실패시키지 않음
+async function syncStaffAuthMetadata(admin: ReturnType<typeof getAdminClient>, id: string) {
+  if (!admin) return;
+  try {
+    const { data: staff } = await admin.from("staff_accounts").select("role,status").eq("id", id).maybeSingle();
+    if (!staff) return;
+    await admin.auth.admin.updateUserById(id, {
+      user_metadata: { role: staff.role, status: staff.status },
+    });
+  } catch {
+    // 동기화 실패해도 무시 — middleware가 staff_accounts 조회로 폴백함
+  }
+}
+
 function randomPassword(length = 10) {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
   let pw = "";
@@ -77,6 +95,9 @@ export async function POST(req: Request) {
       email: email.trim(),
       password: tempPassword,
       email_confirm: true,
+      // role/status를 auth 쪽 user_metadata에도 미러링 — middleware가 매 페이지 이동마다
+      // staff_accounts를 따로 조회하지 않고 getUser() 응답만으로 재직상태/권한을 판단할 수 있게 함
+      user_metadata: { role: finalRole, status: "active" },
     });
     if (userError || !userData?.user) {
       const message = (userError?.message || "").toLowerCase();
@@ -146,6 +167,7 @@ export async function POST(req: Request) {
     }
     const { error } = await admin.from("staff_accounts").update({ role }).eq("id", id);
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    await syncStaffAuthMetadata(admin, id);
     return NextResponse.json({ ok: true });
   }
 
@@ -159,6 +181,7 @@ export async function POST(req: Request) {
     }
     const { error } = await admin.from("staff_accounts").update({ status }).eq("id", id);
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    await syncStaffAuthMetadata(admin, id);
     return NextResponse.json({ ok: true });
   }
 

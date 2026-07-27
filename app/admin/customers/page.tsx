@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { STATUS_OPTIONS, getStatusColor } from "@/lib/statusColors";
@@ -196,9 +197,9 @@ export default function CustomersPage() {
           <p className="page-desc">
             견적요청 이상 단계에 진입한 화주만 모아 보여줍니다. 전체
             영업대상은{" "}
-            <a href="/admin/companies" style={{ textDecoration: "underline" }}>
+            <Link href="/admin/companies" style={{ textDecoration: "underline" }}>
               화주 관리
-            </a>{" "}
+            </Link>{" "}
             화면에서 확인할 수 있습니다. 🔑 표시는 화주포털 계정이 발급된
             업체입니다.
           </p>
