@@ -16,7 +16,10 @@ export default function CustomerLoginPage() {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password: password.trim(),
+    });
     setLoading(false);
     if (error) {
       setError("이메일 또는 비밀번호가 올바르지 않습니다.");
