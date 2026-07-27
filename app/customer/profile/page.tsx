@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import { formatPhoneNumber } from "@/lib/constants";
+import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
@@ -135,7 +136,7 @@ export default function PortalProfilePage() {
             <Field label="이메일" value={saved.email} />
           </>
         ) : (
-          <form onSubmit={handleSave}>
+          <form onSubmit={handleSave} onKeyDown={handleFormKeyDown}>
             <div className="field" style={{ marginBottom: 14 }}>
               <label>담당자명</label>
               <input value={form.name} onChange={(e) => setField("name", e.target.value)} />

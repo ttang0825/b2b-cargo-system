@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { REGIONS, formatPhoneNumber } from "@/lib/constants";
 import MultiSelectTags from "@/components/MultiSelectTags";
+import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 
 const VEHICLE_TYPES = ["1톤", "1.4톤", "2.5톤", "3.5톤", "5톤", "5톤 플러스/축"];
 const BODY_TYPES = [
@@ -226,7 +227,7 @@ export default function DriversPage() {
 
       {showForm && (
         <div className="card" style={{ marginBottom: 24, padding: 20 }}>
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown}>
             <div className="form-grid" style={{ padding: 0 }}>
               <div className="field">
                 <label>차주명 *</label>

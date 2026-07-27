@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getCurrentStaffRole } from "@/lib/currentStaff";
+import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 
 export default function AdminAnnouncementsPage() {
   const [items, setItems] = useState<any[]>([]);
@@ -87,7 +88,7 @@ export default function AdminAnnouncementsPage() {
       {error && <div className="error-box">오류: {error}</div>}
 
       <div className="card" style={{ padding: 20, marginBottom: 24 }}>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown}>
           <div className="field" style={{ marginBottom: 12 }}>
             <label>제목</label>
             <input value={title} onChange={(e) => setTitle(e.target.value)} />

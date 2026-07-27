@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { STATUS_OPTIONS, getStatusColor } from "@/lib/statusColors";
+import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import {
   REGIONS,
   VEHICLE_TYPES,
@@ -379,7 +380,7 @@ export default function CompaniesPage() {
 
       {showForm && (
         <div className="card" style={{ marginBottom: 24 }}>
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown}>
             <div className="form-grid">
               <div className="field">
                 <label>회사명 *</label>

@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { STATUS_OPTIONS, getStatusColor } from "@/lib/statusColors";
+import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import {
   REGIONS,
   VEHICLE_TYPES,
@@ -1337,7 +1338,7 @@ export default function CompanyDetailPage() {
 
         {portalError && <div className="error-box">{portalError}</div>}
 
-        <form onSubmit={handleIssueAccount} style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <form onSubmit={handleIssueAccount} onKeyDown={handleFormKeyDown} style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <input
             type="email"
             value={newAccountEmail}

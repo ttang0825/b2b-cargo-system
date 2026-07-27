@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { generateDailyNumber } from "@/lib/generateNumber";
 import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
+import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import DateTimePicker from "@/components/DateTimePicker";
 
@@ -832,17 +833,7 @@ function QuotesPageInner() {
         }}
       >
         <div className="card" style={{ padding: 20 }}>
-          <form
-            onSubmit={handleSubmit}
-            onKeyDown={(e) => {
-              if (
-                e.key === "Enter" &&
-                (e.target as HTMLElement).tagName !== "TEXTAREA"
-              ) {
-                e.preventDefault();
-              }
-            }}
-          >
+          <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown}>
             <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
               <button
                 type="button"

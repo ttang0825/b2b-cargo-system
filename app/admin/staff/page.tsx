@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getCurrentStaffId, refreshCurrentStaffCache } from "@/lib/currentStaff";
+import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   active: { bg: "#e6f7ec", text: "#1b9c57" },
@@ -198,7 +199,7 @@ export default function AdminStaffPage() {
 
       <div className="card" style={{ padding: 20, marginBottom: 20, maxWidth: 560 }}>
         <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>새 직원 계정 발급</h3>
-        <form onSubmit={handleInvite}>
+        <form onSubmit={handleInvite} onKeyDown={handleFormKeyDown}>
           <div className="form-grid" style={{ padding: 0, marginBottom: 4 }}>
             <div className="field">
               <label>이름</label>
