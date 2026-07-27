@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { supabaseAdminAuth } from "@/lib/supabaseAdminAuthClient";
 import { onBadgeRefresh } from "@/lib/notifyBadgeRefresh";
+import { getCurrentStaffInfo } from "@/lib/currentStaff";
 
 type NavItem = { href: string; label: string; key?: "applications" | "publicQuotes" | "portalRequests" };
 type NavGroup = { label: string; items: NavItem[] };
@@ -134,6 +135,7 @@ export default function TopNav() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [staffName, setStaffName] = useState<string | null>(null);
   const navGroupRef = useRef<HTMLDivElement>(null);
 
   const isPublicPath =
@@ -221,16 +223,9 @@ export default function TopNav() {
   useEffect(() => {
     if (isPublicPath) return;
     async function loadRole() {
-      const {
-        data: { user },
-      } = await supabaseAdminAuth.auth.getUser();
-      if (!user) return;
-      const { data: staff } = await supabaseAdminAuth
-        .from("staff_accounts")
-        .select("role")
-        .eq("id", user.id)
-        .maybeSingle();
-      setIsAdmin(staff?.role === "admin");
+      const info = await getCurrentStaffInfo();
+      setIsAdmin(info?.role === "admin");
+      setStaffName(info?.name || null);
     }
     loadRole();
   }, [isPublicPath]);
@@ -287,6 +282,11 @@ export default function TopNav() {
           <Link href="/admin/announcements" className="guide-link">
             공지사항 관리
           </Link>
+          {staffName && (
+            <Link href="/admin/my-account" className="guide-link">
+              {staffName}님
+            </Link>
+          )}
           <button
             onClick={handleLogout}
             className="guide-link"
@@ -368,6 +368,14 @@ export default function TopNav() {
             >
               공지사항 관리
             </Link>
+            {staffName && (
+              <Link
+                href="/admin/my-account"
+                style={{ display: "block", padding: "8px 4px", fontSize: 13.5, color: "var(--text-muted)", textDecoration: "none" }}
+              >
+                {staffName}님
+              </Link>
+            )}
             <button
               onClick={handleLogout}
               style={{
