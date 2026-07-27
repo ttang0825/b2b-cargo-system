@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
-import { getCurrentStaffRole } from "@/lib/currentStaff";
+import { getCurrentStaffRole, getCurrentStaffName } from "@/lib/currentStaff";
 
 export const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   검토중: { bg: "#fff1e2", text: "#d9730d" },
@@ -76,17 +76,17 @@ export default function ApplicationDetailModal({
   const [submitting, setSubmitting] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [staffName, setStaffName] = useState<string | null>(null);
 
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
+    getCurrentStaffName().then(setStaffName);
   }, []);
 
   const [reason, setReason] = useState("");
   const [customNote, setCustomNote] = useState("");
-  const [decisionProcessedBy, setDecisionProcessedBy] = useState("");
 
   const [approveEmail, setApproveEmail] = useState(item.contact_email || "");
-  const [approveProcessedBy, setApproveProcessedBy] = useState("");
 
   const [resultData, setResultData] = useState<ResultData | null>(null);
   const [sendingEmail, setSendingEmail] = useState(false);
@@ -95,22 +95,20 @@ export default function ApplicationDetailModal({
   function openDecisionStep(type: "거절" | "보류") {
     setReason("");
     setCustomNote("");
-    setDecisionProcessedBy("");
     setLocalError(null);
     setStep(type === "거절" ? "reject" : "hold");
   }
 
   function openApproveStep() {
     setApproveEmail(item.contact_email || "");
-    setApproveProcessedBy("");
     setLocalError(null);
     setStep("approve");
   }
 
   async function submitDecision(type: "거절" | "보류") {
     const reasonText = reason === "기타 (직접 입력)" ? customNote : reason;
-    if (!decisionProcessedBy.trim()) {
-      setLocalError("처리자 이름을 입력해주세요.");
+    if (!staffName) {
+      setLocalError("로그인 정보를 확인할 수 없습니다. 다시 로그인해주세요.");
       return;
     }
     setSubmitting(true);
@@ -123,7 +121,7 @@ export default function ApplicationDetailModal({
           id: item.id,
           status: type,
           staff_note: reasonText || null,
-          processed_by: decisionProcessedBy,
+          processed_by: staffName,
         }),
       });
       if (!res.ok) {
@@ -158,8 +156,8 @@ export default function ApplicationDetailModal({
       setLocalError("포털 계정 로그인용 이메일을 입력해주세요.");
       return;
     }
-    if (!approveProcessedBy.trim()) {
-      setLocalError("처리자 이름을 입력해주세요.");
+    if (!staffName) {
+      setLocalError("로그인 정보를 확인할 수 없습니다. 다시 로그인해주세요.");
       return;
     }
     setSubmitting(true);
@@ -168,7 +166,7 @@ export default function ApplicationDetailModal({
       const res = await fetch("/api/admin/approve-application", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ application_id: item.id, portal_email: email, processed_by: approveProcessedBy }),
+        body: JSON.stringify({ application_id: item.id, portal_email: email, processed_by: staffName }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -434,10 +432,9 @@ export default function ApplicationDetailModal({
                 <textarea rows={2} value={customNote} onChange={(e) => setCustomNote(e.target.value)} />
               </div>
             )}
-            <div className="field" style={{ marginBottom: 18 }}>
-              <label>처리자 이름</label>
-              <input value={decisionProcessedBy} onChange={(e) => setDecisionProcessedBy(e.target.value)} />
-            </div>
+            <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 18 }}>
+              처리자: <strong>{staffName || "확인 중..."}</strong>
+            </p>
             {localError && <div className="error-box" style={{ marginBottom: 12 }}>{localError}</div>}
             <div style={{ display: "flex", gap: 8 }}>
               <button className="btn" onClick={() => submitDecision(step === "reject" ? "거절" : "보류")} disabled={submitting}>
@@ -460,10 +457,9 @@ export default function ApplicationDetailModal({
               <label>포털 계정 로그인용 이메일</label>
               <input value={approveEmail} onChange={(e) => setApproveEmail(e.target.value)} />
             </div>
-            <div className="field" style={{ marginBottom: 18 }}>
-              <label>처리자 이름</label>
-              <input value={approveProcessedBy} onChange={(e) => setApproveProcessedBy(e.target.value)} />
-            </div>
+            <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 18 }}>
+              처리자: <strong>{staffName || "확인 중..."}</strong>
+            </p>
             {localError && <div className="error-box" style={{ marginBottom: 12 }}>{localError}</div>}
             <div style={{ display: "flex", gap: 8 }}>
               <button className="btn" onClick={submitApprove} disabled={submitting}>

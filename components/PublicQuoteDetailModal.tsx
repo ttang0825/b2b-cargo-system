@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { formatDate } from "@/components/ApplicationDetailModal";
 import { notifyBadgeRefresh } from "@/lib/notifyBadgeRefresh";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
-import { getCurrentStaffRole } from "@/lib/currentStaff";
+import { getCurrentStaffRole, getCurrentStaffName } from "@/lib/currentStaff";
 
 export const STATUS_OPTIONS = ["신규", "연락완료", "종료"];
 export const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
@@ -49,19 +49,20 @@ export default function PublicQuoteDetailModal({
   const router = useRouter();
   const [status, setStatus] = useState(item.status);
   const [note, setNote] = useState(item.staff_note || "");
-  const [processedBy, setProcessedBy] = useState(item.processed_by || "");
   const [saving, setSaving] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [staffName, setStaffName] = useState<string | null>(null);
 
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
+    getCurrentStaffName().then(setStaffName);
   }, []);
 
   async function handleSave() {
-    if (!processedBy.trim()) {
-      setLocalError("처리자 이름을 입력해주세요.");
+    if (!staffName) {
+      setLocalError("로그인 정보를 확인할 수 없습니다. 다시 로그인해주세요.");
       return;
     }
     setSaving(true);
@@ -70,7 +71,7 @@ export default function PublicQuoteDetailModal({
       const res = await fetch("/api/admin/public-quote-requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: item.id, action: "update", status, staff_note: note || null, processed_by: processedBy }),
+        body: JSON.stringify({ id: item.id, action: "update", status, staff_note: note || null, processed_by: staffName }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -192,10 +193,9 @@ export default function PublicQuoteDetailModal({
         </div>
 
         <SectionTitle>답변 작성</SectionTitle>
-        <div className="field" style={{ marginBottom: 12 }}>
-          <label>처리자 이름</label>
-          <input value={processedBy} onChange={(e) => setProcessedBy(e.target.value)} />
-        </div>
+        <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 0, marginBottom: 12 }}>
+          처리자: <strong>{staffName || "확인 중..."}</strong>
+        </p>
         <div className="field" style={{ marginBottom: 12 }}>
           <label>상태</label>
           <select value={status} onChange={(e) => setStatus(e.target.value)}>
