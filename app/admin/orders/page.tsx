@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { ORDER_STATUS_OPTIONS, getOrderStatusColor } from "@/lib/orderStatusColors";
 import { LOAD_UNLOAD_CONDITIONS } from "@/lib/constants";
 import { generateDailyNumber } from "@/lib/generateNumber";
+import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import { getCurrentStaffId } from "@/lib/currentStaff";
 import { getOrCreateIndividualCustomer, findIndividualCustomerByPhone } from "@/lib/individualCustomer";
 import DateTimePicker from "@/components/DateTimePicker";
@@ -376,7 +377,7 @@ function OrdersPageInner() {
 
       {showForm && (
         <div className="card" style={{ marginBottom: 24, padding: 20 }}>
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown}>
             <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
               <button
                 type="button"

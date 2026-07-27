@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import { VEHICLE_TYPES } from "@/lib/constants";
 import DateTimePicker from "@/components/DateTimePicker";
+import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 
 declare global {
   interface Window {
@@ -315,7 +316,7 @@ export default function PortalRequestPage() {
       </div>
 
       <div className="card" style={{ padding: 20, marginBottom: 24 }}>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown}>
           {/* 출발지 - 전체 너비, 저장 체크박스는 바로 아래에 */}
           <div className="field" style={{ marginBottom: 16 }}>
             <label>출발지 *</label>

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import {
   DISPATCH_STATUS_OPTIONS,
   getDispatchStatusColor,
@@ -390,7 +391,7 @@ export default function DispatchesPage() {
 
       {showForm && (
         <div className="card" style={{ marginBottom: 24, padding: 20 }}>
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown}>
             <div className="field" style={{ marginBottom: 14 }}>
               <label>배차할 운송오더 *</label>
               <select

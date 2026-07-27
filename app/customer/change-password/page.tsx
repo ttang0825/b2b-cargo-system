@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import PasswordInput from "@/components/PasswordInput";
+import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 
 export default function ChangePasswordPage() {
   const router = useRouter();
@@ -123,7 +124,7 @@ export default function ChangePasswordPage() {
             ? "최초 로그인입니다. 계속하려면 새 비밀번호를 설정해주세요."
             : "기존 비밀번호 확인 후 새 비밀번호를 설정해주세요."}
         </p>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown}>
           {!isForced && (
             <div className="field" style={{ marginBottom: 12 }}>
               <label>기존 비밀번호</label>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { formatPhoneNumber, formatBizRegNo, REGIONS, VEHICLE_TYPES } from "@/lib/constants";
 import MultiSelectTags from "@/components/MultiSelectTags";
+import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 
 declare global {
   interface Window {
@@ -177,7 +178,7 @@ export default function ApplyPage() {
         </div>
 
         <div className="card" style={{ padding: 24 }}>
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown}>
             <div className="form-grid" style={{ padding: 0 }}>
               <div className="field">
                 <label>회사명 *</label>

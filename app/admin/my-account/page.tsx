@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabaseAdminAuth } from "@/lib/supabaseAdminAuthClient";
 import { getCurrentStaffInfo, refreshCurrentStaffCache } from "@/lib/currentStaff";
+import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import PasswordInput from "@/components/PasswordInput";
 
 const ROLE_LABELS: Record<string, string> = { admin: "관리자", staff: "직원" };
@@ -143,7 +144,7 @@ export default function MyAccountPage() {
 
       <div className="card" style={{ padding: 20, marginBottom: 20, maxWidth: 480 }}>
         <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>기본 정보</h3>
-        <form onSubmit={handleSaveName}>
+        <form onSubmit={handleSaveName} onKeyDown={handleFormKeyDown}>
           <div className="field" style={{ marginBottom: 12 }}>
             <label>이름</label>
             <input value={name} onChange={(e) => setName(e.target.value)} />
@@ -168,7 +169,7 @@ export default function MyAccountPage() {
 
       <div className="card" style={{ padding: 20, maxWidth: 480 }}>
         <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>비밀번호 변경</h3>
-        <form onSubmit={handleChangePassword}>
+        <form onSubmit={handleChangePassword} onKeyDown={handleFormKeyDown}>
           <div className="field" style={{ marginBottom: 12 }}>
             <label>현재 비밀번호</label>
             <PasswordInput value={currentPassword} onChange={setCurrentPassword} />

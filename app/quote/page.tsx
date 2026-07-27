@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { VEHICLE_TYPES, formatPhoneNumber } from "@/lib/constants";
 import DateTimePicker from "@/components/DateTimePicker";
+import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 
 declare global {
   interface Window {
@@ -208,7 +209,7 @@ export default function PublicQuotePage() {
         </div>
 
         <div className="card" style={{ padding: 24 }}>
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown}>
             <div className="form-grid" style={{ padding: 0, marginBottom: 4 }}>
               <div className="field">
                 <label>신청자 성함 / 업체명 *</label>
