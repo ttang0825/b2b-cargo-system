@@ -7,6 +7,7 @@ import { ORDER_STATUS_OPTIONS, getOrderStatusColor } from "@/lib/orderStatusColo
 import { LOAD_UNLOAD_CONDITIONS } from "@/lib/constants";
 import { generateDailyNumber } from "@/lib/generateNumber";
 import { getCurrentStaffId } from "@/lib/currentStaff";
+import { getOrCreateIndividualCustomer, findIndividualCustomerByPhone } from "@/lib/individualCustomer";
 import DateTimePicker from "@/components/DateTimePicker";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 
@@ -59,6 +60,9 @@ function OrdersPageInner() {
   const [companySearch, setCompanySearch] = useState("");
   const [companyResults, setCompanyResults] = useState<CompanyLite[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<CompanyLite | null>(
+    null
+  );
+  const [matchedIndividual, setMatchedIndividual] = useState<{ id: string; name: string } | null>(
     null
   );
 
@@ -180,6 +184,29 @@ function OrdersPageInner() {
     };
   }, [companySearch]);
 
+  // 개인/신규 고객 연락처로 기존에 등록된 개인고객이 있는지 조회 — 있으면 이름 자동완성
+  useEffect(() => {
+    if (customerMode !== "guest") {
+      setMatchedIndividual(null);
+      return;
+    }
+    let active = true;
+    async function lookup() {
+      const found = await findIndividualCustomerByPhone(form.guest_phone);
+      if (!active) return;
+      setMatchedIndividual(found);
+      if (found && !form.guest_name.trim()) {
+        setForm((prev) => ({ ...prev, guest_name: found.name }));
+      }
+    }
+    const t = setTimeout(lookup, 400);
+    return () => {
+      active = false;
+      clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerMode, form.guest_phone]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -208,12 +235,25 @@ function OrdersPageInner() {
     setSaving(true);
     const orderNo = await generateDailyNumber("orders", "O");
 
+    let individualCustomerId: string | null = null;
+    if (customerMode === "guest" && form.guest_phone.trim()) {
+      individualCustomerId = await getOrCreateIndividualCustomer(
+        form.guest_name,
+        form.guest_phone,
+        [
+          { address: form.origin, location_type: "상차지" },
+          { address: form.destination, location_type: "하차지" },
+        ]
+      );
+    }
+
     const { error } = await supabase.from("orders").insert({
       order_no: orderNo,
       created_by: await getCurrentStaffId(),
       company_id: customerMode === "company" ? selectedCompany!.id : null,
       guest_name: customerMode === "guest" ? form.guest_name : null,
       guest_phone: customerMode === "guest" ? form.guest_phone || null : null,
+      individual_customer_id: individualCustomerId,
       quote_id: form.quote_id || null,
       origin: form.origin,
       destination: form.destination,
@@ -236,6 +276,7 @@ function OrdersPageInner() {
     setShowForm(false);
     setSelectedCompany(null);
     setCompanySearch("");
+    setMatchedIndividual(null);
     setForm({
       guest_name: "",
       guest_phone: "",
@@ -412,6 +453,12 @@ function OrdersPageInner() {
                       setForm({ ...form, guest_phone: e.target.value })
                     }
                   />
+                  {matchedIndividual && (
+                    <p style={{ fontSize: 11.5, color: "var(--accent)", marginTop: 4 }}>
+                      ✓ 기존 개인고객입니다 ({matchedIndividual.name}) — 이 오더도 같은
+                      고객으로 연결됩니다
+                    </p>
+                  )}
                 </div>
               </div>
             )}

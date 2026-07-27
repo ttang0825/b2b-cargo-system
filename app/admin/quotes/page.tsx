@@ -392,6 +392,19 @@ function QuotesPageInner() {
     }
   }
 
+  // 출발지/도착지(도로명주소)가 둘 다 채워지면 버튼 클릭 없이 자동으로 거리계산.
+  // 타이핑 중에 매번 호출되지 않도록 디바운스 적용, 상세주소 입력은 감지 대상에서 제외.
+  // "직접 입력한 거리를 사용" 체크박스를 켠 경우엔 자동계산으로 덮어쓰지 않음.
+  useEffect(() => {
+    if (!form.origin.trim() || !form.destination.trim()) return;
+    if (allowManualDistance) return;
+    const t = setTimeout(() => {
+      handleAutoDistance();
+    }, 800);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.origin, form.destination]);
+
   function findOption(category: string, name: string) {
     return surcharges.find(
       (s) => s.category === category && s.option_name === name
