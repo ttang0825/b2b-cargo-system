@@ -24,3 +24,18 @@ export async function getCurrentStaffRole(): Promise<"admin" | "staff" | null> {
     .maybeSingle();
   return (data?.role as "admin" | "staff") || null;
 }
+
+// 견적/화주등록신청/공개문의 처리 시 "처리자 이름"을 직접 타이핑하는 대신, 지금
+// 로그인한 직원의 이름을 자동으로 채워 넣을 때 사용
+export async function getCurrentStaffName(): Promise<string | null> {
+  const {
+    data: { user },
+  } = await supabaseAdminAuth.auth.getUser();
+  if (!user) return null;
+  const { data } = await supabaseAdminAuth
+    .from("staff_accounts")
+    .select("name")
+    .eq("id", user.id)
+    .maybeSingle();
+  return data?.name || null;
+}
