@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabaseAdminAuth } from "@/lib/supabaseAdminAuthClient";
+import { getCurrentStaffInfo, refreshCurrentStaffCache } from "@/lib/currentStaff";
 import PasswordInput from "@/components/PasswordInput";
 
 const ROLE_LABELS: Record<string, string> = { admin: "관리자", staff: "직원" };
@@ -32,13 +33,9 @@ export default function MyAccountPage() {
         return;
       }
       setEmail(user.email || "");
-      const { data: staff } = await supabaseAdminAuth
-        .from("staff_accounts")
-        .select("name,role")
-        .eq("id", user.id)
-        .maybeSingle();
-      setName(staff?.name || "");
-      setRole(staff?.role || null);
+      const info = await getCurrentStaffInfo();
+      setName(info?.name || "");
+      setRole(info?.role || null);
       setLoading(false);
     }
     load();
@@ -65,6 +62,8 @@ export default function MyAccountPage() {
         setSavingName(false);
         return;
       }
+      await refreshCurrentStaffCache();
+      setName(data.name || name.trim());
       setNameSaved(true);
       setTimeout(() => setNameSaved(false), 1500);
     } catch {

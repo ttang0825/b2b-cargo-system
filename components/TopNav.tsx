@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { supabaseAdminAuth } from "@/lib/supabaseAdminAuthClient";
 import { onBadgeRefresh } from "@/lib/notifyBadgeRefresh";
-import { getCurrentStaffInfo } from "@/lib/currentStaff";
+import { getCurrentStaffInfo, onCurrentStaffChange, clearCurrentStaffCache } from "@/lib/currentStaff";
 
 type NavItem = { href: string; label: string; key?: "applications" | "publicQuotes" | "portalRequests" };
 type NavGroup = { label: string; items: NavItem[] };
@@ -213,8 +213,14 @@ export default function TopNav() {
       clearInterval(pollInterval);
       offBadgeRefresh();
     };
+    // 배지 개수는 특정 페이지에 속한 값이 아니라 전역 값이라 페이지 이동마다
+    // 다시 구독/폴링을 새로 만들 필요가 없음 (예전엔 [pathname]에 의존해서
+    // 페이지를 옮길 때마다 Realtime 채널을 매번 재연결 + API 3개를 다시 호출하고
+    // 있었음 — 관리자 화면 어디서든 페이지 전환이 느리게 느껴지던 원인).
+    // 공개 페이지 ↔ 관리자 화면 경계를 넘나들 때만 다시 설정하면 되므로
+    // isPublicPath로만 의존성을 좁힘
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
+  }, [isPublicPath]);
 
   useEffect(() => {
     setMobileMenuOpen(false);
@@ -223,12 +229,14 @@ export default function TopNav() {
 
   useEffect(() => {
     if (isPublicPath) return;
-    async function loadRole() {
-      const info = await getCurrentStaffInfo();
+    function applyInfo(info: { name: string; role: "admin" | "staff" } | null) {
       setIsAdmin(info?.role === "admin");
       setStaffName(info?.name || null);
     }
-    loadRole();
+    getCurrentStaffInfo().then(applyInfo);
+    // 본인 정보 수정(/admin/my-account)·role 변경(/admin/staff) 직후 바로 반영되도록 구독
+    const off = onCurrentStaffChange(applyInfo);
+    return off;
   }, [isPublicPath]);
 
   // 드롭다운이 열려있을 때 메뉴 바깥의 빈 곳을 클릭하면 닫히게 함
@@ -247,6 +255,7 @@ export default function TopNav() {
 
   async function handleLogout() {
     await supabaseAdminAuth.auth.signOut();
+    clearCurrentStaffCache();
     router.push("/admin/login");
     router.refresh();
   }

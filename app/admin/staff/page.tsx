@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getCurrentStaffId, refreshCurrentStaffCache } from "@/lib/currentStaff";
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   active: { bg: "#e6f7ec", text: "#1b9c57" },
@@ -116,6 +117,10 @@ export default function AdminStaffPage() {
       }
       setEditItem(null);
       loadItems();
+      // 지금 로그인한 본인의 행을 수정한 경우, 상단메뉴 등이 참조하는 캐시도 갱신
+      if ((await getCurrentStaffId()) === editItem.id) {
+        await refreshCurrentStaffCache();
+      }
     } catch {
       setEditError("정보 수정 중 오류가 발생했습니다.");
     }
@@ -139,6 +144,10 @@ export default function AdminStaffPage() {
         return;
       }
       loadItems();
+      // 지금 로그인한 본인의 role을 바꾼 경우, 상단메뉴 등이 참조하는 캐시도 갱신
+      if ((await getCurrentStaffId()) === id) {
+        await refreshCurrentStaffCache();
+      }
     } catch {
       setError("역할 변경 중 오류가 발생했습니다.");
     }
