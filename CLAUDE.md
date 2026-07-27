@@ -5,7 +5,8 @@
 > 작업을 이어갑니다.
 
 **작성일: 2026-07-23** (최종 갱신: 2026-07-27, Claude Code 세션에서 직접 갱신 — 직원 계정
-재구조화 1~8단계 전부(스펙 전체) 완료·merge됨)
+재구조화 1~8단계 전부(스펙 전체) 완료·merge됨 + 수정 스펙 3건(견적 거리 자동계산 /
+로그인 정보 표시·본인 비밀번호 변경 / 개인고객 관리) 완료·merge됨)
 
 ---
 
@@ -71,6 +72,14 @@
   관리자가 화주포털 계정으로 "지원접속"할 때마다 기록. `public_quote_requests`와
   동일하게 anon 정책 없이 RLS만 켜둠 — 서버 API(`SUPABASE_SERVICE_ROLE_KEY`)로만
   읽고 씀
+- `individual_customers`(신규 테이블): 비회원(개인) 고객을 전화번호 기준으로
+  식별·누적 관리. `id`/`name`/`phone`/`phone_normalized`(하이픈 등 제거된 숫자만,
+  unique index)/`email`/`memo`/`created_by`/`updated_by`/`created_at`/`updated_at`.
+  `individual_customer_addresses`(신규 테이블, `customer_locations`와 동일한 패턴의
+  주소 이력 연결 테이블): `individual_customer_id`/`address`/`location_type`/
+  `created_at`. `orders`/`invoices`에 `individual_customer_id`(uuid,
+  `individual_customers(id)` 참조) 컬럼 추가. 두 신규 테이블 모두 RLS는 켜되 anon
+  전체허용 정책 적용(원칙 2번과 동일한 패턴 — admin이 anon key로 직접 접속하므로)
 
 ---
 
@@ -204,6 +213,14 @@
     type should be provided" 에러로 검증이 항상 실패함** (실제로 8단계 지원접속
     기능에서 이 실수로 접속이 전혀 안 되는 버그가 있었음). `app/api/admin/
     support-login/route.ts` + `app/customer/support-verify/page.tsx`가 참고 예시
+30. **"본인 계정 정보 수정"처럼 role 상관없이 누구나 접근 가능해야 하는 API는, 수정
+    대상 id를 클라이언트가 아니라 반드시 서버에서 `getCurrentStaff()`로 직접 구해서
+    사용할 것** — 클라이언트가 `{ id, name }`처럼 id를 같이 보내는 방식은 브라우저
+    콘솔에서 다른 직원의 id로 바꿔 보내면 그 사람 정보를 수정할 수 있는 권한 상승
+    구멍이 생김. `app/api/admin/my-account/route.ts`가 참고 예시 — 요청 바디에서
+    `name`만 받고, 어느 행을 수정할지는 쿠키 세션의 `currentStaff.id`로만 결정함
+    (원칙 25번의 "화면단+서버단 이중 체크"와는 별개로, role 무관 self-service API는
+    애초에 대상 id 자체를 클라이언트 입력값으로 안 받는 방식으로 막을 것)
 
 ---
 
@@ -277,6 +294,28 @@
   - 8단계: 관리자 "고객지원용 접속" — 화주 상세화면에서 활성 포털 계정에 임시
     로그인(magic link 방식), `support_access_logs`에 접속 이력 기록, 조회 화면
     `/admin/support-logs`(관리자 전용) (완료, 원칙 29번)
+- **로그인/비밀번호 앞뒤 공백(trim) 자동 처리**: 관리자 로그인, 화주포털 로그인,
+  화주포털 비밀번호 변경(최초/평소 구분) 전부 저장 시점·로그인 시점 양쪽에서 앞뒤
+  공백을 제거하도록 통일. 문자열 중간 공백은 그대로 유지
+- **수정 스펙 3건 완료·merge됨** (PR #24):
+  - **견적관리 거리 자동계산**: 출발지/도착지(도로명주소)가 둘 다 채워지면 버튼
+    클릭 없이 800ms 디바운스 후 자동으로 거리계산 실행. 상세주소만 바뀐 경우는
+    재계산 안 함, "직접 입력한 거리를 사용" 체크박스를 켠 경우엔 자동계산이 덮어쓰지
+    않음. 기존 수동 "자동계산" 버튼도 유지
+  - **관리자 로그인 정보 표시 + 본인 비밀번호 변경**: 상단메뉴에 로그인한 직원 이름
+    표시(`lib/currentStaff.ts`의 `getCurrentStaffInfo()`), 클릭 시 신규 화면
+    `/admin/my-account`로 이동 — 본인 이름 수정(이메일 변경은 기존처럼 관리자가
+    `/admin/staff`에서 처리), 현재 비밀번호 확인 후 새 비밀번호 변경(trim 적용).
+    role 상관없이 관리자·직원 누구나 본인 계정에 대해 사용 가능 (원칙 30번)
+  - **개인고객(비회원) 데이터 관리**: `individual_customers`/
+    `individual_customer_addresses` 신규 — 전화번호 기준으로 개인고객을
+    식별·누적 관리. 운송오더 등록(개인/신규 고객) 시 연락처 입력하면 기존
+    개인고객 자동완성+안내, 저장 시 전화번호로 매칭해 연결 또는 신규 생성, 상/하차
+    주소는 이력에 자동 누적(중복 방지). 정산도 오더에 연결된 개인고객을 그대로
+    이어받음(수동 등록·배차 자동등록 둘 다). 관리자 화면 `/admin/individual-customers`
+    신규(목록: 이름/연락처/누적 주문건수/최근 이용일, 상세: 기본정보 수정+주소
+    이력+주문/정산 이력 타임라인), TopNav "화주 확보" 그룹에 추가. 이번 범위에서
+    개인고객용 포털 기능은 제외
 
 ---
 
