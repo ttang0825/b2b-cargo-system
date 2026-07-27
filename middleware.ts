@@ -48,14 +48,29 @@ export async function middleware(req: NextRequest) {
     return redirectToLogin();
   }
 
-  // 직원 계정 테이블에서 재직 상태를 확인 - 퇴사(inactive) 처리된 계정은 세션이 있어도 차단
-  const { data: staff } = await supabase
-    .from("staff_accounts")
-    .select("status,role")
-    .eq("id", user.id)
-    .maybeSingle();
+  // role/status는 staff_accounts 변경 시(app/api/admin/staff/route.ts) auth의
+  // user_metadata에도 같이 미러링해두므로, getUser() 응답에 이미 최신 값이 들어있으면
+  // 페이지 이동마다 staff_accounts를 또 조회할 필요가 없음. 아직 미러링 전인
+  // 레거시 계정(둘 중 하나라도 비어있는 경우)만 예전처럼 DB에서 직접 조회
+  let status = user.user_metadata?.status as string | undefined;
+  let role = user.user_metadata?.role as string | undefined;
 
-  if (!staff || staff.status !== "active") {
+  if (!status || !role) {
+    const { data: staff } = await supabase
+      .from("staff_accounts")
+      .select("status,role")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (!staff) {
+      await supabase.auth.signOut();
+      return redirectToLogin("inactive");
+    }
+    status = staff.status;
+    role = staff.role;
+  }
+
+  // 재직 상태 확인 - 퇴사(inactive) 처리된 계정은 세션이 있어도 차단
+  if (status !== "active") {
     await supabase.auth.signOut();
     return redirectToLogin("inactive");
   }
@@ -63,7 +78,7 @@ export async function middleware(req: NextRequest) {
   // 직원 계정 관리 · 지원접속 이력 화면은 관리자만 접근 가능
   if (
     (pathname.startsWith("/admin/staff") || pathname.startsWith("/admin/support-logs")) &&
-    staff.role !== "admin"
+    role !== "admin"
   ) {
     return NextResponse.redirect(new URL("/admin", req.url));
   }
