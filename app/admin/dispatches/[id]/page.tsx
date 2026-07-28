@@ -301,10 +301,30 @@ export default function DispatchDetailPage() {
     }
   }
 
+  // 상차/하차 완료 확인 체크는 배차상태도 같이 앞으로 진행시킴(뒤로는 자동으로
+  // 안 돌아감 — 체크 해제만으로 상태를 되돌리고 싶으면 상태 드롭다운에서 직접
+  // 바꿀 것). 접수중/운송완료/문제발생 상태는 체크박스로 건드리지 않음(접수중은
+  // 전용 확정 절차를 거쳐야 하고, 운송완료·문제발생은 수동 관리 영역이라서)
+  function computeStatusFromChecks(
+    currentStatus: string,
+    pickupConfirmed: boolean,
+    deliveryConfirmed: boolean
+  ) {
+    if (["접수중", "운송완료", "문제발생"].includes(currentStatus)) return currentStatus;
+    if (deliveryConfirmed) return "하차완료";
+    if (pickupConfirmed) return "상차완료";
+    return currentStatus;
+  }
+
   async function handleSave(force = false) {
     setSaving(true);
     setError(null);
     setConflict(false);
+    const nextStatus = computeStatusFromChecks(
+      dispatch.dispatch_status,
+      editForm.pickup_confirmed,
+      editForm.delivery_confirmed
+    );
     const payload = {
       customer_charge: editForm.customer_charge
         ? Number(editForm.customer_charge)
@@ -320,16 +340,28 @@ export default function DispatchDetailPage() {
       assignment_type: editForm.assignment_type,
       driver_id: editForm.assignment_type === "internal" ? editForm.driver_id : null,
       requested_network_ids: editForm.requested_network_ids,
+      dispatch_status: nextStatus,
       updated_by: await getCurrentStaffId(),
     };
 
+    async function syncOrderStatus() {
+      if (nextStatus !== dispatch.dispatch_status && dispatch?.orders?.id && DISPATCH_TO_ORDER_STATUS[nextStatus]) {
+        await supabase
+          .from("orders")
+          .update({ status: DISPATCH_TO_ORDER_STATUS[nextStatus] })
+          .eq("id", dispatch.orders.id);
+      }
+    }
+
     if (force) {
       const { error } = await supabase.from("dispatches").update(payload).eq("id", id);
-      setSaving(false);
       if (error) {
+        setSaving(false);
         setError(error.message);
         return;
       }
+      await syncOrderStatus();
+      setSaving(false);
       router.push("/admin/dispatches");
       return;
     }
@@ -340,15 +372,18 @@ export default function DispatchDetailPage() {
       payload,
       dispatch?.updated_at
     );
-    setSaving(false);
     if (error) {
+      setSaving(false);
       setError(error);
       return;
     }
     if (hasConflict) {
+      setSaving(false);
       setConflict(true);
       return;
     }
+    await syncOrderStatus();
+    setSaving(false);
     router.push("/admin/dispatches");
   }
 
