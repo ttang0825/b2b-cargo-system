@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { VEHICLE_TYPES, formatPhoneNumber } from "@/lib/constants";
+import { LOADING_METHODS } from "@/lib/loadingMethods";
 import DateTimePicker from "@/components/DateTimePicker";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 
@@ -12,13 +13,6 @@ declare global {
     daum: any;
   }
 }
-
-const LOADING_METHODS = [
-  { value: "기본운송", desc: "차량 적재함에서 물품을 상하차합니다" },
-  { value: "지게차 상하차", desc: "파렛트로 작업된 제품을 지게차로 상하차합니다" },
-  { value: "기사님 도움", desc: "일반화물·소형가전을 기사님과 함께 운반합니다" },
-  { value: "협의 필요", desc: "현장 상황에 따라 별도로 협의합니다" },
-];
 
 export default function PublicQuotePage() {
   const [postcodeReady, setPostcodeReady] = useState(false);
@@ -37,7 +31,8 @@ export default function PublicQuotePage() {
     destinationDetail: "",
     vehicle_type: VEHICLE_TYPES[0],
     item: "",
-    loading_method: LOADING_METHODS[0].value,
+    pickup_loading_method: LOADING_METHODS[0].label as string,
+    dropoff_loading_method: LOADING_METHODS[0].label as string,
     requested_pickup_at: "",
     notes: "",
   });
@@ -108,7 +103,8 @@ export default function PublicQuotePage() {
       destination: fullDestination,
       vehicle_type: form.vehicle_type,
       item: form.item || null,
-      loading_method: form.loading_method || null,
+      pickup_loading_method: form.pickup_loading_method || null,
+      dropoff_loading_method: form.dropoff_loading_method || null,
       requested_pickup_at: form.requested_pickup_at || null,
       notes: form.notes || null,
       status: "신규",
@@ -300,34 +296,41 @@ export default function PublicQuotePage() {
               </div>
             </div>
 
-            <div style={{ marginTop: 14, marginBottom: 4 }}>
-              <label style={{ display: "block", fontSize: 12.5, color: "var(--text-muted)", marginBottom: 8, fontWeight: 600 }}>
-                상하차 방법
-              </label>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8 }}>
-                {LOADING_METHODS.map((m) => {
-                  const active = form.loading_method === m.value;
-                  return (
-                    <button
-                      key={m.value}
-                      type="button"
-                      onClick={() => setField("loading_method", m.value)}
-                      className="card"
-                      style={{
-                        padding: 12,
-                        textAlign: "left",
-                        cursor: "pointer",
-                        border: active ? "1.5px solid var(--accent)" : "1px solid var(--border)",
-                        background: active ? "var(--accent-soft)" : "var(--surface)",
-                      }}
-                    >
-                      <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 3 }}>{m.value}</div>
-                      <div style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.4 }}>{m.desc}</div>
-                    </button>
-                  );
-                })}
+            {(
+              [
+                { key: "pickup_loading_method" as const, label: "상차 방법" },
+                { key: "dropoff_loading_method" as const, label: "하차 방법" },
+              ]
+            ).map(({ key, label }) => (
+              <div key={key} style={{ marginTop: 14, marginBottom: 4 }}>
+                <label style={{ display: "block", fontSize: 12.5, color: "var(--text-muted)", marginBottom: 8, fontWeight: 600 }}>
+                  {label}
+                </label>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8 }}>
+                  {LOADING_METHODS.map((m) => {
+                    const active = form[key] === m.label;
+                    return (
+                      <button
+                        key={m.label}
+                        type="button"
+                        onClick={() => setField(key, m.label)}
+                        className="card"
+                        style={{
+                          padding: 12,
+                          textAlign: "left",
+                          cursor: "pointer",
+                          border: active ? "1.5px solid var(--accent)" : "1px solid var(--border)",
+                          background: active ? "var(--accent-soft)" : "var(--surface)",
+                        }}
+                      >
+                        <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 3 }}>{m.label}</div>
+                        <div style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.4 }}>{m.desc}</div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            ))}
 
             <div className="form-grid" style={{ padding: 0 }}>
               <div style={{ gridColumn: "1 / -1" }}>

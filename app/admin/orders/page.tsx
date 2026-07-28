@@ -4,7 +4,8 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { ORDER_STATUS_OPTIONS, getOrderStatusColor } from "@/lib/orderStatusColors";
-import { LOAD_UNLOAD_CONDITIONS, formatPhoneNumber } from "@/lib/constants";
+import { formatPhoneNumber } from "@/lib/constants";
+import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import { generateDailyNumber } from "@/lib/generateNumber";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import { getCurrentStaffId } from "@/lib/currentStaff";
@@ -520,7 +521,7 @@ function OrdersPageInner() {
                   }
                 >
                   <option value="">선택</option>
-                  {LOAD_UNLOAD_CONDITIONS.map((c) => (
+                  {LOADING_METHOD_OPTIONS.map((c) => (
                     <option key={c} value={c}>
                       {c}
                     </option>
@@ -536,7 +537,7 @@ function OrdersPageInner() {
                   }
                 >
                   <option value="">선택</option>
-                  {LOAD_UNLOAD_CONDITIONS.map((c) => (
+                  {LOADING_METHOD_OPTIONS.map((c) => (
                     <option key={c} value={c}>
                       {c}
                     </option>

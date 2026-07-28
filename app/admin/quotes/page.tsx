@@ -8,6 +8,7 @@ import { generateDailyNumber } from "@/lib/generateNumber";
 import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import { formatPhoneNumber } from "@/lib/constants";
+import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import DateTimePicker from "@/components/DateTimePicker";
 
@@ -178,8 +179,8 @@ function QuotesPageInner() {
     vehicle_type: "1톤",
     item: "",
     차량형태: "카고",
-    상차조건: "지게차/도크",
-    하차조건: "지게차/도크",
+    상차조건: LOADING_METHOD_OPTIONS[0],
+    하차조건: LOADING_METHOD_OPTIONS[0],
     물품특성: "일반화물",
     운송시간: "평일 주간",
     긴급여부: "일반",
@@ -320,6 +321,8 @@ function QuotesPageInner() {
         destination: reqData.destination || "",
         vehicle_type: reqData.vehicle_type || prev.vehicle_type,
         item: reqData.item || "",
+        상차조건: reqData.pickup_loading_method || prev.상차조건,
+        하차조건: reqData.dropoff_loading_method || prev.하차조건,
         requested_pickup_at: reqData.requested_pickup_at
           ? reqData.requested_pickup_at.slice(0, 16)
           : prev.requested_pickup_at,
@@ -1286,13 +1289,11 @@ function QuotesPageInner() {
                   value={form.상차조건}
                   onChange={(e) => setForm({ ...form, 상차조건: e.target.value })}
                 >
-                  {surcharges
-                    .filter((s) => s.category === "상하차방식")
-                    .map((o) => (
-                      <option key={o.option_name} value={o.option_name}>
-                        {o.option_name}
-                      </option>
-                    ))}
+                  {LOADING_METHOD_OPTIONS.map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="field">
@@ -1301,13 +1302,11 @@ function QuotesPageInner() {
                   value={form.하차조건}
                   onChange={(e) => setForm({ ...form, 하차조건: e.target.value })}
                 >
-                  {surcharges
-                    .filter((s) => s.category === "상하차방식")
-                    .map((o) => (
-                      <option key={o.option_name} value={o.option_name}>
-                        {o.option_name}
-                      </option>
-                    ))}
+                  {LOADING_METHOD_OPTIONS.map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="field">

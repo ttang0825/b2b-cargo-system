@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import { VEHICLE_TYPES } from "@/lib/constants";
+import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import DateTimePicker from "@/components/DateTimePicker";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 
@@ -63,8 +64,8 @@ export default function PortalRequestPage() {
     destinationDetail: "",
     vehicle_type: VEHICLE_TYPES[0],
     차량형태: "",
-    상차조건: "",
-    하차조건: "",
+    상차조건: LOADING_METHOD_OPTIONS[0] as string,
+    하차조건: LOADING_METHOD_OPTIONS[0] as string,
     물품특성: "",
     운송시간: "",
     긴급여부: "",
@@ -140,15 +141,10 @@ export default function PortalRequestPage() {
     setSurcharges(list);
     setForm((prev) => {
       const next = { ...prev };
-      for (const cat of [...SINGLE_SELECT_CATEGORIES, "상하차방식"]) {
+      for (const cat of SINGLE_SELECT_CATEGORIES) {
         const first = list.find((s) => s.category === cat)?.option_name;
         if (!first) continue;
-        if (cat === "상하차방식") {
-          if (!next.상차조건) next.상차조건 = first;
-          if (!next.하차조건) next.하차조건 = first;
-        } else {
-          if (!(next as any)[cat]) (next as any)[cat] = first;
-        }
+        if (!(next as any)[cat]) (next as any)[cat] = first;
       }
       return next;
     });
@@ -446,16 +442,16 @@ export default function PortalRequestPage() {
             <div className="field">
               <label>상차조건</label>
               <select value={form.상차조건} onChange={(e) => setField("상차조건", e.target.value)}>
-                {surcharges.filter((s) => s.category === "상하차방식").map((o) => (
-                  <option key={o.option_name} value={o.option_name}>{o.option_name}</option>
+                {LOADING_METHOD_OPTIONS.map((o) => (
+                  <option key={o} value={o}>{o}</option>
                 ))}
               </select>
             </div>
             <div className="field">
               <label>하차조건</label>
               <select value={form.하차조건} onChange={(e) => setField("하차조건", e.target.value)}>
-                {surcharges.filter((s) => s.category === "상하차방식").map((o) => (
-                  <option key={o.option_name} value={o.option_name}>{o.option_name}</option>
+                {LOADING_METHOD_OPTIONS.map((o) => (
+                  <option key={o} value={o}>{o}</option>
                 ))}
               </select>
             </div>

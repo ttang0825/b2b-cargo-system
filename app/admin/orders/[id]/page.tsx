@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { ORDER_STATUS_OPTIONS, getOrderStatusColor } from "@/lib/orderStatusColors";
-import { LOAD_UNLOAD_CONDITIONS } from "@/lib/constants";
+import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import DateTimePicker from "@/components/DateTimePicker";
 import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
@@ -424,7 +424,7 @@ export default function OrderDetailPage() {
                 }
               >
                 <option value="">선택</option>
-                {LOAD_UNLOAD_CONDITIONS.map((c) => (
+                {LOADING_METHOD_OPTIONS.map((c) => (
                   <option key={c} value={c}>
                     {c}
                   </option>
@@ -443,7 +443,7 @@ export default function OrderDetailPage() {
                 }
               >
                 <option value="">선택</option>
-                {LOAD_UNLOAD_CONDITIONS.map((c) => (
+                {LOADING_METHOD_OPTIONS.map((c) => (
                   <option key={c} value={c}>
                     {c}
                   </option>
