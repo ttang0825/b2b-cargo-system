@@ -161,7 +161,8 @@ export default function PublicQuoteDetailModal({
         {destinationExtra && <DetailRow label="도착지 상세" value={destinationExtra} />}
         <DetailRow label="희망 톤수" value={item.vehicle_type || "-"} />
         <DetailRow label="품목" value={item.item || "미입력"} />
-        <DetailRow label="상하차 방법" value={item.loading_method || "미입력"} />
+        <DetailRow label="상차 방법" value={item.pickup_loading_method || "미입력"} />
+        <DetailRow label="하차 방법" value={item.dropoff_loading_method || "미입력"} />
         <DetailRow
           label="희망 상차일시"
           value={item.requested_pickup_at ? formatDateTime(item.requested_pickup_at) : "미입력"}
