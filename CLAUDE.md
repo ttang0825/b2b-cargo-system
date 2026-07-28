@@ -182,71 +182,68 @@ Enter키 자동제출 방지 완료·merge됨 + 2026-07-28: 배차 프로세스 
 9. **화주 개인정보는 계정별로 분리 저장** — `customer_accounts`(계정 개인정보:
    name/contact_position/contact_mobile/email) vs `companies`(회사 대표정보,
    관리자가 관리). 여러 포털 계정이 있는 화주도 서로 안 덮어씀
-10. **엑셀 내보내기는 `lib/exportExcel.ts` 공용 함수만 사용** (`exportRowsToExcel`,
-   `exportMultiSheetExcel`, `buildExportFilename`). 헤더 스타일(굵게+옐로우 배경)+
-   1행 틀고정 자동 적용됨. **`xlsx`가 아니라 `xlsx-js-style` import 필수**
-11. **탭 제목(metadata)은 각 세그먼트 `layout.tsx`에서 관리.** 클라이언트 컴포넌트는
+10. **탭 제목(metadata)은 각 세그먼트 `layout.tsx`에서 관리.** 클라이언트 컴포넌트는
     metadata export 불가 → 얇은 서버 레이아웃이 클라이언트 컴포넌트를 감싸는 패턴
     (`app/customer/layout.tsx` → `CustomerPortalShell.tsx` 참고)
-12. **새 공개 경로(admin도 customer도 아닌 최상위 경로)를 추가하면 반드시
+11. **새 공개 경로(admin도 customer도 아닌 최상위 경로)를 추가하면 반드시
     `components/TopNav.tsx`의 숨김 조건에도 추가할 것** — 안 그러면 관리자 메뉴가
     그 공개 페이지 위에 얹혀서 나타남 (실제로 여러 번 겪은 버그: `/`, `/quote`,
     `/apply`, `/status` 전부 이 조건에 등록되어 있어야 함)
-13. **비밀번호 입력창은 `components/PasswordInput.tsx`(표시/숨김 토글) 재사용**
-14. **표/카드가 있는 화면은 데스크탑 `<table>`과 모바일 카드가 완전히 별개 JSX** —
+12. **비밀번호 입력창은 `components/PasswordInput.tsx`(표시/숨김 토글) 재사용**
+13. **표/카드가 있는 화면은 데스크탑 `<table>`과 모바일 카드가 완전히 별개 JSX** —
     컬럼 추가할 때 양쪽 다 챙길 것 (화주포털 페이지들, `.desktop-only`/`.mobile-only`
     클래스로 전환)
-15. **관리자 메뉴는 3개 그룹 드롭다운 구조**: 화주 확보(화주관리·화주신청·공개문의) /
+14. **관리자 메뉴는 3개 그룹 드롭다운 구조**: 화주 확보(화주관리·화주신청·공개문의) /
     화주 관리(활성화주CRM·화주요청) / 운송 운영(운임기준표·견적·오더·차주·배차·정산).
     새 관리자 메뉴 추가 시 `TopNav.tsx`의 `NAV_GROUPS`에 적절한 그룹으로 넣을 것
-16. **관리자 화면의 알림 배지는 항상 같은 폭을 차지하도록 `visibility` 토글 방식**
+15. **관리자 화면의 알림 배지는 항상 같은 폭을 차지하도록 `visibility` 토글 방식**
     사용 (조건부 렌더링 금지) — 배지 유무로 메뉴 레이아웃이 밀리는 버그 방지
-17. **거절/보류 처리에는 표준화된 사유 드롭다운**이 있음
+16. **거절/보류 처리에는 표준화된 사유 드롭다운**이 있음
     (`components/ApplicationDetailModal.tsx`의 `REJECT_REASONS`/`HOLD_REASONS`) —
     새로운 사유가 필요하면 이 배열에 추가
-18. **Daum 주소검색으로 채워지는 입력창엔 반드시 `autoComplete="off"`** — 브라우저
+17. **Daum 주소검색으로 채워지는 입력창엔 반드시 `autoComplete="off"`** — 브라우저
     자체 자동완성 드롭다운이 뜨면서 입력창에 위/양옆만 테두리가 생기는(아래는 안
     생기는) 버그가 있었음. `quote`/`apply`/`customer/request`/`admin/quotes`의
     출발지·도착지 입력에 전부 적용되어 있음, 새로 주소검색 입력창 만들 때도 반드시
     추가할 것
-19. **목록+상세모달 패턴**: 목록에 모든 필드를 다 넣지 말고 핵심 컬럼만(옆스크롤
+18. **목록+상세모달 패턴**: 목록에 모든 필드를 다 넣지 말고 핵심 컬럼만(옆스크롤
     없이) 보여준 뒤, 행 클릭 시 별도 모달 컴포넌트에서 전체 정보+처리 버튼을 다루는
     구조. `components/ApplicationDetailModal.tsx`가 참고 예시 (화주등록신청 화면에
     적용됨) — 비슷한 화면 만들 때 이 패턴 재사용
-20. **회사(`companies`)나 포털 계정을 삭제할 때는 연결된 Supabase Auth 유저도 반드시
+19. **회사(`companies`)나 포털 계정을 삭제할 때는 연결된 Supabase Auth 유저도 반드시
     명시적으로 같이 삭제할 것** — DB 행만 지우면 Auth 쪽 계정이 고아로 남아서, 같은
     이메일로 나중에 재가입할 때 "이미 등록된 이메일" 오류가 남 (Auth는 DB FK cascade
     범위 밖이라 자동으로 안 지워짐). 회사 삭제는 `app/api/admin/delete-company/route.ts`,
     개별 계정 삭제는 `app/api/admin/delete-portal-account/route.ts` 참고. 이미 생긴
     고아 계정은 `/admin/account-cleanup`에서 이메일로 검색해서 정리 가능
-21. **상단메뉴 드롭다운은 열려있는 상태에서 바깥 빈 곳을 클릭하면 닫히게** 되어 있음
+20. **상단메뉴 드롭다운은 열려있는 상태에서 바깥 빈 곳을 클릭하면 닫히게** 되어 있음
     (`document`에 `mousedown` 리스너, `TopNav.tsx`·`CustomerPortalShell.tsx` 둘 다
     적용) — 새로운 드롭다운 UI 만들 때도 이 패턴 재사용
-22. **관리자용 GET API 라우트(`app/api/admin/*`)는 반드시 `export const dynamic =
+21. **관리자용 GET API 라우트(`app/api/admin/*`)는 반드시 `export const dynamic =
     "force-dynamic"` 추가할 것** — 요청 파라미터를 안 읽는 GET 핸들러는 Next.js가
     응답(및 내부 supabase-js fetch 호출)을 캐시해버릴 수 있음. 저장 직후 재조회해도
     캐시된 예전 데이터가 나오는 버그를 실제로 겪었음 (`applications`,
     `public-quote-requests` GET 라우트에서 발견, 새 GET 라우트 만들 때마다 빠뜨리지
     말 것)
-23. **anon-locked 테이블(`public_quote_requests`, `customer_applications`)을 anon
+22. **anon-locked 테이블(`public_quote_requests`, `customer_applications`)을 anon
     클라이언트로 직접 SELECT하면 에러 없이 조용히 빈 결과만 돌아옴** (RLS가 막지만
     에러를 던지지 않음) — admin 쪽 어느 컴포넌트에서든 이 테이블을 조회할 땐 예외
     없이 서버 API(`SUPABASE_SERVICE_ROLE_KEY`)를 거칠 것. 실제로 견적전환 프리필
     기능에서 이 실수로 데이터가 하나도 안 채워지는 버그가 있었음 (원칙 3번 위반 시
     증상이 바로 이렇게 나타남 — 참고용으로 기록)
-24. **알림 배지를 즉시 갱신해야 하면 `lib/notifyBadgeRefresh.ts`의
+23. **알림 배지를 즉시 갱신해야 하면 `lib/notifyBadgeRefresh.ts`의
     `notifyBadgeRefresh()`를 처리 완료 시점에 호출할 것** — anon-locked 테이블은
     Realtime이 안 돼서 `TopNav.tsx`가 15초 폴링에만 의존하는데, 이 함수를 호출하면
     폴링을 기다리지 않고 바로 배지를 재조회함. 새로운 처리 액션(승인/거절/답변저장
     등)을 추가할 때도 이 호출을 빠뜨리지 말 것
-25. **관리자 로그인/권한 확인용 클라이언트는 `lib/supabaseAdminAuthClient.ts`
+24. **관리자 로그인/권한 확인용 클라이언트는 `lib/supabaseAdminAuthClient.ts`
     (`supabaseAdminAuth`, 쿠키 기반 세션) 딱 하나만 사용** — `lib/supabaseClient.ts`(anon,
     localStorage)와 절대 섞지 말 것. "지금 로그인한 직원이 누구/무슨 role인지" 필요할 때는
     새로 만들지 말고 기존 헬퍼 재사용: 클라이언트 컴포넌트는 `lib/currentStaff.ts`의
     `getCurrentStaffId()`(id만)/`getCurrentStaffRole()`(role만, "admin"|"staff"|null),
     서버 API 라우트는 `lib/getCurrentStaff.ts`의 `getCurrentStaff()`(id+name+role+status,
     쿠키 기반)
-26. **직원 계정 관련 권한/이력 체크는 반드시 "화면단 + 서버단" 이중 체크**: 화면에서
+25. **직원 계정 관련 권한/이력 체크는 반드시 "화면단 + 서버단" 이중 체크**: 화면에서
     버튼을 숨기거나 비활성화하는 것만으로는 브라우저 콘솔에서 직접 fetch를 호출해
     우회할 수 있음. 삭제·운임기준표 수정처럼 관리자 전용이어야 하는 기능은 반드시
     서버 API 라우트에서도 `getCurrentStaff().role === "admin"` 확인 후에만 처리하도록
@@ -255,13 +252,13 @@ Enter키 자동제출 방지 완료·merge됨 + 2026-07-28: 배차 프로세스 
     때도 마찬가지로 클라이언트 컴포넌트는 `getCurrentStaffId()`로 `created_by`/
     `updated_by`를 채우고, 화면에는 `components/ProcessedByFooter.tsx`로 "등록: 이름
     (날짜) · 최종수정: 이름 (날짜)"를 표시
-27. **여러 화면의 단순 레코드 삭제는 `app/api/admin/delete-record/route.ts` 공용
+26. **여러 화면의 단순 레코드 삭제는 `app/api/admin/delete-record/route.ts` 공용
     API를 거칠 것** (`{ table, id }` POST, 허용된 테이블 목록으로 제한) — 매번 새
     라우트를 만들지 않아도 되고, 관리자 권한 체크가 한 곳에 모여있어 빠뜨릴 위험이
     적음. 화주(`delete-company`)나 포털계정(`delete-portal-account`)처럼 Auth 유저
     정리 등 부가 로직이 필요한 삭제는 기존처럼 전용 라우트를 쓰되, 그 라우트 안에도
     반드시 관리자 체크를 넣을 것
-28. **`alter table X add column if not exists Y ... references Z(id)`는 컬럼이
+27. **`alter table X add column if not exists Y ... references Z(id)`는 컬럼이
     이미 존재하면 REFERENCES 절이 조용히 무시됨** — 예전부터 남아있던 레거시 컬럼이
     있으면 새 마이그레이션의 외래키가 실제로는 안 걸려서, 엉뚱한 테이블을 참조하는
     옛날 제약조건이 그대로 남는 버그가 생김 (실제로 `quotes.created_by`가 안 쓰던
@@ -271,29 +268,29 @@ Enter키 자동제출 방지 완료·merge됨 + 2026-07-28: 배차 프로세스 
     로 그 컬럼이 이미 있는지, `select conname, pg_get_constraintdef(oid) from
     pg_constraint where conname = '..._fkey'`로 기존 제약조건이 뭘 참조하는지 먼저
     확인하는 습관을 들일 것
-29. **여러 필드를 한 번에 수정하는 "정보 수정" 폼이 있는 상세화면(화주/오더/배차/
+28. **여러 필드를 한 번에 수정하는 "정보 수정" 폼이 있는 상세화면(화주/오더/배차/
     정산)은 `lib/optimisticUpdate.ts`의 `optimisticUpdate()`로 저장할 것** — 내가
     불러온 시점의 `updated_at`과 실제 DB의 `updated_at`이 다르면(그 사이 다른 직원이
     먼저 저장함) 조용히 덮어쓰지 않고 `components/ConflictWarning.tsx`로 경고 +
     새로고침/그래도 덮어쓰기 선택지를 보여줌. 상태값 하나만 바꾸는 단순 드롭다운
     (예: 견적 상태변경)에는 굳이 적용 안 해도 됨 — 여러 필드를 동시에 편집하는
     화면 위주로 적용
-30. **Supabase magic link로 임시 로그인(관리자 지원접속 등)을 구현할 때는
+29. **Supabase magic link로 임시 로그인(관리자 지원접속 등)을 구현할 때는
     `admin.auth.admin.generateLink({ type: "magiclink", email })`로 받은
     `properties.hashed_token`을, 클라이언트에서 `auth.verifyOtp({ token_hash, type:
     "magiclink" })`로만 검증할 것 — `email`을 같이 넘기면 "Only the token_hash and
     type should be provided" 에러로 검증이 항상 실패함** (실제로 8단계 지원접속
     기능에서 이 실수로 접속이 전혀 안 되는 버그가 있었음). `app/api/admin/
     support-login/route.ts` + `app/customer/support-verify/page.tsx`가 참고 예시
-31. **"본인 계정 정보 수정"처럼 role 상관없이 누구나 접근 가능해야 하는 API는, 수정
+30. **"본인 계정 정보 수정"처럼 role 상관없이 누구나 접근 가능해야 하는 API는, 수정
     대상 id를 클라이언트가 아니라 반드시 서버에서 `getCurrentStaff()`로 직접 구해서
     사용할 것** — 클라이언트가 `{ id, name }`처럼 id를 같이 보내는 방식은 브라우저
     콘솔에서 다른 직원의 id로 바꿔 보내면 그 사람 정보를 수정할 수 있는 권한 상승
     구멍이 생김. `app/api/admin/my-account/route.ts`가 참고 예시 — 요청 바디에서
     `name`만 받고, 어느 행을 수정할지는 쿠키 세션의 `currentStaff.id`로만 결정함
-    (원칙 25번의 "화면단+서버단 이중 체크"와는 별개로, role 무관 self-service API는
+    (원칙 25번의 "화면단+서버단 이중체크"와는 별개로, role 무관 self-service API는
     애초에 대상 id 자체를 클라이언트 입력값으로 안 받는 방식으로 막을 것)
-32. **앱 내부 경로로 이동하는 링크는 반드시 `next/link`의 `<Link href=...>`를 쓸 것 —
+31. **앱 내부 경로로 이동하는 링크는 반드시 `next/link`의 `<Link href=...>`를 쓸 것 —
     순수 HTML `<a href="/admin/...">`을 쓰면 클라이언트 사이드 전환 대신 브라우저
     전체 새로고침(하드 리로드)이 발생함.** 실제로 `TopNav.tsx`의 드롭다운 메뉴
     항목 전부와 화주포털(`CustomerPortalShell.tsx`) 전체가 이 실수로 페이지
@@ -304,7 +301,7 @@ Enter키 자동제출 방지 완료·merge됨 + 2026-07-28: 배차 프로세스 
     `#해시` 앵커(`admin/guide`)처럼 원래 하드 네비게이션이 필요한 경우만 예외.
     새 링크를 추가할 때 `<a href=`로 시작하는 코드를 쓰고 있다면 내부 경로가
     아닌지 반드시 확인할 것
-33. **`support_access_logs`처럼 순수 이력(로그) 목적의 테이블이 `companies`/
+32. **`support_access_logs`처럼 순수 이력(로그) 목적의 테이블이 `companies`/
     `customer_accounts` 등 실제 데이터를 참조할 때는 FK에 `on delete set null`을
     걸고, 표시용 텍스트 스냅샷 컬럼(`company_name`/`customer_email`처럼)을 같이
     저장해둘 것** — `on delete` 옵션 없이(기본 RESTRICT) FK를 걸면, 원본이 삭제될
@@ -315,7 +312,7 @@ Enter키 자동제출 방지 완료·merge됨 + 2026-07-28: 배차 프로세스 
     삭제 전에 관련 견적/오더/정산 건수를 확인해서 있으면 완전삭제를 막고 "거래중단"
     상태변경을 안내함). "이 데이터가 지워질 때 삭제를 막아야 하는지 vs 로그만
     남기고 통과시켜야 하는지"를 테이블 성격에 따라 판단할 것
-34. **삭제/저장 등 액션 실패 시 에러를 표시할 state는 페이지 최초 로딩 실패용
+33. **삭제/저장 등 액션 실패 시 에러를 표시할 state는 페이지 최초 로딩 실패용
     state와 반드시 분리할 것** — 화주 상세화면(`companies/[id]/page.tsx`)이
     `handleDelete()` 실패 시 로딩 실패용 `error` state를 그대로 재사용하고 있어서,
     `if (error || !company) return <전체화면 에러>` 가드에 걸려 이미 불러온 상세
@@ -323,7 +320,7 @@ Enter키 자동제출 방지 완료·merge됨 + 2026-07-28: 배차 프로세스 
     상세화면에도 같은 패턴이 있어서 같이 수정함). 액션 실패는 항상 별도 state(예:
     `deleteError`/`actionError`)로 받아서 인라인 에러 배너로만 보여줄 것 — 이미
     로드된 화면 데이터를 오류 메시지로 통째로 덮어쓰면 안 됨
-35. **저장/등록 폼(`<form onSubmit={...}>`)에는 `lib/preventEnterSubmit.ts`의
+34. **저장/등록 폼(`<form onSubmit={...}>`)에는 `lib/preventEnterSubmit.ts`의
     `handleFormKeyDown`을 `onKeyDown`으로 붙일 것** — 입력 중 습관적으로 누르는
     Enter키가 브라우저 기본 동작으로 폼을 그대로 제출시켜서, 아직 다 작성하지 않은
     정보가 실수로 저장/등록되는 문제를 막기 위함(`textarea`는 줄바꿈 용도라 예외).
@@ -331,7 +328,7 @@ Enter키 자동제출 방지 완료·merge됨 + 2026-07-28: 배차 프로세스 
     조회하는 검색 폼**(`/status`, `/quote/status`, `/apply/status`,
     `/admin/account-cleanup` — 저장이 아니라 단순 조회라 Enter 실행이 자연스러움)은
     예외로 붙이지 않음. 새 등록/수정 폼을 추가할 때도 이 핸들러를 빠뜨리지 말 것
-36. **전화번호를 입력받는 `<input>`은 예외 없이 `lib/constants.ts`의
+35. **전화번호를 입력받는 `<input>`은 예외 없이 `lib/constants.ts`의
     `formatPhoneNumber()`를 `onChange`에 물려서 입력 즉시 자동으로 하이픈(-)이
     표시되게 할 것** — 대부분의 화면(화주 대표번호, 담당자 연락처, 차주 연락처,
     공개 견적문의/화주등록신청 연락처 등)은 이미 적용되어 있었지만, 개인고객
@@ -339,7 +336,7 @@ Enter키 자동제출 방지 완료·merge됨 + 2026-07-28: 배차 프로세스 
     있었음. 새로 전화번호 입력창을 추가할 때 빠뜨리지 말 것(검색용 입력창도
     사람이 눈으로 확인하기 편하도록 동일하게 적용 — 조회 로직은 어차피 숫자만
     비교하도록 정규화해서 비교하므로 하이픈이 있어도 조회에 지장 없음)
-37. **원칙 28번(낙관적 잠금)을 쓰는 상세화면에서, 그 화면 안의 다른 "즉시 저장"
+36. **원칙 28번(낙관적 잠금)을 쓰는 상세화면에서, 그 화면 안의 다른 "즉시 저장"
     액션(상태 드롭다운 변경, 체크박스 등)은 DB에 쓴 뒤 반드시 `load()`로 전체를
     다시 불러올 것 — 부분(payload 필드만) 병합으로 로컬 state를 갱신하고 넘어가면
     안 됨.** `updated_at`은 DB 트리거가 자동으로 갱신하는데, 로컬에 남은
@@ -348,7 +345,7 @@ Enter키 자동제출 방지 완료·merge됨 + 2026-07-28: 배차 프로세스 
     (실제로는 같은 사용자 본인이 방금 한 조작인데도). 배차 상세화면의 배차상태
     변경·상차/하차 완료 체크에서 실제로 겪은 버그 — 두 액션 모두 부분 병합을
     `load()` 호출로 바꿔서 해결함
-38. **주소(도로명주소+상세주소)를 입력받는 화면은 예외 없이
+37. **주소(도로명주소+상세주소)를 입력받는 화면은 예외 없이
     `components/AddressSearch.tsx` 공용 컴포넌트를 재사용할 것** — 원칙 12번
     (`PasswordInput`)과 같은 이유. 다음 주소검색 스크립트 로드는
     `lib/useDaumPostcode.ts` 훅이 대신 처리하므로 페이지에서 직접
@@ -359,7 +356,7 @@ Enter키 자동제출 방지 완료·merge됨 + 2026-07-28: 배차 프로세스 
     도로명주소와 공백으로 합쳐서 하나의 문자열 컬럼에 저장하는 게 이 프로젝트
     전체의 기존 관례(`fullOrigin`/`fullDestination` 패턴) — 새 주소 필드를
     추가할 때도 이 패턴을 따르고, DB에 별도 "상세주소" 컬럼을 새로 만들지 말 것
-39. **`TopNav.tsx`처럼 루트 레이아웃(`app/layout.tsx`)에서 전체 사이트에 항상
+38. **`TopNav.tsx`처럼 루트 레이아웃(`app/layout.tsx`)에서 전체 사이트에 항상
     렌더링되는 컴포넌트에는 `useSearchParams()`를 직접 쓰지 말 것 — 반드시
     `<Suspense>`로 감싼 얇은 래퍼(`export default`)와 실제 로직을 담은 내부
     컴포넌트로 분리할 것.** 감싸지 않으면 Next.js가 정적 생성 시
