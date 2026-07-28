@@ -215,7 +215,6 @@ export default function DispatchDetailPage() {
       setError(error.message);
       return;
     }
-    setDispatch((d: any) => ({ ...d, dispatch_status: status }));
     if (dispatch?.orders?.id && DISPATCH_TO_ORDER_STATUS[status]) {
       await supabase
         .from("orders")
@@ -242,6 +241,11 @@ export default function DispatchDetailPage() {
     if (status === "운송완료" && prevStatus !== "운송완료" && dispatch?.orders?.id) {
       await autoCreateInvoiceIfNeeded(dispatch.orders.id);
     }
+
+    // updated_at을 DB 기준으로 다시 받아와야 함 — 부분 병합만 하고 넘어가면
+    // 로컬 updated_at이 옛날 값 그대로 남아서, 바로 이어서 "변경사항 저장"을
+    // 누를 때 낙관적 잠금이 "다른 직원이 방금 수정함"으로 잘못 판단하는 버그가 있었음
+    load();
   }
 
   async function adjustDriverTripCount(driverId: string, delta: number) {
@@ -343,7 +347,6 @@ export default function DispatchDetailPage() {
       setError(error.message);
       return;
     }
-    setDispatch((d: any) => ({ ...d, ...payload }));
 
     if (nextStatus !== prevStatus && dispatch?.orders?.id && DISPATCH_TO_ORDER_STATUS[nextStatus]) {
       await supabase
@@ -351,6 +354,11 @@ export default function DispatchDetailPage() {
         .update({ status: DISPATCH_TO_ORDER_STATUS[nextStatus] })
         .eq("id", dispatch.orders.id);
     }
+
+    // updated_at을 DB 기준으로 다시 받아와야 함 — 부분 병합만 하고 넘어가면
+    // 로컬 updated_at이 옛날 값 그대로 남아서, 바로 이어서 "변경사항 저장"을
+    // 누를 때 낙관적 잠금이 "다른 직원이 방금 수정함"으로 잘못 판단하는 버그가 있었음
+    load();
   }
 
   async function handleSave(force = false) {
