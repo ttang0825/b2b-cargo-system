@@ -140,7 +140,8 @@ Enter키 자동제출 방지 완료·merge됨 + 2026-07-28: 배차 프로세스 
   `individual_customer_addresses`에 `sido`/`sigungu` 컬럼 추가. **DB 마이그레이션은
   코드와 별개로 사용자가 Supabase SQL 편집기에서 직접 실행해야 함** (원칙 8번
   "Claude Code로 넘어가면서 참고할 것" 관례 그대로 — 이 세션에서 SQL 파일을 전달함,
-  적용 여부 미확인). 상세주소는 다른 화면들과 동일하게 별도 컬럼 없이 저장 직전
+  사용자가 실행 후 8개 테이블 30개 컬럼 전부 생성된 것 확인 완료). 상세주소는
+  다른 화면들과 동일하게 별도 컬럼 없이 저장 직전
   도로명주소와 합쳐서 하나의 문자열로 저장(`fullOrigin` 패턴). 화주등록신청 승인
   시(`approve-application/route.ts`) `customer_applications.main_origin`/
   `main_destination`(+sido/sigungu)을 `companies.main_pickup_*`/`main_dropoff_*`에
