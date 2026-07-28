@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { STATUS_OPTIONS, getStatusColor } from "@/lib/statusColors";
@@ -141,7 +141,14 @@ const CRM_PERFORMANCE_FIELDS: [string, string, string?][] = [
 export default function CompanyDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const id = params?.id as string;
+
+  // 활성 화주(CRM) 목록에서 들어온 경우, 목록으로 돌아갈 때/상단메뉴 활성표시도
+  // 그쪽 목록을 가리키게 함 (?from_order 패턴과 동일한 출처 파라미터 방식)
+  const fromCustomers = searchParams.get("from") === "customers";
+  const listHref = fromCustomers ? "/admin/customers" : "/admin/companies";
+  const listLabel = fromCustomers ? "활성 화주 목록" : "화주 관리 목록";
 
   const [company, setCompany] = useState<CompanyDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -592,7 +599,7 @@ export default function CompanyDetailPage() {
       return;
     }
 
-    router.push("/admin/companies");
+    router.push(listHref);
   }
 
   if (loading) {
@@ -609,7 +616,7 @@ export default function CompanyDetailPage() {
         <div className="error-box">
           업체 정보를 불러오지 못했습니다. {error}
         </div>
-        <Link href="/admin/companies" className="btn btn-ghost">
+        <Link href={listHref} className="btn btn-ghost">
           ← 목록으로
         </Link>
       </main>
@@ -620,10 +627,10 @@ export default function CompanyDetailPage() {
     <main className="container">
       <div style={{ marginBottom: 16 }}>
         <Link
-          href="/admin/companies"
+          href={listHref}
           style={{ fontSize: 13, color: "var(--text-muted)" }}
         >
-          ← 화주 관리 목록으로
+          ← {listLabel}으로
         </Link>
       </div>
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { supabaseAdminAuth } from "@/lib/supabaseAdminAuthClient";
 import { onBadgeRefresh } from "@/lib/notifyBadgeRefresh";
@@ -53,6 +53,18 @@ const ADMIN_ONLY_GROUP: NavGroup = {
   ],
 };
 
+// 화주 상세(/admin/companies/[id])는 "화주 관리(영업)"/"활성 화주(CRM)" 두 목록
+// 어디서든 들어올 수 있는 공용 화면이라, pathname만으로는 상단메뉴에서 어느 쪽을
+// 활성표시해야 할지 구분이 안 됨 — 목록에서 넘어올 때 붙이는 ?from=customers
+// 파라미터(?from_order 패턴과 동일)로 구분함
+function isNavItemActive(pathname: string | null, fromCustomers: boolean, href: string) {
+  if (fromCustomers && pathname?.startsWith("/admin/companies/")) {
+    if (href === "/admin/customers") return true;
+    if (href === "/admin/companies") return false;
+  }
+  return !!pathname?.startsWith(href);
+}
+
 function Badge({ count }: { count: number }) {
   return (
     <span
@@ -80,17 +92,19 @@ function Badge({ count }: { count: number }) {
 function NavDropdown({
   group,
   pathname,
+  fromCustomers,
   counts,
   open,
   onToggle,
 }: {
   group: NavGroup;
   pathname: string | null;
+  fromCustomers: boolean;
   counts: Record<string, number>;
   open: boolean;
   onToggle: () => void;
 }) {
-  const isActiveGroup = group.items.some((i) => pathname?.startsWith(i.href));
+  const isActiveGroup = group.items.some((i) => isNavItemActive(pathname, fromCustomers, i.href));
   const groupTotal = group.items.reduce((sum, i) => sum + (i.key ? counts[i.key] || 0 : 0), 0);
 
   return (
@@ -111,7 +125,7 @@ function NavDropdown({
           style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, minWidth: 190, padding: 6, zIndex: 30 }}
         >
           {group.items.map((item) => {
-            const active = pathname?.startsWith(item.href);
+            const active = isNavItemActive(pathname, fromCustomers, item.href);
             const count = item.key ? counts[item.key] || 0 : 0;
             return (
               <Link
@@ -132,6 +146,8 @@ function NavDropdown({
 
 export default function TopNav() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const fromCustomers = searchParams.get("from") === "customers";
   const router = useRouter();
   const [counts, setCounts] = useState({ portalRequests: 0, publicQuotes: 0, applications: 0 });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -282,6 +298,7 @@ export default function TopNav() {
               key={group.label}
               group={group}
               pathname={pathname}
+              fromCustomers={fromCustomers}
               counts={counts}
               open={openGroup === group.label}
               onToggle={() => setOpenGroup((g) => (g === group.label ? null : group.label))}
@@ -342,7 +359,7 @@ export default function TopNav() {
                 {group.label}
               </div>
               {group.items.map((item) => {
-                const active = pathname?.startsWith(item.href);
+                const active = isNavItemActive(pathname, fromCustomers, item.href);
                 const count = item.key ? counts[item.key] || 0 : 0;
                 return (
                   <Link
