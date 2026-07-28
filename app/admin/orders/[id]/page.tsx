@@ -68,6 +68,7 @@ export default function OrderDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [conflict, setConflict] = useState(false);
+  const [linkedDispatchId, setLinkedDispatchId] = useState<string | null>(null);
 
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
@@ -115,6 +116,15 @@ export default function OrderDetailPage() {
       unload_condition: data.unload_condition || "",
       special_notes: data.special_notes || "",
     });
+
+    const { data: dispatchRow } = await supabase
+      .from("dispatches")
+      .select("id")
+      .eq("order_id", id)
+      .limit(1)
+      .maybeSingle();
+    setLinkedDispatchId(dispatchRow?.id || null);
+
     setLoading(false);
   }
 
@@ -275,6 +285,15 @@ export default function OrderDetailPage() {
         <div style={{ display: "flex", gap: 8 }}>
           {!editing ? (
             <>
+              {linkedDispatchId ? (
+                <Link href={`/admin/dispatches/${linkedDispatchId}`} className="btn btn-ghost">
+                  배차 상세보기
+                </Link>
+              ) : (
+                <Link href={`/admin/dispatches?from_order=${id}`} className="btn">
+                  배차관리로 이동
+                </Link>
+              )}
               <button className="btn" onClick={() => setEditing(true)}>
                 정보 수정
               </button>

@@ -541,6 +541,14 @@ export default function DispatchDetailPage() {
           )}
         </div>
 
+        {dispatch.orders?.id && (
+          <div style={{ marginBottom: 14 }}>
+            <Link href={`/admin/orders/${dispatch.orders.id}`} style={{ fontSize: 12.5, textDecoration: "underline" }}>
+              연결된 운송오더 보기 →
+            </Link>
+          </div>
+        )}
+
         {dispatch.dispatch_status === "접수중" ? (
           <>
             <div style={{ marginBottom: 14 }}>
@@ -761,14 +769,6 @@ export default function DispatchDetailPage() {
               <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>품목</div>
               <div style={{ fontSize: 13.5 }}>{dispatch.orders?.item || "-"}</div>
             </div>
-            {dispatch.orders?.id && (
-              <div>
-                <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>오더 상세</div>
-                <Link href={`/admin/orders/${dispatch.orders.id}`} style={{ fontSize: 13.5, textDecoration: "underline" }}>
-                  오더 페이지로 이동 →
-                </Link>
-              </div>
-            )}
           </div>
         )}
       </div>
