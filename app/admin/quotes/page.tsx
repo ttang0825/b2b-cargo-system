@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { generateDailyNumber } from "@/lib/generateNumber";
 import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
+import { formatPhoneNumber } from "@/lib/constants";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import DateTimePicker from "@/components/DateTimePicker";
 
@@ -923,7 +924,7 @@ function QuotesPageInner() {
                   <input
                     value={form.guest_phone}
                     onChange={(e) =>
-                      setForm({ ...form, guest_phone: e.target.value })
+                      setForm({ ...form, guest_phone: formatPhoneNumber(e.target.value) })
                     }
                   />
                 </div>

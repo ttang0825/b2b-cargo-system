@@ -10,6 +10,7 @@ import {
   DISPATCH_TO_ORDER_STATUS,
 } from "@/lib/dispatchStatusColors";
 import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
+import { formatPhoneNumber } from "@/lib/constants";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
 import ConflictWarning from "@/components/ConflictWarning";
 import { optimisticUpdate } from "@/lib/optimisticUpdate";
@@ -214,7 +215,6 @@ export default function DispatchDetailPage() {
       setError(error.message);
       return;
     }
-    setDispatch((d: any) => ({ ...d, dispatch_status: status }));
     if (dispatch?.orders?.id && DISPATCH_TO_ORDER_STATUS[status]) {
       await supabase
         .from("orders")
@@ -241,6 +241,11 @@ export default function DispatchDetailPage() {
     if (status === "운송완료" && prevStatus !== "운송완료" && dispatch?.orders?.id) {
       await autoCreateInvoiceIfNeeded(dispatch.orders.id);
     }
+
+    // updated_at을 DB 기준으로 다시 받아와야 함 — 부분 병합만 하고 넘어가면
+    // 로컬 updated_at이 옛날 값 그대로 남아서, 바로 이어서 "변경사항 저장"을
+    // 누를 때 낙관적 잠금이 "다른 직원이 방금 수정함"으로 잘못 판단하는 버그가 있었음
+    load();
   }
 
   async function adjustDriverTripCount(driverId: string, delta: number) {
@@ -342,7 +347,6 @@ export default function DispatchDetailPage() {
       setError(error.message);
       return;
     }
-    setDispatch((d: any) => ({ ...d, ...payload }));
 
     if (nextStatus !== prevStatus && dispatch?.orders?.id && DISPATCH_TO_ORDER_STATUS[nextStatus]) {
       await supabase
@@ -350,6 +354,11 @@ export default function DispatchDetailPage() {
         .update({ status: DISPATCH_TO_ORDER_STATUS[nextStatus] })
         .eq("id", dispatch.orders.id);
     }
+
+    // updated_at을 DB 기준으로 다시 받아와야 함 — 부분 병합만 하고 넘어가면
+    // 로컬 updated_at이 옛날 값 그대로 남아서, 바로 이어서 "변경사항 저장"을
+    // 누를 때 낙관적 잠금이 "다른 직원이 방금 수정함"으로 잘못 판단하는 버그가 있었음
+    load();
   }
 
   async function handleSave(force = false) {
@@ -540,6 +549,14 @@ export default function DispatchDetailPage() {
           )}
         </div>
 
+        {dispatch.orders?.id && (
+          <div style={{ marginBottom: 14 }}>
+            <Link href={`/admin/orders/${dispatch.orders.id}`} style={{ fontSize: 12.5, textDecoration: "underline" }}>
+              연결된 운송오더 보기 →
+            </Link>
+          </div>
+        )}
+
         {dispatch.dispatch_status === "접수중" ? (
           <>
             <div style={{ marginBottom: 14 }}>
@@ -682,7 +699,10 @@ export default function DispatchDetailPage() {
                   </div>
                   <div className="field">
                     <label>배정된 차주 연락처</label>
-                    <input value={externalDriverPhone} onChange={(e) => setExternalDriverPhone(e.target.value)} />
+                    <input
+                      value={externalDriverPhone}
+                      onChange={(e) => setExternalDriverPhone(formatPhoneNumber(e.target.value))}
+                    />
                   </div>
                   <div className="field">
                     <label>차량번호</label>
@@ -757,14 +777,6 @@ export default function DispatchDetailPage() {
               <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>품목</div>
               <div style={{ fontSize: 13.5 }}>{dispatch.orders?.item || "-"}</div>
             </div>
-            {dispatch.orders?.id && (
-              <div>
-                <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>오더 상세</div>
-                <Link href={`/admin/orders/${dispatch.orders.id}`} style={{ fontSize: 13.5, textDecoration: "underline" }}>
-                  오더 페이지로 이동 →
-                </Link>
-              </div>
-            )}
           </div>
         )}
       </div>

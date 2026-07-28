@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import {
@@ -65,8 +65,10 @@ function won(n: number | null) {
   return Math.round(n).toLocaleString("ko-KR") + "원";
 }
 
-export default function DispatchesPage() {
+function DispatchesPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const fromOrderId = searchParams.get("from_order");
   const [dispatches, setDispatches] = useState<DispatchRow[]>([]);
   const [availableOrders, setAvailableOrders] = useState<OrderLite[]>([]);
   const [loading, setLoading] = useState(true);
@@ -142,6 +144,16 @@ export default function DispatchesPage() {
     loadNetworks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 운송오더 상세의 "배차관리로 이동" 버튼으로 넘어온 경우, 그 오더를 자동으로
+  // 선택해서 등록폼을 열어줌 (공개문의 → 견적관리 전환 프리필과 동일한 패턴)
+  useEffect(() => {
+    if (!fromOrderId) return;
+    if (!availableOrders.some((o) => o.id === fromOrderId)) return;
+    setShowForm(true);
+    handleSelectOrder(fromOrderId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromOrderId, availableOrders]);
 
   // 기간 필터 변경 시 배차 목록만 다시 로드
   useEffect(() => {
@@ -776,5 +788,19 @@ export default function DispatchesPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function DispatchesPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="container">
+          <div className="empty-state">불러오는 중...</div>
+        </main>
+      }
+    >
+      <DispatchesPageInner />
+    </Suspense>
   );
 }

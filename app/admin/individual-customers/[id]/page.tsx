@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
+import { formatPhoneNumber } from "@/lib/constants";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
 
 type Customer = {
@@ -252,7 +253,10 @@ export default function IndividualCustomerDetailPage() {
             </div>
             <div className="field">
               <label>연락처</label>
-              <input value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} />
+              <input
+                value={editForm.phone}
+                onChange={(e) => setEditForm({ ...editForm, phone: formatPhoneNumber(e.target.value) })}
+              />
             </div>
             <div className="field">
               <label>이메일</label>

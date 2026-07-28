@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { ORDER_STATUS_OPTIONS, getOrderStatusColor } from "@/lib/orderStatusColors";
-import { LOAD_UNLOAD_CONDITIONS } from "@/lib/constants";
+import { LOAD_UNLOAD_CONDITIONS, formatPhoneNumber } from "@/lib/constants";
 import { generateDailyNumber } from "@/lib/generateNumber";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import { getCurrentStaffId } from "@/lib/currentStaff";
@@ -451,7 +451,7 @@ function OrdersPageInner() {
                   <input
                     value={form.guest_phone}
                     onChange={(e) =>
-                      setForm({ ...form, guest_phone: e.target.value })
+                      setForm({ ...form, guest_phone: formatPhoneNumber(e.target.value) })
                     }
                   />
                   {matchedIndividual && (
