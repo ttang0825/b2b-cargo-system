@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { supabaseAdminAuth } from "@/lib/supabaseAdminAuthClient";
@@ -144,7 +144,19 @@ function NavDropdown({
   );
 }
 
+// useSearchParams()를 쓰기 때문에 Suspense 경계 안에서만 렌더링 가능 — 루트
+// 레이아웃에서 전체 사이트에 항상 렌더링되므로, 이 컴포넌트가 직접 export되면
+// 정적 생성 시 "useSearchParams should be wrapped in a suspense boundary" 오류로
+// 빌드가 실패함 (실제로 Vercel 배포에서 이 문제로 빌드 실패했던 적 있음)
 export default function TopNav() {
+  return (
+    <Suspense fallback={null}>
+      <TopNavInner />
+    </Suspense>
+  );
+}
+
+function TopNavInner() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const fromCustomers = searchParams.get("from") === "customers";
