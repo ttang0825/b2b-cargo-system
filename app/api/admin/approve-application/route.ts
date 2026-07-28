@@ -60,7 +60,10 @@ export async function POST(req: Request) {
   }
 
   // 2. 화주 회사 신규 등록
-  const extraNoteParts = [
+  // "월 예상 운송건수"/"신청 메모"는 일반 메모(notes)로 남김 — manual_source_note는
+  // 출처분류가 "기타"일 때만 쓰는 "기타 출처 설명" 전용 칸이라 여기 넣으면 안 됨
+  // (넣으면 나중에 담당자가 출처분류를 "기타"로 바꿀 때 엉뚱한 텍스트가 자동으로 보임)
+  const noteParts = [
     application.monthly_volume_estimate ? `월 예상 운송건수: ${application.monthly_volume_estimate}` : null,
     application.notes ? `신청 메모: ${application.notes}` : null,
   ].filter(Boolean);
@@ -86,7 +89,7 @@ export async function POST(req: Request) {
       main_dropoff_sigungu: application.main_destination_sigungu || null,
       recommended_vehicle: application.preferred_vehicle || null,
       manual_source_type: "온라인 등록신청",
-      manual_source_note: extraNoteParts.length > 0 ? extraNoteParts.join(" / ") : null,
+      notes: noteParts.length > 0 ? noteParts.join(" / ") : null,
       created_by: staff?.id || null,
     })
     .select("id")
