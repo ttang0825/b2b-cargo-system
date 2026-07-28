@@ -2,8 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
+import AddressSearch from "@/components/AddressSearch";
 
-type Location = { id: string; address: string | null; location_type: string | null };
+type Location = {
+  id: string;
+  address: string | null;
+  location_type: string | null;
+  sido: string | null;
+  sigungu: string | null;
+};
 
 export default function PortalLocationsPage() {
   const [companyId, setCompanyId] = useState<string | null>(null);
@@ -11,6 +18,9 @@ export default function PortalLocationsPage() {
   const [loading, setLoading] = useState(true);
   const [newType, setNewType] = useState("상차지");
   const [newAddress, setNewAddress] = useState("");
+  const [newDetail, setNewDetail] = useState("");
+  const [newSido, setNewSido] = useState("");
+  const [newSigungu, setNewSigungu] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -18,7 +28,7 @@ export default function PortalLocationsPage() {
   async function loadLocations(cid: string) {
     const { data } = await supabase
       .from("customer_locations")
-      .select("id,address,location_type")
+      .select("id,address,location_type,sido,sigungu")
       .eq("company_id", cid);
     setLocations(data || []);
   }
@@ -48,16 +58,22 @@ export default function PortalLocationsPage() {
 
   async function handleAdd() {
     if (!newAddress.trim() || !companyId) return;
+    const fullAddress = [newAddress, newDetail].filter((v) => v.trim()).join(" ");
     const { error } = await supabase.from("customer_locations").insert({
       company_id: companyId,
-      address: newAddress,
+      address: fullAddress,
       location_type: newType,
+      sido: newSido || null,
+      sigungu: newSigungu || null,
     });
     if (error) {
       setError(error.message);
       return;
     }
     setNewAddress("");
+    setNewDetail("");
+    setNewSido("");
+    setNewSigungu("");
     loadLocations(companyId);
   }
 
@@ -146,18 +162,26 @@ export default function PortalLocationsPage() {
             );
           })}
 
-          <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
-            <select value={newType} onChange={(e) => setNewType(e.target.value)} style={{ width: 100, fontSize: 12.5 }}>
+          <div style={{ marginTop: 12, maxWidth: 380 }}>
+            <select value={newType} onChange={(e) => setNewType(e.target.value)} style={{ width: 100, fontSize: 12.5, marginBottom: 6 }}>
               <option value="상차지">상차지</option>
               <option value="하차지">하차지</option>
             </select>
-            <input
+            <AddressSearch
+              label="새 주소"
+              className=""
               value={newAddress}
-              onChange={(e) => setNewAddress(e.target.value)}
-              placeholder="주소 입력"
-              style={{ flex: 1, fontSize: 12.5, padding: "6px 10px" }}
+              detailValue={newDetail}
+              placeholder="주소검색 또는 직접 입력"
+              detailPlaceholder="상세주소 (선택)"
+              onChange={(addr, sido, sigungu) => {
+                setNewAddress(addr);
+                setNewSido(sido);
+                setNewSigungu(sigungu);
+              }}
+              onDetailChange={setNewDetail}
             />
-            <button className="btn" type="button" style={{ padding: "6px 14px", fontSize: 12.5 }} onClick={handleAdd}>
+            <button className="btn" type="button" style={{ padding: "6px 14px", fontSize: 12.5, marginTop: 6 }} onClick={handleAdd}>
               추가
             </button>
           </div>

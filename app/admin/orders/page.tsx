@@ -12,6 +12,7 @@ import { getCurrentStaffId } from "@/lib/currentStaff";
 import { getOrCreateIndividualCustomer, findIndividualCustomerByPhone } from "@/lib/individualCustomer";
 import DateTimePicker from "@/components/DateTimePicker";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
+import AddressSearch from "@/components/AddressSearch";
 
 type CompanyLite = { id: string; name: string; phone: string | null };
 
@@ -72,7 +73,13 @@ function OrdersPageInner() {
     guest_name: "",
     guest_phone: "",
     origin: "",
+    originDetail: "",
+    originSido: "",
+    originSigungu: "",
     destination: "",
+    destinationDetail: "",
+    destinationSido: "",
+    destinationSigungu: "",
     vehicle_type: "",
     item: "",
     requested_pickup_at: "",
@@ -130,7 +137,7 @@ function OrdersPageInner() {
       const { data: q } = await supabase
         .from("quotes")
         .select(
-          "id,company_id,guest_name,guest_phone,origin,destination,vehicle_type,item,selected_options,notes,requested_pickup_at,requested_dropoff_at,companies(id,name,phone)"
+          "id,company_id,guest_name,guest_phone,origin,origin_sido,origin_sigungu,destination,destination_sido,destination_sigungu,vehicle_type,item,selected_options,notes,requested_pickup_at,requested_dropoff_at,companies(id,name,phone)"
         )
         .eq("id", fromQuoteId)
         .single();
@@ -142,7 +149,11 @@ function OrdersPageInner() {
       setForm((prev) => ({
         ...prev,
         origin: q.origin || "",
+        originSido: q.origin_sido || "",
+        originSigungu: q.origin_sigungu || "",
         destination: q.destination || "",
+        destinationSido: q.destination_sido || "",
+        destinationSigungu: q.destination_sigungu || "",
         vehicle_type: q.vehicle_type || "",
         item: q.item || "",
         quote_id: q.id,
@@ -237,14 +248,22 @@ function OrdersPageInner() {
     setSaving(true);
     const orderNo = await generateDailyNumber("orders", "O");
 
+    const fullOrigin = [form.origin, form.originDetail].filter((v) => v.trim()).join(" ");
+    const fullDestination = [form.destination, form.destinationDetail].filter((v) => v.trim()).join(" ");
+
     let individualCustomerId: string | null = null;
     if (customerMode === "guest" && form.guest_phone.trim()) {
       individualCustomerId = await getOrCreateIndividualCustomer(
         form.guest_name,
         form.guest_phone,
         [
-          { address: form.origin, location_type: "상차지" },
-          { address: form.destination, location_type: "하차지" },
+          { address: fullOrigin, location_type: "상차지", sido: form.originSido, sigungu: form.originSigungu },
+          {
+            address: fullDestination,
+            location_type: "하차지",
+            sido: form.destinationSido,
+            sigungu: form.destinationSigungu,
+          },
         ]
       );
     }
@@ -257,8 +276,12 @@ function OrdersPageInner() {
       guest_phone: customerMode === "guest" ? form.guest_phone || null : null,
       individual_customer_id: individualCustomerId,
       quote_id: form.quote_id || null,
-      origin: form.origin,
-      destination: form.destination,
+      origin: fullOrigin,
+      origin_sido: form.originSido || null,
+      origin_sigungu: form.originSigungu || null,
+      destination: fullDestination,
+      destination_sido: form.destinationSido || null,
+      destination_sigungu: form.destinationSigungu || null,
       vehicle_type: form.vehicle_type || null,
       item: form.item || null,
       requested_pickup_at: form.requested_pickup_at || null,
@@ -283,7 +306,13 @@ function OrdersPageInner() {
       guest_name: "",
       guest_phone: "",
       origin: "",
+      originDetail: "",
+      originSido: "",
+      originSigungu: "",
       destination: "",
+      destinationDetail: "",
+      destinationSido: "",
+      destinationSigungu: "",
       vehicle_type: "",
       item: "",
       requested_pickup_at: "",
@@ -466,22 +495,31 @@ function OrdersPageInner() {
             )}
 
             <div className="form-grid" style={{ padding: 0 }}>
-              <div className="field">
-                <label>출발지 *</label>
-                <input
-                  value={form.origin}
-                  onChange={(e) => setForm({ ...form, origin: e.target.value })}
-                />
-              </div>
-              <div className="field">
-                <label>도착지 *</label>
-                <input
-                  value={form.destination}
-                  onChange={(e) =>
-                    setForm({ ...form, destination: e.target.value })
-                  }
-                />
-              </div>
+              <AddressSearch
+                label="출발지"
+                required
+                value={form.origin}
+                detailValue={form.originDetail}
+                onChange={(addr, sido, sigungu) =>
+                  setForm((prev) => ({ ...prev, origin: addr, originSido: sido, originSigungu: sigungu }))
+                }
+                onDetailChange={(v) => setForm((prev) => ({ ...prev, originDetail: v }))}
+              />
+              <AddressSearch
+                label="도착지"
+                required
+                value={form.destination}
+                detailValue={form.destinationDetail}
+                onChange={(addr, sido, sigungu) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    destination: addr,
+                    destinationSido: sido,
+                    destinationSigungu: sigungu,
+                  }))
+                }
+                onDetailChange={(v) => setForm((prev) => ({ ...prev, destinationDetail: v }))}
+              />
               <div className="field">
                 <label>차량</label>
                 <input

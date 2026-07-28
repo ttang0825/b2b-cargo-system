@@ -4,7 +4,7 @@
 > 최종 버전입니다. 앞으로는 이 문서(또는 `CLAUDE.md`)를 참고해서 Claude Code가
 > 작업을 이어갑니다.
 
-**작성일: 2026-07-23** (최종 갱신: 2026-07-27, Claude Code 세션에서 직접 갱신 — 직원 계정
+**작성일: 2026-07-23** (최종 갱신: 2026-07-28, Claude Code 세션에서 직접 갱신 — 직원 계정
 재구조화 1~8단계 전부(스펙 전체) 완료·merge됨 + 수정 스펙 3건(견적 거리 자동계산 /
 로그인 정보 표시·본인 비밀번호 변경 / 개인고객 관리) 완료·merge됨 + 페이지 전환 성능
 개선(로그인정보/권한체크 캐싱, middleware 최적화, `<a href>` 하드 리로드 버그 수정)
@@ -12,7 +12,10 @@
 Enter키 자동제출 방지 완료·merge됨 + 2026-07-28: 배차 프로세스 재설계(접수중→배차확정,
 내부차주/외부정보망 배정, 운송오더↔배차관리 연결) 3단계 전부 완료·merge됨 + 전화번호
 자동 하이픈 포맷팅 전체 적용 완료·merge됨 + 상하차 방법 표준화(7개 옵션 통일 +
-공용 상수 파일화) 완료·merge됨 + 긴급여부 항목 전체 제거 완료·merge됨)
+공용 상수 파일화) 완료·merge됨 + 긴급여부 항목 전체 제거 완료·merge됨 + 주소 입력
+통일화(`AddressSearch` 공용 컴포넌트) + 광역권/시군구 자동기입 + 화주등록신청 승인
+시 주소 자동저장 완료·**코드는 merge됨, DB 마이그레이션 SQL은 사용자가 Supabase에
+직접 실행해야 실제로 동작함** — 8번 섹션 참고)
 
 ---
 
@@ -118,6 +121,28 @@ Enter키 자동제출 방지 완료·merge됨 + 2026-07-28: 배차 프로세스 
   `portal_order_requests.urgency` 컬럼은 과거 데이터 보존을 위해 그대로 둠 —
   신규 저장부터만 이 값이 안 생기도록 화면·로직만 제거함. `rate_surcharges`의
   `긴급여부` 카테고리 행도 완전삭제 대신 화면단에서만 숨김
+- **주소 입력 통일화 + 광역권/시군구 자동기입**: `components/AddressSearch.tsx`
+  (도로명주소 검색+상세주소 공용 컴포넌트) + `lib/useDaumPostcode.ts`(스크립트
+  로드 공용 훅) 신규 — `/quote`·`/apply`·`admin/quotes`·`customer/request`에
+  각자 구현되어 있던 다음 주소검색을 이 컴포넌트로 통일 교체, `admin/orders`·
+  `admin/orders/[id]`·`admin/companies/[id]`(저장된 주소)·`customer/locations`
+  (화주포털 배송지)는 기존에 주소검색 없이 텍스트 직접입력만 가능했던 곳이라
+  이번에 신규로 적용함. 다음 주소검색 응답의 `sido`/`sigungu`를 함께 저장하도록
+  `companies`(`main_pickup_address`/`main_pickup_sido`/`main_pickup_sigungu`/
+  `main_dropoff_*` 3종 신규 — 기존 `main_pickup_region`/`main_dropoff_region`
+  체크박스 필드와는 별개로 유지), `customer_locations`, `quotes`, `orders`,
+  `public_quote_requests`, `customer_applications`(`main_origin`/
+  `main_destination`은 이미 있던 컬럼, sido/sigungu만 신규), `portal_order_requests`
+  (스펙 원문엔 없었지만 화면이 AddressSearch로 바뀌는 대상이라 함께 추가),
+  `individual_customer_addresses`에 `sido`/`sigungu` 컬럼 추가. **DB 마이그레이션은
+  코드와 별개로 사용자가 Supabase SQL 편집기에서 직접 실행해야 함** (원칙 8번
+  "Claude Code로 넘어가면서 참고할 것" 관례 그대로 — 이 세션에서 SQL 파일을 전달함,
+  적용 여부 미확인). 상세주소는 다른 화면들과 동일하게 별도 컬럼 없이 저장 직전
+  도로명주소와 합쳐서 하나의 문자열로 저장(`fullOrigin` 패턴). 화주등록신청 승인
+  시(`approve-application/route.ts`) `customer_applications.main_origin`/
+  `main_destination`(+sido/sigungu)을 `companies.main_pickup_*`/`main_dropoff_*`에
+  매핑하고, `customer_locations`에도 상차지/하차지로 각 1건씩 자동 생성(동일
+  주소+타입 조합이 이미 있으면 중복 생성 안 함)
 
 ---
 
@@ -314,6 +339,17 @@ Enter키 자동제출 방지 완료·merge됨 + 2026-07-28: 배차 프로세스 
     (실제로는 같은 사용자 본인이 방금 한 조작인데도). 배차 상세화면의 배차상태
     변경·상차/하차 완료 체크에서 실제로 겪은 버그 — 두 액션 모두 부분 병합을
     `load()` 호출로 바꿔서 해결함
+37. **주소(도로명주소+상세주소)를 입력받는 화면은 예외 없이
+    `components/AddressSearch.tsx` 공용 컴포넌트를 재사용할 것** — 원칙 12번
+    (`PasswordInput`)과 같은 이유. 다음 주소검색 스크립트 로드는
+    `lib/useDaumPostcode.ts` 훅이 대신 처리하므로 페이지에서 직접
+    `<script id="daum-postcode-script">`를 붙이지 말 것. 이 컴포넌트는 검색으로
+    주소를 채우면 `sido`/`sigungu`도 함께 콜백으로 넘겨주고 상세주소를 자동
+    초기화함 — 직접 타이핑(수동 수정)한 경우엔 sido/sigungu를 알 수 없으므로
+    빈 값으로 넘어오는 게 정상 동작. 상세주소는 별도 컬럼 없이 저장 직전
+    도로명주소와 공백으로 합쳐서 하나의 문자열 컬럼에 저장하는 게 이 프로젝트
+    전체의 기존 관례(`fullOrigin`/`fullDestination` 패턴) — 새 주소 필드를
+    추가할 때도 이 패턴을 따르고, DB에 별도 "상세주소" 컬럼을 새로 만들지 말 것
 
 ---
 
@@ -477,6 +513,23 @@ Enter키 자동제출 방지 완료·merge됨 + 2026-07-28: 배차 프로세스 
   - "긴급여부" 항목을 운임기준표/견적관리/화주포털 발주요청에서 전부 제거(화면·
     로직만 없앰, DB 컬럼과 과거 데이터는 보존 — 화주포털 견적 상세의 과거 견적
     표시가 안 깨지도록)
+- **주소 입력 통일화 + 광역권/시군구 자동기입 + 화주등록신청 승인 시 주소 자동저장**
+  (코드는 merge됨, **DB 마이그레이션 SQL은 사용자 실행 확인 전** — 8번 섹션 참고):
+  - `components/AddressSearch.tsx` + `lib/useDaumPostcode.ts` 신규(원칙 37번).
+    기존 4곳(`/quote`, `/apply`, `admin/quotes`, `customer/request`)은 이
+    컴포넌트로 교체, 기존에 주소검색이 아예 없던 4곳(`admin/orders`,
+    `admin/orders/[id]`, `admin/companies/[id]`의 "저장된 주소" 추가,
+    `customer/locations`)은 신규 적용
+  - `companies`에 `main_pickup_address`/`main_dropoff_address`(+ 각각
+    sido/sigungu) 신규 — 기존 `main_pickup_region`/`main_dropoff_region`(이용지역
+    체크박스)과 별개로 유지, 화주 상세화면에서 편집 가능
+  - `customer_locations`/`quotes`/`orders`/`public_quote_requests`/
+    `customer_applications`/`portal_order_requests`/`individual_customer_addresses`에
+    sido/sigungu 컬럼 추가, 저장 시점에 다 함께 기록
+  - 화주등록신청 승인(`approve-application/route.ts`) 시
+    `customer_applications.main_origin`/`main_destination`을
+    `companies.main_pickup_*`/`main_dropoff_*`에 자동 매핑 +
+    `customer_locations`에 상차지/하차지로 자동 등록(중복 주소는 재등록 안 함)
 
 ---
 
@@ -577,6 +630,14 @@ Enter키 자동제출 방지 완료·merge됨 + 2026-07-28: 배차 프로세스 
   컬럼임. 이 둘을 혼동해서 마이그레이션 SQL을 잘못 짜고 재작성한 적 있음 —
   UPDATE 문 쓰기 전에 그 테이블 저장 코드(`.insert()`/`.update()` payload 모양)
   를 먼저 확인할 것
+- **화주/견적/오더 등 화면에서 주소를 저장했는데 `sido`/`sigungu`가 계속
+  비어있거나, "column ... does not exist" 에러가 나면**: 2026-07-28에 추가한
+  주소 통일화 작업의 DB 마이그레이션(`companies.main_pickup_address` 등,
+  7개 테이블에 sido/sigungu 컬럼 추가)이 아직 Supabase에 실행 안 됐을 가능성이
+  큼 — 이 세션에서 SQL은 전달했지만 사용자가 직접 실행했는지 확인되지 않은
+  상태로 코드만 merge됨. `select column_name from information_schema.columns
+  where table_name = 'companies' and column_name = 'main_pickup_address'`로
+  먼저 확인할 것
 
 ---
 

@@ -11,12 +11,7 @@ import { formatPhoneNumber } from "@/lib/constants";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import DateTimePicker from "@/components/DateTimePicker";
-
-declare global {
-  interface Window {
-    daum: any;
-  }
-}
+import AddressSearch from "@/components/AddressSearch";
 
 const VEHICLES = ["1톤", "1.4톤", "2.5톤", "3.5톤", "5톤", "5톤 플러스/축"];
 
@@ -105,7 +100,6 @@ function QuotesPageInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [postcodeReady, setPostcodeReady] = useState(false);
   const [period, setPeriod] = useState<DatePreset>("all");
   const [calculatingDistance, setCalculatingDistance] = useState(false);
   const [distanceAutoCalculated, setDistanceAutoCalculated] = useState(false);
@@ -120,42 +114,17 @@ function QuotesPageInner() {
   }, []);
 
   const [savedLocations, setSavedLocations] = useState<
-    { id: string; location_name: string | null; address: string | null; location_type: string | null }[]
+    {
+      id: string;
+      location_name: string | null;
+      address: string | null;
+      location_type: string | null;
+      sido: string | null;
+      sigungu: string | null;
+    }[]
   >([]);
   const [saveOrigin, setSaveOrigin] = useState(false);
   const [saveDestination, setSaveDestination] = useState(false);
-
-  // 다음(Daum) 우편번호 서비스 스크립트 로드 (API 키 불필요, 무료)
-  useEffect(() => {
-    if (document.getElementById("daum-postcode-script")) {
-      setPostcodeReady(true);
-      return;
-    }
-    const script = document.createElement("script");
-    script.id = "daum-postcode-script";
-    script.src =
-      "https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js";
-    script.onload = () => setPostcodeReady(true);
-    document.body.appendChild(script);
-  }, []);
-
-  function openAddressSearch(target: "origin" | "destination") {
-    if (!postcodeReady || !window.daum) return;
-    new window.daum.Postcode({
-      oncomplete: (data: any) => {
-        const addr = data.roadAddress || data.jibunAddress;
-        if (target === "origin") {
-          setForm((prev) => ({ ...prev, origin: addr, originDetail: "" }));
-        } else {
-          setForm((prev) => ({
-            ...prev,
-            destination: addr,
-            destinationDetail: "",
-          }));
-        }
-      },
-    }).open();
-  }
 
   const [customerMode, setCustomerMode] = useState<"company" | "guest">(
     "company"
@@ -172,8 +141,12 @@ function QuotesPageInner() {
     guest_email: "",
     origin: "",
     originDetail: "",
+    originSido: "",
+    originSigungu: "",
     destination: "",
     destinationDetail: "",
+    destinationSido: "",
+    destinationSigungu: "",
     distance_km: "",
     vehicle_type: "1톤",
     item: "",
@@ -241,7 +214,7 @@ function QuotesPageInner() {
       const { data: reqData } = await supabase
         .from("portal_order_requests")
         .select(
-          "id,company_id,origin,destination,vehicle_type,body_type,item,load_condition,unload_condition,item_condition,transport_time,urgency,trip_type,waiting_minutes,waypoint_count,requested_pickup_at,requested_dropoff_at,notes,companies(id,name,phone,address,status)"
+          "id,company_id,origin,origin_sido,origin_sigungu,destination,destination_sido,destination_sigungu,vehicle_type,body_type,item,load_condition,unload_condition,item_condition,transport_time,urgency,trip_type,waiting_minutes,waypoint_count,requested_pickup_at,requested_dropoff_at,notes,companies(id,name,phone,address,status)"
         )
         .eq("id", fromRequestId)
         .single();
@@ -254,7 +227,11 @@ function QuotesPageInner() {
       setForm((prev) => ({
         ...prev,
         origin: reqData.origin || "",
+        originSido: reqData.origin_sido || "",
+        originSigungu: reqData.origin_sigungu || "",
         destination: reqData.destination || "",
+        destinationSido: reqData.destination_sido || "",
+        destinationSigungu: reqData.destination_sigungu || "",
         vehicle_type: reqData.vehicle_type || prev.vehicle_type,
         차량형태: reqData.body_type || prev.차량형태,
         상차조건: reqData.load_condition || prev.상차조건,
@@ -315,7 +292,11 @@ function QuotesPageInner() {
       setForm((prev) => ({
         ...prev,
         origin: reqData.origin || "",
+        originSido: reqData.origin_sido || "",
+        originSigungu: reqData.origin_sigungu || "",
         destination: reqData.destination || "",
+        destinationSido: reqData.destination_sido || "",
+        destinationSigungu: reqData.destination_sigungu || "",
         vehicle_type: reqData.vehicle_type || prev.vehicle_type,
         item: reqData.item || "",
         상차조건: reqData.pickup_loading_method || prev.상차조건,
@@ -359,7 +340,7 @@ function QuotesPageInner() {
       }
       const { data } = await supabase
         .from("customer_locations")
-        .select("id,location_name,address,location_type")
+        .select("id,location_name,address,location_type,sido,sigungu")
         .eq("company_id", selectedCompany.id);
       setSavedLocations(data || []);
     }
@@ -630,7 +611,11 @@ function QuotesPageInner() {
         guest_email:
           customerMode === "guest" ? form.guest_email || null : null,
         origin: fullOrigin || null,
+        origin_sido: form.originSido || null,
+        origin_sigungu: form.originSigungu || null,
         destination: fullDestination || null,
+        destination_sido: form.destinationSido || null,
+        destination_sigungu: form.destinationSigungu || null,
         distance_km: Number(form.distance_km) || null,
         vehicle_type: form.vehicle_type,
         item: form.item || null,
@@ -696,12 +681,16 @@ function QuotesPageInner() {
           company_id: selectedCompany.id,
           address: fullOrigin,
           location_type: "상차지",
+          sido: form.originSido || null,
+          sigungu: form.originSigungu || null,
         });
       if (saveDestination && fullDestination)
         toSave.push({
           company_id: selectedCompany.id,
           address: fullDestination,
           location_type: "하차지",
+          sido: form.destinationSido || null,
+          sigungu: form.destinationSigungu || null,
         });
       if (toSave.length > 0) {
         await supabase.from("customer_locations").insert(toSave);
@@ -740,8 +729,12 @@ function QuotesPageInner() {
       guest_email: "",
       origin: "",
       originDetail: "",
+      originSido: "",
+      originSigungu: "",
       destination: "",
       destinationDetail: "",
+      destinationSido: "",
+      destinationSigungu: "",
       distance_km: "",
       item: "",
       waitingMinutes: "",
@@ -947,41 +940,18 @@ function QuotesPageInner() {
                 </select>
               </div>
 
-              <div className="field">
-                <label>출발지 *</label>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <input
-                    value={form.origin}
-                    onChange={(e) =>
-                      setForm({ ...form, origin: e.target.value })
-                    }
-                    placeholder="도로명주소 검색 또는 직접 입력"
-                    autoComplete="off"
-                    style={{ flex: 1 }}
-                  />
-                  <button
-                    type="button"
-                    className="btn-ghost"
-                    style={{
-                      padding: "0 10px",
-                      borderRadius: 6,
-                      fontSize: 12,
-                      whiteSpace: "nowrap",
-                      cursor: "pointer",
-                    }}
-                    onClick={() => openAddressSearch("origin")}
-                  >
-                    주소검색
-                  </button>
-                </div>
-                <input
-                  value={form.originDetail}
-                  onChange={(e) =>
-                    setForm({ ...form, originDetail: e.target.value })
-                  }
-                  placeholder="상세주소 (동/층/호수, 창고 위치 등)"
-                  style={{ marginTop: 6 }}
-                />
+              <AddressSearch
+                label="출발지"
+                required
+                value={form.origin}
+                detailValue={form.originDetail}
+                placeholder="도로명주소 검색 또는 직접 입력"
+                detailPlaceholder="상세주소 (동/층/호수, 창고 위치 등)"
+                onChange={(addr, sido, sigungu) =>
+                  setForm((prev) => ({ ...prev, origin: addr, originSido: sido, originSigungu: sigungu }))
+                }
+                onDetailChange={(v) => setForm((prev) => ({ ...prev, originDetail: v }))}
+              >
                 {savedLocations.filter((l) => l.location_type === "상차지")
                   .length > 0 && (
                   <div
@@ -1000,11 +970,13 @@ function QuotesPageInner() {
                           className="badge"
                           style={{ cursor: "pointer" }}
                           onClick={() =>
-                            setForm({
-                              ...form,
+                            setForm((prev) => ({
+                              ...prev,
                               origin: l.address || "",
                               originDetail: "",
-                            })
+                              originSido: l.sido || "",
+                              originSigungu: l.sigungu || "",
+                            }))
                           }
                         >
                           {l.address}
@@ -1012,43 +984,25 @@ function QuotesPageInner() {
                       ))}
                   </div>
                 )}
-              </div>
+              </AddressSearch>
 
-              <div className="field">
-                <label>도착지 *</label>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <input
-                    value={form.destination}
-                    onChange={(e) =>
-                      setForm({ ...form, destination: e.target.value })
-                    }
-                    placeholder="도로명주소 검색 또는 직접 입력"
-                    autoComplete="off"
-                    style={{ flex: 1 }}
-                  />
-                  <button
-                    type="button"
-                    className="btn-ghost"
-                    style={{
-                      padding: "0 10px",
-                      borderRadius: 6,
-                      fontSize: 12,
-                      whiteSpace: "nowrap",
-                      cursor: "pointer",
-                    }}
-                    onClick={() => openAddressSearch("destination")}
-                  >
-                    주소검색
-                  </button>
-                </div>
-                <input
-                  value={form.destinationDetail}
-                  onChange={(e) =>
-                    setForm({ ...form, destinationDetail: e.target.value })
-                  }
-                  placeholder="상세주소 (동/층/호수, 하차장 위치 등)"
-                  style={{ marginTop: 6 }}
-                />
+              <AddressSearch
+                label="도착지"
+                required
+                value={form.destination}
+                detailValue={form.destinationDetail}
+                placeholder="도로명주소 검색 또는 직접 입력"
+                detailPlaceholder="상세주소 (동/층/호수, 하차장 위치 등)"
+                onChange={(addr, sido, sigungu) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    destination: addr,
+                    destinationSido: sido,
+                    destinationSigungu: sigungu,
+                  }))
+                }
+                onDetailChange={(v) => setForm((prev) => ({ ...prev, destinationDetail: v }))}
+              >
                 {savedLocations.filter((l) => l.location_type === "하차지")
                   .length > 0 && (
                   <div
@@ -1067,11 +1021,13 @@ function QuotesPageInner() {
                           className="badge"
                           style={{ cursor: "pointer" }}
                           onClick={() =>
-                            setForm({
-                              ...form,
+                            setForm((prev) => ({
+                              ...prev,
                               destination: l.address || "",
                               destinationDetail: "",
-                            })
+                              destinationSido: l.sido || "",
+                              destinationSigungu: l.sigungu || "",
+                            }))
                           }
                         >
                           {l.address}
@@ -1079,7 +1035,7 @@ function QuotesPageInner() {
                       ))}
                   </div>
                 )}
-              </div>
+              </AddressSearch>
 
               {customerMode === "company" && selectedCompany && (
                 <div

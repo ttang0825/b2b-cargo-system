@@ -61,8 +61,6 @@ export async function POST(req: Request) {
 
   // 2. 화주 회사 신규 등록
   const extraNoteParts = [
-    application.main_origin ? `주요 출발지: ${application.main_origin}` : null,
-    application.main_destination ? `주요 도착지: ${application.main_destination}` : null,
     application.monthly_volume_estimate ? `월 예상 운송건수: ${application.monthly_volume_estimate}` : null,
     application.notes ? `신청 메모: ${application.notes}` : null,
   ].filter(Boolean);
@@ -75,10 +73,17 @@ export async function POST(req: Request) {
       contact_name: application.contact_name,
       contact_mobile: application.contact_phone,
       contact_email: application.contact_email || null,
+      address: application.main_origin || null,
       status: "견적요청",
       industry: application.industry || null,
       main_pickup_region: application.preferred_regions || null,
       main_dropoff_region: application.preferred_regions || null,
+      main_pickup_address: application.main_origin || null,
+      main_pickup_sido: application.main_origin_sido || null,
+      main_pickup_sigungu: application.main_origin_sigungu || null,
+      main_dropoff_address: application.main_destination || null,
+      main_dropoff_sido: application.main_destination_sido || null,
+      main_dropoff_sigungu: application.main_destination_sigungu || null,
       recommended_vehicle: application.preferred_vehicle || null,
       manual_source_type: "온라인 등록신청",
       manual_source_note: extraNoteParts.length > 0 ? extraNoteParts.join(" / ") : null,
@@ -92,6 +97,45 @@ export async function POST(req: Request) {
       { error: companyError?.message || "화주 회사 등록에 실패했습니다." },
       { status: 400 }
     );
+  }
+
+  // 주요 출발지/도착지가 입력된 신청 건은 승인 즉시 화주 상세의 "저장된 주소"에도
+  // 상차지/하차지로 각 1건씩 반영 (동일 주소가 이미 있으면 중복 생성하지 않음)
+  const locationsToInsert = [
+    application.main_origin
+      ? {
+          company_id: company.id,
+          address: application.main_origin,
+          location_type: "상차지",
+          sido: application.main_origin_sido || null,
+          sigungu: application.main_origin_sigungu || null,
+        }
+      : null,
+    application.main_destination
+      ? {
+          company_id: company.id,
+          address: application.main_destination,
+          location_type: "하차지",
+          sido: application.main_destination_sido || null,
+          sigungu: application.main_destination_sigungu || null,
+        }
+      : null,
+  ].filter(Boolean) as { company_id: string; address: string; location_type: string; sido: string | null; sigungu: string | null }[];
+
+  if (locationsToInsert.length > 0) {
+    const { data: existingLocations } = await admin
+      .from("customer_locations")
+      .select("address,location_type")
+      .eq("company_id", company.id);
+    const toInsert = locationsToInsert.filter(
+      (loc) =>
+        !(existingLocations || []).some(
+          (e) => e.address === loc.address && e.location_type === loc.location_type
+        )
+    );
+    if (toInsert.length > 0) {
+      await admin.from("customer_locations").insert(toInsert);
+    }
   }
 
   // 3. 포털 계정 발급 (Auth 사용자 생성 + customer_accounts 연결)
