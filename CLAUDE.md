@@ -174,8 +174,11 @@ Enter키 자동제출 방지 완료·merge됨 + 2026-07-28: 배차 프로세스 
 7. **견적 관리 폼 필드 순서는 전화상담 흐름 고정**: 고객구분 → 품목/물품특성 → 톤수 →
    출발지/도착지 → 거리 → 희망 상차/하차일시 → 운송시간(상차일시 기준
    자동추천) → 왕복/편도 → 상차조건/하차조건 → 차량형태 → 대기시간/경유지수 → 특이사항
-   
+
    단, `긴급여부`는 화면·신규 저장 로직에서 제거된 항목이며, 과거 데이터 보존용 값만 유지한다.
+8. **엑셀 내보내기는 `lib/exportExcel.ts` 공용 함수만 사용** (`exportRowsToExcel`,
+   `exportMultiSheetExcel`, `buildExportFilename`). 헤더 스타일(굵게+옐로우 배경)+
+   1행 틀고정 자동 적용됨. **`xlsx`가 아니라 `xlsx-js-style` import 필수**
 9. **화주 개인정보는 계정별로 분리 저장** — `customer_accounts`(계정 개인정보:
    name/contact_position/contact_mobile/email) vs `companies`(회사 대표정보,
    관리자가 관리). 여러 포털 계정이 있는 화주도 서로 안 덮어씀
