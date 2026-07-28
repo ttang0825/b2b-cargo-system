@@ -14,8 +14,10 @@ Enter키 자동제출 방지 완료·merge됨 + 2026-07-28: 배차 프로세스 
 자동 하이픈 포맷팅 전체 적용 완료·merge됨 + 상하차 방법 표준화(7개 옵션 통일 +
 공용 상수 파일화) 완료·merge됨 + 긴급여부 항목 전체 제거 완료·merge됨 + 주소 입력
 통일화(`AddressSearch` 공용 컴포넌트) + 광역권/시군구 자동기입 + 화주등록신청 승인
-시 주소 자동저장 완료·**코드는 merge됨, DB 마이그레이션 SQL은 사용자가 Supabase에
-직접 실행해야 실제로 동작함** — 8번 섹션 참고)
+시 주소 자동저장 완료·merge됨(DB 마이그레이션도 사용자가 Supabase에서 직접 실행
+완료) + 전체 사이트 톤다운 회색 글씨(`--text-muted`) 가독성 개선 + 화주등록신청
+승인 시 출처설명(`manual_source_note`)에 엉뚱한 텍스트가 자동으로 채워지던 버그
+수정 완료·merge됨)
 
 ---
 
@@ -514,7 +516,7 @@ Enter키 자동제출 방지 완료·merge됨 + 2026-07-28: 배차 프로세스 
     로직만 없앰, DB 컬럼과 과거 데이터는 보존 — 화주포털 견적 상세의 과거 견적
     표시가 안 깨지도록)
 - **주소 입력 통일화 + 광역권/시군구 자동기입 + 화주등록신청 승인 시 주소 자동저장**
-  (코드는 merge됨, **DB 마이그레이션 SQL은 사용자 실행 확인 전** — 8번 섹션 참고):
+  (코드·DB 마이그레이션 전부 완료·merge됨, PR #38):
   - `components/AddressSearch.tsx` + `lib/useDaumPostcode.ts` 신규(원칙 37번).
     기존 4곳(`/quote`, `/apply`, `admin/quotes`, `customer/request`)은 이
     컴포넌트로 교체, 기존에 주소검색이 아예 없던 4곳(`admin/orders`,
@@ -522,7 +524,8 @@ Enter키 자동제출 방지 완료·merge됨 + 2026-07-28: 배차 프로세스 
     `customer/locations`)은 신규 적용
   - `companies`에 `main_pickup_address`/`main_dropoff_address`(+ 각각
     sido/sigungu) 신규 — 기존 `main_pickup_region`/`main_dropoff_region`(이용지역
-    체크박스)과 별개로 유지, 화주 상세화면에서 편집 가능
+    체크박스)과 별개로 유지, 화주 상세화면에서 편집 가능. 승인 시
+    `companies.address`(기본정보 최상단 주소칸)도 함께 채움
   - `customer_locations`/`quotes`/`orders`/`public_quote_requests`/
     `customer_applications`/`portal_order_requests`/`individual_customer_addresses`에
     sido/sigungu 컬럼 추가, 저장 시점에 다 함께 기록
@@ -530,6 +533,25 @@ Enter키 자동제출 방지 완료·merge됨 + 2026-07-28: 배차 프로세스 
     `customer_applications.main_origin`/`main_destination`을
     `companies.main_pickup_*`/`main_dropoff_*`에 자동 매핑 +
     `customer_locations`에 상차지/하차지로 자동 등록(중복 주소는 재등록 안 함)
+  - `AddressSearch`를 사이트 공통 `.field` 클래스 없이 쓰는 화면(화주 상세
+    "저장된 주소" 추가, 화주포털 "배송지" 추가)에서 도로명주소 줄만 넓고
+    상세주소 칸은 브라우저 기본 폭으로 좁게 나오던 레이아웃 버그 수정 —
+    컴포넌트 자체에 `width:100%` 명시. 전체 폭도 카드 끝까지 늘어나던 걸
+    `maxWidth: 380px`로 제한
+- **전체 사이트 톤다운 회색 글씨 가독성 개선**: `--text-muted`(설명 텍스트,
+  TopNav 서브메뉴, 필드 라벨 등에 전부 쓰이는 공용 CSS 변수, admin/portal/랜딩
+  전체 공유) 색상을 `#8b95a1`(흰 배경 대비 약 3.0:1, WCAG AA 미달)에서
+  `#5f6b78`(약 5.4:1)로 진하게 변경. 화면별 개별 수정이 아니라 `app/globals.css`
+  변수 하나만 바꿔서 세 영역 전부 한 번에 적용됨
+- **화주등록신청 승인 시 "출처 설명"에 엉뚱한 텍스트가 자동으로 채워지던 버그
+  수정**: `companies.manual_source_note`는 출처분류가 "기타"일 때만 쓰는
+  "기타 출처 설명" 전용 칸인데, `/apply` 승인 처리(`approve-application/route.ts`)가
+  출처분류를 "온라인 등록신청"으로 저장하면서도 이 칸에 "월 예상 운송건수/신청
+  메모" 텍스트를 같이 넣고 있었음 — 평소엔 출처분류가 "기타"가 아니라 안 보이다가,
+  담당자가 출처분류를 "기타"로 바꾸면 이 엉뚱한 텍스트가 "출처 설명"에 자동으로
+  나타나는 것처럼 보였던 것. 이 텍스트는 이제 일반 메모(`companies.notes`)에
+  들어가도록 수정(기존에 이미 이렇게 승인된 화주들의 데이터는 코드로 자동
+  정리되지 않음 — 정리하려면 별도 SQL 필요, 원한다면 요청할 것)
 
 ---
 
@@ -630,14 +652,11 @@ Enter키 자동제출 방지 완료·merge됨 + 2026-07-28: 배차 프로세스 
   컬럼임. 이 둘을 혼동해서 마이그레이션 SQL을 잘못 짜고 재작성한 적 있음 —
   UPDATE 문 쓰기 전에 그 테이블 저장 코드(`.insert()`/`.update()` payload 모양)
   를 먼저 확인할 것
-- **화주/견적/오더 등 화면에서 주소를 저장했는데 `sido`/`sigungu`가 계속
-  비어있거나, "column ... does not exist" 에러가 나면**: 2026-07-28에 추가한
-  주소 통일화 작업의 DB 마이그레이션(`companies.main_pickup_address` 등,
-  7개 테이블에 sido/sigungu 컬럼 추가)이 아직 Supabase에 실행 안 됐을 가능성이
-  큼 — 이 세션에서 SQL은 전달했지만 사용자가 직접 실행했는지 확인되지 않은
-  상태로 코드만 merge됨. `select column_name from information_schema.columns
-  where table_name = 'companies' and column_name = 'main_pickup_address'`로
-  먼저 확인할 것
+- **`manual_source_note`(화주 상세의 "출처 설명")는 출처분류가 "기타"일 때만
+  쓰는 전용 칸** — 다른 승인/등록 흐름에서 임의 텍스트를 저장할 목적으로
+  재사용하지 말 것(과거 `/apply` 승인 처리가 이 칸에 신청 메모를 넣었다가,
+  출처분류를 "기타"로 바꾸는 순간 엉뚱한 텍스트가 나타나는 버그가 있었음).
+  분류에 안 묶이는 자유 메모는 `companies.notes`(일반 메모)에 넣을 것
 
 ---
 
