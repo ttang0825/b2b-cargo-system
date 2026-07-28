@@ -305,7 +305,7 @@ export default function CustomersPage() {
               {filtered.map((c) => (
                 <tr
                   key={c.id}
-                  onClick={() => router.push(`/admin/companies/${c.id}`)}
+                  onClick={() => router.push(`/admin/companies/${c.id}?from=customers`)}
                   style={{ cursor: "pointer" }}
                 >
                   <td className="cell-nowrap" style={{ minWidth: 110 }}>
