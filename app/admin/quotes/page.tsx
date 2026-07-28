@@ -66,7 +66,6 @@ const SINGLE_SELECT_CATEGORIES = [
   "차량형태",
   "물품특성",
   "운송시간",
-  "긴급여부",
   "왕복/편도",
 ];
 
@@ -183,7 +182,6 @@ function QuotesPageInner() {
     하차조건: LOADING_METHOD_OPTIONS[0],
     물품특성: "일반화물",
     운송시간: "평일 주간",
-    긴급여부: "일반",
     "왕복/편도": "편도",
     firstDealDiscount: false,
     waitingMinutes: "",
@@ -263,7 +261,6 @@ function QuotesPageInner() {
         하차조건: reqData.unload_condition || prev.하차조건,
         물품특성: reqData.item_condition || prev.물품특성,
         운송시간: reqData.transport_time || prev.운송시간,
-        긴급여부: reqData.urgency || prev.긴급여부,
         "왕복/편도": reqData.trip_type || prev["왕복/편도"],
         waitingMinutes:
           reqData.waiting_minutes != null ? String(reqData.waiting_minutes) : prev.waitingMinutes,
@@ -433,7 +430,6 @@ function QuotesPageInner() {
       ["차량형태", form.차량형태],
       ["물품특성", form.물품특성],
       ["운송시간", form.운송시간],
-      ["긴급여부", form.긴급여부],
       ["왕복/편도", form["왕복/편도"]],
     ];
 
@@ -563,28 +559,6 @@ function QuotesPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.requested_pickup_at, surcharges]);
 
-  // 희망 상차일시가 "오늘"이면 긴급여부를 자동으로 당일/긴급 옵션으로 맞춰줌 (직접 변경 가능)
-  useEffect(() => {
-    if (!form.requested_pickup_at) return;
-    const options = surcharges
-      .filter((s) => s.category === "긴급여부")
-      .map((s) => s.option_name);
-    if (options.length === 0) return;
-
-    const pickupDate = new Date(form.requested_pickup_at);
-    const today = new Date();
-    const isToday =
-      pickupDate.getFullYear() === today.getFullYear() &&
-      pickupDate.getMonth() === today.getMonth() &&
-      pickupDate.getDate() === today.getDate();
-
-    if (isToday) {
-      const matched = options.find((o) => o.includes("당일") || o.includes("긴급"));
-      if (matched) setForm((prev) => ({ ...prev, 긴급여부: matched! }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.requested_pickup_at, surcharges]);
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -676,7 +650,6 @@ function QuotesPageInner() {
           하차조건: form.하차조건,
           물품특성: form.물품특성,
           운송시간: form.운송시간,
-          긴급여부: form.긴급여부,
           "왕복/편도": form["왕복/편도"],
           대기시간_분: Number(form.waitingMinutes) || 0,
           경유지수: Number(form.waypointCount) || 0,
@@ -1232,21 +1205,6 @@ function QuotesPageInner() {
                 />
               </div>
 
-              <div className="field">
-                <label>긴급여부</label>
-                <select
-                  value={form.긴급여부}
-                  onChange={(e) => setForm({ ...form, 긴급여부: e.target.value })}
-                >
-                  {surcharges
-                    .filter((s) => s.category === "긴급여부")
-                    .map((o) => (
-                      <option key={o.option_name} value={o.option_name}>
-                        {o.option_name}
-                      </option>
-                    ))}
-                </select>
-              </div>
               <div className="field">
                 <label>운송시간</label>
                 <select

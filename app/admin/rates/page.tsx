@@ -256,7 +256,11 @@ export default function RatesPage() {
     matrix[t.distance_label][t.vehicle_type] = t;
   }
 
-  const categories = Array.from(new Set(surcharges.map((s) => s.category)));
+  // "긴급여부"는 항목 자체가 폐지됨 — 기존 데이터는 남겨두되(참조가 있을 수 있어
+  // 완전삭제는 안 함, 원칙 32번과 같은 취지) 화면에서만 숨김
+  const categories = Array.from(new Set(surcharges.map((s) => s.category))).filter(
+    (c) => c !== "긴급여부"
+  );
 
   if (loading) {
     return (
