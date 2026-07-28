@@ -162,7 +162,7 @@ export default function PortalLocationsPage() {
             );
           })}
 
-          <div style={{ marginTop: 12 }}>
+          <div style={{ marginTop: 12, maxWidth: 380 }}>
             <select value={newType} onChange={(e) => setNewType(e.target.value)} style={{ width: 100, fontSize: 12.5, marginBottom: 6 }}>
               <option value="상차지">상차지</option>
               <option value="하차지">하차지</option>

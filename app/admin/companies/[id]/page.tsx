@@ -1201,7 +1201,7 @@ export default function CompanyDetailPage() {
           );
         })}
 
-        <div style={{ marginTop: 12 }}>
+        <div style={{ marginTop: 12, maxWidth: 380 }}>
           <select
             value={newLocType}
             onChange={(e) => setNewLocType(e.target.value)}
