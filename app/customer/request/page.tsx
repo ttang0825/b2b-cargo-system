@@ -19,7 +19,7 @@ const REQUEST_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   반려: { bg: "var(--danger-soft)", text: "var(--danger)" },
 };
 
-const SINGLE_SELECT_CATEGORIES = ["차량형태", "물품특성", "운송시간", "긴급여부", "왕복/편도"];
+const SINGLE_SELECT_CATEGORIES = ["차량형태", "물품특성", "운송시간", "왕복/편도"];
 
 type SavedLocation = { id: string; address: string | null; location_type: string | null };
 type Surcharge = { category: string; option_name: string };
@@ -68,7 +68,6 @@ export default function PortalRequestPage() {
     하차조건: LOADING_METHOD_OPTIONS[0] as string,
     물품특성: "",
     운송시간: "",
-    긴급여부: "",
     "왕복/편도": "",
     waitingMinutes: "",
     waypointCount: "",
@@ -242,7 +241,6 @@ export default function PortalRequestPage() {
       unload_condition: form.하차조건 || null,
       item_condition: form.물품특성 || null,
       transport_time: form.운송시간 || null,
-      urgency: form.긴급여부 || null,
       trip_type: form["왕복/편도"] || null,
       waiting_minutes: form.waitingMinutes ? Number(form.waitingMinutes) : null,
       waypoint_count: form.waypointCount ? Number(form.waypointCount) : null,
