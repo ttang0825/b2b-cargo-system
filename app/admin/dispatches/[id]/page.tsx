@@ -10,6 +10,7 @@ import {
   DISPATCH_TO_ORDER_STATUS,
 } from "@/lib/dispatchStatusColors";
 import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
+import { formatPhoneNumber } from "@/lib/constants";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
 import ConflictWarning from "@/components/ConflictWarning";
 import { optimisticUpdate } from "@/lib/optimisticUpdate";
@@ -682,7 +683,10 @@ export default function DispatchDetailPage() {
                   </div>
                   <div className="field">
                     <label>배정된 차주 연락처</label>
-                    <input value={externalDriverPhone} onChange={(e) => setExternalDriverPhone(e.target.value)} />
+                    <input
+                      value={externalDriverPhone}
+                      onChange={(e) => setExternalDriverPhone(formatPhoneNumber(e.target.value))}
+                    />
                   </div>
                   <div className="field">
                     <label>차량번호</label>
