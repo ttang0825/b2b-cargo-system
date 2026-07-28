@@ -353,6 +353,17 @@ Enter키 자동제출 방지 완료·merge됨 + 2026-07-28: 배차 프로세스 
     도로명주소와 공백으로 합쳐서 하나의 문자열 컬럼에 저장하는 게 이 프로젝트
     전체의 기존 관례(`fullOrigin`/`fullDestination` 패턴) — 새 주소 필드를
     추가할 때도 이 패턴을 따르고, DB에 별도 "상세주소" 컬럼을 새로 만들지 말 것
+38. **`TopNav.tsx`처럼 루트 레이아웃(`app/layout.tsx`)에서 전체 사이트에 항상
+    렌더링되는 컴포넌트에는 `useSearchParams()`를 직접 쓰지 말 것 — 반드시
+    `<Suspense>`로 감싼 얇은 래퍼(`export default`)와 실제 로직을 담은 내부
+    컴포넌트로 분리할 것.** 감싸지 않으면 Next.js가 정적 생성 시
+    "useSearchParams should be wrapped in a suspense boundary" 오류를 내며
+    Vercel 빌드 전체가 실패함 — `admin/quotes`/`admin/orders`처럼 이미
+    `Suspense`로 감싸져 있는 목록 페이지들과 달리, TopNav는 사이트 전체에
+    영향을 주기 때문에 실수하면 전체 배포가 막힘. 로컬에 Supabase 환경변수가
+    없는 개발 환경에서는 대부분 페이지가 그보다 먼저 다른 이유로 실패해서 이
+    문제가 가려질 수 있으니, `useSearchParams`를 쓰는 화면을 추가/수정했으면
+    실제 Vercel 배포(Preview) 로그로 최종 확인하는 습관을 들일 것
 
 ---
 
@@ -562,7 +573,14 @@ Enter키 자동제출 방지 완료·merge됨 + 2026-07-28: 배차 프로세스 
   이동할 때 `?from=customers`를 붙이고(`?from_order` 패턴과 동일), `TopNav.tsx`의
   `isNavItemActive()`가 이 파라미터를 보고 "화주 관리"/"활성 화주(CRM)"를 대신
   활성표시하도록 수정. 화주 상세의 "목록으로" 링크/삭제 후 이동/에러화면 링크도
-  전부 이 출처에 따라 `/admin/customers` 또는 `/admin/companies`로 분기
+  전부 이 출처에 따라 `/admin/customers` 또는 `/admin/companies`로 분기.
+  **부수 버그**: `TopNav.tsx`(루트 레이아웃에서 전체 사이트에 항상 렌더링)에
+  `useSearchParams()`를 추가하면서 Suspense 경계 없이 그대로 export하고
+  있어서, Vercel 빌드가 "useSearchParams should be wrapped in a suspense
+  boundary" 오류로 실패했음(로컬 샌드박스는 Supabase 환경변수가 없어 대부분
+  페이지가 그보다 먼저 다른 이유로 실패해서 이 문제가 가려져 있었음). `export
+  default TopNav`는 `<Suspense>`로 감싼 얇은 래퍼로 남기고 실제 로직은
+  `TopNavInner`로 옮겨서 해결 — 원칙 38번 참고
 
 ---
 
@@ -676,6 +694,15 @@ Enter키 자동제출 방지 완료·merge됨 + 2026-07-28: 배차 프로세스 
   버그 있었음). 상세 화면을 여러 목록에서 공유한다면 `?from=xxx` 같은 출처
   파라미터(`?from_order` 패턴과 동일)를 목록→상세 이동 시 붙이고, `TopNav.tsx`와
   상세화면의 "목록으로" 링크 둘 다 이 파라미터를 참고하도록 만들 것
+- **로컬/샌드박스에서는 `npm run build`가 잘 되는데 Vercel 배포에서만
+  실패한다면**: 십중팔구 `NEXT_PUBLIC_SUPABASE_URL` 등 환경변수 차이 때문에
+  로컬에서는 도달하지 못했던 코드 경로가 Vercel(진짜 환경변수 있음)에서는
+  실행되면서 드러나는 문제임. 실제로 `TopNav.tsx`에 `useSearchParams()`를
+  Suspense 없이 추가했을 때, 로컬 빌드는 대부분 페이지가 Supabase 환경변수
+  누락으로 그보다 먼저 실패해서 이 문제가 안 보였지만 Vercel에서는 바로
+  드러났음(원칙 38번). Vercel 빌드 로그의 정확한 에러 메시지부터 확인할 것 —
+  로컬에서 안 나던 에러라고 원인불명 취급하지 말고, "로컬은 조건이 다르다"는
+  것부터 의심할 것
 
 ---
 
