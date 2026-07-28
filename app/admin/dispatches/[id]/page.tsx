@@ -316,15 +316,46 @@ export default function DispatchDetailPage() {
     return currentStatus;
   }
 
+  // "변경사항 저장" 버튼을 따로 눌러야만 반영되던 게 불편하다는 피드백에 따라,
+  // 체크박스는 클릭 즉시 저장 + 배차상태·운송오더 상태까지 바로 반영되게 함
+  // (다른 필드들처럼 배치 저장에 묶어두지 않음 — 단순 상태 토글이라 원칙 28번
+  // 낙관적 잠금 예외에 해당, handleStatusChange와 동일한 방식)
+  async function handleProgressCheck(field: "pickup_confirmed" | "delivery_confirmed", checked: boolean) {
+    setError(null);
+    const updatedPickup = field === "pickup_confirmed" ? checked : editForm.pickup_confirmed;
+    const updatedDelivery = field === "delivery_confirmed" ? checked : editForm.delivery_confirmed;
+    const nextStatus = computeStatusFromChecks(dispatch.dispatch_status, updatedPickup, updatedDelivery);
+    const prevStatus = dispatch.dispatch_status;
+
+    setEditForm((f) => ({ ...f, [field]: checked }));
+
+    const payload: Record<string, any> = {
+      [field]: checked,
+      updated_by: await getCurrentStaffId(),
+    };
+    if (nextStatus !== prevStatus) {
+      payload.dispatch_status = nextStatus;
+    }
+
+    const { error } = await supabase.from("dispatches").update(payload).eq("id", id);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setDispatch((d: any) => ({ ...d, ...payload }));
+
+    if (nextStatus !== prevStatus && dispatch?.orders?.id && DISPATCH_TO_ORDER_STATUS[nextStatus]) {
+      await supabase
+        .from("orders")
+        .update({ status: DISPATCH_TO_ORDER_STATUS[nextStatus] })
+        .eq("id", dispatch.orders.id);
+    }
+  }
+
   async function handleSave(force = false) {
     setSaving(true);
     setError(null);
     setConflict(false);
-    const nextStatus = computeStatusFromChecks(
-      dispatch.dispatch_status,
-      editForm.pickup_confirmed,
-      editForm.delivery_confirmed
-    );
     const payload = {
       customer_charge: editForm.customer_charge
         ? Number(editForm.customer_charge)
@@ -340,28 +371,16 @@ export default function DispatchDetailPage() {
       assignment_type: editForm.assignment_type,
       driver_id: editForm.assignment_type === "internal" ? editForm.driver_id : null,
       requested_network_ids: editForm.requested_network_ids,
-      dispatch_status: nextStatus,
       updated_by: await getCurrentStaffId(),
     };
 
-    async function syncOrderStatus() {
-      if (nextStatus !== dispatch.dispatch_status && dispatch?.orders?.id && DISPATCH_TO_ORDER_STATUS[nextStatus]) {
-        await supabase
-          .from("orders")
-          .update({ status: DISPATCH_TO_ORDER_STATUS[nextStatus] })
-          .eq("id", dispatch.orders.id);
-      }
-    }
-
     if (force) {
       const { error } = await supabase.from("dispatches").update(payload).eq("id", id);
+      setSaving(false);
       if (error) {
-        setSaving(false);
         setError(error.message);
         return;
       }
-      await syncOrderStatus();
-      setSaving(false);
       router.push("/admin/dispatches");
       return;
     }
@@ -372,18 +391,15 @@ export default function DispatchDetailPage() {
       payload,
       dispatch?.updated_at
     );
+    setSaving(false);
     if (error) {
-      setSaving(false);
       setError(error);
       return;
     }
     if (hasConflict) {
-      setSaving(false);
       setConflict(true);
       return;
     }
-    await syncOrderStatus();
-    setSaving(false);
     router.push("/admin/dispatches");
   }
 
@@ -795,9 +811,7 @@ export default function DispatchDetailPage() {
             <input
               type="checkbox"
               checked={editForm.pickup_confirmed}
-              onChange={(e) =>
-                setEditForm({ ...editForm, pickup_confirmed: e.target.checked })
-              }
+              onChange={(e) => handleProgressCheck("pickup_confirmed", e.target.checked)}
             />
             상차 완료 확인
           </label>
@@ -805,12 +819,7 @@ export default function DispatchDetailPage() {
             <input
               type="checkbox"
               checked={editForm.delivery_confirmed}
-              onChange={(e) =>
-                setEditForm({
-                  ...editForm,
-                  delivery_confirmed: e.target.checked,
-                })
-              }
+              onChange={(e) => handleProgressCheck("delivery_confirmed", e.target.checked)}
             />
             하차 완료 확인
           </label>
