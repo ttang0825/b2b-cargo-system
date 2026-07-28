@@ -31,6 +31,8 @@ type DriverLite = {
   regionMatch?: boolean;
 };
 
+type NetworkLite = { id: string; name: string; is_active: boolean };
+
 type DispatchRow = {
   id: string;
   dispatch_status: string;
@@ -40,6 +42,10 @@ type DispatchRow = {
   created_at: string;
   order_id: string;
   driver_id: string | null;
+  assignment_type: string;
+  requested_network_ids: string[] | null;
+  confirmed_network_id: string | null;
+  external_driver_name: string | null;
   orders: {
     order_no: string | null;
     origin: string | null;
@@ -82,6 +88,15 @@ export default function DispatchesPage() {
   const [customerCharge, setCustomerCharge] = useState("");
   const [driverPayout, setDriverPayout] = useState("");
   const [memo, setMemo] = useState("");
+  const [assignmentType, setAssignmentType] = useState<"internal" | "external">("internal");
+  const [selectedNetworkIds, setSelectedNetworkIds] = useState<string[]>([]);
+  const [networks, setNetworks] = useState<NetworkLite[]>([]);
+
+  const networkNameById = useMemo(() => {
+    const map: Record<string, string> = {};
+    networks.forEach((n) => (map[n.id] = n.name));
+    return map;
+  }, [networks]);
 
   async function loadDispatches(preset: DatePreset = period) {
     setLoading(true);
@@ -89,7 +104,7 @@ export default function DispatchesPage() {
     let query = supabase
       .from("dispatches")
       .select(
-        "id,dispatch_status,customer_charge,driver_payout,margin,created_at,order_id,driver_id,orders(order_no,origin,destination,companies(name),guest_name),drivers(name,phone)"
+        "id,dispatch_status,customer_charge,driver_payout,margin,created_at,order_id,driver_id,assignment_type,requested_network_ids,confirmed_network_id,external_driver_name,orders(order_no,origin,destination,companies(name),guest_name),drivers(name,phone)"
       )
       .order("created_at", { ascending: false })
       .limit(preset === "all" ? ALL_PERIOD_LIMIT : FILTERED_PERIOD_LIMIT);
@@ -113,9 +128,18 @@ export default function DispatchesPage() {
     setAvailableOrders((data as any as OrderLite[]) || []);
   }
 
+  async function loadNetworks() {
+    const { data } = await supabase
+      .from("external_networks")
+      .select("id,name,is_active")
+      .order("sort_order", { ascending: true });
+    setNetworks((data as any as NetworkLite[]) || []);
+  }
+
   useEffect(() => {
     loadDispatches("all");
     loadAvailableOrders();
+    loadNetworks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -201,19 +225,19 @@ export default function DispatchesPage() {
       setError("배차할 운송오더를 선택해주세요.");
       return;
     }
-    if (!selectedDriver) {
-      setError("배정할 차주를 검색해서 선택해주세요.");
-      return;
-    }
 
     setSaving(true);
     const vehicleId = null; // vehicles 테이블은 driver_id로 조회 가능하므로 필요 시 추후 연결
 
+    // 배차는 항상 "접수중"으로 시작 — 내부차주든 외부정보망이든 실제로 배차가
+    // 잡혔는지는 아직 확정되지 않은 상태. 확정은 상세화면의 전용 절차에서만 가능
     const { error } = await supabase.from("dispatches").insert({
       order_id: selectedOrderId,
-      driver_id: selectedDriver.id,
+      driver_id: assignmentType === "internal" ? selectedDriver?.id || null : null,
       vehicle_id: vehicleId,
-      dispatch_status: "배차확정",
+      dispatch_status: "접수중",
+      assignment_type: assignmentType,
+      requested_network_ids: assignmentType === "external" ? selectedNetworkIds : [],
       customer_charge: customerCharge ? Number(customerCharge) : null,
       driver_payout: driverPayout ? Number(driverPayout) : null,
       memo: memo || null,
@@ -226,10 +250,10 @@ export default function DispatchesPage() {
       return;
     }
 
-    // 오더 상태도 "배차완료"로 같이 갱신
+    // 오더 상태도 "배차중"으로 같이 갱신
     await supabase
       .from("orders")
-      .update({ status: DISPATCH_TO_ORDER_STATUS["배차확정"] })
+      .update({ status: DISPATCH_TO_ORDER_STATUS["접수중"] })
       .eq("id", selectedOrderId);
 
     setSaving(false);
@@ -240,6 +264,8 @@ export default function DispatchesPage() {
     setCustomerCharge("");
     setDriverPayout("");
     setMemo("");
+    setAssignmentType("internal");
+    setSelectedNetworkIds([]);
     loadDispatches(period);
     loadAvailableOrders();
   }
@@ -414,7 +440,73 @@ export default function DispatchesPage() {
             </div>
 
             <div className="field" style={{ marginBottom: 14 }}>
-              <label>배정할 차주 *</label>
+              <label>배정방식</label>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  className={assignmentType === "internal" ? "btn" : "btn btn-ghost"}
+                  style={{ fontSize: 12.5, padding: "7px 12px" }}
+                  onClick={() => setAssignmentType("internal")}
+                >
+                  내부차주
+                </button>
+                <button
+                  type="button"
+                  className={assignmentType === "external" ? "btn" : "btn btn-ghost"}
+                  style={{ fontSize: 12.5, padding: "7px 12px" }}
+                  onClick={() => setAssignmentType("external")}
+                >
+                  외부정보망
+                </button>
+              </div>
+            </div>
+
+            {assignmentType === "external" && (
+              <div className="field" style={{ marginBottom: 14 }}>
+                <label>후보 정보망 (여러 곳 선택 가능)</label>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {networks.filter((n) => n.is_active).map((n) => (
+                    <label
+                      key={n.id}
+                      className="badge"
+                      style={{
+                        cursor: "pointer",
+                        border: selectedNetworkIds.includes(n.id)
+                          ? "1px solid var(--accent)"
+                          : "1px solid var(--border)",
+                        background: selectedNetworkIds.includes(n.id)
+                          ? "var(--accent-soft)"
+                          : "var(--surface)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedNetworkIds.includes(n.id)}
+                        onChange={(e) =>
+                          setSelectedNetworkIds((prev) =>
+                            e.target.checked ? [...prev, n.id] : prev.filter((id) => id !== n.id)
+                          )
+                        }
+                        style={{ margin: 0 }}
+                      />
+                      {n.name}
+                    </label>
+                  ))}
+                  {networks.filter((n) => n.is_active).length === 0 && (
+                    <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                      등록된 외부 정보망이 없습니다. "외부 정보망 관리"에서 먼저 추가해주세요.
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {assignmentType === "internal" && (
+            <div className="field" style={{ marginBottom: 14 }}>
+              <label>배정할 차주 (아직 안 정해졌으면 비워두고 나중에 상세화면에서 선택 가능)</label>
               {!selectedDriver && recommendedDrivers.length > 0 && (
                 <div style={{ marginBottom: 8 }}>
                   <div style={{ fontSize: 11.5, color: "var(--accent)", marginBottom: 4 }}>
@@ -484,6 +576,7 @@ export default function DispatchesPage() {
                 </div>
               )}
             </div>
+            )}
 
             <div className="form-grid" style={{ padding: 0 }}>
               <div className="field">
@@ -525,7 +618,7 @@ export default function DispatchesPage() {
 
             <div className="form-actions">
               <button className="btn" type="submit" disabled={saving}>
-                {saving ? "저장 중..." : "배차 확정"}
+                {saving ? "저장 중..." : "배차 등록 (접수중으로 시작)"}
               </button>
               <button
                 type="button"
@@ -589,7 +682,7 @@ export default function DispatchesPage() {
                 <th>오더번호</th>
                 <th>고객</th>
                 <th>구간</th>
-                <th>차주</th>
+                <th>배정</th>
                 <th>청구운임</th>
                 <th>지급운임</th>
                 <th>마진</th>
@@ -597,7 +690,18 @@ export default function DispatchesPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((d) => (
+              {filtered.map((d) => {
+                const assignmentText =
+                  d.assignment_type === "external"
+                    ? d.confirmed_network_id
+                      ? `${networkNameById[d.confirmed_network_id] || "외부정보망"} 배차`
+                      : (d.requested_network_ids || []).length > 0
+                      ? `후보: ${(d.requested_network_ids || [])
+                          .map((id) => networkNameById[id] || "?")
+                          .join(", ")}`
+                      : "외부정보망 (미정)"
+                    : d.drivers?.name || "내부차주 (미정)";
+                return (
                 <tr
                   key={d.id}
                   onClick={() => router.push(`/admin/dispatches/${d.id}`)}
@@ -610,7 +714,7 @@ export default function DispatchesPage() {
                   <td>
                     {d.orders?.origin || "-"} → {d.orders?.destination || "-"}
                   </td>
-                  <td>{d.drivers?.name || "-"}</td>
+                  <td style={{ fontSize: 12.5 }}>{assignmentText}</td>
                   <td>
                     <span className="num">{won(d.customer_charge)}</span>
                   </td>
@@ -621,34 +725,52 @@ export default function DispatchesPage() {
                     <span className="num">{won(d.margin)}</span>
                   </td>
                   <td onClick={(e) => e.stopPropagation()}>
-                    <select
-                      value={d.dispatch_status}
-                      onChange={(e) =>
-                        handleStatusChange(
-                          d.id,
-                          d.orders?.order_no || null,
-                          e.target.value
-                        )
-                      }
-                      style={{
-                        fontSize: "12px",
-                        padding: "4px 8px",
-                        borderRadius: 999,
-                        border: "none",
-                        fontWeight: 600,
-                        background: getDispatchStatusColor(d.dispatch_status).bg,
-                        color: getDispatchStatusColor(d.dispatch_status).text,
-                      }}
-                    >
-                      {DISPATCH_STATUS_OPTIONS.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
+                    {d.dispatch_status === "접수중" ? (
+                      <button
+                        type="button"
+                        className="badge"
+                        onClick={() => router.push(`/admin/dispatches/${d.id}`)}
+                        style={{
+                          cursor: "pointer",
+                          border: "none",
+                          fontWeight: 600,
+                          background: getDispatchStatusColor("접수중").bg,
+                          color: getDispatchStatusColor("접수중").text,
+                        }}
+                      >
+                        접수중 · 상세에서 확정
+                      </button>
+                    ) : (
+                      <select
+                        value={d.dispatch_status}
+                        onChange={(e) =>
+                          handleStatusChange(
+                            d.id,
+                            d.orders?.order_no || null,
+                            e.target.value
+                          )
+                        }
+                        style={{
+                          fontSize: "12px",
+                          padding: "4px 8px",
+                          borderRadius: 999,
+                          border: "none",
+                          fontWeight: 600,
+                          background: getDispatchStatusColor(d.dispatch_status).bg,
+                          color: getDispatchStatusColor(d.dispatch_status).text,
+                        }}
+                      >
+                        {DISPATCH_STATUS_OPTIONS.filter((s) => s !== "접수중").map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         )}

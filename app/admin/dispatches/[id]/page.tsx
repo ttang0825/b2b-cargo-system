@@ -19,6 +19,14 @@ function won(n: number | null) {
   return Math.round(n).toLocaleString("ko-KR") + "원";
 }
 
+type NetworkLite = { id: string; name: string; is_active: boolean };
+type DriverLite = {
+  id: string;
+  name: string;
+  phone: string | null;
+  vehicles: { vehicle_number: string | null; vehicle_type: string | null }[];
+};
+
 export default function DispatchDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -32,9 +40,52 @@ export default function DispatchDetailPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [conflict, setConflict] = useState(false);
 
+  const [networks, setNetworks] = useState<NetworkLite[]>([]);
+  const [selectedDriverInfo, setSelectedDriverInfo] = useState<DriverLite | null>(null);
+  const [driverSearch, setDriverSearch] = useState("");
+  const [driverResults, setDriverResults] = useState<DriverLite[]>([]);
+
+  const [confirmedNetworkId, setConfirmedNetworkId] = useState("");
+  const [externalDriverName, setExternalDriverName] = useState("");
+  const [externalDriverPhone, setExternalDriverPhone] = useState("");
+  const [externalVehiclePlate, setExternalVehiclePlate] = useState("");
+  const [confirming, setConfirming] = useState(false);
+
+  const networkNameById: Record<string, string> = {};
+  networks.forEach((n) => (networkNameById[n.id] = n.name));
+
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
   }, []);
+
+  useEffect(() => {
+    supabase
+      .from("external_networks")
+      .select("id,name,is_active")
+      .order("sort_order", { ascending: true })
+      .then(({ data }) => setNetworks((data as any as NetworkLite[]) || []));
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    async function search_() {
+      if (driverSearch.trim().length < 1) {
+        setDriverResults([]);
+        return;
+      }
+      const { data } = await supabase
+        .from("drivers")
+        .select("id,name,phone,vehicles(vehicle_number,vehicle_type)")
+        .ilike("name", `%${driverSearch}%`)
+        .limit(8);
+      if (active) setDriverResults((data as any as DriverLite[]) || []);
+    }
+    const t = setTimeout(search_, 250);
+    return () => {
+      active = false;
+      clearTimeout(t);
+    };
+  }, [driverSearch]);
 
   const [editForm, setEditForm] = useState({
     customer_charge: "",
@@ -44,6 +95,9 @@ export default function DispatchDetailPage() {
     issue_occurred: false,
     issue_notes: "",
     memo: "",
+    assignment_type: "internal" as "internal" | "external",
+    driver_id: null as string | null,
+    requested_network_ids: [] as string[],
   });
 
   async function load() {
@@ -69,7 +123,15 @@ export default function DispatchDetailPage() {
       issue_occurred: data.issue_occurred || false,
       issue_notes: data.issue_notes || "",
       memo: data.memo || "",
+      assignment_type: (data.assignment_type as "internal" | "external") || "internal",
+      driver_id: data.driver_id || null,
+      requested_network_ids: data.requested_network_ids || [],
     });
+    setSelectedDriverInfo(data.drivers || null);
+    setConfirmedNetworkId(data.confirmed_network_id || "");
+    setExternalDriverName(data.external_driver_name || "");
+    setExternalDriverPhone(data.external_driver_phone || "");
+    setExternalVehiclePlate(data.external_vehicle_plate || "");
     setLoading(false);
   }
 
@@ -77,6 +139,70 @@ export default function DispatchDetailPage() {
     if (id) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  function handleAssignmentTypeChange(type: "internal" | "external") {
+    // 배정방식을 바꾸면 반대쪽에서 선택해뒀던 정보는 초기화 (운임은 유지)
+    setEditForm((f) => ({
+      ...f,
+      assignment_type: type,
+      driver_id: type === "internal" ? f.driver_id : null,
+      requested_network_ids: type === "external" ? f.requested_network_ids : [],
+    }));
+    if (type === "external") {
+      setSelectedDriverInfo(null);
+      setDriverSearch("");
+    }
+  }
+
+  async function handleConfirm() {
+    setError(null);
+    if (editForm.assignment_type === "internal") {
+      if (!editForm.driver_id) {
+        setError("배차확정하려면 차주를 먼저 선택해주세요.");
+        return;
+      }
+    } else {
+      if (!confirmedNetworkId) {
+        setError("실제로 배차가 확정된 정보망을 선택해주세요.");
+        return;
+      }
+      if (!externalDriverName.trim() || !externalDriverPhone.trim()) {
+        setError("배정된 차주의 이름과 연락처를 입력해주세요.");
+        return;
+      }
+    }
+
+    setConfirming(true);
+    const payload: any = {
+      dispatch_status: "배차확정",
+      assignment_type: editForm.assignment_type,
+      driver_id: editForm.assignment_type === "internal" ? editForm.driver_id : null,
+      requested_network_ids: editForm.requested_network_ids,
+      confirmed_network_id: editForm.assignment_type === "external" ? confirmedNetworkId : null,
+      external_driver_name: editForm.assignment_type === "external" ? externalDriverName.trim() : null,
+      external_driver_phone: editForm.assignment_type === "external" ? externalDriverPhone.trim() : null,
+      external_vehicle_plate:
+        editForm.assignment_type === "external" ? externalVehiclePlate.trim() || null : null,
+      customer_charge: editForm.customer_charge ? Number(editForm.customer_charge) : null,
+      driver_payout: editForm.driver_payout ? Number(editForm.driver_payout) : null,
+      updated_by: await getCurrentStaffId(),
+    };
+
+    const { error } = await supabase.from("dispatches").update(payload).eq("id", id);
+    if (error) {
+      setConfirming(false);
+      setError(error.message);
+      return;
+    }
+    if (dispatch?.orders?.id) {
+      await supabase
+        .from("orders")
+        .update({ status: DISPATCH_TO_ORDER_STATUS["배차확정"] })
+        .eq("id", dispatch.orders.id);
+    }
+    setConfirming(false);
+    load();
+  }
 
   async function handleStatusChange(status: string) {
     const prevStatus = dispatch?.dispatch_status;
@@ -175,6 +301,57 @@ export default function DispatchDetailPage() {
     }
   }
 
+  // 상차/하차 완료 확인 체크는 배차상태도 같이 앞으로 진행시킴(뒤로는 자동으로
+  // 안 돌아감 — 체크 해제만으로 상태를 되돌리고 싶으면 상태 드롭다운에서 직접
+  // 바꿀 것). 접수중/운송완료/문제발생 상태는 체크박스로 건드리지 않음(접수중은
+  // 전용 확정 절차를 거쳐야 하고, 운송완료·문제발생은 수동 관리 영역이라서)
+  function computeStatusFromChecks(
+    currentStatus: string,
+    pickupConfirmed: boolean,
+    deliveryConfirmed: boolean
+  ) {
+    if (["접수중", "운송완료", "문제발생"].includes(currentStatus)) return currentStatus;
+    if (deliveryConfirmed) return "하차완료";
+    if (pickupConfirmed) return "상차완료";
+    return currentStatus;
+  }
+
+  // "변경사항 저장" 버튼을 따로 눌러야만 반영되던 게 불편하다는 피드백에 따라,
+  // 체크박스는 클릭 즉시 저장 + 배차상태·운송오더 상태까지 바로 반영되게 함
+  // (다른 필드들처럼 배치 저장에 묶어두지 않음 — 단순 상태 토글이라 원칙 28번
+  // 낙관적 잠금 예외에 해당, handleStatusChange와 동일한 방식)
+  async function handleProgressCheck(field: "pickup_confirmed" | "delivery_confirmed", checked: boolean) {
+    setError(null);
+    const updatedPickup = field === "pickup_confirmed" ? checked : editForm.pickup_confirmed;
+    const updatedDelivery = field === "delivery_confirmed" ? checked : editForm.delivery_confirmed;
+    const nextStatus = computeStatusFromChecks(dispatch.dispatch_status, updatedPickup, updatedDelivery);
+    const prevStatus = dispatch.dispatch_status;
+
+    setEditForm((f) => ({ ...f, [field]: checked }));
+
+    const payload: Record<string, any> = {
+      [field]: checked,
+      updated_by: await getCurrentStaffId(),
+    };
+    if (nextStatus !== prevStatus) {
+      payload.dispatch_status = nextStatus;
+    }
+
+    const { error } = await supabase.from("dispatches").update(payload).eq("id", id);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setDispatch((d: any) => ({ ...d, ...payload }));
+
+    if (nextStatus !== prevStatus && dispatch?.orders?.id && DISPATCH_TO_ORDER_STATUS[nextStatus]) {
+      await supabase
+        .from("orders")
+        .update({ status: DISPATCH_TO_ORDER_STATUS[nextStatus] })
+        .eq("id", dispatch.orders.id);
+    }
+  }
+
   async function handleSave(force = false) {
     setSaving(true);
     setError(null);
@@ -191,6 +368,9 @@ export default function DispatchDetailPage() {
       issue_occurred: editForm.issue_occurred,
       issue_notes: editForm.issue_notes || null,
       memo: editForm.memo || null,
+      assignment_type: editForm.assignment_type,
+      driver_id: editForm.assignment_type === "internal" ? editForm.driver_id : null,
+      requested_network_ids: editForm.requested_network_ids,
       updated_by: await getCurrentStaffId(),
     };
 
@@ -325,83 +505,268 @@ export default function DispatchDetailPage() {
           <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 4 }}>
             배차상태
           </div>
-          <select
-            value={dispatch.dispatch_status}
-            onChange={(e) => handleStatusChange(e.target.value)}
-            style={{
-              fontWeight: 600,
-              padding: "5px 10px",
-              borderRadius: 999,
-              border: "none",
-              background: statusColor.bg,
-              color: statusColor.text,
-            }}
-          >
-            {DISPATCH_STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
-            gap: 10,
-          }}
-        >
-          <div>
-            <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>차주</div>
-            <div style={{ fontSize: 13.5 }}>
-              {dispatch.drivers ? (
-                <Link
-                  href={`/admin/drivers/${dispatch.drivers.id}`}
-                  style={{ textDecoration: "underline" }}
-                >
-                  {dispatch.drivers.name}
-                </Link>
-              ) : (
-                "-"
-              )}
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
-              차주 연락처
-            </div>
-            <div style={{ fontSize: 13.5 }}>{dispatch.drivers?.phone || "-"}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
-              차량
-            </div>
-            <div style={{ fontSize: 13.5 }}>
-              {dispatch.drivers?.vehicles?.[0]?.vehicle_number || "-"}{" "}
-              {dispatch.drivers?.vehicles?.[0]?.vehicle_type || ""}
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
-              품목
-            </div>
-            <div style={{ fontSize: 13.5 }}>{dispatch.orders?.item || "-"}</div>
-          </div>
-          {dispatch.orders?.id && (
-            <div>
-              <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
-                오더 상세
-              </div>
-              <Link
-                href={`/admin/orders/${dispatch.orders.id}`}
-                style={{ fontSize: 13.5, textDecoration: "underline" }}
-              >
-                오더 페이지로 이동 →
-              </Link>
-            </div>
+          {dispatch.dispatch_status === "접수중" ? (
+            <span
+              style={{
+                display: "inline-block",
+                fontWeight: 600,
+                padding: "5px 10px",
+                borderRadius: 999,
+                background: statusColor.bg,
+                color: statusColor.text,
+              }}
+            >
+              접수중
+            </span>
+          ) : (
+            <select
+              value={dispatch.dispatch_status}
+              onChange={(e) => handleStatusChange(e.target.value)}
+              style={{
+                fontWeight: 600,
+                padding: "5px 10px",
+                borderRadius: 999,
+                border: "none",
+                background: statusColor.bg,
+                color: statusColor.text,
+              }}
+            >
+              {DISPATCH_STATUS_OPTIONS.filter((s) => s !== "접수중").map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
           )}
         </div>
+
+        {dispatch.dispatch_status === "접수중" ? (
+          <>
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 6 }}>
+                배정방식
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  className={editForm.assignment_type === "internal" ? "btn" : "btn btn-ghost"}
+                  style={{ fontSize: 12.5, padding: "7px 12px" }}
+                  onClick={() => handleAssignmentTypeChange("internal")}
+                >
+                  내부차주
+                </button>
+                <button
+                  type="button"
+                  className={editForm.assignment_type === "external" ? "btn" : "btn btn-ghost"}
+                  style={{ fontSize: 12.5, padding: "7px 12px" }}
+                  onClick={() => handleAssignmentTypeChange("external")}
+                >
+                  외부정보망
+                </button>
+              </div>
+            </div>
+
+            {editForm.assignment_type === "internal" ? (
+              <div className="field" style={{ marginBottom: 14 }}>
+                <label>배정할 차주</label>
+                <input
+                  value={selectedDriverInfo ? selectedDriverInfo.name : driverSearch}
+                  onChange={(e) => {
+                    setSelectedDriverInfo(null);
+                    setEditForm((f) => ({ ...f, driver_id: null }));
+                    setDriverSearch(e.target.value);
+                  }}
+                  placeholder="이름으로 검색"
+                />
+                {!selectedDriverInfo && driverResults.length > 0 && (
+                  <div className="card" style={{ marginTop: 6, maxHeight: 160, overflowY: "auto" }}>
+                    {driverResults.map((d) => (
+                      <div
+                        key={d.id}
+                        onClick={() => {
+                          setSelectedDriverInfo(d);
+                          setEditForm((f) => ({ ...f, driver_id: d.id }));
+                          setDriverResults([]);
+                        }}
+                        style={{
+                          padding: "8px 12px",
+                          fontSize: 13,
+                          cursor: "pointer",
+                          borderBottom: "1px solid var(--border)",
+                        }}
+                      >
+                        {d.name}{" "}
+                        <span style={{ color: "var(--text-muted)" }}>
+                          {d.vehicles?.[0]?.vehicle_number || ""} {d.vehicles?.[0]?.vehicle_type || ""}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="field" style={{ marginBottom: 14 }}>
+                <label>후보 정보망 (여러 곳 선택 가능)</label>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {networks.filter((n) => n.is_active).map((n) => (
+                    <label
+                      key={n.id}
+                      className="badge"
+                      style={{
+                        cursor: "pointer",
+                        border: editForm.requested_network_ids.includes(n.id)
+                          ? "1px solid var(--accent)"
+                          : "1px solid var(--border)",
+                        background: editForm.requested_network_ids.includes(n.id)
+                          ? "var(--accent-soft)"
+                          : "var(--surface)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={editForm.requested_network_ids.includes(n.id)}
+                        onChange={(e) =>
+                          setEditForm((f) => ({
+                            ...f,
+                            requested_network_ids: e.target.checked
+                              ? [...f.requested_network_ids, n.id]
+                              : f.requested_network_ids.filter((id) => id !== n.id),
+                          }))
+                        }
+                        style={{ margin: 0 }}
+                      />
+                      {n.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div style={{ borderTop: "1px solid var(--border)", marginTop: 16, paddingTop: 16 }}>
+              <h4 style={{ fontSize: 13.5, marginTop: 0, marginBottom: 10 }}>배차확정</h4>
+              {editForm.assignment_type === "internal" ? (
+                <div>
+                  <p style={{ fontSize: 13, marginBottom: 10 }}>
+                    선택된 차주:{" "}
+                    {selectedDriverInfo ? (
+                      <strong>
+                        {selectedDriverInfo.name} ({selectedDriverInfo.phone || "연락처 미상"})
+                      </strong>
+                    ) : (
+                      "아직 선택되지 않았습니다"
+                    )}
+                  </p>
+                  <button className="btn" onClick={handleConfirm} disabled={!editForm.driver_id || confirming}>
+                    {confirming ? "확정 중..." : "배차확정"}
+                  </button>
+                </div>
+              ) : (
+                <div className="form-grid" style={{ padding: 0 }}>
+                  <div className="field">
+                    <label>실제로 확정된 정보망</label>
+                    <select value={confirmedNetworkId} onChange={(e) => setConfirmedNetworkId(e.target.value)}>
+                      <option value="">선택</option>
+                      {editForm.requested_network_ids.map((nid) => (
+                        <option key={nid} value={nid}>
+                          {networkNameById[nid] || nid}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label>배정된 차주 이름</label>
+                    <input value={externalDriverName} onChange={(e) => setExternalDriverName(e.target.value)} />
+                  </div>
+                  <div className="field">
+                    <label>배정된 차주 연락처</label>
+                    <input value={externalDriverPhone} onChange={(e) => setExternalDriverPhone(e.target.value)} />
+                  </div>
+                  <div className="field">
+                    <label>차량번호</label>
+                    <input value={externalVehiclePlate} onChange={(e) => setExternalVehiclePlate(e.target.value)} />
+                  </div>
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <button className="btn" onClick={handleConfirm} disabled={confirming}>
+                      {confirming ? "확정 중..." : "배차확정"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+              gap: 10,
+            }}
+          >
+            {dispatch.assignment_type === "external" ? (
+              <>
+                <div>
+                  <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>배정 정보망</div>
+                  <div style={{ fontSize: 13.5 }}>
+                    {dispatch.confirmed_network_id ? networkNameById[dispatch.confirmed_network_id] || "-" : "-"}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>차주</div>
+                  <div style={{ fontSize: 13.5 }}>{dispatch.external_driver_name || "-"}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>차주 연락처</div>
+                  <div style={{ fontSize: 13.5 }}>{dispatch.external_driver_phone || "-"}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>차량번호</div>
+                  <div style={{ fontSize: 13.5 }}>{dispatch.external_vehicle_plate || "-"}</div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>차주</div>
+                  <div style={{ fontSize: 13.5 }}>
+                    {dispatch.drivers ? (
+                      <Link href={`/admin/drivers/${dispatch.drivers.id}`} style={{ textDecoration: "underline" }}>
+                        {dispatch.drivers.name}
+                      </Link>
+                    ) : (
+                      "-"
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>차주 연락처</div>
+                  <div style={{ fontSize: 13.5 }}>{dispatch.drivers?.phone || "-"}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>차량</div>
+                  <div style={{ fontSize: 13.5 }}>
+                    {dispatch.drivers?.vehicles?.[0]?.vehicle_number || "-"}{" "}
+                    {dispatch.drivers?.vehicles?.[0]?.vehicle_type || ""}
+                  </div>
+                </div>
+              </>
+            )}
+            <div>
+              <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>품목</div>
+              <div style={{ fontSize: 13.5 }}>{dispatch.orders?.item || "-"}</div>
+            </div>
+            {dispatch.orders?.id && (
+              <div>
+                <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>오더 상세</div>
+                <Link href={`/admin/orders/${dispatch.orders.id}`} style={{ fontSize: 13.5, textDecoration: "underline" }}>
+                  오더 페이지로 이동 →
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="card" style={{ padding: 20, marginBottom: 20 }}>
@@ -446,9 +811,7 @@ export default function DispatchDetailPage() {
             <input
               type="checkbox"
               checked={editForm.pickup_confirmed}
-              onChange={(e) =>
-                setEditForm({ ...editForm, pickup_confirmed: e.target.checked })
-              }
+              onChange={(e) => handleProgressCheck("pickup_confirmed", e.target.checked)}
             />
             상차 완료 확인
           </label>
@@ -456,12 +819,7 @@ export default function DispatchDetailPage() {
             <input
               type="checkbox"
               checked={editForm.delivery_confirmed}
-              onChange={(e) =>
-                setEditForm({
-                  ...editForm,
-                  delivery_confirmed: e.target.checked,
-                })
-              }
+              onChange={(e) => handleProgressCheck("delivery_confirmed", e.target.checked)}
             />
             하차 완료 확인
           </label>
