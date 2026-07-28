@@ -11,7 +11,7 @@ export function normalizePhone(phone: string): string {
 export async function getOrCreateIndividualCustomer(
   name: string,
   phone: string,
-  addresses: { address: string; location_type: string }[] = []
+  addresses: { address: string; location_type: string; sido?: string; sigungu?: string }[] = []
 ): Promise<string | null> {
   const normalized = normalizePhone(phone);
   if (!normalized) return null;
@@ -54,6 +54,8 @@ export async function getOrCreateIndividualCustomer(
         individual_customer_id: customerId,
         address: addr.address,
         location_type: addr.location_type,
+        sido: addr.sido || null,
+        sigungu: addr.sigungu || null,
       });
     }
   }

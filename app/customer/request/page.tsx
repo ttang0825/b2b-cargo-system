@@ -5,13 +5,8 @@ import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import { VEHICLE_TYPES } from "@/lib/constants";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import DateTimePicker from "@/components/DateTimePicker";
+import AddressSearch from "@/components/AddressSearch";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
-
-declare global {
-  interface Window {
-    daum: any;
-  }
-}
 
 const REQUEST_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   대기중: { bg: "#fff1e2", text: "#d9730d" },
@@ -21,7 +16,13 @@ const REQUEST_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
 
 const SINGLE_SELECT_CATEGORIES = ["차량형태", "물품특성", "운송시간", "왕복/편도"];
 
-type SavedLocation = { id: string; address: string | null; location_type: string | null };
+type SavedLocation = {
+  id: string;
+  address: string | null;
+  location_type: string | null;
+  sido: string | null;
+  sigungu: string | null;
+};
 type Surcharge = { category: string; option_name: string };
 
 // 저장된 배송지 주소 뱃지 - 길어도 칸을 넘어가지 않고 줄바꿈되도록
@@ -55,13 +56,16 @@ export default function PortalRequestPage() {
   const [success, setSuccess] = useState(false);
   const [saveOrigin, setSaveOrigin] = useState(false);
   const [saveDestination, setSaveDestination] = useState(false);
-  const [postcodeReady, setPostcodeReady] = useState(false);
 
   const [form, setForm] = useState({
     origin: "",
     originDetail: "",
+    originSido: "",
+    originSigungu: "",
     destination: "",
     destinationDetail: "",
+    destinationSido: "",
+    destinationSigungu: "",
     vehicle_type: VEHICLE_TYPES[0],
     차량형태: "",
     상차조건: LOADING_METHOD_OPTIONS[0] as string,
@@ -88,32 +92,6 @@ export default function PortalRequestPage() {
     )}`;
   })();
 
-  useEffect(() => {
-    if (document.getElementById("daum-postcode-script")) {
-      setPostcodeReady(true);
-      return;
-    }
-    const script = document.createElement("script");
-    script.id = "daum-postcode-script";
-    script.src = "https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js";
-    script.onload = () => setPostcodeReady(true);
-    document.body.appendChild(script);
-  }, []);
-
-  function openAddressSearch(target: "origin" | "destination") {
-    if (!postcodeReady || !window.daum) return;
-    new window.daum.Postcode({
-      oncomplete: (data: any) => {
-        const addr = data.roadAddress || data.jibunAddress;
-        if (target === "origin") {
-          setForm((prev) => ({ ...prev, origin: addr, originDetail: "" }));
-        } else {
-          setForm((prev) => ({ ...prev, destination: addr, destinationDetail: "" }));
-        }
-      },
-    }).open();
-  }
-
   async function loadRequests(cid: string) {
     const { data } = await supabase
       .from("portal_order_requests")
@@ -129,7 +107,7 @@ export default function PortalRequestPage() {
   async function loadSavedLocations(cid: string) {
     const { data } = await supabase
       .from("customer_locations")
-      .select("id,address,location_type")
+      .select("id,address,location_type,sido,sigungu")
       .eq("company_id", cid);
     setSavedLocations(data || []);
   }
@@ -234,7 +212,11 @@ export default function PortalRequestPage() {
       company_id: companyId,
       requested_by: accountId,
       origin: fullOrigin,
+      origin_sido: form.originSido || null,
+      origin_sigungu: form.originSigungu || null,
       destination: fullDestination,
+      destination_sido: form.destinationSido || null,
+      destination_sigungu: form.destinationSigungu || null,
       vehicle_type: form.vehicle_type,
       body_type: form.차량형태 || null,
       load_condition: form.상차조건 || null,
@@ -258,9 +240,22 @@ export default function PortalRequestPage() {
     }
 
     const toSave: any[] = [];
-    if (saveOrigin && fullOrigin) toSave.push({ company_id: companyId, address: fullOrigin, location_type: "상차지" });
+    if (saveOrigin && fullOrigin)
+      toSave.push({
+        company_id: companyId,
+        address: fullOrigin,
+        location_type: "상차지",
+        sido: form.originSido || null,
+        sigungu: form.originSigungu || null,
+      });
     if (saveDestination && fullDestination)
-      toSave.push({ company_id: companyId, address: fullDestination, location_type: "하차지" });
+      toSave.push({
+        company_id: companyId,
+        address: fullDestination,
+        location_type: "하차지",
+        sido: form.destinationSido || null,
+        sigungu: form.destinationSigungu || null,
+      });
     if (toSave.length > 0) {
       await supabase.from("customer_locations").insert(toSave);
       await loadSavedLocations(companyId);
@@ -274,6 +269,8 @@ export default function PortalRequestPage() {
       ...prev,
       destination: "",
       destinationDetail: "",
+      destinationSido: "",
+      destinationSigungu: "",
       item: "",
       requested_pickup_at: "",
       requested_dropoff_at: "",
@@ -312,38 +309,33 @@ export default function PortalRequestPage() {
       <div className="card" style={{ padding: 20, marginBottom: 24 }}>
         <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown}>
           {/* 출발지 - 전체 너비, 저장 체크박스는 바로 아래에 */}
-          <div className="field" style={{ marginBottom: 16 }}>
-            <label>출발지 *</label>
-            <div style={{ display: "flex", gap: 6 }}>
-              <input
-                value={form.origin}
-                onChange={(e) => setField("origin", e.target.value)}
-                placeholder="도로명주소 검색 또는 직접 입력"
-                autoComplete="off"
-                style={{ flex: 1 }}
-              />
-              <button
-                type="button"
-                className="btn-ghost"
-                style={{ padding: "0 10px", borderRadius: 6, fontSize: 12, whiteSpace: "nowrap", cursor: "pointer" }}
-                onClick={() => openAddressSearch("origin")}
-              >
-                주소검색
-              </button>
-            </div>
-            <input
-              value={form.originDetail}
-              onChange={(e) => setField("originDetail", e.target.value)}
-              placeholder="상세주소 (동/층/호수, 창고 위치 등)"
-              style={{ marginTop: 6 }}
-            />
+          <AddressSearch
+            label="출발지"
+            required
+            style={{ marginBottom: 16 }}
+            value={form.origin}
+            detailValue={form.originDetail}
+            detailPlaceholder="상세주소 (동/층/호수, 창고 위치 등)"
+            onChange={(addr, sido, sigungu) =>
+              setForm((prev) => ({ ...prev, origin: addr, originSido: sido, originSigungu: sigungu }))
+            }
+            onDetailChange={(v) => setField("originDetail", v)}
+          >
             {pickupBadges.length > 0 && (
               <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 8 }}>
                 {pickupBadges.map((l) => (
                   <AddressBadge
                     key={l.id}
                     address={l.address || ""}
-                    onClick={() => setForm((prev) => ({ ...prev, origin: l.address || "", originDetail: "" }))}
+                    onClick={() =>
+                      setForm((prev) => ({
+                        ...prev,
+                        origin: l.address || "",
+                        originDetail: "",
+                        originSido: l.sido || "",
+                        originSigungu: l.sigungu || "",
+                      }))
+                    }
                   />
                 ))}
               </div>
@@ -367,41 +359,36 @@ export default function PortalRequestPage() {
               />
               이 출발지를 배송지 목록에 저장
             </label>
-          </div>
+          </AddressSearch>
 
           {/* 도착지 - 전체 너비, 저장 체크박스는 바로 아래에 */}
-          <div className="field" style={{ marginBottom: 16 }}>
-            <label>도착지 *</label>
-            <div style={{ display: "flex", gap: 6 }}>
-              <input
-                value={form.destination}
-                onChange={(e) => setField("destination", e.target.value)}
-                placeholder="도로명주소 검색 또는 직접 입력"
-                autoComplete="off"
-                style={{ flex: 1 }}
-              />
-              <button
-                type="button"
-                className="btn-ghost"
-                style={{ padding: "0 10px", borderRadius: 6, fontSize: 12, whiteSpace: "nowrap", cursor: "pointer" }}
-                onClick={() => openAddressSearch("destination")}
-              >
-                주소검색
-              </button>
-            </div>
-            <input
-              value={form.destinationDetail}
-              onChange={(e) => setField("destinationDetail", e.target.value)}
-              placeholder="상세주소 (동/층/호수, 하차장 위치 등)"
-              style={{ marginTop: 6 }}
-            />
+          <AddressSearch
+            label="도착지"
+            required
+            style={{ marginBottom: 16 }}
+            value={form.destination}
+            detailValue={form.destinationDetail}
+            detailPlaceholder="상세주소 (동/층/호수, 하차장 위치 등)"
+            onChange={(addr, sido, sigungu) =>
+              setForm((prev) => ({ ...prev, destination: addr, destinationSido: sido, destinationSigungu: sigungu }))
+            }
+            onDetailChange={(v) => setField("destinationDetail", v)}
+          >
             {dropoffBadges.length > 0 && (
               <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 8 }}>
                 {dropoffBadges.map((l) => (
                   <AddressBadge
                     key={l.id}
                     address={l.address || ""}
-                    onClick={() => setForm((prev) => ({ ...prev, destination: l.address || "", destinationDetail: "" }))}
+                    onClick={() =>
+                      setForm((prev) => ({
+                        ...prev,
+                        destination: l.address || "",
+                        destinationDetail: "",
+                        destinationSido: l.sido || "",
+                        destinationSigungu: l.sigungu || "",
+                      }))
+                    }
                   />
                 ))}
               </div>
@@ -425,7 +412,7 @@ export default function PortalRequestPage() {
               />
               이 도착지를 배송지 목록에 저장
             </label>
-          </div>
+          </AddressSearch>
 
           <div className="form-grid" style={{ padding: 0 }}>
             <div className="field">

@@ -1,21 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { VEHICLE_TYPES, formatPhoneNumber } from "@/lib/constants";
 import { LOADING_METHODS } from "@/lib/loadingMethods";
 import DateTimePicker from "@/components/DateTimePicker";
+import AddressSearch from "@/components/AddressSearch";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 
-declare global {
-  interface Window {
-    daum: any;
-  }
-}
-
 export default function PublicQuotePage() {
-  const [postcodeReady, setPostcodeReady] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -27,8 +21,12 @@ export default function PublicQuotePage() {
     email: "",
     origin: "",
     originDetail: "",
+    originSido: "",
+    originSigungu: "",
     destination: "",
     destinationDetail: "",
+    destinationSido: "",
+    destinationSigungu: "",
     vehicle_type: VEHICLE_TYPES[0],
     item: "",
     pickup_loading_method: LOADING_METHODS[0].label as string,
@@ -36,29 +34,6 @@ export default function PublicQuotePage() {
     requested_pickup_at: "",
     notes: "",
   });
-
-  useEffect(() => {
-    if (document.getElementById("daum-postcode-script")) {
-      setPostcodeReady(true);
-      return;
-    }
-    const script = document.createElement("script");
-    script.id = "daum-postcode-script";
-    script.src = "https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js";
-    script.onload = () => setPostcodeReady(true);
-    document.body.appendChild(script);
-  }, []);
-
-  function openAddressSearch(target: "origin" | "destination") {
-    if (!postcodeReady || !window.daum) return;
-    new window.daum.Postcode({
-      oncomplete: (data: any) => {
-        const addr = data.roadAddress || data.jibunAddress;
-        if (target === "origin") setForm((p) => ({ ...p, origin: addr, originDetail: "" }));
-        else setForm((p) => ({ ...p, destination: addr, destinationDetail: "" }));
-      },
-    }).open();
-  }
 
   function setField(key: keyof typeof form, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -100,7 +75,11 @@ export default function PublicQuotePage() {
       phone: form.phone,
       email: form.email || null,
       origin: fullOrigin,
+      origin_sido: form.originSido || null,
+      origin_sigungu: form.originSigungu || null,
       destination: fullDestination,
+      destination_sido: form.destinationSido || null,
+      destination_sigungu: form.destinationSigungu || null,
       vehicle_type: form.vehicle_type,
       item: form.item || null,
       pickup_loading_method: form.pickup_loading_method || null,
@@ -226,60 +205,30 @@ export default function PublicQuotePage() {
             </div>
 
             {/* 출발지 */}
-            <div className="field" style={{ marginTop: 14, marginBottom: 18 }}>
-              <label>출발지 *</label>
-              <div style={{ display: "flex", gap: 6 }}>
-                <input
-                  value={form.origin}
-                  onChange={(e) => setField("origin", e.target.value)}
-                  placeholder="도로명주소 검색 또는 직접 입력"
-                  autoComplete="off"
-                  style={{ flex: 1 }}
-                />
-                <button
-                  type="button"
-                  className="btn-ghost"
-                  style={{ padding: "0 10px", borderRadius: 6, fontSize: 12, whiteSpace: "nowrap", cursor: "pointer" }}
-                  onClick={() => openAddressSearch("origin")}
-                >
-                  주소검색
-                </button>
-              </div>
-              <input
-                value={form.originDetail}
-                onChange={(e) => setField("originDetail", e.target.value)}
-                placeholder="상세주소 (선택)"
-                style={{ marginTop: 6 }}
-              />
-            </div>
+            <AddressSearch
+              label="출발지"
+              required
+              style={{ marginTop: 14, marginBottom: 18 }}
+              value={form.origin}
+              detailValue={form.originDetail}
+              onChange={(addr, sido, sigungu) =>
+                setForm((p) => ({ ...p, origin: addr, originSido: sido, originSigungu: sigungu }))
+              }
+              onDetailChange={(v) => setField("originDetail", v)}
+            />
 
             {/* 도착지 */}
-            <div className="field" style={{ marginBottom: 18 }}>
-              <label>도착지 *</label>
-              <div style={{ display: "flex", gap: 6 }}>
-                <input
-                  value={form.destination}
-                  onChange={(e) => setField("destination", e.target.value)}
-                  placeholder="도로명주소 검색 또는 직접 입력"
-                  autoComplete="off"
-                  style={{ flex: 1 }}
-                />
-                <button
-                  type="button"
-                  className="btn-ghost"
-                  style={{ padding: "0 10px", borderRadius: 6, fontSize: 12, whiteSpace: "nowrap", cursor: "pointer" }}
-                  onClick={() => openAddressSearch("destination")}
-                >
-                  주소검색
-                </button>
-              </div>
-              <input
-                value={form.destinationDetail}
-                onChange={(e) => setField("destinationDetail", e.target.value)}
-                placeholder="상세주소 (선택)"
-                style={{ marginTop: 6 }}
-              />
-            </div>
+            <AddressSearch
+              label="도착지"
+              required
+              style={{ marginBottom: 18 }}
+              value={form.destination}
+              detailValue={form.destinationDetail}
+              onChange={(addr, sido, sigungu) =>
+                setForm((p) => ({ ...p, destination: addr, destinationSido: sido, destinationSigungu: sigungu }))
+              }
+              onDetailChange={(v) => setField("destinationDetail", v)}
+            />
 
             <div className="form-grid" style={{ padding: 0 }}>
               <div className="field">

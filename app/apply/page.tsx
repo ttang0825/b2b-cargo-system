@@ -1,16 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { formatPhoneNumber, formatBizRegNo, REGIONS, VEHICLE_TYPES } from "@/lib/constants";
 import MultiSelectTags from "@/components/MultiSelectTags";
+import AddressSearch from "@/components/AddressSearch";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
-
-declare global {
-  interface Window {
-    daum: any;
-  }
-}
 
 export default function ApplyPage() {
   const [saving, setSaving] = useState(false);
@@ -18,7 +13,6 @@ export default function ApplyPage() {
   const [errorReason, setErrorReason] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [agreed, setAgreed] = useState(false);
-  const [postcodeReady, setPostcodeReady] = useState(false);
 
   const [form, setForm] = useState({
     company_name: "",
@@ -27,35 +21,19 @@ export default function ApplyPage() {
     contact_phone: "",
     contact_email: "",
     main_origin: "",
+    main_origin_detail: "",
+    main_origin_sido: "",
+    main_origin_sigungu: "",
     main_destination: "",
+    main_destination_detail: "",
+    main_destination_sido: "",
+    main_destination_sigungu: "",
     monthly_volume_estimate: "",
     industry: "",
     preferred_regions: "",
     preferred_vehicle: "",
     notes: "",
   });
-
-  useEffect(() => {
-    if (document.getElementById("daum-postcode-script")) {
-      setPostcodeReady(true);
-      return;
-    }
-    const script = document.createElement("script");
-    script.id = "daum-postcode-script";
-    script.src = "https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js";
-    script.onload = () => setPostcodeReady(true);
-    document.body.appendChild(script);
-  }, []);
-
-  function openAddressSearch(target: "main_origin" | "main_destination") {
-    if (!postcodeReady || !window.daum) return;
-    new window.daum.Postcode({
-      oncomplete: (data: any) => {
-        const addr = data.roadAddress || data.jibunAddress;
-        setForm((p) => ({ ...p, [target]: addr }));
-      },
-    }).open();
-  }
 
   function setField(key: keyof typeof form, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -80,11 +58,21 @@ export default function ApplyPage() {
     }
 
     setSaving(true);
+    const fullMainOrigin = [form.main_origin, form.main_origin_detail]
+      .filter((v) => v.trim())
+      .join(" ");
+    const fullMainDestination = [form.main_destination, form.main_destination_detail]
+      .filter((v) => v.trim())
+      .join(" ");
     try {
       const res = await fetch("/api/apply-submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          main_origin: fullMainOrigin,
+          main_destination: fullMainDestination,
+        }),
       });
       const data = await res.json();
       setSaving(false);
@@ -212,46 +200,29 @@ export default function ApplyPage() {
                 <input type="email" value={form.contact_email} onChange={(e) => setField("contact_email", e.target.value)} />
               </div>
 
-              <div className="field">
-                <label>주요 출발지 (선택)</label>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <input
-                    value={form.main_origin}
-                    onChange={(e) => setField("main_origin", e.target.value)}
-                    placeholder="도로명주소 검색 또는 직접 입력"
-                    autoComplete="off"
-                    style={{ flex: 1 }}
-                  />
-                  <button
-                    type="button"
-                    className="btn-ghost"
-                    style={{ padding: "0 10px", borderRadius: 6, fontSize: 12, whiteSpace: "nowrap", cursor: "pointer" }}
-                    onClick={() => openAddressSearch("main_origin")}
-                  >
-                    주소검색
-                  </button>
-                </div>
-              </div>
-              <div className="field">
-                <label>주요 도착지 (선택)</label>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <input
-                    value={form.main_destination}
-                    onChange={(e) => setField("main_destination", e.target.value)}
-                    placeholder="도로명주소 검색 또는 직접 입력"
-                    autoComplete="off"
-                    style={{ flex: 1 }}
-                  />
-                  <button
-                    type="button"
-                    className="btn-ghost"
-                    style={{ padding: "0 10px", borderRadius: 6, fontSize: 12, whiteSpace: "nowrap", cursor: "pointer" }}
-                    onClick={() => openAddressSearch("main_destination")}
-                  >
-                    주소검색
-                  </button>
-                </div>
-              </div>
+              <AddressSearch
+                label="주요 출발지 (선택)"
+                value={form.main_origin}
+                detailValue={form.main_origin_detail}
+                onChange={(addr, sido, sigungu) =>
+                  setForm((p) => ({ ...p, main_origin: addr, main_origin_sido: sido, main_origin_sigungu: sigungu }))
+                }
+                onDetailChange={(v) => setField("main_origin_detail", v)}
+              />
+              <AddressSearch
+                label="주요 도착지 (선택)"
+                value={form.main_destination}
+                detailValue={form.main_destination_detail}
+                onChange={(addr, sido, sigungu) =>
+                  setForm((p) => ({
+                    ...p,
+                    main_destination: addr,
+                    main_destination_sido: sido,
+                    main_destination_sigungu: sigungu,
+                  }))
+                }
+                onDetailChange={(v) => setField("main_destination_detail", v)}
+              />
 
               <div className="field" style={{ gridColumn: "1 / -1" }}>
                 <label>월 예상 운송건수 (선택)</label>

@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { ORDER_STATUS_OPTIONS, getOrderStatusColor } from "@/lib/orderStatusColors";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import DateTimePicker from "@/components/DateTimePicker";
+import AddressSearch from "@/components/AddressSearch";
 import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
 import ConflictWarning from "@/components/ConflictWarning";
@@ -77,7 +78,13 @@ export default function OrderDetailPage() {
   const [editForm, setEditForm] = useState({
     status: "",
     origin: "",
+    originDetail: "",
+    originSido: "",
+    originSigungu: "",
     destination: "",
+    destinationDetail: "",
+    destinationSido: "",
+    destinationSigungu: "",
     vehicle_type: "",
     item: "",
     requested_pickup_at: "",
@@ -103,7 +110,13 @@ export default function OrderDetailPage() {
     setEditForm({
       status: data.status || "접수",
       origin: data.origin || "",
+      originDetail: "",
+      originSido: data.origin_sido || "",
+      originSigungu: data.origin_sigungu || "",
       destination: data.destination || "",
+      destinationDetail: "",
+      destinationSido: data.destination_sido || "",
+      destinationSigungu: data.destination_sigungu || "",
       vehicle_type: data.vehicle_type || "",
       item: data.item || "",
       requested_pickup_at: data.requested_pickup_at
@@ -137,10 +150,16 @@ export default function OrderDetailPage() {
     setSaving(true);
     setError(null);
     setConflict(false);
+    const fullOrigin = [editForm.origin, editForm.originDetail].filter((v) => v.trim()).join(" ");
+    const fullDestination = [editForm.destination, editForm.destinationDetail].filter((v) => v.trim()).join(" ");
     const payload = {
       status: editForm.status,
-      origin: editForm.origin || null,
-      destination: editForm.destination || null,
+      origin: fullOrigin || null,
+      origin_sido: editForm.originSido || null,
+      origin_sigungu: editForm.originSigungu || null,
+      destination: fullDestination || null,
+      destination_sido: editForm.destinationSido || null,
+      destination_sigungu: editForm.destinationSigungu || null,
       vehicle_type: editForm.vehicle_type || null,
       item: editForm.item || null,
       requested_pickup_at: editForm.requested_pickup_at || null,
@@ -370,24 +389,26 @@ export default function OrderDetailPage() {
                 ))}
               </select>
             </div>
-            <div className="field">
-              <label>출발지</label>
-              <input
-                value={editForm.origin}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, origin: e.target.value })
-                }
-              />
-            </div>
-            <div className="field">
-              <label>도착지</label>
-              <input
-                value={editForm.destination}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, destination: e.target.value })
-                }
-              />
-            </div>
+            <AddressSearch
+              label="출발지"
+              value={editForm.origin}
+              detailValue={editForm.originDetail}
+              detailPlaceholder="추가 상세주소 (선택)"
+              onChange={(addr, sido, sigungu) =>
+                setEditForm({ ...editForm, origin: addr, originSido: sido, originSigungu: sigungu })
+              }
+              onDetailChange={(v) => setEditForm({ ...editForm, originDetail: v })}
+            />
+            <AddressSearch
+              label="도착지"
+              value={editForm.destination}
+              detailValue={editForm.destinationDetail}
+              detailPlaceholder="추가 상세주소 (선택)"
+              onChange={(addr, sido, sigungu) =>
+                setEditForm({ ...editForm, destination: addr, destinationSido: sido, destinationSigungu: sigungu })
+              }
+              onDetailChange={(v) => setEditForm({ ...editForm, destinationDetail: v })}
+            />
             <div className="field">
               <label>차량</label>
               <input

@@ -15,6 +15,7 @@ import {
 } from "@/lib/constants";
 import { MANUAL_SOURCE_OPTIONS, getSourceChips } from "@/lib/sourceColors";
 import MultiSelectTags from "@/components/MultiSelectTags";
+import AddressSearch from "@/components/AddressSearch";
 import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
 import ConflictWarning from "@/components/ConflictWarning";
@@ -124,6 +125,8 @@ const CRM_BIZ_FIELDS = [
   ["payment_terms", "결제조건"],
   ["main_pickup_region", "주요 상차지역"],
   ["main_dropoff_region", "주요 하차지역"],
+  ["main_pickup_address", "주요 상차지 정확주소"],
+  ["main_dropoff_address", "주요 하차지 정확주소"],
   ["assigned_staff", "담당직원"],
 ];
 
@@ -159,10 +162,15 @@ export default function CompanyDetailPage() {
     location_name: string | null;
     address: string | null;
     location_type: string | null;
+    sido: string | null;
+    sigungu: string | null;
   };
   const [locations, setLocations] = useState<Location[]>([]);
   const [newLocType, setNewLocType] = useState("상차지");
   const [newLocAddress, setNewLocAddress] = useState("");
+  const [newLocDetail, setNewLocDetail] = useState("");
+  const [newLocSido, setNewLocSido] = useState("");
+  const [newLocSigungu, setNewLocSigungu] = useState("");
   const [editingLocId, setEditingLocId] = useState<string | null>(null);
   const [editingLocValue, setEditingLocValue] = useState("");
 
@@ -233,6 +241,10 @@ export default function CompanyDetailPage() {
         ...CRM_CONTACT_FIELDS.map((f) => f[0]),
         ...CRM_BIZ_FIELDS.map((f) => f[0]),
         ...CRM_PERFORMANCE_FIELDS.map((f) => f[0]),
+        "main_pickup_sido",
+        "main_pickup_sigungu",
+        "main_dropoff_sido",
+        "main_dropoff_sigungu",
       ];
       const initial: Record<string, any> = {};
       for (const k of allKeys) {
@@ -381,23 +393,29 @@ export default function CompanyDetailPage() {
   async function loadLocations() {
     const { data } = await supabase
       .from("customer_locations")
-      .select("id,location_name,address,location_type")
+      .select("id,location_name,address,location_type,sido,sigungu")
       .eq("company_id", id);
     setLocations(data || []);
   }
 
   async function handleAddLocation() {
     if (!newLocAddress.trim()) return;
+    const fullAddress = [newLocAddress, newLocDetail].filter((v) => v.trim()).join(" ");
     const { error } = await supabase.from("customer_locations").insert({
       company_id: id,
-      address: newLocAddress,
+      address: fullAddress,
       location_type: newLocType,
+      sido: newLocSido || null,
+      sigungu: newLocSigungu || null,
     });
     if (error) {
       setError(error.message);
       return;
     }
     setNewLocAddress("");
+    setNewLocDetail("");
+    setNewLocSido("");
+    setNewLocSigungu("");
     loadLocations();
   }
 
@@ -435,11 +453,27 @@ export default function CompanyDetailPage() {
     setError(null);
     setConflict(false);
 
-    const uiOnlyKeys = ["recommended_vehicle_tonnage", "recommended_vehicle_bodytype"];
+    const uiOnlyKeys = [
+      "recommended_vehicle_tonnage",
+      "recommended_vehicle_bodytype",
+      "main_pickup_addressDetail",
+      "main_dropoff_addressDetail",
+    ];
+    // 정확주소 입력의 도로명주소 + 상세주소를 저장 전에 하나의 문자열로 합침
+    // (다른 화면들의 fullOrigin/fullDestination 조합 방식과 동일한 패턴)
+    const fullMainPickupAddress = [editForm.main_pickup_address, editForm.main_pickup_addressDetail]
+      .filter((v) => v?.trim())
+      .join(" ");
+    const fullMainDropoffAddress = [editForm.main_dropoff_address, editForm.main_dropoff_addressDetail]
+      .filter((v) => v?.trim())
+      .join(" ");
+
     const payload: Record<string, any> = {};
     for (const key of Object.keys(editForm)) {
       if (uiOnlyKeys.includes(key)) continue;
       let v = editForm[key];
+      if (key === "main_pickup_address") v = fullMainPickupAddress;
+      if (key === "main_dropoff_address") v = fullMainDropoffAddress;
       if (v === "") v = null;
       if (
         CRM_PERFORMANCE_FIELDS.some(
@@ -995,6 +1029,33 @@ export default function CompanyDetailPage() {
                 </div>
               );
             }
+            if (
+              (key === "main_pickup_address" || key === "main_dropoff_address") &&
+              editing
+            ) {
+              const sidoKey = key === "main_pickup_address" ? "main_pickup_sido" : "main_dropoff_sido";
+              const sigunguKey =
+                key === "main_pickup_address" ? "main_pickup_sigungu" : "main_dropoff_sigungu";
+              const detailKey = `${key}Detail`;
+              return (
+                <AddressSearch
+                  key={key}
+                  label={label}
+                  className="field"
+                  style={{ gridColumn: "1 / -1", minWidth: 0 }}
+                  value={editForm[key] || ""}
+                  detailValue={editForm[detailKey] || ""}
+                  detailPlaceholder="상세주소 (선택)"
+                  onChange={(addr, sido, sigungu) => {
+                    set(key, addr);
+                    set(sidoKey, sido);
+                    set(sigunguKey, sigungu);
+                    set(detailKey, "");
+                  }}
+                  onDetailChange={(v) => set(detailKey, v)}
+                />
+              );
+            }
             return (
               <EditableField
                 key={key}
@@ -1140,25 +1201,33 @@ export default function CompanyDetailPage() {
           );
         })}
 
-        <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
+        <div style={{ marginTop: 12 }}>
           <select
             value={newLocType}
             onChange={(e) => setNewLocType(e.target.value)}
-            style={{ width: 100, fontSize: 12.5 }}
+            style={{ width: 100, fontSize: 12.5, marginBottom: 6 }}
           >
             <option value="상차지">상차지</option>
             <option value="하차지">하차지</option>
           </select>
-          <input
+          <AddressSearch
+            label="새 주소"
+            className=""
             value={newLocAddress}
-            onChange={(e) => setNewLocAddress(e.target.value)}
-            placeholder="주소 직접 추가"
-            style={{ flex: 1, fontSize: 12.5, padding: "5px 8px" }}
+            detailValue={newLocDetail}
+            placeholder="주소검색 또는 직접 입력"
+            detailPlaceholder="상세주소 (선택)"
+            onChange={(addr, sido, sigungu) => {
+              setNewLocAddress(addr);
+              setNewLocSido(sido);
+              setNewLocSigungu(sigungu);
+            }}
+            onDetailChange={setNewLocDetail}
           />
           <button
             className="btn"
             type="button"
-            style={{ padding: "5px 12px", fontSize: 12.5 }}
+            style={{ padding: "5px 12px", fontSize: 12.5, marginTop: 6 }}
             onClick={handleAddLocation}
           >
             추가
