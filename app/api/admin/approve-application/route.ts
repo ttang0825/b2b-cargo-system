@@ -73,6 +73,7 @@ export async function POST(req: Request) {
       contact_name: application.contact_name,
       contact_mobile: application.contact_phone,
       contact_email: application.contact_email || null,
+      address: application.main_origin || null,
       status: "견적요청",
       industry: application.industry || null,
       main_pickup_region: application.preferred_regions || null,

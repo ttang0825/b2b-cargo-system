@@ -56,7 +56,7 @@ export default function AddressSearch({
           onChange={(e) => onChange(e.target.value, "", "")}
           placeholder={placeholder}
           autoComplete="off"
-          style={{ flex: 1 }}
+          style={{ flex: 1, minWidth: 0, boxSizing: "border-box" }}
         />
         <button
           type="button"
@@ -67,6 +67,7 @@ export default function AddressSearch({
             fontSize: 12,
             whiteSpace: "nowrap",
             cursor: "pointer",
+            flexShrink: 0,
           }}
           onClick={handleSearch}
           disabled={!ready}
@@ -78,7 +79,7 @@ export default function AddressSearch({
         value={detailValue}
         onChange={(e) => onDetailChange(e.target.value)}
         placeholder={detailPlaceholder}
-        style={{ marginTop: 6 }}
+        style={{ marginTop: 6, width: "100%", boxSizing: "border-box" }}
       />
       {children}
     </div>
