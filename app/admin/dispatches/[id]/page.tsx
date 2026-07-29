@@ -16,7 +16,7 @@ import ConflictWarning from "@/components/ConflictWarning";
 import SettlementTypeChangeModal from "@/components/SettlementTypeChangeModal";
 import { optimisticUpdate } from "@/lib/optimisticUpdate";
 import { logSettlementTypeChange } from "@/lib/settlementTypeChangeLog";
-import { calcSettlement, applyMixedDiscount, reverseMixedDiscount } from "@/lib/settlementCalc";
+import { calcSettlement } from "@/lib/settlementCalc";
 import MoneyInput from "@/components/MoneyInput";
 import {
   getLatestInsuranceRateSettings,
@@ -416,8 +416,8 @@ export default function DispatchDetailPage() {
       .eq("id", orderId)
       .single();
 
-    // 혼적 실행 체크 시 화주 청구운임(editForm.customer_charge)에서 이미
-    // 할인이 차감되어 저장되므로 별도 변환 없이 그대로 사용
+    // 혼적 할인은 이미 견적 단계 최종금액에 반영되어 저장되므로 별도 변환
+    // 없이 화주 청구운임을 그대로 사용
     const charge = Number(editForm.customer_charge) || 0;
     const payout = Number(editForm.driver_payout) || 0;
     const now = new Date();
@@ -505,29 +505,17 @@ export default function DispatchDetailPage() {
   }
 
   // 오더의 loading_type이 mixable인 건에만 노출되는 "혼적 실행" 체크 — 실제로
-  // 혼적으로 운행됐는지 여부 1개만 판단하면 되므로 즉시 저장(원칙 36번, load()로
-  // 전체 재조회)
+  // 혼적으로 운행됐는지 여부만 기록하는 플래그(원칙 36번, load()로 전체 재조회).
+  // 할인은 이미 견적 단계 최종금액에 반영되어 오더·배차로 그대로 승계되므로,
+  // 이 체크박스는 더 이상 화주 청구운임을 직접 건드리지 않음(6차 세션 보정 —
+  // 아래 handleSave 근처 주석 참고)
   async function handleMixedExecutedChange(checked: boolean) {
     if (!dispatch) return;
     setError(null);
-    const loadingType = (dispatch.orders?.loading_type as "exclusive" | "mixable") || "exclusive";
-    const discountType = dispatch.orders?.mixed_discount_type || null;
-    const discountAmount = dispatch.orders?.mixed_discount_amount || 0;
-    const discountPercent = dispatch.orders?.mixed_discount_percent || 0;
-    const currentCharge = Number(editForm.customer_charge) || 0;
-    // 체크하면 청구운임에서 할인을 실제로 차감하고, 해제하면 역산해서 원래
-    // 금액으로 되돌림 — 계산에만 반영하고 화면 숫자는 그대로 두면 "할인이
-    // 적용 안 된 것처럼 보인다"는 실사용 피드백을 반영해 직접 반영하는 방식으로 변경
-    const newCharge = checked
-      ? applyMixedDiscount(currentCharge, loadingType, true, discountType, discountAmount, discountPercent)
-      : reverseMixedDiscount(currentCharge, loadingType, discountType, discountAmount, discountPercent);
-
-    setEditForm((f) => ({ ...f, mixed_executed: checked, customer_charge: String(newCharge) }));
     const { error } = await supabase
       .from("dispatches")
       .update({
         mixed_executed: checked,
-        customer_charge: newCharge || null,
         updated_by: await getCurrentStaffId(),
       })
       .eq("id", id);
@@ -642,9 +630,8 @@ export default function DispatchDetailPage() {
   }
 
   const statusColor = getDispatchStatusColor(dispatch.dispatch_status);
-  // "혼적 실행" 체크 시 화주 청구운임(editForm.customer_charge) 자체에서
-  // 할인이 이미 차감되어 저장되므로(handleMixedExecutedChange 참고), 마진
-  // 계산은 별도 변환 없이 그대로 이 값을 사용한다.
+  // 혼적 할인은 이미 견적 단계 최종금액에 반영되어 있으므로, 마진 계산은
+  // 별도 변환 없이 화주 청구운임을 그대로 사용한다.
   const margin =
     editForm.customer_charge && editForm.driver_payout
       ? Number(editForm.customer_charge) - Number(editForm.driver_payout)
@@ -1043,9 +1030,9 @@ export default function DispatchDetailPage() {
                 ? `할인금액 ${won(dispatch.orders.mixed_discount_amount)}`
                 : "-"}
               {" · "}
-              {editForm.mixed_executed
-                ? "아래 화주 청구운임에 할인이 반영되어 있습니다. 체크 해제하면 원래 금액으로 되돌아갑니다."
-                : "체크하면 아래 화주 청구운임에서 할인이 바로 차감됩니다."}
+              할인은 이미 견적 단계 최종금액에 반영되어 아래 화주 청구운임으로
+              승계되어 있습니다. 이 체크박스는 실제로 혼적 운행됐는지만
+              기록하는 용도이며, 체크 여부는 청구운임에 영향을 주지 않습니다.
             </p>
           </div>
         )}

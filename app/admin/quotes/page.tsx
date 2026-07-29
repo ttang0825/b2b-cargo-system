@@ -15,6 +15,7 @@ import AddressSearch from "@/components/AddressSearch";
 import MoneyInput from "@/components/MoneyInput";
 import { getLatestMixedLoadingDiscountSettings } from "@/lib/mixedLoadingDiscountSettings";
 import { localInputToISOString, toLocalDateTimeInput } from "@/lib/localDateTime";
+import { applyMixedDiscount } from "@/lib/settlementCalc";
 
 const VEHICLES = ["1톤", "1.4톤", "2.5톤", "3.5톤", "5톤", "5톤 플러스/축"];
 
@@ -506,7 +507,38 @@ function QuotesPageInner() {
 
     const pctAmount = base * ratePctTotal;
     const surchargeTotal = pctAmount + flatTotal + waitingExtra + waypointExtra;
-    const final = Math.max(base + surchargeTotal, 0);
+    const rawFinal = Math.max(base + surchargeTotal, 0);
+
+    // 혼적가능 + 화주동의 + 할인조건이 설정된 견적은, 실제 정보망/화주에게
+    // 안내하는 가격이 혼적여부에 따라 둘로 나뉘지 않는다는 실사용 피드백에
+    // 따라 최종 견적금액 자체에 할인을 바로 반영한다(배차 단계 "혼적 실행"은
+    // 이제 순수 기록용 플래그로, 가격에 다시 손대지 않음)
+    let final = rawFinal;
+    if (
+      form.loading_type === "mixable" &&
+      form.mixed_shipper_consent &&
+      form.mixed_discount_type
+    ) {
+      const discounted = applyMixedDiscount(
+        rawFinal,
+        form.loading_type,
+        true,
+        form.mixed_discount_type,
+        Number(form.mixed_discount_amount) || 0,
+        Number(form.mixed_discount_percent) || 0
+      );
+      const discountAmount = rawFinal - discounted;
+      if (discountAmount > 0) {
+        breakdown.push({
+          label:
+            form.mixed_discount_type === "percent"
+              ? `혼적 할인(${form.mixed_discount_percent}%)`
+              : "혼적 할인",
+          amount: -discountAmount,
+        });
+        final = discounted;
+      }
+    }
 
     return { base, surchargeTotal, final, breakdown, tierMatch };
   }, [tiers, surcharges, extraFees, form]);
@@ -1533,8 +1565,8 @@ function QuotesPageInner() {
                     color: "var(--text-muted)",
                   }}
                 >
-                  <span>+ {b.label}</span>
-                  <span className="num">{won(b.amount)}</span>
+                  <span>{b.amount < 0 ? "-" : "+"} {b.label}</span>
+                  <span className="num">{won(Math.abs(b.amount))}</span>
                 </div>
               ))}
               <div

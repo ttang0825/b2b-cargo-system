@@ -400,7 +400,7 @@ export default function InvoiceDetailPage() {
                     color: mixedExecuted ? "#059669" : "#6B7280",
                   }}
                 >
-                  {mixedExecuted ? "혼적할인 적용" : "혼적가능(미적용)"}
+                  {mixedExecuted ? "혼적 실행됨" : "혼적 미실행"}
                 </span>
               </div>
             )}

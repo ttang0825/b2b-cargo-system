@@ -623,7 +623,7 @@ export default function InvoicesPage() {
                             color: i.order_id && mixedExecutedByOrderId[i.order_id] ? "#059669" : "#6B7280",
                           }}
                         >
-                          {i.order_id && mixedExecutedByOrderId[i.order_id] ? "혼적할인 적용" : "혼적가능(미적용)"}
+                          {i.order_id && mixedExecutedByOrderId[i.order_id] ? "혼적 실행됨" : "혼적 미실행"}
                         </span>
                       </div>
                     )}

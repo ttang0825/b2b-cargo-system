@@ -236,22 +236,10 @@ export default function QuotePrintPage() {
         )}
 
         {optionEntries.length > 0 && (
-          <p style={{ fontSize: 12, color: "#777", marginTop: 0, marginBottom: quote.loading_type === "mixable" && quote.mixed_shipper_consent ? 8 : 24 }}>
+          <p style={{ fontSize: 12, color: "#777", marginTop: 0, marginBottom: 24 }}>
             {optionEntries
               .map(([k, v]) => `${k.replace(/_/g, " ")}: ${v === true ? "적용" : v}`)
               .join("  ·  ")}
-          </p>
-        )}
-
-        {quote.loading_type === "mixable" && quote.mixed_shipper_consent && (
-          <p style={{ fontSize: 12, color: "#B45309", marginTop: 0, marginBottom: 24 }}>
-            · 혼적 조건부 할인:{" "}
-            {quote.mixed_discount_type === "percent"
-              ? `${quote.mixed_discount_percent}%`
-              : quote.mixed_discount_type === "amount"
-              ? won(quote.mixed_discount_amount)
-              : "-"}{" "}
-            (실제 혼적 시 적용)
           </p>
         )}
 

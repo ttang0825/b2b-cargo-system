@@ -1016,8 +1016,8 @@ export default function QuoteDetailPage() {
               color: "var(--text-muted)",
             }}
           >
-            <span>+ {it.item_name}</span>
-            <span className="num">{won(it.amount)}</span>
+            <span>{(it.amount || 0) < 0 ? "-" : "+"} {it.item_name}</span>
+            <span className="num">{won(it.amount != null ? Math.abs(it.amount) : it.amount)}</span>
           </div>
         ))}
         <div
