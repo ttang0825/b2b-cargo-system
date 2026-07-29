@@ -64,7 +64,7 @@ export default function DispatchDetailPage() {
   const [payoutCalcSaving, setPayoutCalcSaving] = useState(false);
   const [payoutCalcForm, setPayoutCalcForm] = useState({
     driver_base_fare: "",
-    driver_vat_included: true,
+    driver_vat_included: false,
     industrial_insurance_applicable: true,
   });
   const [rateSettings, setRateSettings] = useState(DEFAULT_INSURANCE_RATE_SETTINGS);
@@ -107,7 +107,7 @@ export default function DispatchDetailPage() {
 
   const [editForm, setEditForm] = useState({
     customer_charge: "",
-    customer_charge_vat_included: true,
+    customer_charge_vat_included: false,
     driver_payout: "",
     pickup_confirmed: false,
     delivery_confirmed: false,
@@ -136,7 +136,7 @@ export default function DispatchDetailPage() {
     setDispatch(data);
     setEditForm({
       customer_charge: data.customer_charge ?? "",
-      customer_charge_vat_included: data.customer_charge_vat_included ?? true,
+      customer_charge_vat_included: data.customer_charge_vat_included ?? false,
       driver_payout: data.driver_payout ?? "",
       pickup_confirmed: data.pickup_confirmed || false,
       delivery_confirmed: data.delivery_confirmed || false,
@@ -157,7 +157,7 @@ export default function DispatchDetailPage() {
       // 이미 한 번 저장된 적 있는 배차 — 저장된 값 그대로 표시
       setPayoutCalcForm({
         driver_base_fare: String(data.driver_base_fare),
-        driver_vat_included: data.driver_vat_included ?? true,
+        driver_vat_included: data.driver_vat_included ?? false,
         industrial_insurance_applicable: data.industrial_insurance_applicable ?? true,
       });
     } else {
@@ -173,7 +173,7 @@ export default function DispatchDetailPage() {
         .maybeSingle();
       setPayoutCalcForm({
         driver_base_fare: "",
-        driver_vat_included: recent?.driver_vat_included ?? true,
+        driver_vat_included: recent?.driver_vat_included ?? false,
         industrial_insurance_applicable: recent?.industrial_insurance_applicable ?? true,
       });
     }
@@ -978,34 +978,38 @@ export default function DispatchDetailPage() {
         <div className="form-grid" style={{ padding: 0, marginBottom: 10 }}>
           <div className="field">
             <label>화주 청구운임(원)</label>
-            <input
-              type="number"
-              step={100}
-              value={editForm.customer_charge}
-              onChange={(e) =>
-                setEditForm({ ...editForm, customer_charge: e.target.value })
-              }
-            />
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                marginTop: 6,
-                fontSize: 12.5,
-                fontWeight: 400,
-                color: "var(--text-muted)",
-              }}
-            >
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <input
-                type="checkbox"
-                checked={editForm.customer_charge_vat_included}
+                type="number"
+                step={100}
+                value={editForm.customer_charge}
                 onChange={(e) =>
-                  setEditForm({ ...editForm, customer_charge_vat_included: e.target.checked })
+                  setEditForm({ ...editForm, customer_charge: e.target.value })
                 }
+                style={{ flex: 1, minWidth: 0 }}
               />
-              부가세 포함가로 청구
-            </label>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontSize: 12.5,
+                  fontWeight: 400,
+                  color: "var(--text-muted)",
+                  whiteSpace: "nowrap",
+                  flexShrink: 0,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={editForm.customer_charge_vat_included}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, customer_charge_vat_included: e.target.checked })
+                  }
+                />
+                부가세 포함
+              </label>
+            </div>
           </div>
           <div className="field">
             <label>차주 지급운임(원)</label>
