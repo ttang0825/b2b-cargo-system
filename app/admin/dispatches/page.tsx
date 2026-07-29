@@ -701,6 +701,7 @@ function DispatchesPageInner() {
                 <th>청구운임</th>
                 <th>지급운임</th>
                 <th>마진</th>
+                <th>마진율</th>
                 <th>배차상태</th>
               </tr>
             </thead>
@@ -738,6 +739,13 @@ function DispatchesPageInner() {
                   </td>
                   <td>
                     <span className="num">{won(d.margin)}</span>
+                  </td>
+                  <td>
+                    <span className="num">
+                      {d.margin !== null && d.customer_charge
+                        ? `${((d.margin / d.customer_charge) * 100).toFixed(1)}%`
+                        : "-"}
+                    </span>
                   </td>
                   <td onClick={(e) => e.stopPropagation()}>
                     {d.dispatch_status === "접수중" ? (

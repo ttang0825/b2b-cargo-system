@@ -16,6 +16,7 @@ import ConflictWarning from "@/components/ConflictWarning";
 import SettlementTypeChangeModal from "@/components/SettlementTypeChangeModal";
 import { optimisticUpdate } from "@/lib/optimisticUpdate";
 import { logSettlementTypeChange } from "@/lib/settlementTypeChangeLog";
+import { calcSettlement } from "@/lib/settlementCalc";
 
 function won(n: number | null) {
   if (n === null || n === undefined) return "-";
@@ -55,6 +56,14 @@ export default function DispatchDetailPage() {
   const [confirming, setConfirming] = useState(false);
   const [settlementModalOpen, setSettlementModalOpen] = useState(false);
   const [settlementSaving, setSettlementSaving] = useState(false);
+  const [payoutCalcOpen, setPayoutCalcOpen] = useState(false);
+  const [payoutCalcSaving, setPayoutCalcSaving] = useState(false);
+  const [payoutCalcForm, setPayoutCalcForm] = useState({
+    driver_base_fare: "",
+    driver_vat_included: true,
+    industrial_insurance_included: true,
+    industrial_insurance_rate: "0",
+  });
 
   const networkNameById: Record<string, string> = {};
   networks.forEach((n) => (networkNameById[n.id] = n.name));
@@ -137,6 +146,34 @@ export default function DispatchDetailPage() {
     setExternalDriverName(data.external_driver_name || "");
     setExternalDriverPhone(data.external_driver_phone || "");
     setExternalVehiclePlate(data.external_vehicle_plate || "");
+
+    if (data.driver_base_fare != null) {
+      // 이미 한 번 저장된 적 있는 배차 — 저장된 값 그대로 표시
+      setPayoutCalcForm({
+        driver_base_fare: String(data.driver_base_fare),
+        driver_vat_included: data.driver_vat_included ?? true,
+        industrial_insurance_included: data.industrial_insurance_included ?? true,
+        industrial_insurance_rate: String(data.industrial_insurance_rate ?? 0),
+      });
+    } else {
+      // 처음 입력하는 배차 — 가장 최근에 저장된 다른 배차 건의 부가세/산재보험
+      // 설정을 기본값으로 미리 채워줌(매번 토글을 새로 누르지 않아도 되게)
+      const { data: recent } = await supabase
+        .from("dispatches")
+        .select("driver_vat_included,industrial_insurance_included,industrial_insurance_rate")
+        .neq("id", id)
+        .not("driver_base_fare", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      setPayoutCalcForm({
+        driver_base_fare: "",
+        driver_vat_included: recent?.driver_vat_included ?? true,
+        industrial_insurance_included: recent?.industrial_insurance_included ?? true,
+        industrial_insurance_rate: String(recent?.industrial_insurance_rate ?? 0),
+      });
+    }
+
     setLoading(false);
   }
 
@@ -282,6 +319,43 @@ export default function DispatchDetailPage() {
     }
     setSettlementSaving(false);
     setSettlementModalOpen(false);
+    load();
+  }
+
+  // 차주 기본운임 + 부가세/산재보험료 포함여부로 최종 지급액·마진을 계산해서
+  // 저장. driver_total_payout/마진을 새 컬럼으로 만들지 않고 기존
+  // driver_payout/margin 컬럼을 그대로 재사용함(원칙 27번 — dispatches에 이미
+  // 이 용도로 쓰이던 컬럼이 있었음). 저장 시점 값으로 고정되는 스냅샷이라
+  // 이후 요율이 바뀌어도 과거 배차 건의 값은 안 바뀜. 즉시 저장 후 load()로
+  // 전체 재조회 (원칙 36번)
+  async function handlePayoutCalcSave() {
+    if (!dispatch) return;
+    setPayoutCalcSaving(true);
+    setError(null);
+    const result = calcSettlement({
+      driverBaseFare: Number(payoutCalcForm.driver_base_fare) || 0,
+      driverVatIncluded: payoutCalcForm.driver_vat_included,
+      industrialInsuranceIncluded: payoutCalcForm.industrial_insurance_included,
+      industrialInsuranceRate: Number(payoutCalcForm.industrial_insurance_rate) || 0,
+      customerCharge: Number(editForm.customer_charge) || 0,
+    });
+    const { error } = await supabase
+      .from("dispatches")
+      .update({
+        driver_base_fare: Number(payoutCalcForm.driver_base_fare) || null,
+        driver_vat_included: payoutCalcForm.driver_vat_included,
+        industrial_insurance_included: payoutCalcForm.industrial_insurance_included,
+        industrial_insurance_rate: Number(payoutCalcForm.industrial_insurance_rate) || 0,
+        driver_payout: result.driverTotalPayout || null,
+        margin: result.brokerMargin,
+        updated_by: await getCurrentStaffId(),
+      })
+      .eq("id", id);
+    setPayoutCalcSaving(false);
+    if (error) {
+      setError(error.message);
+      return;
+    }
     load();
   }
 
@@ -908,6 +982,137 @@ export default function DispatchDetailPage() {
         <p style={{ fontSize: 13.5, fontWeight: 600 }}>
           마진: {margin !== null ? won(margin) : "-"}
         </p>
+
+        {dispatch.dispatch_status !== "접수중" && (
+          <div style={{ marginTop: 14, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
+            <button
+              type="button"
+              onClick={() => setPayoutCalcOpen((v) => !v)}
+              style={{
+                background: "none",
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 13,
+                fontWeight: 600,
+                color: "var(--text)",
+              }}
+            >
+              <span>{payoutCalcOpen ? "▲" : "▼"}</span>
+              차주 운임 상세 계산 (부가세·산재보험료)
+            </button>
+
+            {payoutCalcOpen && (
+              <div style={{ marginTop: 12 }}>
+                <div className="form-grid" style={{ padding: 0, marginBottom: 10 }}>
+                  <div className="field">
+                    <label>차주 기본운임(원)</label>
+                    <input
+                      type="number"
+                      step={100}
+                      value={payoutCalcForm.driver_base_fare}
+                      onChange={(e) =>
+                        setPayoutCalcForm({ ...payoutCalcForm, driver_base_fare: e.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 20, marginBottom: 10, fontSize: 13 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <input
+                      type="checkbox"
+                      checked={payoutCalcForm.driver_vat_included}
+                      onChange={(e) =>
+                        setPayoutCalcForm({ ...payoutCalcForm, driver_vat_included: e.target.checked })
+                      }
+                    />
+                    부가세 포함
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <input
+                      type="checkbox"
+                      checked={payoutCalcForm.industrial_insurance_included}
+                      onChange={(e) =>
+                        setPayoutCalcForm({
+                          ...payoutCalcForm,
+                          industrial_insurance_included: e.target.checked,
+                        })
+                      }
+                    />
+                    산재보험료 포함
+                  </label>
+                </div>
+                {!payoutCalcForm.industrial_insurance_included && (
+                  <div className="field" style={{ marginBottom: 10, maxWidth: 200 }}>
+                    <label>산재보험료 요율(%)</label>
+                    <input
+                      type="number"
+                      step={0.1}
+                      value={payoutCalcForm.industrial_insurance_rate}
+                      onChange={(e) =>
+                        setPayoutCalcForm({
+                          ...payoutCalcForm,
+                          industrial_insurance_rate: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                )}
+
+                {(() => {
+                  const preview = calcSettlement({
+                    driverBaseFare: Number(payoutCalcForm.driver_base_fare) || 0,
+                    driverVatIncluded: payoutCalcForm.driver_vat_included,
+                    industrialInsuranceIncluded: payoutCalcForm.industrial_insurance_included,
+                    industrialInsuranceRate: Number(payoutCalcForm.industrial_insurance_rate) || 0,
+                    customerCharge: Number(editForm.customer_charge) || 0,
+                  });
+                  return (
+                    <div
+                      style={{
+                        background: "var(--bg)",
+                        borderRadius: 8,
+                        padding: 12,
+                        marginBottom: 10,
+                        fontSize: 13,
+                      }}
+                    >
+                      {!payoutCalcForm.driver_vat_included && (
+                        <div>부가세액: {won(preview.vatAmount)}</div>
+                      )}
+                      {!payoutCalcForm.industrial_insurance_included && (
+                        <div>산재보험료액: {won(preview.industrialInsuranceAmount)}</div>
+                      )}
+                      <div style={{ fontWeight: 700, marginTop: 4 }}>
+                        차주 수금/지급 총액: {won(preview.driverTotalPayout)}
+                      </div>
+                      <div
+                        style={{
+                          fontWeight: 700,
+                          color: preview.brokerMargin < 0 ? "var(--danger)" : "var(--accent)",
+                        }}
+                      >
+                        주선사 마진: {won(preview.brokerMargin)}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={payoutCalcSaving}
+                  onClick={handlePayoutCalcSave}
+                >
+                  {payoutCalcSaving ? "저장 중..." : "정산 정보 저장"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="card" style={{ padding: 20, marginBottom: 20 }}>
