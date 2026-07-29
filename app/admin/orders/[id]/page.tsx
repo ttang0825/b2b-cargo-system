@@ -6,12 +6,15 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { ORDER_STATUS_OPTIONS, getOrderStatusColor } from "@/lib/orderStatusColors";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
+import { SETTLEMENT_TYPES, getSettlementTypeLabel } from "@/lib/constants";
 import DateTimePicker from "@/components/DateTimePicker";
 import AddressSearch from "@/components/AddressSearch";
+import SettlementTypeChangeModal from "@/components/SettlementTypeChangeModal";
 import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
 import ConflictWarning from "@/components/ConflictWarning";
 import { optimisticUpdate } from "@/lib/optimisticUpdate";
+import { logSettlementTypeChange } from "@/lib/settlementTypeChangeLog";
 
 type OrderDetail = {
   id: string;
@@ -21,6 +24,7 @@ type OrderDetail = {
   vehicle_type: string | null;
   item: string | null;
   status: string;
+  settlement_type: string | null;
   requested_pickup_at: string | null;
   requested_delivery_at: string | null;
   load_condition: string | null;
@@ -70,6 +74,8 @@ export default function OrderDetailPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [conflict, setConflict] = useState(false);
   const [linkedDispatchId, setLinkedDispatchId] = useState<string | null>(null);
+  const [settlementModalOpen, setSettlementModalOpen] = useState(false);
+  const [settlementSaving, setSettlementSaving] = useState(false);
 
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
@@ -198,6 +204,39 @@ export default function OrderDetailPage() {
       return;
     }
     setEditing(false);
+    load();
+  }
+
+  // "접수" 단계에서는 자유롭게 변경, 그 이후(배차중~운송완료)는 이미 진행 중인
+  // 오더라 사유 입력 모달(SettlementTypeChangeModal)을 거쳐야만 변경 가능.
+  // 두 경로 다 즉시 저장 후 load()로 전체를 다시 불러옴 (원칙 36번 — 부분 병합 금지)
+  async function handleSettlementTypeChange(newType: string, reason: string | null) {
+    if (!order) return;
+    setSettlementSaving(true);
+    setError(null);
+    const staffId = await getCurrentStaffId();
+    const beforeType = order.settlement_type;
+    const { error } = await supabase
+      .from("orders")
+      .update({ settlement_type: newType, updated_by: staffId })
+      .eq("id", id);
+    if (error) {
+      setSettlementSaving(false);
+      setError(error.message);
+      return;
+    }
+    if (reason) {
+      await logSettlementTypeChange({
+        targetTable: "orders",
+        targetId: id,
+        beforeType,
+        afterType: newType,
+        reason,
+        changedBy: staffId,
+      });
+    }
+    setSettlementSaving(false);
+    setSettlementModalOpen(false);
     load();
   }
 
@@ -365,6 +404,64 @@ export default function OrderDetailPage() {
       )}
 
       {error && <div className="error-box">오류: {error}</div>}
+
+      <div className="card" style={{ padding: 20, marginBottom: 20 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 10,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 4 }}>
+              정산방식
+            </div>
+            {order.status === "접수" ? (
+              <select
+                value={order.settlement_type || "general"}
+                onChange={(e) => handleSettlementTypeChange(e.target.value, null)}
+                disabled={settlementSaving}
+                style={{ fontWeight: 600 }}
+              >
+                {SETTLEMENT_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="badge">{getSettlementTypeLabel(order.settlement_type)}</span>
+            )}
+          </div>
+          {order.status !== "접수" && (
+            <button
+              type="button"
+              className="btn-ghost"
+              style={{ padding: "6px 12px", borderRadius: 6, fontSize: 12.5, cursor: "pointer" }}
+              onClick={() => setSettlementModalOpen(true)}
+            >
+              정산방식 변경
+            </button>
+          )}
+        </div>
+        {order.status !== "접수" && (
+          <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 8, marginBottom: 0 }}>
+            오더가 이미 진행 중(접수 이후)이라 정산방식을 바꾸려면 사유를 입력해야 합니다.
+          </p>
+        )}
+      </div>
+
+      {settlementModalOpen && (
+        <SettlementTypeChangeModal
+          currentType={order.settlement_type || "general"}
+          onCancel={() => setSettlementModalOpen(false)}
+          onConfirm={(newType, reason) => handleSettlementTypeChange(newType, reason)}
+          saving={settlementSaving}
+        />
+      )}
 
       <div className="card" style={{ padding: 20, marginBottom: 20 }}>
         {editing ? (

@@ -18,6 +18,7 @@ type OrderLite = {
   origin: string | null;
   destination: string | null;
   vehicle_type: string | null;
+  settlement_type: string | null;
   quote_id: string | null;
   companies: { name: string } | null;
   guest_name: string | null;
@@ -123,7 +124,7 @@ function DispatchesPageInner() {
     const { data } = await supabase
       .from("orders")
       .select(
-        "id,order_no,origin,destination,vehicle_type,quote_id,companies(name),guest_name"
+        "id,order_no,origin,destination,vehicle_type,settlement_type,quote_id,companies(name),guest_name"
       )
       .in("status", ["접수", "배차중"])
       .order("created_at", { ascending: false });
@@ -240,6 +241,7 @@ function DispatchesPageInner() {
 
     setSaving(true);
     const vehicleId = null; // vehicles 테이블은 driver_id로 조회 가능하므로 필요 시 추후 연결
+    const sourceOrder = availableOrders.find((o) => o.id === selectedOrderId);
 
     // 배차는 항상 "접수중"으로 시작 — 내부차주든 외부정보망이든 실제로 배차가
     // 잡혔는지는 아직 확정되지 않은 상태. 확정은 상세화면의 전용 절차에서만 가능
@@ -250,6 +252,7 @@ function DispatchesPageInner() {
       dispatch_status: "접수중",
       assignment_type: assignmentType,
       requested_network_ids: assignmentType === "external" ? selectedNetworkIds : [],
+      settlement_type: sourceOrder?.settlement_type || "general",
       customer_charge: customerCharge ? Number(customerCharge) : null,
       driver_payout: driverPayout ? Number(driverPayout) : null,
       memo: memo || null,

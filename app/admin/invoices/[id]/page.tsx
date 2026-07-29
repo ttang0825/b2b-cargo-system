@@ -9,9 +9,12 @@ import {
   getInvoiceStatusColor,
 } from "@/lib/invoiceStatusColors";
 import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
+import { getSettlementTypeLabel } from "@/lib/constants";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
 import ConflictWarning from "@/components/ConflictWarning";
+import SettlementTypeChangeModal from "@/components/SettlementTypeChangeModal";
 import { optimisticUpdate } from "@/lib/optimisticUpdate";
+import { logSettlementTypeChange } from "@/lib/settlementTypeChangeLog";
 
 function won(n: number | null) {
   if (n === null || n === undefined) return "-";
@@ -31,6 +34,8 @@ export default function InvoiceDetailPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [conflict, setConflict] = useState(false);
+  const [settlementModalOpen, setSettlementModalOpen] = useState(false);
+  const [settlementSaving, setSettlementSaving] = useState(false);
 
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
@@ -173,6 +178,37 @@ export default function InvoiceDetailPage() {
     router.push("/admin/invoices");
   }
 
+  // 8차 세션(월정산 마감/확정)에서 정산 건 잠금 로직이 생기면, 잠금된 건은
+  // 정산방식 변경 자체를 막아야 함. 지금은 잠금이 없어서 사유 입력만으로 항상
+  // 변경 가능하게 해둠 — 즉시 저장 후 load()로 전체 재조회 (원칙 36번)
+  async function handleSettlementTypeChange(newType: string, reason: string) {
+    if (!invoice) return;
+    setSettlementSaving(true);
+    setSaveError(null);
+    const staffId = await getCurrentStaffId();
+    const beforeType = invoice.settlement_type;
+    const { error } = await supabase
+      .from("invoices")
+      .update({ settlement_type: newType, updated_by: staffId })
+      .eq("id", id);
+    if (error) {
+      setSettlementSaving(false);
+      setSaveError(error.message);
+      return;
+    }
+    await logSettlementTypeChange({
+      targetTable: "invoices",
+      targetId: id,
+      beforeType,
+      afterType: newType,
+      reason,
+      changedBy: staffId,
+    });
+    setSettlementSaving(false);
+    setSettlementModalOpen(false);
+    load();
+  }
+
   async function handleDelete() {
     if (!invoice) return;
     const confirmed = window.confirm(
@@ -280,6 +316,46 @@ export default function InvoiceDetailPage() {
             ))}
           </select>
         </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: 10,
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 4 }}>
+                정산방식
+              </div>
+              <span className="badge">{getSettlementTypeLabel(invoice.settlement_type)}</span>
+            </div>
+            <button
+              type="button"
+              className="btn-ghost"
+              style={{ padding: "6px 12px", borderRadius: 6, fontSize: 12.5, cursor: "pointer" }}
+              onClick={() => setSettlementModalOpen(true)}
+            >
+              정산방식 변경
+            </button>
+          </div>
+          <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 8, marginBottom: 0 }}>
+            정산방식을 바꾸려면 사유를 입력해야 합니다. (정산 확정/잠금 로직은 8차
+            세션에서 처리 예정 — 지금은 잠긴 건이 없어 항상 변경 가능)
+          </p>
+        </div>
+
+        {settlementModalOpen && (
+          <SettlementTypeChangeModal
+            currentType={invoice.settlement_type || "general"}
+            onCancel={() => setSettlementModalOpen(false)}
+            onConfirm={(newType, reason) => handleSettlementTypeChange(newType, reason)}
+            saving={settlementSaving}
+          />
+        )}
 
         <div
           style={{
