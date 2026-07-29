@@ -169,9 +169,13 @@ Enter키 자동제출 방지 완료·merge됨 + 2026-07-28: 배차 프로세스 
   컬럼도 신규로 만드는 것이었으나, `dispatches`에 이미 이 용도로 쓰이던
   `driver_payout`(차주 지급운임, 배차 등록/목록/상세/정산 자동등록 전체에서
   사용 중) 컬럼이 있어서 원칙 27번 지침대로 새로 만들지 않고 그 컬럼을 그대로
-  재사용함(계산기 저장 시 이 컬럼에 최종값을 덮어씀). 같은 이유로 "주선사
-  마진"도 새 컬럼 없이 이미 있던(코드에서는 그동안 안 쓰이고 있던) `margin`
-  컬럼을 재사용. `lib/settlementCalc.ts`(부가세액/산재보험료액/최종 지급액/
+  재사용함(계산기 저장 시 이 컬럼에 최종값을 덮어씀). "주선사 마진"은
+  `dispatches.margin`이라는 기존 컬럼이 있길래 처음엔 이것도 재사용하려
+  했으나, 실제로 값을 넣어보니 PostgreSQL 생성 컬럼(generated column —
+  아마 `customer_charge - driver_payout` 자동계산)이라 직접 UPDATE가 안 되는
+  걸 뒤늦게 발견함(`column "margin" can only be updated to DEFAULT` 에러) —
+  그냥 `driver_payout`만 갱신하고 `margin`은 DB가 알아서 재계산하도록 둠(별도
+  저장 코드 없음). `lib/settlementCalc.ts`(부가세액/산재보험료액/최종 지급액/
   마진 계산, 6차 세션에서 추가비 반영 예정 주석 포함)가 유일한 계산 로직처
 
 ## 3. 핵심 설계 원칙 (반드시 유지할 것)
@@ -642,20 +646,26 @@ Enter키 자동제출 방지 완료·merge됨 + 2026-07-28: 배차 프로세스 
   배차 상세에 "정산 정보" 접이식 하위섹션(기본 접힘) 신설 — 차주 기본운임 입력
   → 부가세 포함/별도 토글 → 산재보험료 포함/별도 토글(+별도 시 요율%) →
   계산된 차주 수금/지급 총액·주선사 마진 실시간 미리보기(마진 음수면 경고색)
-  → 저장. `lib/settlementCalc.ts`가 계산하고, 저장 시 `dispatches.driver_payout`/
-  `dispatches.margin`(둘 다 기존 컬럼 재사용, 위 2번 섹션 참고)에 최종값을
-  스냅샷으로 고정 — 이후 요율이 바뀌어도 과거 배차 건의 저장된 값은 안 바뀜.
-  **배차확정 이후에만 노출**(`dispatch_status !== "접수중"`, 원칙 39번과 동일
-  기준). 새 배차의 "정산 정보" 섹션을 처음 열 때 부가세/산재보험 설정값이
+  → 저장. `lib/settlementCalc.ts`가 계산하고, 저장 시 `dispatches.driver_payout`에
+  최종값을 스냅샷으로 고정 — 이후 요율이 바뀌어도 과거 배차 건의 저장된 값은
+  안 바뀜. **배차확정 이후에만 노출**(`dispatch_status !== "접수중"`, 원칙 39번과
+  동일 기준). 새 배차의 "정산 정보" 섹션을 처음 열 때 부가세/산재보험 설정값이
   비어있으면(`driver_base_fare`가 null인 경우), 가장 최근에 저장된 다른 배차
   건의 부가세/산재보험 설정을 자동으로 기본값으로 채워줌(스마트 디폴트, 매번
   토글을 새로 누르지 않아도 되게 — 별도 설정 테이블 없이 쿼리로 구현).
   배차 목록에는 마진액(기존 컬럼) 옆에 마진율(%) 컬럼을 신규로 추가.
   **작업지시서와 실제 시스템이 안 맞아서 판단을 내린 부분**(2026-07-29 세션):
   작업지시서 원안의 신규 컬럼 `driver_total_payout` 대신 기존 `driver_payout`
-  컬럼을, 신규 마진 컬럼 대신 기존(그동안 코드에서 안 쓰이던) `margin` 컬럼을
-  재사용 — 사전확인 쿼리로 두 컬럼이 이미 존재하는 걸 확인하고 판단, 사용자
-  확인 완료(임의 판단이 아니라 사전에 안내하고 진행함)
+  컬럼을 재사용 — 사전확인 쿼리로 이미 존재하는 걸 확인하고 판단, 사용자 확인
+  완료(임의 판단이 아니라 사전에 안내하고 진행함). **버그 수정**: `margin`도
+  같은 방식으로 재사용하려 했으나, 저장 시도 시 `column "margin" can only be
+  updated to DEFAULT` 에러 발생 — 알고 보니 `margin`은 일반 컬럼이 아니라
+  PostgreSQL 생성 컬럼(generated column, 아마 `customer_charge - driver_payout`
+  기반 자동계산)이라 직접 UPDATE로 값을 넣을 수 없었음. `driver_payout`만
+  갱신하도록 수정하고 `margin`은 DB가 알아서 재계산하도록 둠(원칙 27번 사전확인
+  쿼리가 "컬럼 존재 여부"는 잡아냈지만 "generated column인지"까지는 안 잡아냈던
+  사례 — 비슷한 재사용 판단을 할 땐 `is_generated`/`generation_expression`도
+  같이 확인하는 습관이 필요함)
 
 ---
 
@@ -778,6 +788,17 @@ Enter키 자동제출 방지 완료·merge됨 + 2026-07-28: 배차 프로세스 
   드러났음(원칙 38번). Vercel 빌드 로그의 정확한 에러 메시지부터 확인할 것 —
   로컬에서 안 나던 에러라고 원인불명 취급하지 말고, "로컬은 조건이 다르다"는
   것부터 의심할 것
+- **기존 컬럼을 재사용하려고 `update()`했는데 "column ... can only be updated
+  to DEFAULT" 에러가 나면**: 그 컬럼이 PostgreSQL 생성 컬럼(generated column —
+  다른 컬럼으로부터 자동 계산되는 컬럼)이라 직접 값을 못 넣는 것임. 원칙 27번
+  사전확인 쿼리(`information_schema.columns`)는 컬럼이 "존재하는지"는 잡아내지만
+  "생성 컬럼인지"까지는 안 알려줌 — 이 에러를 실제로 만난 적 있음
+  (`dispatches.margin`을 재사용하려다가 발견, 알고 보니
+  `customer_charge - driver_payout` 자동계산 컬럼이었음). 의심되면
+  `select column_name, is_generated, generation_expression from
+  information_schema.columns where table_name = '...'`로 먼저 확인하고, 생성
+  컬럼이면 그 컬럼은 update 대상에서 빼고 원인이 되는 컬럼만 갱신하면 DB가
+  알아서 재계산함
 
 ---
 

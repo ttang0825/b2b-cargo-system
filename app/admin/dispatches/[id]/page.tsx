@@ -347,7 +347,6 @@ export default function DispatchDetailPage() {
         industrial_insurance_included: payoutCalcForm.industrial_insurance_included,
         industrial_insurance_rate: Number(payoutCalcForm.industrial_insurance_rate) || 0,
         driver_payout: result.driverTotalPayout || null,
-        margin: result.brokerMargin,
         updated_by: await getCurrentStaffId(),
       })
       .eq("id", id);
