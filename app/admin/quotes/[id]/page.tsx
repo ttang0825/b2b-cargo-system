@@ -92,6 +92,19 @@ function won(n: number | null) {
   return Math.round(n).toLocaleString("ko-KR") + "원";
 }
 
+// DB에서 읽은 타임스탬프(시간대 포함 저장)를 DateTimePicker가 쓰는
+// "YYYY-MM-DDTHH:mm" 로컬 시각 문자열로 변환. 문자열을 그대로 잘라 쓰면
+// (slice) 시간대가 있는 컬럼일 때 몇 시간씩 어긋나서 저장 후 값이 바뀐
+// 것처럼 보이는 버그가 있었음 — new Date()로 로컬 시각으로 정확히 변환
+function toLocalDateTimeInput(v: string | null) {
+  if (!v) return "";
+  const d = new Date(v);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
+    d.getMinutes()
+  )}`;
+}
+
 export default function QuoteDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -187,8 +200,8 @@ export default function QuoteDetailPage() {
       "왕복/편도": options["왕복/편도"] || "",
       waitingMinutes: options.대기시간_분 ? String(options.대기시간_분) : "",
       waypointCount: options.경유지수 ? String(options.경유지수) : "",
-      requested_pickup_at: data.requested_pickup_at ? data.requested_pickup_at.slice(0, 16) : "",
-      requested_dropoff_at: data.requested_dropoff_at ? data.requested_dropoff_at.slice(0, 16) : "",
+      requested_pickup_at: toLocalDateTimeInput(data.requested_pickup_at),
+      requested_dropoff_at: toLocalDateTimeInput(data.requested_dropoff_at),
       notes: data.notes || "",
       final_amount: data.final_amount != null ? String(Math.round(data.final_amount)) : "",
       loading_type: (data.loading_type as "exclusive" | "mixable") || "exclusive",
