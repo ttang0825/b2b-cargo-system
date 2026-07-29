@@ -11,6 +11,7 @@ import {
 } from "@/lib/dispatchStatusColors";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import { getCurrentStaffId } from "@/lib/currentStaff";
+import MoneyInput from "@/components/MoneyInput";
 
 type OrderLite = {
   id: string;
@@ -596,21 +597,11 @@ function DispatchesPageInner() {
             <div className="form-grid" style={{ padding: 0 }}>
               <div className="field">
                 <label>화주 청구운임(원)</label>
-                <input
-                  type="number"
-                  step={100}
-                  value={customerCharge}
-                  onChange={(e) => setCustomerCharge(e.target.value)}
-                />
+                <MoneyInput value={customerCharge} onChange={setCustomerCharge} />
               </div>
               <div className="field">
                 <label>차주 지급운임(원)</label>
-                <input
-                  type="number"
-                  step={100}
-                  value={driverPayout}
-                  onChange={(e) => setDriverPayout(e.target.value)}
-                />
+                <MoneyInput value={driverPayout} onChange={setDriverPayout} />
               </div>
               <div className="field" style={{ gridColumn: "1 / -1" }}>
                 <label>메모</label>
