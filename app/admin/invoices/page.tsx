@@ -47,6 +47,22 @@ function vatLabel(included: boolean | null | undefined) {
   return included ? "부가세 포함" : "부가세 별도";
 }
 
+// "일반오더/주선사정산"처럼 "/"가 들어간 라벨은 폭에 따라 auto-wrap이
+// 들쭉날쭉해지는 문제가 있어("/" 앞뒤로 안 끊기고 3줄로 갈라짐), "/" 뒤에서
+// 확실하게 한 번만 줄바꿈되도록 직접 나눈다. "/"가 없는 라벨은 그대로 한 줄.
+function SettlementBadgeLabel({ value }: { value: string | null | undefined }) {
+  const label = getSettlementTypeLabel(value);
+  const slashIdx = label.indexOf("/");
+  if (slashIdx === -1) return <>{label}</>;
+  return (
+    <>
+      {label.slice(0, slashIdx + 1)}
+      <br />
+      {label.slice(slashIdx + 1)}
+    </>
+  );
+}
+
 // "전체" 기간을 선택해도 한 번에 너무 많은 데이터를 불러오지 않도록 안전장치로 상한을 둠
 const ALL_PERIOD_LIMIT = 500;
 const FILTERED_PERIOD_LIMIT = 500;
@@ -542,7 +558,7 @@ export default function InvoicesPage() {
                 <th style={{ whiteSpace: "nowrap" }}>입금</th>
                 <th style={{ whiteSpace: "nowrap" }}>지급</th>
                 <th style={{ whiteSpace: "nowrap" }}>상태</th>
-                <th style={{ maxWidth: 90 }}>정산방식</th>
+                <th>정산방식</th>
               </tr>
             </thead>
             <tbody>
@@ -603,12 +619,12 @@ export default function InvoicesPage() {
                       {i.status}
                     </span>
                   </td>
-                  <td style={{ maxWidth: 90 }}>
+                  <td>
                     <span
                       className="badge"
-                      style={{ whiteSpace: "normal", textAlign: "center", lineHeight: 1.3 }}
+                      style={{ display: "inline-block", textAlign: "center", lineHeight: 1.5 }}
                     >
-                      {getSettlementTypeLabel(i.settlement_type)}
+                      <SettlementBadgeLabel value={i.settlement_type} />
                     </span>
                   </td>
                 </tr>
