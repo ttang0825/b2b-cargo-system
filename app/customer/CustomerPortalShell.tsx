@@ -4,17 +4,26 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
+import NavCountBadge from "@/components/NavCountBadge";
+import {
+  getLastSeen,
+  markSeen,
+  getAcknowledgedRequestIds,
+  acknowledgeRequestIds,
+} from "@/lib/portalNotifications";
 
 const PUBLIC_PATHS = ["/customer/login", "/customer/support-verify"];
 
-type NavItem = { href: string; label: string; key?: "quotes" | "dispatches" | "invoices" };
+type NotifyKey = "request" | "quotes" | "dispatches" | "invoices";
+
+type NavItem = { href: string; label: string; key?: NotifyKey };
 type NavGroup = { label: string; items: NavItem[] };
 
 const NAV_GROUPS: NavGroup[] = [
   {
     label: "운송 현황",
     items: [
-      { href: "/customer/request", label: "발주 요청" },
+      { href: "/customer/request", label: "발주 요청", key: "request" },
       { href: "/customer/quotes", label: "견적 확인", key: "quotes" },
       { href: "/customer/dispatches", label: "배차·운송 조회", key: "dispatches" },
       { href: "/customer/calendar", label: "캘린더" },
@@ -37,20 +46,30 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
+// pathname이 이 항목의 화면일 때 "확인함"으로 표시할 매핑
+const PATH_TO_NOTIFY_KEY: Record<string, NotifyKey | "announcements"> = {
+  "/customer/request": "request",
+  "/customer/quotes": "quotes",
+  "/customer/dispatches": "dispatches",
+  "/customer/invoices": "invoices",
+  "/customer/announcements": "announcements",
+};
+
 function NavDropdown({
   group,
   pathname,
-  hasNotice,
+  counts,
   open,
   onToggle,
 }: {
   group: NavGroup;
   pathname: string | null;
-  hasNotice: boolean;
+  counts: Record<string, number>;
   open: boolean;
   onToggle: () => void;
 }) {
   const isActiveGroup = group.items.some((i) => pathname?.startsWith(i.href));
+  const groupTotal = group.items.reduce((sum, i) => sum + (i.key ? counts[i.key] || 0 : 0), 0);
 
   return (
     <div style={{ position: "relative" }}>
@@ -58,23 +77,11 @@ function NavDropdown({
         type="button"
         onClick={onToggle}
         className={isActiveGroup ? "nav-chip nav-chip-active" : "nav-chip"}
-        style={{ border: "none", cursor: "pointer", position: "relative" }}
+        style={{ border: "none", cursor: "pointer" }}
       >
         {group.label}
         <span style={{ marginLeft: 5, fontSize: 9 }}>{open ? "▲" : "▼"}</span>
-        {hasNotice && (
-          <span
-            style={{
-              position: "absolute",
-              top: 4,
-              right: 4,
-              width: 7,
-              height: 7,
-              borderRadius: "50%",
-              background: "var(--danger)",
-            }}
-          />
-        )}
+        <NavCountBadge count={groupTotal} />
       </button>
       {open && (
         <div
@@ -83,29 +90,22 @@ function NavDropdown({
             position: "absolute",
             top: "calc(100% + 6px)",
             left: 0,
-            minWidth: 180,
+            minWidth: 190,
             padding: 6,
             zIndex: 30,
           }}
         >
           {group.items.map((item) => {
             const active = pathname?.startsWith(item.href);
+            const count = item.key ? counts[item.key] || 0 : 0;
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                style={{
-                  display: "block",
-                  padding: "9px 12px",
-                  borderRadius: 8,
-                  fontSize: 13,
-                  fontWeight: active ? 700 : 500,
-                  color: active ? "var(--accent)" : "var(--text)",
-                  background: active ? "var(--accent-soft)" : "transparent",
-                  textDecoration: "none",
-                }}
+                className={active ? "nav-dropdown-item nav-dropdown-item-active" : "nav-dropdown-item"}
               >
                 {item.label}
+                <NavCountBadge count={count} />
               </Link>
             );
           })}
@@ -120,10 +120,59 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
   const pathname = usePathname();
   const [checking, setChecking] = useState(true);
   const [companyName, setCompanyName] = useState("");
-  const [notified, setNotified] = useState({ quotes: false, dispatches: false, invoices: false, announcements: false });
+  const [companyId, setCompanyId] = useState<string | null>(null);
+  const [counts, setCounts] = useState<Record<string, number>>({
+    request: 0,
+    quotes: 0,
+    dispatches: 0,
+    invoices: 0,
+    announcements: 0,
+  });
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navGroupRef = useRef<HTMLDivElement>(null);
+
+  // 항목별 배지 개수를 다시 계산 — quotes/dispatches/invoices/announcements는
+  // "마지막 확인 시각 이후 변경된 행 수", 발주요청은 "대기중을 벗어났는데
+  // 아직 확인 안 한 건 수"(공지사항과 달리 화주 본인이 직접 등록도 하는
+  // 테이블이라 시각 비교만으로는 방금 등록한 대기중 건까지 안읽음으로 잡힘)
+  async function loadCounts(company: string | null) {
+    const epoch = "1970-01-01T00:00:00.000Z";
+    const [quotesRes, dispatchesRes, invoicesRes, announcementsRes, requestRes] = await Promise.all([
+      supabase
+        .from("quotes")
+        .select("id", { count: "exact", head: true })
+        .gt("updated_at", getLastSeen("quotes") || epoch),
+      supabase
+        .from("dispatches")
+        .select("id", { count: "exact", head: true })
+        .gt("updated_at", getLastSeen("dispatches") || epoch),
+      supabase
+        .from("invoices")
+        .select("id", { count: "exact", head: true })
+        .gt("updated_at", getLastSeen("invoices") || epoch),
+      supabase
+        .from("announcements")
+        .select("id", { count: "exact", head: true })
+        .gt("created_at", getLastSeen("announcements") || epoch),
+      company
+        ? supabase.from("portal_order_requests").select("id").eq("company_id", company).neq("status", "대기중")
+        : Promise.resolve({ data: [] as { id: string }[] }),
+    ]);
+
+    const acknowledged = new Set(getAcknowledgedRequestIds());
+    const requestUnread = ((requestRes.data as { id: string }[]) || []).filter(
+      (r) => !acknowledged.has(r.id)
+    ).length;
+
+    setCounts({
+      quotes: quotesRes.count || 0,
+      dispatches: dispatchesRes.count || 0,
+      invoices: invoicesRes.count || 0,
+      announcements: announcementsRes.count || 0,
+      request: requestUnread,
+    });
+  }
 
   useEffect(() => {
     async function check() {
@@ -143,7 +192,7 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
 
       const { data: account } = await supabase
         .from("customer_accounts")
-        .select("must_change_password, is_active, companies(name)")
+        .select("must_change_password, is_active, company_id, companies(name)")
         .eq("auth_user_id", session.user.id)
         .single();
 
@@ -159,16 +208,28 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
       }
 
       setCompanyName((account.companies as any)?.name || "");
+      setCompanyId(account.company_id || null);
       setChecking(false);
 
-      if (pathname === "/customer/quotes") setNotified((prev) => ({ ...prev, quotes: false }));
-      if (pathname === "/customer/dispatches") setNotified((prev) => ({ ...prev, dispatches: false }));
-      if (pathname === "/customer/invoices") setNotified((prev) => ({ ...prev, invoices: false }));
-      if (pathname === "/customer/announcements") setNotified((prev) => ({ ...prev, announcements: false }));
+      // 이 화면에 들어왔으면 해당 항목은 "확인함"으로 기록
+      const notifyKey = PATH_TO_NOTIFY_KEY[pathname || ""];
+      if (notifyKey === "request" && account.company_id) {
+        const { data: settled } = await supabase
+          .from("portal_order_requests")
+          .select("id")
+          .eq("company_id", account.company_id)
+          .neq("status", "대기중");
+        acknowledgeRequestIds(((settled as { id: string }[]) || []).map((r) => r.id));
+      } else if (notifyKey) {
+        markSeen(notifyKey);
+      }
+
+      loadCounts(account.company_id || null);
     }
     check();
     setOpenGroup(null);
     setMobileMenuOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname, router]);
 
   // 드롭다운이 열려있을 때 메뉴 바깥의 빈 곳을 클릭하면 닫히게 함
@@ -188,25 +249,18 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
 
     const channel = supabase
       .channel("customer_layout_notifications")
-      .on("postgres_changes", { event: "*", schema: "public", table: "quotes" }, () => {
-        setNotified((prev) => (pathname === "/customer/quotes" ? prev : { ...prev, quotes: true }));
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "dispatches" }, () => {
-        setNotified((prev) => (pathname === "/customer/dispatches" ? prev : { ...prev, dispatches: true }));
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "invoices" }, () => {
-        setNotified((prev) => (pathname === "/customer/invoices" ? prev : { ...prev, invoices: true }));
-      })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "announcements" }, () => {
-        setNotified((prev) => (pathname === "/customer/announcements" ? prev : { ...prev, announcements: true }));
-      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "quotes" }, () => loadCounts(companyId))
+      .on("postgres_changes", { event: "*", schema: "public", table: "dispatches" }, () => loadCounts(companyId))
+      .on("postgres_changes", { event: "*", schema: "public", table: "invoices" }, () => loadCounts(companyId))
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "announcements" }, () => loadCounts(companyId))
+      .on("postgres_changes", { event: "*", schema: "public", table: "portal_order_requests" }, () => loadCounts(companyId))
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
+  }, [pathname, companyId]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -227,6 +281,12 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
     );
   }
 
+  // 지금 보고 있는 화면의 항목은 배지를 0으로 눌러둠 — 이미 보고 있는데
+  // 실시간 이벤트로 배지가 다시 뜨는 걸 방지 (기존 boolean 방식의 "현재
+  // 페이지면 건드리지 않음" 동작을 렌더 시점 계산으로 대체)
+  const currentNotifyKey = PATH_TO_NOTIFY_KEY[pathname || ""];
+  const displayCounts = currentNotifyKey ? { ...counts, [currentNotifyKey]: 0 } : counts;
+
   return (
     <div className="portal-theme" style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       <div className="top-nav">
@@ -245,7 +305,7 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
                 key={group.label}
                 group={group}
                 pathname={pathname}
-                hasNotice={group.items.some((i) => i.key && (notified as any)[i.key])}
+                counts={displayCounts}
                 open={openGroup === group.label}
                 onToggle={() => setOpenGroup((g) => (g === group.label ? null : group.label))}
               />
@@ -253,12 +313,9 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
             <Link
               href="/customer/announcements"
               className={pathname === "/customer/announcements" ? "nav-chip nav-chip-active" : "nav-chip"}
-              style={{ position: "relative" }}
             >
               공지사항
-              {notified.announcements && (
-                <span style={{ position: "absolute", top: 4, right: 4, width: 7, height: 7, borderRadius: "50%", background: "var(--danger)" }} />
-              )}
+              <NavCountBadge count={displayCounts.announcements || 0} />
             </Link>
             <button
               onClick={handleLogout}
@@ -296,7 +353,7 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
                 </div>
                 {group.items.map((item) => {
                   const active = pathname?.startsWith(item.href);
-                  const hasDot = item.key && (notified as any)[item.key];
+                  const count = item.key ? displayCounts[item.key] || 0 : 0;
                   return (
                     <Link
                       key={item.href}
@@ -313,9 +370,7 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
                       }}
                     >
                       {item.label}
-                      {hasDot && (
-                        <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--danger)" }} />
-                      )}
+                      <NavCountBadge count={count} />
                     </Link>
                   );
                 })}
@@ -337,9 +392,7 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
               }}
             >
               공지사항
-              {notified.announcements && (
-                <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--danger)" }} />
-              )}
+              <NavCountBadge count={displayCounts.announcements || 0} />
             </Link>
             <button
               onClick={handleLogout}

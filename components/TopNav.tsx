@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { supabaseAdminAuth } from "@/lib/supabaseAdminAuthClient";
 import { onBadgeRefresh } from "@/lib/notifyBadgeRefresh";
 import { getCurrentStaffInfo, onCurrentStaffChange, clearCurrentStaffCache } from "@/lib/currentStaff";
+import NavCountBadge from "@/components/NavCountBadge";
 
 type NavItem = { href: string; label: string; key?: "applications" | "publicQuotes" | "portalRequests" };
 type NavGroup = { label: string; items: NavItem[] };
@@ -65,30 +66,6 @@ function isNavItemActive(pathname: string | null, fromCustomers: boolean, href: 
   return !!pathname?.startsWith(href);
 }
 
-function Badge({ count }: { count: number }) {
-  return (
-    <span
-      style={{
-        marginLeft: 6,
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        minWidth: 16,
-        height: 16,
-        padding: "0 4px",
-        borderRadius: 999,
-        background: "var(--danger)",
-        color: "#fff",
-        fontSize: 10,
-        fontWeight: 800,
-        visibility: count > 0 ? "visible" : "hidden",
-      }}
-    >
-      {count}
-    </span>
-  );
-}
-
 function NavDropdown({
   group,
   pathname,
@@ -117,7 +94,7 @@ function NavDropdown({
       >
         {group.label}
         <span style={{ marginLeft: 5, fontSize: 9 }}>{open ? "▲" : "▼"}</span>
-        <Badge count={groupTotal} />
+        <NavCountBadge count={groupTotal} />
       </button>
       {open && (
         <div
@@ -134,7 +111,7 @@ function NavDropdown({
                 className={active ? "nav-dropdown-item nav-dropdown-item-active" : "nav-dropdown-item"}
               >
                 {item.label}
-                <Badge count={count} />
+                <NavCountBadge count={count} />
               </Link>
             );
           })}
@@ -389,7 +366,7 @@ function TopNavInner() {
                     }}
                   >
                     {item.label}
-                    <Badge count={count} />
+                    <NavCountBadge count={count} />
                   </Link>
                 );
               })}
