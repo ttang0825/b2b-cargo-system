@@ -12,6 +12,7 @@ import {
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import { getCurrentStaffId } from "@/lib/currentStaff";
 import { SETTLEMENT_TYPES, getSettlementTypeLabel } from "@/lib/constants";
+import MoneyInput from "@/components/MoneyInput";
 
 type OrderLite = {
   id: string;
@@ -29,6 +30,8 @@ type InvoiceRow = {
   billing_period: string | null;
   customer_charge_total: number | null;
   driver_payout_total: number | null;
+  customer_charge_vat_included: boolean | null;
+  driver_vat_included: boolean | null;
   commission_total: number | null;
   tax_invoice_issued: boolean;
   payment_received: boolean;
@@ -39,6 +42,10 @@ type InvoiceRow = {
   orders: { order_no: string | null; guest_name: string | null } | null;
   companies: { name: string } | null;
 };
+
+function vatLabel(included: boolean | null | undefined) {
+  return included ? "부가세 포함" : "부가세 별도";
+}
 
 // "전체" 기간을 선택해도 한 번에 너무 많은 데이터를 불러오지 않도록 안전장치로 상한을 둠
 const ALL_PERIOD_LIMIT = 500;
@@ -71,6 +78,8 @@ export default function InvoicesPage() {
   const [billingPeriod, setBillingPeriod] = useState(currentMonth());
   const [customerChargeTotal, setCustomerChargeTotal] = useState("");
   const [driverPayoutTotal, setDriverPayoutTotal] = useState("");
+  const [customerChargeVatIncluded, setCustomerChargeVatIncluded] = useState(false);
+  const [driverVatIncluded, setDriverVatIncluded] = useState(false);
   const [paymentDueDate, setPaymentDueDate] = useState("");
 
   async function loadInvoices(preset: DatePreset = period) {
@@ -79,7 +88,7 @@ export default function InvoicesPage() {
     let query = supabase
       .from("invoices")
       .select(
-        "id,billing_period,customer_charge_total,driver_payout_total,commission_total,tax_invoice_issued,payment_received,driver_paid,status,settlement_type,created_at,orders(order_no,guest_name),companies(name)"
+        "id,billing_period,customer_charge_total,driver_payout_total,customer_charge_vat_included,driver_vat_included,commission_total,tax_invoice_issued,payment_received,driver_paid,status,settlement_type,created_at,orders(order_no,guest_name),companies(name)"
       )
       .order("created_at", { ascending: false })
       .limit(preset === "all" ? ALL_PERIOD_LIMIT : FILTERED_PERIOD_LIMIT);
@@ -126,10 +135,12 @@ export default function InvoicesPage() {
     setSelectedOrderId(orderId);
     setCustomerChargeTotal("");
     setDriverPayoutTotal("");
+    setCustomerChargeVatIncluded(false);
+    setDriverVatIncluded(false);
 
     const { data: dispatch } = await supabase
       .from("dispatches")
-      .select("customer_charge, driver_payout")
+      .select("customer_charge, driver_payout, customer_charge_vat_included, driver_vat_included")
       .eq("order_id", orderId)
       .maybeSingle();
     if (dispatch && (dispatch.customer_charge || dispatch.driver_payout)) {
@@ -139,6 +150,8 @@ export default function InvoicesPage() {
       setDriverPayoutTotal(
         dispatch.driver_payout ? String(Math.round(dispatch.driver_payout)) : ""
       );
+      setCustomerChargeVatIncluded(dispatch.customer_charge_vat_included ?? false);
+      setDriverVatIncluded(dispatch.driver_vat_included ?? false);
       return;
     }
 
@@ -182,6 +195,8 @@ export default function InvoicesPage() {
       billing_period: billingPeriod || null,
       customer_charge_total: chargeNum || null,
       driver_payout_total: payoutNum || null,
+      customer_charge_vat_included: customerChargeVatIncluded,
+      driver_vat_included: driverVatIncluded,
       commission_total: commission || null,
       payment_due_date: paymentDueDate || null,
       receivable_amount: chargeNum || null,
@@ -262,6 +277,8 @@ export default function InvoicesPage() {
     setSelectedOrderId("");
     setCustomerChargeTotal("");
     setDriverPayoutTotal("");
+    setCustomerChargeVatIncluded(false);
+    setDriverVatIncluded(false);
     setPaymentDueDate("");
     loadInvoices(period);
     loadAvailableOrders();
@@ -351,19 +368,61 @@ export default function InvoicesPage() {
               </div>
               <div className="field">
                 <label>화주 청구금액(원) *</label>
-                <input
-                  type="number"
-                  value={customerChargeTotal}
-                  onChange={(e) => setCustomerChargeTotal(e.target.value)}
-                />
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <MoneyInput
+                    value={customerChargeTotal}
+                    onChange={setCustomerChargeTotal}
+                    style={{ flex: 1, minWidth: 0 }}
+                  />
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      fontSize: 12.5,
+                      fontWeight: 400,
+                      color: "var(--text-muted)",
+                      whiteSpace: "nowrap",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={customerChargeVatIncluded}
+                      onChange={(e) => setCustomerChargeVatIncluded(e.target.checked)}
+                    />
+                    부가세 포함
+                  </label>
+                </div>
               </div>
               <div className="field">
                 <label>차주 지급금액(원) *</label>
-                <input
-                  type="number"
-                  value={driverPayoutTotal}
-                  onChange={(e) => setDriverPayoutTotal(e.target.value)}
-                />
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <MoneyInput
+                    value={driverPayoutTotal}
+                    onChange={setDriverPayoutTotal}
+                    style={{ flex: 1, minWidth: 0 }}
+                  />
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      fontSize: 12.5,
+                      fontWeight: 400,
+                      color: "var(--text-muted)",
+                      whiteSpace: "nowrap",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={driverVatIncluded}
+                      onChange={(e) => setDriverVatIncluded(e.target.checked)}
+                    />
+                    부가세 포함
+                  </label>
+                </div>
               </div>
             </div>
 
@@ -475,15 +534,15 @@ export default function InvoicesPage() {
               <tr>
                 <th>오더번호</th>
                 <th>화주</th>
-                <th>정산월</th>
-                <th>청구금액</th>
-                <th>지급금액</th>
-                <th>수수료</th>
-                <th>세금계산서</th>
-                <th>입금</th>
-                <th>지급</th>
-                <th>상태</th>
-                <th>정산방식</th>
+                <th style={{ whiteSpace: "nowrap" }}>정산월</th>
+                <th style={{ whiteSpace: "nowrap" }}>청구금액</th>
+                <th style={{ whiteSpace: "nowrap" }}>지급금액</th>
+                <th style={{ whiteSpace: "nowrap" }}>수수료</th>
+                <th style={{ whiteSpace: "nowrap" }}>세금계산서</th>
+                <th style={{ whiteSpace: "nowrap" }}>입금</th>
+                <th style={{ whiteSpace: "nowrap" }}>지급</th>
+                <th style={{ whiteSpace: "nowrap" }}>상태</th>
+                <th style={{ maxWidth: 90 }}>정산방식</th>
               </tr>
             </thead>
             <tbody>
@@ -504,22 +563,32 @@ export default function InvoicesPage() {
                       </span>
                     )}
                   </td>
-                  <td>
+                  <td style={{ whiteSpace: "nowrap" }}>
                     <span className="num">{i.billing_period || "-"}</span>
                   </td>
-                  <td>
+                  <td style={{ whiteSpace: "nowrap" }}>
                     <span className="num">{won(i.customer_charge_total)}</span>
+                    {i.customer_charge_total != null && (
+                      <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                        {vatLabel(i.customer_charge_vat_included)}
+                      </div>
+                    )}
                   </td>
-                  <td>
+                  <td style={{ whiteSpace: "nowrap" }}>
                     <span className="num">{won(i.driver_payout_total)}</span>
+                    {i.driver_payout_total != null && (
+                      <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                        {vatLabel(i.driver_vat_included)}
+                      </div>
+                    )}
                   </td>
-                  <td>
+                  <td style={{ whiteSpace: "nowrap" }}>
                     <span className="num">{won(i.commission_total)}</span>
                   </td>
-                  <td>{i.tax_invoice_issued ? "발행" : "-"}</td>
-                  <td>{i.payment_received ? "완료" : "대기"}</td>
-                  <td>{i.driver_paid ? "완료" : "대기"}</td>
-                  <td>
+                  <td style={{ whiteSpace: "nowrap" }}>{i.tax_invoice_issued ? "발행" : "-"}</td>
+                  <td style={{ whiteSpace: "nowrap" }}>{i.payment_received ? "완료" : "대기"}</td>
+                  <td style={{ whiteSpace: "nowrap" }}>{i.driver_paid ? "완료" : "대기"}</td>
+                  <td style={{ whiteSpace: "nowrap" }}>
                     <span
                       style={{
                         display: "inline-block",
@@ -534,8 +603,13 @@ export default function InvoicesPage() {
                       {i.status}
                     </span>
                   </td>
-                  <td>
-                    <span className="badge">{getSettlementTypeLabel(i.settlement_type)}</span>
+                  <td style={{ maxWidth: 90 }}>
+                    <span
+                      className="badge"
+                      style={{ whiteSpace: "normal", textAlign: "center", lineHeight: 1.3 }}
+                    >
+                      {getSettlementTypeLabel(i.settlement_type)}
+                    </span>
                   </td>
                 </tr>
               ))}

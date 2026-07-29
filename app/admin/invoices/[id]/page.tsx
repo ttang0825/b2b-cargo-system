@@ -21,6 +21,10 @@ function won(n: number | null) {
   return Math.round(n).toLocaleString("ko-KR") + "원";
 }
 
+function vatLabel(included: boolean | null | undefined) {
+  return included ? "부가세 포함" : "부가세 별도";
+}
+
 export default function InvoiceDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -371,6 +375,11 @@ export default function InvoiceDetailPage() {
             <div style={{ fontSize: 14, fontWeight: 600 }}>
               {won(invoice.customer_charge_total)}
             </div>
+            {invoice.customer_charge_total != null && (
+              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                {vatLabel(invoice.customer_charge_vat_included)}
+              </div>
+            )}
           </div>
           <div>
             <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
@@ -379,6 +388,11 @@ export default function InvoiceDetailPage() {
             <div style={{ fontSize: 14, fontWeight: 600 }}>
               {won(invoice.driver_payout_total)}
             </div>
+            {invoice.driver_payout_total != null && (
+              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                {vatLabel(invoice.driver_vat_included)}
+              </div>
+            )}
           </div>
           <div>
             <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>

@@ -17,6 +17,7 @@ import SettlementTypeChangeModal from "@/components/SettlementTypeChangeModal";
 import { optimisticUpdate } from "@/lib/optimisticUpdate";
 import { logSettlementTypeChange } from "@/lib/settlementTypeChangeLog";
 import { calcSettlement } from "@/lib/settlementCalc";
+import MoneyInput from "@/components/MoneyInput";
 import {
   getLatestInsuranceRateSettings,
   DEFAULT_INSURANCE_RATE_SETTINGS,
@@ -425,6 +426,8 @@ export default function DispatchDetailPage() {
       billing_period: billingPeriod,
       customer_charge_total: charge || null,
       driver_payout_total: payout || null,
+      customer_charge_vat_included: editForm.customer_charge_vat_included,
+      driver_vat_included: dispatch?.driver_vat_included ?? false,
       commission_total: charge - payout || null,
       receivable_amount: charge || null,
       payable_amount: payout || null,
@@ -979,13 +982,9 @@ export default function DispatchDetailPage() {
           <div className="field">
             <label>화주 청구운임(원)</label>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <input
-                type="number"
-                step={100}
-                value={editForm.customer_charge}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, customer_charge: e.target.value })
-                }
+              <MoneyInput
+                value={String(editForm.customer_charge)}
+                onChange={(v) => setEditForm({ ...editForm, customer_charge: v })}
                 style={{ flex: 1, minWidth: 0 }}
               />
               <label
@@ -1013,13 +1012,9 @@ export default function DispatchDetailPage() {
           </div>
           <div className="field">
             <label>차주 지급운임(원)</label>
-            <input
-              type="number"
-              step={100}
-              value={editForm.driver_payout}
-              onChange={(e) =>
-                setEditForm({ ...editForm, driver_payout: e.target.value })
-              }
+            <MoneyInput
+              value={String(editForm.driver_payout)}
+              onChange={(v) => setEditForm({ ...editForm, driver_payout: v })}
             />
           </div>
         </div>
@@ -1054,13 +1049,9 @@ export default function DispatchDetailPage() {
                 <div className="form-grid" style={{ padding: 0, marginBottom: 10 }}>
                   <div className="field">
                     <label>차주 기본운임(원)</label>
-                    <input
-                      type="number"
-                      step={100}
+                    <MoneyInput
                       value={payoutCalcForm.driver_base_fare}
-                      onChange={(e) =>
-                        setPayoutCalcForm({ ...payoutCalcForm, driver_base_fare: e.target.value })
-                      }
+                      onChange={(v) => setPayoutCalcForm({ ...payoutCalcForm, driver_base_fare: v })}
                     />
                   </div>
                 </div>
