@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
-
-const LAST_SEEN_KEY = "wecarry_announcements_last_seen";
+import { ANNOUNCEMENTS_LAST_SEEN_KEY as LAST_SEEN_KEY } from "@/lib/portalNotifications";
 
 export default function PortalAnnouncementsPage() {
   const [items, setItems] = useState<any[]>([]);
