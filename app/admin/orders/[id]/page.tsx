@@ -17,6 +17,7 @@ import { optimisticUpdate } from "@/lib/optimisticUpdate";
 import { logSettlementTypeChange } from "@/lib/settlementTypeChangeLog";
 import MoneyInput from "@/components/MoneyInput";
 import { getLatestMixedLoadingDiscountSettings } from "@/lib/mixedLoadingDiscountSettings";
+import { localInputToISOString, toLocalDateTimeInput } from "@/lib/localDateTime";
 
 function won(n: number | null) {
   if (n === null || n === undefined) return "-";
@@ -159,12 +160,8 @@ export default function OrderDetailPage() {
       mixed_discount_percent: data.mixed_discount_percent ? String(data.mixed_discount_percent) : "",
       mixed_note: data.mixed_note || "",
       item: data.item || "",
-      requested_pickup_at: data.requested_pickup_at
-        ? data.requested_pickup_at.slice(0, 16)
-        : "",
-      requested_delivery_at: data.requested_delivery_at
-        ? data.requested_delivery_at.slice(0, 16)
-        : "",
+      requested_pickup_at: toLocalDateTimeInput(data.requested_pickup_at),
+      requested_delivery_at: toLocalDateTimeInput(data.requested_delivery_at),
       load_condition: data.load_condition || "",
       unload_condition: data.unload_condition || "",
       special_notes: data.special_notes || "",
@@ -208,8 +205,8 @@ export default function OrderDetailPage() {
       mixed_discount_percent: Number(editForm.mixed_discount_percent) || 0,
       mixed_note: editForm.loading_type === "mixable" ? editForm.mixed_note || null : null,
       item: editForm.item || null,
-      requested_pickup_at: editForm.requested_pickup_at || null,
-      requested_delivery_at: editForm.requested_delivery_at || null,
+      requested_pickup_at: localInputToISOString(editForm.requested_pickup_at),
+      requested_delivery_at: localInputToISOString(editForm.requested_delivery_at),
       load_condition: editForm.load_condition || null,
       unload_condition: editForm.unload_condition || null,
       special_notes: editForm.special_notes || null,

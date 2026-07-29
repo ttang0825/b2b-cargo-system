@@ -13,6 +13,7 @@ import { getOrCreateIndividualCustomer, findIndividualCustomerByPhone } from "@/
 import DateTimePicker from "@/components/DateTimePicker";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import AddressSearch from "@/components/AddressSearch";
+import { localInputToISOString, toLocalDateTimeInput } from "@/lib/localDateTime";
 
 type CompanyLite = { id: string; name: string; phone: string | null };
 
@@ -176,8 +177,8 @@ function OrdersPageInner() {
         load_condition: options.상차조건 || "",
         unload_condition: options.하차조건 || "",
         special_notes: q.notes || "",
-        requested_pickup_at: q.requested_pickup_at ? q.requested_pickup_at.slice(0, 16) : "",
-        requested_delivery_at: q.requested_dropoff_at ? q.requested_dropoff_at.slice(0, 16) : "",
+        requested_pickup_at: toLocalDateTimeInput(q.requested_pickup_at),
+        requested_delivery_at: toLocalDateTimeInput(q.requested_dropoff_at),
       }));
       if (q.company_id && (q as any).companies) {
         setCustomerMode("company");
@@ -305,8 +306,8 @@ function OrdersPageInner() {
       mixed_discount_percent: form.mixed_discount_percent || 0,
       mixed_note: form.loading_type === "mixable" ? form.mixed_note || null : null,
       item: form.item || null,
-      requested_pickup_at: form.requested_pickup_at || null,
-      requested_delivery_at: form.requested_delivery_at || null,
+      requested_pickup_at: localInputToISOString(form.requested_pickup_at),
+      requested_delivery_at: localInputToISOString(form.requested_delivery_at),
       load_condition: form.load_condition || null,
       unload_condition: form.unload_condition || null,
       special_notes: form.special_notes || null,

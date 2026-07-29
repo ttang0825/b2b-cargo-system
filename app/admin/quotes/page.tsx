@@ -14,6 +14,7 @@ import DateTimePicker from "@/components/DateTimePicker";
 import AddressSearch from "@/components/AddressSearch";
 import MoneyInput from "@/components/MoneyInput";
 import { getLatestMixedLoadingDiscountSettings } from "@/lib/mixedLoadingDiscountSettings";
+import { localInputToISOString, toLocalDateTimeInput } from "@/lib/localDateTime";
 
 const VEHICLES = ["1톤", "1.4톤", "2.5톤", "3.5톤", "5톤", "5톤 플러스/축"];
 
@@ -263,10 +264,10 @@ function QuotesPageInner() {
           reqData.waypoint_count != null ? String(reqData.waypoint_count) : prev.waypointCount,
         item: reqData.item || "",
         requested_pickup_at: reqData.requested_pickup_at
-          ? reqData.requested_pickup_at.slice(0, 16)
+          ? toLocalDateTimeInput(reqData.requested_pickup_at)
           : prev.requested_pickup_at,
         requested_dropoff_at: reqData.requested_dropoff_at
-          ? reqData.requested_dropoff_at.slice(0, 16)
+          ? toLocalDateTimeInput(reqData.requested_dropoff_at)
           : prev.requested_dropoff_at,
         notes: reqData.notes || prev.notes,
       }));
@@ -320,7 +321,7 @@ function QuotesPageInner() {
         상차조건: reqData.pickup_loading_method || prev.상차조건,
         하차조건: reqData.dropoff_loading_method || prev.하차조건,
         requested_pickup_at: reqData.requested_pickup_at
-          ? reqData.requested_pickup_at.slice(0, 16)
+          ? toLocalDateTimeInput(reqData.requested_pickup_at)
           : prev.requested_pickup_at,
         notes: reqData.notes || prev.notes,
       }));
@@ -650,8 +651,8 @@ function QuotesPageInner() {
         final_amount:
           useManualFinalAmount && finalAmountOverride ? Number(finalAmountOverride) : calc.final,
         status: "상담중",
-        requested_pickup_at: form.requested_pickup_at || null,
-        requested_dropoff_at: form.requested_dropoff_at || null,
+        requested_pickup_at: localInputToISOString(form.requested_pickup_at),
+        requested_dropoff_at: localInputToISOString(form.requested_dropoff_at),
         notes: form.notes || null,
         selected_options: {
           톤수: form.vehicle_type,

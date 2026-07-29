@@ -8,6 +8,7 @@ import { LOADING_METHODS } from "@/lib/loadingMethods";
 import DateTimePicker from "@/components/DateTimePicker";
 import AddressSearch from "@/components/AddressSearch";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
+import { localInputToISOString } from "@/lib/localDateTime";
 
 export default function PublicQuotePage() {
   const [saving, setSaving] = useState(false);
@@ -84,7 +85,7 @@ export default function PublicQuotePage() {
       item: form.item || null,
       pickup_loading_method: form.pickup_loading_method || null,
       dropoff_loading_method: form.dropoff_loading_method || null,
-      requested_pickup_at: form.requested_pickup_at || null,
+      requested_pickup_at: localInputToISOString(form.requested_pickup_at),
       notes: form.notes || null,
       status: "신규",
     });

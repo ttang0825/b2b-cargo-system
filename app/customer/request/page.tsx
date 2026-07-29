@@ -7,6 +7,7 @@ import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import DateTimePicker from "@/components/DateTimePicker";
 import AddressSearch from "@/components/AddressSearch";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
+import { localInputToISOString } from "@/lib/localDateTime";
 
 const REQUEST_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   대기중: { bg: "#fff1e2", text: "#d9730d" },
@@ -227,8 +228,8 @@ export default function PortalRequestPage() {
       waiting_minutes: form.waitingMinutes ? Number(form.waitingMinutes) : null,
       waypoint_count: form.waypointCount ? Number(form.waypointCount) : null,
       item: form.item || null,
-      requested_pickup_at: form.requested_pickup_at || null,
-      requested_dropoff_at: form.requested_dropoff_at || null,
+      requested_pickup_at: localInputToISOString(form.requested_pickup_at),
+      requested_dropoff_at: localInputToISOString(form.requested_dropoff_at),
       notes: form.notes || null,
       status: "대기중",
     });

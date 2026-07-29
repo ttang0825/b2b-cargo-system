@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
@@ -15,6 +15,7 @@ import {
 } from "@/lib/mixedLoadingDiscountSettings";
 import AddressSearch from "@/components/AddressSearch";
 import DateTimePicker from "@/components/DateTimePicker";
+import { localInputToISOString, toLocalDateTimeInput } from "@/lib/localDateTime";
 import MoneyInput from "@/components/MoneyInput";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
 import ConflictWarning from "@/components/ConflictWarning";
@@ -92,17 +93,9 @@ function won(n: number | null) {
   return Math.round(n).toLocaleString("ko-KR") + "원";
 }
 
-// DB에서 읽은 타임스탬프(시간대 포함 저장)를 DateTimePicker가 쓰는
-// "YYYY-MM-DDTHH:mm" 로컬 시각 문자열로 변환. 문자열을 그대로 잘라 쓰면
-// (slice) 시간대가 있는 컬럼일 때 몇 시간씩 어긋나서 저장 후 값이 바뀐
-// 것처럼 보이는 버그가 있었음 — new Date()로 로컬 시각으로 정확히 변환
-function toLocalDateTimeInput(v: string | null) {
-  if (!v) return "";
-  const d = new Date(v);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
-    d.getMinutes()
-  )}`;
+// 견적 관리는 거리기반 최소 간격(100km당 1h, 2~5h 범위) 규칙을 씀 (원칙 6번)
+function calcMinGapHours(distanceKm: number) {
+  return Math.min(5, Math.max(2, 2 + Math.floor(distanceKm / 100)));
 }
 
 export default function QuoteDetailPage() {
@@ -154,6 +147,22 @@ export default function QuoteDetailPage() {
     mixed_discount_percent: "",
     mixed_note: "",
   });
+
+  // 희망 상차일시는 현재 시각 이후로만 선택 가능 (원칙 6번)
+  const nowDateTime = useMemo(() => toLocalDateTimeInput(new Date().toISOString()), []);
+
+  // 거리 기준 최소 하차일시 (희망 상차일시가 있어야 계산됨)
+  const minDropoffDateTime = useMemo(() => {
+    if (!editForm.requested_pickup_at) return undefined;
+    const gapHours = calcMinGapHours(Number(editForm.distance_km) || 0);
+    const pickup = new Date(editForm.requested_pickup_at);
+    pickup.setHours(pickup.getHours() + gapHours);
+    return toLocalDateTimeInput(pickup.toISOString());
+  }, [editForm.requested_pickup_at, editForm.distance_km]);
+
+  const minDropoffLabel = editForm.requested_pickup_at
+    ? `거리 기준 상차 후 최소 ${calcMinGapHours(Number(editForm.distance_km) || 0)}시간 이후로 선택해주세요`
+    : undefined;
 
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
@@ -261,9 +270,28 @@ export default function QuoteDetailPage() {
 
   async function handleSave(force = false) {
     if (!quote) return;
-    setSaving(true);
     setSaveError(null);
     setConflict(false);
+
+    if (
+      editForm.requested_pickup_at &&
+      new Date(editForm.requested_pickup_at).getTime() < Date.now() - 60000
+    ) {
+      setSaveError("희망 상차일시는 현재 시각 이후로 설정해주세요.");
+      return;
+    }
+    if (editForm.requested_pickup_at && editForm.requested_dropoff_at) {
+      const gapHours = calcMinGapHours(Number(editForm.distance_km) || 0);
+      const diffMs =
+        new Date(editForm.requested_dropoff_at).getTime() -
+        new Date(editForm.requested_pickup_at).getTime();
+      if (diffMs < gapHours * 60 * 60 * 1000) {
+        setSaveError(`희망 하차일시는 상차일시 기준 최소 ${gapHours}시간 이후로 설정해주세요.`);
+        return;
+      }
+    }
+
+    setSaving(true);
 
     const fullOrigin = [editForm.origin, editForm.originDetail].filter((v) => v.trim()).join(" ");
     const fullDestination = [editForm.destination, editForm.destinationDetail]
@@ -280,8 +308,8 @@ export default function QuoteDetailPage() {
       distance_km: Number(editForm.distance_km) || null,
       vehicle_type: editForm.vehicle_type,
       item: editForm.item || null,
-      requested_pickup_at: editForm.requested_pickup_at || null,
-      requested_dropoff_at: editForm.requested_dropoff_at || null,
+      requested_pickup_at: localInputToISOString(editForm.requested_pickup_at),
+      requested_dropoff_at: localInputToISOString(editForm.requested_dropoff_at),
       notes: editForm.notes || null,
       final_amount: Number(editForm.final_amount) || null,
       loading_type: editForm.loading_type,
@@ -643,6 +671,7 @@ export default function QuoteDetailPage() {
                 label="희망 상차 일시"
                 value={editForm.requested_pickup_at}
                 onChange={(v) => setEditForm({ ...editForm, requested_pickup_at: v })}
+                minDateTime={nowDateTime}
               />
             </div>
             <div style={{ gridColumn: "1 / -1" }}>
@@ -650,6 +679,8 @@ export default function QuoteDetailPage() {
                 label="희망 하차 일시"
                 value={editForm.requested_dropoff_at}
                 onChange={(v) => setEditForm({ ...editForm, requested_dropoff_at: v })}
+                minDateTime={minDropoffDateTime}
+                minDateTimeLabel={minDropoffLabel}
               />
             </div>
             <div className="field">
