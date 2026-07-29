@@ -305,6 +305,9 @@ export default function OrderDetailPage() {
   }
 
   const statusColor = getOrderStatusColor(order.status);
+  // 배차가 실제로 매칭되기 전(접수/배차중)에는 화주와 세부조율 중이라 정산방식을
+  // 자유롭게 바꿀 수 있고, 배차완료부터는 사유 입력이 필요함 (원칙 39번)
+  const settlementNeedsReason = ["배차완료", "운송중", "운송완료"].includes(order.status);
 
   return (
     <main className="container">
@@ -419,7 +422,7 @@ export default function OrderDetailPage() {
             <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 4 }}>
               정산방식
             </div>
-            {order.status === "접수" ? (
+            {!settlementNeedsReason ? (
               <select
                 value={order.settlement_type || "general"}
                 onChange={(e) => handleSettlementTypeChange(e.target.value, null)}
@@ -436,7 +439,7 @@ export default function OrderDetailPage() {
               <span className="badge">{getSettlementTypeLabel(order.settlement_type)}</span>
             )}
           </div>
-          {order.status !== "접수" && (
+          {settlementNeedsReason && (
             <button
               type="button"
               className="btn-ghost"
@@ -447,9 +450,9 @@ export default function OrderDetailPage() {
             </button>
           )}
         </div>
-        {order.status !== "접수" && (
+        {settlementNeedsReason && (
           <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 8, marginBottom: 0 }}>
-            오더가 이미 진행 중(접수 이후)이라 정산방식을 바꾸려면 사유를 입력해야 합니다.
+            배차완료 이후라 정산방식을 바꾸려면 사유를 입력해야 합니다.
           </p>
         )}
       </div>
