@@ -40,6 +40,7 @@ export default function InvoiceDetailPage() {
   const [conflict, setConflict] = useState(false);
   const [settlementModalOpen, setSettlementModalOpen] = useState(false);
   const [settlementSaving, setSettlementSaving] = useState(false);
+  const [mixedExecuted, setMixedExecuted] = useState(false);
 
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
@@ -59,7 +60,7 @@ export default function InvoiceDetailPage() {
     setLoading(true);
     const { data, error } = await supabase
       .from("invoices")
-      .select("*, orders(id,order_no,guest_name), companies(id,name)")
+      .select("*, orders(id,order_no,guest_name,loading_type,mixed_discount_type,mixed_discount_amount,mixed_discount_percent), companies(id,name)")
       .eq("id", id)
       .single();
     if (error) {
@@ -68,6 +69,16 @@ export default function InvoiceDetailPage() {
       return;
     }
     setInvoice(data);
+    if (data.order_id && data.orders?.loading_type === "mixable") {
+      const { data: dispatchRow } = await supabase
+        .from("dispatches")
+        .select("mixed_executed")
+        .eq("order_id", data.order_id)
+        .maybeSingle();
+      setMixedExecuted(!!dispatchRow?.mixed_executed);
+    } else {
+      setMixedExecuted(false);
+    }
     setEditForm({
       status: data.status || "정산대기",
       tax_invoice_issued: data.tax_invoice_issued || false,
@@ -378,6 +389,19 @@ export default function InvoiceDetailPage() {
             {invoice.customer_charge_total != null && (
               <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
                 {vatLabel(invoice.customer_charge_vat_included)}
+              </div>
+            )}
+            {invoice.orders?.loading_type === "mixable" && (
+              <div style={{ marginTop: 4 }}>
+                <span
+                  className="badge"
+                  style={{
+                    background: mixedExecuted ? "#D1FAE5" : "#F3F4F6",
+                    color: mixedExecuted ? "#059669" : "#6B7280",
+                  }}
+                >
+                  {mixedExecuted ? "혼적할인 적용" : "혼적가능(미적용)"}
+                </span>
               </div>
             )}
           </div>

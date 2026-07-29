@@ -12,6 +12,8 @@ import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import DateTimePicker from "@/components/DateTimePicker";
 import AddressSearch from "@/components/AddressSearch";
+import MoneyInput from "@/components/MoneyInput";
+import { getLatestMixedLoadingDiscountSettings } from "@/lib/mixedLoadingDiscountSettings";
 
 const VEHICLES = ["1톤", "1.4톤", "2.5톤", "3.5톤", "5톤", "5톤 플러스/축"];
 
@@ -108,9 +110,13 @@ function QuotesPageInner() {
   const [finalAmountOverride, setFinalAmountOverride] = useState("");
   const [ratesLoading, setRatesLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [standardMixedDiscountPercent, setStandardMixedDiscountPercent] = useState(0);
 
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
+    getLatestMixedLoadingDiscountSettings().then((row) => {
+      if (row) setStandardMixedDiscountPercent(row.standard_discount_percent);
+    });
   }, []);
 
   const [savedLocations, setSavedLocations] = useState<
@@ -150,6 +156,12 @@ function QuotesPageInner() {
     distance_km: "",
     vehicle_type: "1톤",
     settlement_type: "general" as string,
+    loading_type: "exclusive" as "exclusive" | "mixable",
+    mixed_shipper_consent: false,
+    mixed_discount_type: null as "amount" | "percent" | null,
+    mixed_discount_amount: "",
+    mixed_discount_percent: "",
+    mixed_note: "",
     item: "",
     차량형태: "카고",
     상차조건: LOADING_METHOD_OPTIONS[0],
@@ -620,6 +632,12 @@ function QuotesPageInner() {
         distance_km: Number(form.distance_km) || null,
         vehicle_type: form.vehicle_type,
         settlement_type: form.settlement_type,
+        loading_type: form.loading_type,
+        mixed_shipper_consent: form.loading_type === "mixable" ? form.mixed_shipper_consent : false,
+        mixed_discount_type: form.loading_type === "mixable" ? form.mixed_discount_type : null,
+        mixed_discount_amount: Number(form.mixed_discount_amount) || 0,
+        mixed_discount_percent: Number(form.mixed_discount_percent) || 0,
+        mixed_note: form.loading_type === "mixable" ? form.mixed_note || null : null,
         item: form.item || null,
         base_fare: calc.base,
         surcharge_amount: calc.surchargeTotal,
@@ -739,6 +757,12 @@ function QuotesPageInner() {
       destinationSigungu: "",
       distance_km: "",
       settlement_type: "general",
+      loading_type: "exclusive",
+      mixed_shipper_consent: false,
+      mixed_discount_type: null,
+      mixed_discount_amount: "",
+      mixed_discount_percent: "",
+      mixed_note: "",
       item: "",
       waitingMinutes: "",
       waypointCount: "",
@@ -1254,6 +1278,121 @@ function QuotesPageInner() {
                       </option>
                     ))}
                 </select>
+              </div>
+
+              <div className="field" style={{ gridColumn: "1 / -1" }}>
+                <label>적재구분</label>
+                <div style={{ display: "flex", gap: 16, fontSize: 13 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <input
+                      type="radio"
+                      name="loading_type"
+                      checked={form.loading_type === "exclusive"}
+                      onChange={() => setForm({ ...form, loading_type: "exclusive" })}
+                    />
+                    독차
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <input
+                      type="radio"
+                      name="loading_type"
+                      checked={form.loading_type === "mixable"}
+                      onChange={() => setForm({ ...form, loading_type: "mixable" })}
+                    />
+                    혼적가능
+                  </label>
+                </div>
+
+                {form.loading_type === "mixable" && (
+                  <div
+                    style={{
+                      marginTop: 10,
+                      padding: 12,
+                      background: "var(--bg)",
+                      borderRadius: 8,
+                    }}
+                  >
+                    <label
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        fontSize: 13,
+                        marginBottom: 10,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={form.mixed_shipper_consent}
+                        onChange={(e) =>
+                          setForm({ ...form, mixed_shipper_consent: e.target.checked })
+                        }
+                      />
+                      화주 동의 확인됨
+                    </label>
+
+                    <div style={{ display: "flex", gap: 16, fontSize: 13, marginBottom: 10 }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <input
+                          type="radio"
+                          name="mixed_discount_type"
+                          checked={form.mixed_discount_type === "percent"}
+                          onChange={() =>
+                            setForm((f) => ({
+                              ...f,
+                              mixed_discount_type: "percent",
+                              mixed_discount_percent:
+                                f.mixed_discount_percent || String(standardMixedDiscountPercent),
+                            }))
+                          }
+                        />
+                        할인율(%)
+                      </label>
+                      <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <input
+                          type="radio"
+                          name="mixed_discount_type"
+                          checked={form.mixed_discount_type === "amount"}
+                          onChange={() => setForm({ ...form, mixed_discount_type: "amount" })}
+                        />
+                        할인금액(원)
+                      </label>
+                    </div>
+
+                    {form.mixed_discount_type === "percent" && (
+                      <div className="field" style={{ maxWidth: 160, marginBottom: 10 }}>
+                        <label>혼적 할인율(%)</label>
+                        <input
+                          type="number"
+                          step={0.1}
+                          value={form.mixed_discount_percent}
+                          onChange={(e) =>
+                            setForm({ ...form, mixed_discount_percent: e.target.value })
+                          }
+                        />
+                      </div>
+                    )}
+                    {form.mixed_discount_type === "amount" && (
+                      <div className="field" style={{ maxWidth: 200, marginBottom: 10 }}>
+                        <label>혼적 할인금액(원)</label>
+                        <MoneyInput
+                          value={form.mixed_discount_amount}
+                          onChange={(v) => setForm({ ...form, mixed_discount_amount: v })}
+                        />
+                      </div>
+                    )}
+
+                    <div className="field" style={{ marginBottom: 0 }}>
+                      <label>혼적 주의사항</label>
+                      <textarea
+                        rows={2}
+                        value={form.mixed_note}
+                        onChange={(e) => setForm({ ...form, mixed_note: e.target.value })}
+                        placeholder="혼적 시 유의할 점 등"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="field">

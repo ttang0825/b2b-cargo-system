@@ -82,6 +82,12 @@ function OrdersPageInner() {
     destinationSigungu: "",
     vehicle_type: "",
     settlement_type: "general" as string,
+    loading_type: "exclusive" as "exclusive" | "mixable",
+    mixed_shipper_consent: false,
+    mixed_discount_type: null as "amount" | "percent" | null,
+    mixed_discount_amount: 0,
+    mixed_discount_percent: 0,
+    mixed_note: "",
     item: "",
     requested_pickup_at: "",
     requested_delivery_at: "",
@@ -138,7 +144,7 @@ function OrdersPageInner() {
       const { data: q } = await supabase
         .from("quotes")
         .select(
-          "id,company_id,guest_name,guest_phone,origin,origin_sido,origin_sigungu,destination,destination_sido,destination_sigungu,vehicle_type,settlement_type,item,selected_options,notes,requested_pickup_at,requested_dropoff_at,companies(id,name,phone)"
+          "id,company_id,guest_name,guest_phone,origin,origin_sido,origin_sigungu,destination,destination_sido,destination_sigungu,vehicle_type,settlement_type,loading_type,mixed_shipper_consent,mixed_discount_type,mixed_discount_amount,mixed_discount_percent,mixed_note,item,selected_options,notes,requested_pickup_at,requested_dropoff_at,companies(id,name,phone)"
         )
         .eq("id", fromQuoteId)
         .single();
@@ -157,6 +163,12 @@ function OrdersPageInner() {
         destinationSigungu: q.destination_sigungu || "",
         vehicle_type: q.vehicle_type || "",
         settlement_type: q.settlement_type || "general",
+        loading_type: (q.loading_type as "exclusive" | "mixable") || "exclusive",
+        mixed_shipper_consent: q.mixed_shipper_consent || false,
+        mixed_discount_type: (q.mixed_discount_type as "amount" | "percent" | null) || null,
+        mixed_discount_amount: q.mixed_discount_amount || 0,
+        mixed_discount_percent: q.mixed_discount_percent || 0,
+        mixed_note: q.mixed_note || "",
         item: q.item || "",
         quote_id: q.id,
         guest_name: q.guest_name || "",
@@ -286,6 +298,12 @@ function OrdersPageInner() {
       destination_sigungu: form.destinationSigungu || null,
       vehicle_type: form.vehicle_type || null,
       settlement_type: form.settlement_type,
+      loading_type: form.loading_type,
+      mixed_shipper_consent: form.loading_type === "mixable" ? form.mixed_shipper_consent : false,
+      mixed_discount_type: form.loading_type === "mixable" ? form.mixed_discount_type : null,
+      mixed_discount_amount: form.mixed_discount_amount || 0,
+      mixed_discount_percent: form.mixed_discount_percent || 0,
+      mixed_note: form.loading_type === "mixable" ? form.mixed_note || null : null,
       item: form.item || null,
       requested_pickup_at: form.requested_pickup_at || null,
       requested_delivery_at: form.requested_delivery_at || null,
@@ -318,6 +336,12 @@ function OrdersPageInner() {
       destinationSigungu: "",
       vehicle_type: "",
       settlement_type: "general",
+      loading_type: "exclusive",
+      mixed_shipper_consent: false,
+      mixed_discount_type: null,
+      mixed_discount_amount: 0,
+      mixed_discount_percent: 0,
+      mixed_note: "",
       item: "",
       requested_pickup_at: "",
       requested_delivery_at: "",

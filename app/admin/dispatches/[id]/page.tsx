@@ -16,7 +16,7 @@ import ConflictWarning from "@/components/ConflictWarning";
 import SettlementTypeChangeModal from "@/components/SettlementTypeChangeModal";
 import { optimisticUpdate } from "@/lib/optimisticUpdate";
 import { logSettlementTypeChange } from "@/lib/settlementTypeChangeLog";
-import { calcSettlement } from "@/lib/settlementCalc";
+import { calcSettlement, applyMixedDiscount } from "@/lib/settlementCalc";
 import MoneyInput from "@/components/MoneyInput";
 import {
   getLatestInsuranceRateSettings,
@@ -118,6 +118,7 @@ export default function DispatchDetailPage() {
     assignment_type: "internal" as "internal" | "external",
     driver_id: null as string | null,
     requested_network_ids: [] as string[],
+    mixed_executed: false,
   });
 
   async function load() {
@@ -125,7 +126,7 @@ export default function DispatchDetailPage() {
     const { data, error } = await supabase
       .from("dispatches")
       .select(
-        "*, orders(id,order_no,origin,destination,item,vehicle_type), drivers(id,name,phone,vehicles(vehicle_number,vehicle_type))"
+        "*, orders(id,order_no,origin,destination,item,vehicle_type,loading_type,mixed_discount_type,mixed_discount_amount,mixed_discount_percent), drivers(id,name,phone,vehicles(vehicle_number,vehicle_type))"
       )
       .eq("id", id)
       .single();
@@ -147,6 +148,7 @@ export default function DispatchDetailPage() {
       assignment_type: (data.assignment_type as "internal" | "external") || "internal",
       driver_id: data.driver_id || null,
       requested_network_ids: data.requested_network_ids || [],
+      mixed_executed: data.mixed_executed || false,
     });
     setSelectedDriverInfo(data.drivers || null);
     setConfirmedNetworkId(data.confirmed_network_id || "");
@@ -346,11 +348,19 @@ export default function DispatchDetailPage() {
     if (!dispatch) return;
     setPayoutCalcSaving(true);
     setError(null);
+    const chargeAfterMixedDiscount = applyMixedDiscount(
+      Number(editForm.customer_charge) || 0,
+      (dispatch.orders?.loading_type as "exclusive" | "mixable") || "exclusive",
+      editForm.mixed_executed,
+      dispatch.orders?.mixed_discount_type || null,
+      dispatch.orders?.mixed_discount_amount || 0,
+      dispatch.orders?.mixed_discount_percent || 0
+    );
     const result = calcSettlement({
       driverBaseFare: Number(payoutCalcForm.driver_base_fare) || 0,
       driverVatIncluded: payoutCalcForm.driver_vat_included,
       industrialInsuranceApplicable: payoutCalcForm.industrial_insurance_applicable,
-      customerCharge: Number(editForm.customer_charge) || 0,
+      customerCharge: chargeAfterMixedDiscount,
       customerChargeVatIncluded: editForm.customer_charge_vat_included,
       rateSettings: {
         expenseDeductionRate: rateSettings.expense_deduction_rate,
@@ -410,11 +420,20 @@ export default function DispatchDetailPage() {
 
     const { data: order } = await supabase
       .from("orders")
-      .select("company_id,individual_customer_id")
+      .select(
+        "company_id,individual_customer_id,loading_type,mixed_discount_type,mixed_discount_amount,mixed_discount_percent"
+      )
       .eq("id", orderId)
       .single();
 
-    const charge = Number(editForm.customer_charge) || 0;
+    const charge = applyMixedDiscount(
+      Number(editForm.customer_charge) || 0,
+      (order?.loading_type as "exclusive" | "mixable") || "exclusive",
+      editForm.mixed_executed,
+      order?.mixed_discount_type || null,
+      order?.mixed_discount_amount || 0,
+      order?.mixed_discount_percent || 0
+    );
     const payout = Number(editForm.driver_payout) || 0;
     const now = new Date();
     const billingPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -497,6 +516,23 @@ export default function DispatchDetailPage() {
     // updated_at을 DB 기준으로 다시 받아와야 함 — 부분 병합만 하고 넘어가면
     // 로컬 updated_at이 옛날 값 그대로 남아서, 바로 이어서 "변경사항 저장"을
     // 누를 때 낙관적 잠금이 "다른 직원이 방금 수정함"으로 잘못 판단하는 버그가 있었음
+    load();
+  }
+
+  // 오더의 loading_type이 mixable인 건에만 노출되는 "혼적 실행" 체크 — 실제로
+  // 혼적으로 운행됐는지 여부 1개만 판단하면 되므로 즉시 저장(원칙 36번, load()로
+  // 전체 재조회)
+  async function handleMixedExecutedChange(checked: boolean) {
+    setError(null);
+    setEditForm((f) => ({ ...f, mixed_executed: checked }));
+    const { error } = await supabase
+      .from("dispatches")
+      .update({ mixed_executed: checked, updated_by: await getCurrentStaffId() })
+      .eq("id", id);
+    if (error) {
+      setError(error.message);
+      return;
+    }
     load();
   }
 
@@ -604,9 +640,21 @@ export default function DispatchDetailPage() {
   }
 
   const statusColor = getDispatchStatusColor(dispatch.dispatch_status);
+  // 혼적 할인 반영 후 실제 화주청구금액 — 원본 청구운임 입력값은 그대로 두고
+  // (예정대로 협의된 기준가), 정산 계산(마진·정산등록)에만 할인을 적용한다.
+  // 독차로 실행됐거나(loading_type !== "mixable") 혼적 실행 체크가 안 되어
+  // 있으면 할인 없이 원본 그대로.
+  const effectiveCustomerCharge = applyMixedDiscount(
+    Number(editForm.customer_charge) || 0,
+    (dispatch.orders?.loading_type as "exclusive" | "mixable") || "exclusive",
+    editForm.mixed_executed,
+    dispatch.orders?.mixed_discount_type || null,
+    dispatch.orders?.mixed_discount_amount || 0,
+    dispatch.orders?.mixed_discount_percent || 0
+  );
   const margin =
     editForm.customer_charge && editForm.driver_payout
-      ? Number(editForm.customer_charge) - Number(editForm.driver_payout)
+      ? effectiveCustomerCharge - Number(editForm.driver_payout)
       : null;
 
   return (
@@ -983,6 +1031,30 @@ export default function DispatchDetailPage() {
         <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
           정산 정보
         </h3>
+
+        {dispatch.orders?.loading_type === "mixable" && (
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+              <input
+                type="checkbox"
+                checked={editForm.mixed_executed}
+                onChange={(e) => handleMixedExecutedChange(e.target.checked)}
+              />
+              혼적 실행
+            </label>
+            <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 4, marginBottom: 0 }}>
+              {editForm.mixed_executed
+                ? "견적에서 설정한 할인이 정산에 반영됩니다."
+                : "독차로 진행되어 혼적 할인이 적용되지 않습니다."}
+            </p>
+            {editForm.mixed_executed && effectiveCustomerCharge !== (Number(editForm.customer_charge) || 0) && (
+              <p style={{ fontSize: 12.5, fontWeight: 600, marginTop: 6, marginBottom: 0 }}>
+                할인 적용 후 화주청구금액: {won(effectiveCustomerCharge)}
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="form-grid" style={{ padding: 0, marginBottom: 10 }}>
           <div className="field">
             <label>화주 청구운임(원)</label>
@@ -1091,7 +1163,7 @@ export default function DispatchDetailPage() {
                     driverBaseFare: Number(payoutCalcForm.driver_base_fare) || 0,
                     driverVatIncluded: payoutCalcForm.driver_vat_included,
                     industrialInsuranceApplicable: payoutCalcForm.industrial_insurance_applicable,
-                    customerCharge: Number(editForm.customer_charge) || 0,
+                    customerCharge: effectiveCustomerCharge,
                     customerChargeVatIncluded: editForm.customer_charge_vat_included,
                     rateSettings: {
                       expenseDeductionRate: rateSettings.expense_deduction_rate,

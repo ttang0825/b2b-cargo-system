@@ -42,6 +42,12 @@ type QuoteDetail = {
   guest_email: string | null;
   company_id: string | null;
   selected_options: Record<string, any> | null;
+  loading_type: string | null;
+  mixed_shipper_consent: boolean | null;
+  mixed_discount_type: string | null;
+  mixed_discount_amount: number | null;
+  mixed_discount_percent: number | null;
+  mixed_note: string | null;
   notes: string | null;
   requested_pickup_at: string | null;
   requested_dropoff_at: string | null;
@@ -367,6 +373,41 @@ export default function QuoteDetailPage() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {quote.loading_type === "mixable" && (
+        <div className="card" style={{ padding: 20, marginBottom: 20 }}>
+          <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
+            혼적 옵션 <span className="badge" style={{ marginLeft: 6 }}>혼적가능</span>
+          </h3>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+              gap: 10,
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>화주 동의</div>
+              <div style={{ fontSize: 13.5 }}>{quote.mixed_shipper_consent ? "확인됨" : "미확인"}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>할인방식</div>
+              <div style={{ fontSize: 13.5 }}>
+                {quote.mixed_discount_type === "percent"
+                  ? `할인율 ${quote.mixed_discount_percent}%`
+                  : quote.mixed_discount_type === "amount"
+                  ? `할인금액 ${won(quote.mixed_discount_amount)}`
+                  : "-"}
+              </div>
+            </div>
+          </div>
+          {quote.mixed_note && (
+            <p style={{ fontSize: 13, whiteSpace: "pre-wrap", marginTop: 12, marginBottom: 0 }}>
+              {quote.mixed_note}
+            </p>
+          )}
         </div>
       )}
 

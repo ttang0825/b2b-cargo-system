@@ -10,6 +10,11 @@ import {
   DEFAULT_INSURANCE_RATE_SETTINGS,
   type InsuranceRateSettingsRow,
 } from "@/lib/insuranceRateSettings";
+import {
+  getLatestMixedLoadingDiscountSettings,
+  DEFAULT_MIXED_LOADING_DISCOUNT_SETTINGS,
+  type MixedLoadingDiscountSettingsRow,
+} from "@/lib/mixedLoadingDiscountSettings";
 
 const VEHICLES = ["1톤", "1.4톤", "2.5톤", "3.5톤", "5톤", "5톤 플러스/축"];
 
@@ -246,6 +251,112 @@ function InsuranceRateTab({ isAdmin }: { isAdmin: boolean }) {
         <div className="empty-state">설정값이 없습니다.</div>
       )}
     </>
+  );
+}
+
+// 표준 혼적 할인율(%) — 가산기준 탭 안의 소섹션. 혼적 할인 중 율(%) 방식에만
+// 쓰는 회사 자체 기본값으로, 견적에서 "혼적가능"+"할인유형: 율"을 선택하면
+// 이 값이 입력창 기본값으로 채워짐(담당자가 건별 수정 가능). 금액(정액)
+// 방식은 표준값 없이 계속 수동 입력만 지원(4차 세션 결정사항).
+function MixedLoadingDiscountCard({ isAdmin }: { isAdmin: boolean }) {
+  const [row, setRow] = useState<MixedLoadingDiscountSettingsRow | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [discountPercent, setDiscountPercent] = useState(
+    String(DEFAULT_MIXED_LOADING_DISCOUNT_SETTINGS.standard_discount_percent)
+  );
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  async function load() {
+    setLoading(true);
+    setError(null);
+    const data = await getLatestMixedLoadingDiscountSettings();
+    if (!data) {
+      setError("설정값을 불러오지 못했습니다.");
+      setLoading(false);
+      return;
+    }
+    setRow(data);
+    setDiscountPercent(String(data.standard_discount_percent));
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!row) return;
+    setSaving(true);
+    setActionError(null);
+    setSaved(false);
+    try {
+      const res = await fetch("/api/admin/mixed-loading-discount-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: row.id, standard_discount_percent: Number(discountPercent) }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setActionError(data.error || "저장에 실패했습니다.");
+        setSaving(false);
+        return;
+      }
+      setSaved(true);
+      await load();
+    } catch {
+      setActionError("저장 중 오류가 발생했습니다.");
+    }
+    setSaving(false);
+  }
+
+  if (loading) return <div className="empty-state">불러오는 중...</div>;
+
+  return (
+    <div className="card" style={{ padding: 16, marginBottom: 24, maxWidth: 380 }}>
+      <h3 style={{ fontSize: 13.5, marginTop: 0, marginBottom: 10 }}>표준 혼적 할인율</h3>
+      <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 0, marginBottom: 12 }}>
+        견적에서 "혼적가능" + 할인유형을 "율(%)"로 선택하면 이 값이 기본값으로 채워집니다
+        (건별로 수정 가능). 금액(정액) 할인은 표준값 없이 항상 직접 입력합니다.
+      </p>
+      {error && <div className="error-box">오류: {error}</div>}
+      {actionError && <div className="error-box">{actionError}</div>}
+      {row && (
+        <>
+          <form onSubmit={handleSave} onKeyDown={handleFormKeyDown} style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+            <div className="field" style={{ marginBottom: 0, maxWidth: 140 }}>
+              <label>표준 할인율(%)</label>
+              <input
+                type="number"
+                step={0.1}
+                value={discountPercent}
+                onChange={(e) => setDiscountPercent(e.target.value)}
+                disabled={!isAdmin}
+              />
+            </div>
+            {isAdmin && (
+              <button className="btn" type="submit" disabled={saving}>
+                {saving ? "저장 중..." : "저장"}
+              </button>
+            )}
+          </form>
+          {saved && (
+            <span style={{ display: "block", marginTop: 8, fontSize: 12.5, color: "var(--accent)" }}>
+              저장되었습니다.
+            </span>
+          )}
+          {!isAdmin && (
+            <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 8, marginBottom: 0 }}>
+              조회만 가능합니다. 수정은 관리자만 할 수 있습니다.
+            </p>
+          )}
+          <ProcessedByFooter updatedBy={row.updated_by} updatedAt={row.updated_at} />
+        </>
+      )}
+    </div>
   );
 }
 
@@ -564,6 +675,7 @@ export default function RatesPage() {
 
       {activeTab === "surcharge" && (
         <>
+          <MixedLoadingDiscountCard isAdmin={isAdmin} />
           <div
             style={{
               display: "grid",

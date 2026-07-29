@@ -22,6 +22,11 @@ type QuoteDetail = {
   guest_name: string | null;
   guest_phone: string | null;
   selected_options: Record<string, any> | null;
+  loading_type: string | null;
+  mixed_shipper_consent: boolean | null;
+  mixed_discount_type: string | null;
+  mixed_discount_amount: number | null;
+  mixed_discount_percent: number | null;
   notes: string | null;
   requested_pickup_at: string | null;
   requested_dropoff_at: string | null;
@@ -231,10 +236,22 @@ export default function QuotePrintPage() {
         )}
 
         {optionEntries.length > 0 && (
-          <p style={{ fontSize: 12, color: "#777", marginTop: 0, marginBottom: 24 }}>
+          <p style={{ fontSize: 12, color: "#777", marginTop: 0, marginBottom: quote.loading_type === "mixable" && quote.mixed_shipper_consent ? 8 : 24 }}>
             {optionEntries
               .map(([k, v]) => `${k.replace(/_/g, " ")}: ${v === true ? "적용" : v}`)
               .join("  ·  ")}
+          </p>
+        )}
+
+        {quote.loading_type === "mixable" && quote.mixed_shipper_consent && (
+          <p style={{ fontSize: 12, color: "#B45309", marginTop: 0, marginBottom: 24 }}>
+            · 혼적 조건부 할인:{" "}
+            {quote.mixed_discount_type === "percent"
+              ? `${quote.mixed_discount_percent}%`
+              : quote.mixed_discount_type === "amount"
+              ? won(quote.mixed_discount_amount)
+              : "-"}{" "}
+            (실제 혼적 시 적용)
           </p>
         )}
 

@@ -27,6 +27,7 @@ type OrderLite = {
 
 type InvoiceRow = {
   id: string;
+  order_id: string | null;
   billing_period: string | null;
   customer_charge_total: number | null;
   driver_payout_total: number | null;
@@ -39,7 +40,7 @@ type InvoiceRow = {
   status: string;
   settlement_type: string | null;
   created_at: string;
-  orders: { order_no: string | null; guest_name: string | null } | null;
+  orders: { order_no: string | null; guest_name: string | null; loading_type: string | null } | null;
   companies: { name: string } | null;
 };
 
@@ -97,6 +98,7 @@ export default function InvoicesPage() {
   const [customerChargeVatIncluded, setCustomerChargeVatIncluded] = useState(false);
   const [driverVatIncluded, setDriverVatIncluded] = useState(false);
   const [paymentDueDate, setPaymentDueDate] = useState("");
+  const [mixedExecutedByOrderId, setMixedExecutedByOrderId] = useState<Record<string, boolean>>({});
 
   async function loadInvoices(preset: DatePreset = period) {
     setLoading(true);
@@ -104,7 +106,7 @@ export default function InvoicesPage() {
     let query = supabase
       .from("invoices")
       .select(
-        "id,billing_period,customer_charge_total,driver_payout_total,customer_charge_vat_included,driver_vat_included,commission_total,tax_invoice_issued,payment_received,driver_paid,status,settlement_type,created_at,orders(order_no,guest_name),companies(name)"
+        "id,order_id,billing_period,customer_charge_total,driver_payout_total,customer_charge_vat_included,driver_vat_included,commission_total,tax_invoice_issued,payment_received,driver_paid,status,settlement_type,created_at,orders(order_no,guest_name,loading_type),companies(name)"
       )
       .order("created_at", { ascending: false })
       .limit(preset === "all" ? ALL_PERIOD_LIMIT : FILTERED_PERIOD_LIMIT);
@@ -113,6 +115,25 @@ export default function InvoicesPage() {
     const { data, error } = await query;
     if (error) setError(error.message);
     else setInvoices(data as any as InvoiceRow[]);
+
+    // 배차의 혼적 실행여부는 invoices와 직접 연결되어 있지 않아(order_id를
+    // 공유할 뿐) 별도로 한 번에 조회해서 order_id 기준 맵으로 만들어 씀
+    const orderIds = ((data as any as InvoiceRow[]) || [])
+      .map((i) => i.order_id)
+      .filter((v): v is string => !!v);
+    if (orderIds.length > 0) {
+      const { data: dispatchRows } = await supabase
+        .from("dispatches")
+        .select("order_id,mixed_executed")
+        .in("order_id", orderIds);
+      const map: Record<string, boolean> = {};
+      (dispatchRows || []).forEach((d: any) => {
+        if (d.order_id) map[d.order_id] = !!d.mixed_executed;
+      });
+      setMixedExecutedByOrderId(map);
+    } else {
+      setMixedExecutedByOrderId({});
+    }
     setLoading(false);
   }
 
@@ -591,6 +612,19 @@ export default function InvoicesPage() {
                     {i.customer_charge_total != null && (
                       <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
                         {vatLabel(i.customer_charge_vat_included)}
+                      </div>
+                    )}
+                    {i.orders?.loading_type === "mixable" && (
+                      <div style={{ fontSize: 11, marginTop: 2 }}>
+                        <span
+                          className="badge"
+                          style={{
+                            background: i.order_id && mixedExecutedByOrderId[i.order_id] ? "#D1FAE5" : "#F3F4F6",
+                            color: i.order_id && mixedExecutedByOrderId[i.order_id] ? "#059669" : "#6B7280",
+                          }}
+                        >
+                          {i.order_id && mixedExecutedByOrderId[i.order_id] ? "혼적할인 적용" : "혼적가능(미적용)"}
+                        </span>
                       </div>
                     )}
                   </td>

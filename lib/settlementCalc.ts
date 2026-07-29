@@ -89,3 +89,26 @@ export function calcSettlement(input: SettlementCalcInput): SettlementCalcResult
     realMargin,
   };
 }
+
+// 혼적 할인 (4차 세션). 견적 단계에서 동의·할인조건을 1회만 수집하고,
+// 배차 단계는 "실제 혼적됐는지" 실행여부 플래그(mixedExecuted) 1개로
+// 판단한다 — 독차로 실제 운행되면(mixedExecuted=false) 할인 미적용,
+// 혼적으로 실제 운행되면 견적에서 설정한 할인을 그대로 반영한다.
+export function applyMixedDiscount(
+  baseCharge: number,
+  loadingType: "exclusive" | "mixable",
+  mixedExecuted: boolean,
+  discountType: "amount" | "percent" | null,
+  discountAmount: number,
+  discountPercent: number
+): number {
+  const applies = loadingType === "mixable" && mixedExecuted;
+  if (!applies) return baseCharge;
+  if (discountType === "percent") {
+    return Math.round(baseCharge * (1 - discountPercent / 100));
+  }
+  if (discountType === "amount") {
+    return Math.max(0, baseCharge - discountAmount);
+  }
+  return baseCharge;
+}
