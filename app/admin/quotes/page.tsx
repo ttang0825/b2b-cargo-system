@@ -1282,8 +1282,16 @@ function QuotesPageInner() {
 
               <div className="field" style={{ gridColumn: "1 / -1" }}>
                 <label>적재구분</label>
-                <div style={{ display: "flex", gap: 16, fontSize: 13 }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ display: "flex", flexWrap: "nowrap", gap: 16, fontSize: 13 }}>
+                  <label
+                    style={{
+                      display: "flex",
+                      flexShrink: 0,
+                      alignItems: "center",
+                      gap: 6,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
                     <input
                       type="radio"
                       name="loading_type"
@@ -1292,7 +1300,15 @@ function QuotesPageInner() {
                     />
                     독차
                   </label>
-                  <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <label
+                    style={{
+                      display: "flex",
+                      flexShrink: 0,
+                      alignItems: "center",
+                      gap: 6,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
                     <input
                       type="radio"
                       name="loading_type"
@@ -1315,10 +1331,12 @@ function QuotesPageInner() {
                     <label
                       style={{
                         display: "flex",
+                        flexWrap: "nowrap",
                         alignItems: "center",
                         gap: 6,
                         fontSize: 13,
                         marginBottom: 10,
+                        whiteSpace: "nowrap",
                       }}
                     >
                       <input
@@ -1331,8 +1349,16 @@ function QuotesPageInner() {
                       화주 동의 확인됨
                     </label>
 
-                    <div style={{ display: "flex", gap: 16, fontSize: 13, marginBottom: 10 }}>
-                      <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ display: "flex", flexWrap: "nowrap", gap: 16, fontSize: 13, marginBottom: 10 }}>
+                      <label
+                        style={{
+                          display: "flex",
+                          flexShrink: 0,
+                          alignItems: "center",
+                          gap: 6,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
                         <input
                           type="radio"
                           name="mixed_discount_type"
@@ -1348,7 +1374,15 @@ function QuotesPageInner() {
                         />
                         할인율(%)
                       </label>
-                      <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <label
+                        style={{
+                          display: "flex",
+                          flexShrink: 0,
+                          alignItems: "center",
+                          gap: 6,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
                         <input
                           type="radio"
                           name="mixed_discount_type"
