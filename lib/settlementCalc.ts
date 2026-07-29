@@ -112,3 +112,22 @@ export function applyMixedDiscount(
   }
   return baseCharge;
 }
+
+// applyMixedDiscount()의 역연산 — "혼적 실행" 체크를 해제할 때 이미 할인이
+// 반영되어 저장된 청구운임에서 할인 전 금액으로 되돌리는 데 사용
+export function reverseMixedDiscount(
+  discountedCharge: number,
+  loadingType: "exclusive" | "mixable",
+  discountType: "amount" | "percent" | null,
+  discountAmount: number,
+  discountPercent: number
+): number {
+  if (loadingType !== "mixable") return discountedCharge;
+  if (discountType === "percent" && discountPercent < 100) {
+    return Math.round(discountedCharge / (1 - discountPercent / 100));
+  }
+  if (discountType === "amount") {
+    return discountedCharge + discountAmount;
+  }
+  return discountedCharge;
+}
