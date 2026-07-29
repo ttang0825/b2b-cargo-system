@@ -156,7 +156,7 @@ export default function InvoicesPage() {
 
     const { data: dispatch } = await supabase
       .from("dispatches")
-      .select("customer_charge, driver_payout, customer_charge_vat_included, driver_vat_included")
+      .select("customer_charge, driver_payout, customer_charge_vat_included, driver_vat_included, driver_base_fare")
       .eq("order_id", orderId)
       .maybeSingle();
     if (dispatch && (dispatch.customer_charge || dispatch.driver_payout)) {
@@ -167,7 +167,11 @@ export default function InvoicesPage() {
         dispatch.driver_payout ? String(Math.round(dispatch.driver_payout)) : ""
       );
       setCustomerChargeVatIncluded(dispatch.customer_charge_vat_included ?? false);
-      setDriverVatIncluded(dispatch.driver_vat_included ?? false);
+      // driver_vat_included(계산기 입력 토글)는 dispatch.driver_payout이 계산기를
+      // 거친 값이면 항상 부가세 포함으로 산출되므로(driver_base_fare가 있으면),
+      // 토글을 그대로 복사하지 않고 항상 true로 맞춤 — dispatches/[id]/page.tsx의
+      // autoCreateInvoiceIfNeeded와 동일한 판단
+      setDriverVatIncluded(dispatch.driver_base_fare != null ? true : dispatch.driver_vat_included ?? false);
       return;
     }
 

@@ -427,7 +427,12 @@ export default function DispatchDetailPage() {
       customer_charge_total: charge || null,
       driver_payout_total: payout || null,
       customer_charge_vat_included: editForm.customer_charge_vat_included,
-      driver_vat_included: dispatch?.driver_vat_included ?? false,
+      // driver_vat_included(계산기의 "부가세 포함" 토글)는 "입력한 기본운임을
+      // 어떻게 해석할지"만 나타내는 값이고, 계산 결과인 driver_payout(차주
+      // 최종 수금액)은 토글 상태와 무관하게 항상 부가세 포함 금액으로
+      // 산출됨(lib/settlementCalc.ts의 collectAmount 참고) — 계산기를 거친
+      // 값이면(driver_base_fare가 있으면) 항상 "포함"으로 표시해야 함
+      driver_vat_included: dispatch?.driver_base_fare != null ? true : dispatch?.driver_vat_included ?? false,
       commission_total: charge - payout || null,
       receivable_amount: charge || null,
       payable_amount: payout || null,
