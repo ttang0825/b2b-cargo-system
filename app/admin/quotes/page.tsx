@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { generateDailyNumber } from "@/lib/generateNumber";
 import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
-import { formatPhoneNumber } from "@/lib/constants";
+import { formatPhoneNumber, SETTLEMENT_TYPES } from "@/lib/constants";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import DateTimePicker from "@/components/DateTimePicker";
@@ -149,6 +149,7 @@ function QuotesPageInner() {
     destinationSigungu: "",
     distance_km: "",
     vehicle_type: "1톤",
+    settlement_type: "general" as string,
     item: "",
     차량형태: "카고",
     상차조건: LOADING_METHOD_OPTIONS[0],
@@ -618,6 +619,7 @@ function QuotesPageInner() {
         destination_sigungu: form.destinationSigungu || null,
         distance_km: Number(form.distance_km) || null,
         vehicle_type: form.vehicle_type,
+        settlement_type: form.settlement_type,
         item: form.item || null,
         base_fare: calc.base,
         surcharge_amount: calc.surchargeTotal,
@@ -736,6 +738,7 @@ function QuotesPageInner() {
       destinationSido: "",
       destinationSigungu: "",
       distance_km: "",
+      settlement_type: "general",
       item: "",
       waitingMinutes: "",
       waypointCount: "",
@@ -821,6 +824,20 @@ function QuotesPageInner() {
               >
                 개인 / 신규 고객
               </button>
+            </div>
+
+            <div className="field" style={{ marginBottom: 14 }}>
+              <label>정산방식</label>
+              <select
+                value={form.settlement_type}
+                onChange={(e) => setForm({ ...form, settlement_type: e.target.value })}
+              >
+                {SETTLEMENT_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {customerMode === "company" ? (

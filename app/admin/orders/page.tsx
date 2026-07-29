@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { ORDER_STATUS_OPTIONS, getOrderStatusColor } from "@/lib/orderStatusColors";
-import { formatPhoneNumber } from "@/lib/constants";
+import { formatPhoneNumber, SETTLEMENT_TYPES, getSettlementTypeLabel } from "@/lib/constants";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import { generateDailyNumber } from "@/lib/generateNumber";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
@@ -81,6 +81,7 @@ function OrdersPageInner() {
     destinationSido: "",
     destinationSigungu: "",
     vehicle_type: "",
+    settlement_type: "general" as string,
     item: "",
     requested_pickup_at: "",
     requested_delivery_at: "",
@@ -137,7 +138,7 @@ function OrdersPageInner() {
       const { data: q } = await supabase
         .from("quotes")
         .select(
-          "id,company_id,guest_name,guest_phone,origin,origin_sido,origin_sigungu,destination,destination_sido,destination_sigungu,vehicle_type,item,selected_options,notes,requested_pickup_at,requested_dropoff_at,companies(id,name,phone)"
+          "id,company_id,guest_name,guest_phone,origin,origin_sido,origin_sigungu,destination,destination_sido,destination_sigungu,vehicle_type,settlement_type,item,selected_options,notes,requested_pickup_at,requested_dropoff_at,companies(id,name,phone)"
         )
         .eq("id", fromQuoteId)
         .single();
@@ -155,6 +156,7 @@ function OrdersPageInner() {
         destinationSido: q.destination_sido || "",
         destinationSigungu: q.destination_sigungu || "",
         vehicle_type: q.vehicle_type || "",
+        settlement_type: q.settlement_type || "general",
         item: q.item || "",
         quote_id: q.id,
         guest_name: q.guest_name || "",
@@ -283,6 +285,7 @@ function OrdersPageInner() {
       destination_sido: form.destinationSido || null,
       destination_sigungu: form.destinationSigungu || null,
       vehicle_type: form.vehicle_type || null,
+      settlement_type: form.settlement_type,
       item: form.item || null,
       requested_pickup_at: form.requested_pickup_at || null,
       requested_delivery_at: form.requested_delivery_at || null,
@@ -314,6 +317,7 @@ function OrdersPageInner() {
       destinationSido: "",
       destinationSigungu: "",
       vehicle_type: "",
+      settlement_type: "general",
       item: "",
       requested_pickup_at: "",
       requested_delivery_at: "",
@@ -529,6 +533,19 @@ function OrdersPageInner() {
                   }
                   placeholder="예: 1톤 탑차"
                 />
+              </div>
+              <div className="field">
+                <label>정산방식</label>
+                <select
+                  value={form.settlement_type}
+                  onChange={(e) => setForm({ ...form, settlement_type: e.target.value })}
+                >
+                  {SETTLEMENT_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div style={{ gridColumn: "1 / -1" }}>
                 <DateTimePicker

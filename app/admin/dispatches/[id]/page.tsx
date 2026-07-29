@@ -10,10 +10,12 @@ import {
   DISPATCH_TO_ORDER_STATUS,
 } from "@/lib/dispatchStatusColors";
 import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
-import { formatPhoneNumber } from "@/lib/constants";
+import { formatPhoneNumber, SETTLEMENT_TYPES, getSettlementTypeLabel } from "@/lib/constants";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
 import ConflictWarning from "@/components/ConflictWarning";
+import SettlementTypeChangeModal from "@/components/SettlementTypeChangeModal";
 import { optimisticUpdate } from "@/lib/optimisticUpdate";
+import { logSettlementTypeChange } from "@/lib/settlementTypeChangeLog";
 
 function won(n: number | null) {
   if (n === null || n === undefined) return "-";
@@ -51,6 +53,8 @@ export default function DispatchDetailPage() {
   const [externalDriverPhone, setExternalDriverPhone] = useState("");
   const [externalVehiclePlate, setExternalVehiclePlate] = useState("");
   const [confirming, setConfirming] = useState(false);
+  const [settlementModalOpen, setSettlementModalOpen] = useState(false);
+  const [settlementSaving, setSettlementSaving] = useState(false);
 
   const networkNameById: Record<string, string> = {};
   networks.forEach((n) => (networkNameById[n.id] = n.name));
@@ -248,6 +252,39 @@ export default function DispatchDetailPage() {
     load();
   }
 
+  // "접수중" 단계에서는 자유롭게 변경, 배차확정 이후는 사유 입력 모달을 거쳐야만
+  // 변경 가능 (오더 상세와 동일한 패턴). 즉시 저장 후 load()로 전체 재조회
+  // (원칙 36번 — 부분 병합 금지)
+  async function handleSettlementTypeChange(newType: string, reason: string | null) {
+    if (!dispatch) return;
+    setSettlementSaving(true);
+    setError(null);
+    const staffId = await getCurrentStaffId();
+    const beforeType = dispatch.settlement_type;
+    const { error } = await supabase
+      .from("dispatches")
+      .update({ settlement_type: newType, updated_by: staffId })
+      .eq("id", id);
+    if (error) {
+      setSettlementSaving(false);
+      setError(error.message);
+      return;
+    }
+    if (reason) {
+      await logSettlementTypeChange({
+        targetTable: "dispatches",
+        targetId: id,
+        beforeType,
+        afterType: newType,
+        reason,
+        changedBy: staffId,
+      });
+    }
+    setSettlementSaving(false);
+    setSettlementModalOpen(false);
+    load();
+  }
+
   async function adjustDriverTripCount(driverId: string, delta: number) {
     const { data: driver } = await supabase
       .from("drivers")
@@ -298,6 +335,7 @@ export default function DispatchDetailPage() {
       commission_total: charge - payout || null,
       receivable_amount: charge || null,
       payable_amount: payout || null,
+      settlement_type: dispatch?.settlement_type || "general",
       status: "정산대기",
       created_by: await getCurrentStaffId(),
     });
@@ -555,6 +593,64 @@ export default function DispatchDetailPage() {
               연결된 운송오더 보기 →
             </Link>
           </div>
+        )}
+
+        <div style={{ marginBottom: 14 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: 10,
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 4 }}>
+                정산방식
+              </div>
+              {dispatch.dispatch_status === "접수중" ? (
+                <select
+                  value={dispatch.settlement_type || "general"}
+                  onChange={(e) => handleSettlementTypeChange(e.target.value, null)}
+                  disabled={settlementSaving}
+                  style={{ fontWeight: 600 }}
+                >
+                  {SETTLEMENT_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="badge">{getSettlementTypeLabel(dispatch.settlement_type)}</span>
+              )}
+            </div>
+            {dispatch.dispatch_status !== "접수중" && (
+              <button
+                type="button"
+                className="btn-ghost"
+                style={{ padding: "6px 12px", borderRadius: 6, fontSize: 12.5, cursor: "pointer" }}
+                onClick={() => setSettlementModalOpen(true)}
+              >
+                정산방식 변경
+              </button>
+            )}
+          </div>
+          {dispatch.dispatch_status !== "접수중" && (
+            <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 8, marginBottom: 0 }}>
+              배차확정 이후라 정산방식을 바꾸려면 사유를 입력해야 합니다.
+            </p>
+          )}
+        </div>
+
+        {settlementModalOpen && (
+          <SettlementTypeChangeModal
+            currentType={dispatch.settlement_type || "general"}
+            onCancel={() => setSettlementModalOpen(false)}
+            onConfirm={(newType, reason) => handleSettlementTypeChange(newType, reason)}
+            saving={settlementSaving}
+          />
         )}
 
         {dispatch.dispatch_status === "접수중" ? (

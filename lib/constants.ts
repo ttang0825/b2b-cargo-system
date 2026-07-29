@@ -65,3 +65,18 @@ export function formatBizRegNo(raw: string): string {
   if (digits.length < 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
   return `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`;
 }
+
+// 운임 정산방식 — 견적 단계에서 최초 선택하면 운송오더→배차→정산관리까지 승계되는
+// 기준 필드. 신규 유형이 생기면 이 배열만 수정할 것 (화면마다 하드코딩 금지,
+// lib/loadingMethods.ts와 동일한 패턴)
+export const SETTLEMENT_TYPES = [
+  { value: "general", label: "일반오더/주선사정산" },
+  { value: "prepaid", label: "선불 오더" },
+  { value: "postpaid_cod", label: "착불 오더" },
+  { value: "monthly", label: "월정산 오더" },
+  { value: "network", label: "정보망 정산" },
+] as const;
+
+export function getSettlementTypeLabel(value: string | null | undefined): string {
+  return SETTLEMENT_TYPES.find((t) => t.value === value)?.label || value || "-";
+}

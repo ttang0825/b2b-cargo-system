@@ -11,6 +11,7 @@ import {
 } from "@/lib/invoiceStatusColors";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import { getCurrentStaffId } from "@/lib/currentStaff";
+import { SETTLEMENT_TYPES, getSettlementTypeLabel } from "@/lib/constants";
 
 type OrderLite = {
   id: string;
@@ -18,6 +19,7 @@ type OrderLite = {
   company_id: string | null;
   quote_id: string | null;
   individual_customer_id: string | null;
+  settlement_type: string | null;
   companies: { name: string } | null;
   guest_name: string | null;
 };
@@ -32,6 +34,7 @@ type InvoiceRow = {
   payment_received: boolean;
   driver_paid: boolean;
   status: string;
+  settlement_type: string | null;
   created_at: string;
   orders: { order_no: string | null; guest_name: string | null } | null;
   companies: { name: string } | null;
@@ -61,6 +64,7 @@ export default function InvoicesPage() {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("전체");
+  const [settlementFilter, setSettlementFilter] = useState("전체");
   const [period, setPeriod] = useState<DatePreset>("all");
 
   const [selectedOrderId, setSelectedOrderId] = useState("");
@@ -75,7 +79,7 @@ export default function InvoicesPage() {
     let query = supabase
       .from("invoices")
       .select(
-        "id,billing_period,customer_charge_total,driver_payout_total,commission_total,tax_invoice_issued,payment_received,driver_paid,status,created_at,orders(order_no,guest_name),companies(name)"
+        "id,billing_period,customer_charge_total,driver_payout_total,commission_total,tax_invoice_issued,payment_received,driver_paid,status,settlement_type,created_at,orders(order_no,guest_name),companies(name)"
       )
       .order("created_at", { ascending: false })
       .limit(preset === "all" ? ALL_PERIOD_LIMIT : FILTERED_PERIOD_LIMIT);
@@ -96,7 +100,7 @@ export default function InvoicesPage() {
     );
     const { data } = await supabase
       .from("orders")
-      .select("id,order_no,company_id,quote_id,individual_customer_id,companies(name),guest_name")
+      .select("id,order_no,company_id,quote_id,individual_customer_id,settlement_type,companies(name),guest_name")
       .eq("status", "운송완료")
       .order("created_at", { ascending: false });
     setAvailableOrders(
@@ -182,6 +186,7 @@ export default function InvoicesPage() {
       payment_due_date: paymentDueDate || null,
       receivable_amount: chargeNum || null,
       payable_amount: payoutNum || null,
+      settlement_type: order?.settlement_type || "general",
       status: "정산대기",
       created_by: await getCurrentStaffId(),
     });
@@ -265,6 +270,7 @@ export default function InvoicesPage() {
   const filtered = useMemo(() => {
     return invoices
       .filter((i) => statusFilter === "전체" || i.status === statusFilter)
+      .filter((i) => settlementFilter === "전체" || i.settlement_type === settlementFilter)
       .filter((i) => {
         if (!search.trim()) return true;
         const q = search.trim().toLowerCase();
@@ -274,7 +280,7 @@ export default function InvoicesPage() {
           (i.orders?.guest_name || "").toLowerCase().includes(q)
         );
       });
-  }, [invoices, search, statusFilter]);
+  }, [invoices, search, statusFilter, settlementFilter]);
 
   return (
     <main className="container">
@@ -440,6 +446,18 @@ export default function InvoicesPage() {
             </option>
           ))}
         </select>
+        <select
+          value={settlementFilter}
+          onChange={(e) => setSettlementFilter(e.target.value)}
+          style={{ fontSize: 12.5, padding: "7px 8px" }}
+        >
+          <option value="전체">전체 정산방식</option>
+          {SETTLEMENT_TYPES.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="card">
@@ -465,6 +483,7 @@ export default function InvoicesPage() {
                 <th>입금</th>
                 <th>지급</th>
                 <th>상태</th>
+                <th>정산방식</th>
               </tr>
             </thead>
             <tbody>
@@ -514,6 +533,9 @@ export default function InvoicesPage() {
                     >
                       {i.status}
                     </span>
+                  </td>
+                  <td>
+                    <span className="badge">{getSettlementTypeLabel(i.settlement_type)}</span>
                   </td>
                 </tr>
               ))}
