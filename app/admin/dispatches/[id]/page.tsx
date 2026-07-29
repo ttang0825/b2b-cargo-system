@@ -118,6 +118,7 @@ export default function DispatchDetailPage() {
     assignment_type: "internal" as "internal" | "external",
     driver_id: null as string | null,
     requested_network_ids: [] as string[],
+    mixed_executed: false,
   });
 
   async function load() {
@@ -125,7 +126,7 @@ export default function DispatchDetailPage() {
     const { data, error } = await supabase
       .from("dispatches")
       .select(
-        "*, orders(id,order_no,origin,destination,item,vehicle_type), drivers(id,name,phone,vehicles(vehicle_number,vehicle_type))"
+        "*, orders(id,order_no,origin,destination,item,vehicle_type,loading_type,mixed_discount_type,mixed_discount_amount,mixed_discount_percent), drivers(id,name,phone,vehicles(vehicle_number,vehicle_type))"
       )
       .eq("id", id)
       .single();
@@ -147,6 +148,7 @@ export default function DispatchDetailPage() {
       assignment_type: (data.assignment_type as "internal" | "external") || "internal",
       driver_id: data.driver_id || null,
       requested_network_ids: data.requested_network_ids || [],
+      mixed_executed: data.mixed_executed || false,
     });
     setSelectedDriverInfo(data.drivers || null);
     setConfirmedNetworkId(data.confirmed_network_id || "");
@@ -414,6 +416,8 @@ export default function DispatchDetailPage() {
       .eq("id", orderId)
       .single();
 
+    // 혼적 할인은 이미 견적 단계 최종금액에 반영되어 저장되므로 별도 변환
+    // 없이 화주 청구운임을 그대로 사용
     const charge = Number(editForm.customer_charge) || 0;
     const payout = Number(editForm.driver_payout) || 0;
     const now = new Date();
@@ -497,6 +501,28 @@ export default function DispatchDetailPage() {
     // updated_at을 DB 기준으로 다시 받아와야 함 — 부분 병합만 하고 넘어가면
     // 로컬 updated_at이 옛날 값 그대로 남아서, 바로 이어서 "변경사항 저장"을
     // 누를 때 낙관적 잠금이 "다른 직원이 방금 수정함"으로 잘못 판단하는 버그가 있었음
+    load();
+  }
+
+  // 오더의 loading_type이 mixable인 건에만 노출되는 "혼적 실행" 체크 — 실제로
+  // 혼적으로 운행됐는지 여부만 기록하는 플래그(원칙 36번, load()로 전체 재조회).
+  // 할인은 이미 견적 단계 최종금액에 반영되어 오더·배차로 그대로 승계되므로,
+  // 이 체크박스는 더 이상 화주 청구운임을 직접 건드리지 않음(6차 세션 보정 —
+  // 아래 handleSave 근처 주석 참고)
+  async function handleMixedExecutedChange(checked: boolean) {
+    if (!dispatch) return;
+    setError(null);
+    const { error } = await supabase
+      .from("dispatches")
+      .update({
+        mixed_executed: checked,
+        updated_by: await getCurrentStaffId(),
+      })
+      .eq("id", id);
+    if (error) {
+      setError(error.message);
+      return;
+    }
     load();
   }
 
@@ -604,6 +630,8 @@ export default function DispatchDetailPage() {
   }
 
   const statusColor = getDispatchStatusColor(dispatch.dispatch_status);
+  // 혼적 할인은 이미 견적 단계 최종금액에 반영되어 있으므로, 마진 계산은
+  // 별도 변환 없이 화주 청구운임을 그대로 사용한다.
   const margin =
     editForm.customer_charge && editForm.driver_payout
       ? Number(editForm.customer_charge) - Number(editForm.driver_payout)
@@ -983,6 +1011,32 @@ export default function DispatchDetailPage() {
         <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
           정산 정보
         </h3>
+
+        {dispatch.orders?.loading_type === "mixable" && (
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+              <input
+                type="checkbox"
+                checked={editForm.mixed_executed}
+                onChange={(e) => handleMixedExecutedChange(e.target.checked)}
+              />
+              혼적 실행
+            </label>
+            <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 4, marginBottom: 0 }}>
+              설정된 할인:{" "}
+              {dispatch.orders?.mixed_discount_type === "percent"
+                ? `할인율 ${dispatch.orders.mixed_discount_percent}%`
+                : dispatch.orders?.mixed_discount_type === "amount"
+                ? `할인금액 ${won(dispatch.orders.mixed_discount_amount)}`
+                : "-"}
+              {" · "}
+              할인은 이미 견적 단계 최종금액에 반영되어 아래 화주 청구운임으로
+              승계되어 있습니다. 이 체크박스는 실제로 혼적 운행됐는지만
+              기록하는 용도이며, 체크 여부는 청구운임에 영향을 주지 않습니다.
+            </p>
+          </div>
+        )}
+
         <div className="form-grid" style={{ padding: 0, marginBottom: 10 }}>
           <div className="field">
             <label>화주 청구운임(원)</label>

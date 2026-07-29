@@ -12,8 +12,17 @@ import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import DateTimePicker from "@/components/DateTimePicker";
 import AddressSearch from "@/components/AddressSearch";
+import MoneyInput from "@/components/MoneyInput";
+import { getLatestMixedLoadingDiscountSettings } from "@/lib/mixedLoadingDiscountSettings";
+import { localInputToISOString, toLocalDateTimeInput } from "@/lib/localDateTime";
+import { applyMixedDiscount } from "@/lib/settlementCalc";
 
 const VEHICLES = ["1톤", "1.4톤", "2.5톤", "3.5톤", "5톤", "5톤 플러스/축"];
+
+// .field input 전역 CSS(width:100%, padding, border-radius 등)가 텍스트
+// 입력창 기준이라 체크박스/라디오에 그대로 적용되면 뭉개져 보임 — 명시적으로
+// 원래 크기로 되돌림
+const CHECKBOX_STYLE: React.CSSProperties = { width: "auto", flexShrink: 0 };
 
 type Tier = {
   distance_from_km: number;
@@ -108,9 +117,13 @@ function QuotesPageInner() {
   const [finalAmountOverride, setFinalAmountOverride] = useState("");
   const [ratesLoading, setRatesLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [standardMixedDiscountPercent, setStandardMixedDiscountPercent] = useState(0);
 
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
+    getLatestMixedLoadingDiscountSettings().then((row) => {
+      if (row) setStandardMixedDiscountPercent(row.standard_discount_percent);
+    });
   }, []);
 
   const [savedLocations, setSavedLocations] = useState<
@@ -150,6 +163,12 @@ function QuotesPageInner() {
     distance_km: "",
     vehicle_type: "1톤",
     settlement_type: "general" as string,
+    loading_type: "exclusive" as "exclusive" | "mixable",
+    mixed_shipper_consent: false,
+    mixed_discount_type: null as "amount" | "percent" | null,
+    mixed_discount_amount: "",
+    mixed_discount_percent: "",
+    mixed_note: "",
     item: "",
     차량형태: "카고",
     상차조건: LOADING_METHOD_OPTIONS[0],
@@ -246,10 +265,10 @@ function QuotesPageInner() {
           reqData.waypoint_count != null ? String(reqData.waypoint_count) : prev.waypointCount,
         item: reqData.item || "",
         requested_pickup_at: reqData.requested_pickup_at
-          ? reqData.requested_pickup_at.slice(0, 16)
+          ? toLocalDateTimeInput(reqData.requested_pickup_at)
           : prev.requested_pickup_at,
         requested_dropoff_at: reqData.requested_dropoff_at
-          ? reqData.requested_dropoff_at.slice(0, 16)
+          ? toLocalDateTimeInput(reqData.requested_dropoff_at)
           : prev.requested_dropoff_at,
         notes: reqData.notes || prev.notes,
       }));
@@ -303,7 +322,7 @@ function QuotesPageInner() {
         상차조건: reqData.pickup_loading_method || prev.상차조건,
         하차조건: reqData.dropoff_loading_method || prev.하차조건,
         requested_pickup_at: reqData.requested_pickup_at
-          ? reqData.requested_pickup_at.slice(0, 16)
+          ? toLocalDateTimeInput(reqData.requested_pickup_at)
           : prev.requested_pickup_at,
         notes: reqData.notes || prev.notes,
       }));
@@ -488,7 +507,38 @@ function QuotesPageInner() {
 
     const pctAmount = base * ratePctTotal;
     const surchargeTotal = pctAmount + flatTotal + waitingExtra + waypointExtra;
-    const final = Math.max(base + surchargeTotal, 0);
+    const rawFinal = Math.max(base + surchargeTotal, 0);
+
+    // 혼적가능 + 화주동의 + 할인조건이 설정된 견적은, 실제 정보망/화주에게
+    // 안내하는 가격이 혼적여부에 따라 둘로 나뉘지 않는다는 실사용 피드백에
+    // 따라 최종 견적금액 자체에 할인을 바로 반영한다(배차 단계 "혼적 실행"은
+    // 이제 순수 기록용 플래그로, 가격에 다시 손대지 않음)
+    let final = rawFinal;
+    if (
+      form.loading_type === "mixable" &&
+      form.mixed_shipper_consent &&
+      form.mixed_discount_type
+    ) {
+      const discounted = applyMixedDiscount(
+        rawFinal,
+        form.loading_type,
+        true,
+        form.mixed_discount_type,
+        Number(form.mixed_discount_amount) || 0,
+        Number(form.mixed_discount_percent) || 0
+      );
+      const discountAmount = rawFinal - discounted;
+      if (discountAmount > 0) {
+        breakdown.push({
+          label:
+            form.mixed_discount_type === "percent"
+              ? `혼적 할인(${form.mixed_discount_percent}%)`
+              : "혼적 할인",
+          amount: -discountAmount,
+        });
+        final = discounted;
+      }
+    }
 
     return { base, surchargeTotal, final, breakdown, tierMatch };
   }, [tiers, surcharges, extraFees, form]);
@@ -620,6 +670,12 @@ function QuotesPageInner() {
         distance_km: Number(form.distance_km) || null,
         vehicle_type: form.vehicle_type,
         settlement_type: form.settlement_type,
+        loading_type: form.loading_type,
+        mixed_shipper_consent: form.loading_type === "mixable" ? form.mixed_shipper_consent : false,
+        mixed_discount_type: form.loading_type === "mixable" ? form.mixed_discount_type : null,
+        mixed_discount_amount: Number(form.mixed_discount_amount) || 0,
+        mixed_discount_percent: Number(form.mixed_discount_percent) || 0,
+        mixed_note: form.loading_type === "mixable" ? form.mixed_note || null : null,
         item: form.item || null,
         base_fare: calc.base,
         surcharge_amount: calc.surchargeTotal,
@@ -627,8 +683,8 @@ function QuotesPageInner() {
         final_amount:
           useManualFinalAmount && finalAmountOverride ? Number(finalAmountOverride) : calc.final,
         status: "상담중",
-        requested_pickup_at: form.requested_pickup_at || null,
-        requested_dropoff_at: form.requested_dropoff_at || null,
+        requested_pickup_at: localInputToISOString(form.requested_pickup_at),
+        requested_dropoff_at: localInputToISOString(form.requested_dropoff_at),
         notes: form.notes || null,
         selected_options: {
           톤수: form.vehicle_type,
@@ -739,6 +795,12 @@ function QuotesPageInner() {
       destinationSigungu: "",
       distance_km: "",
       settlement_type: "general",
+      loading_type: "exclusive",
+      mixed_shipper_consent: false,
+      mixed_discount_type: null,
+      mixed_discount_amount: "",
+      mixed_discount_percent: "",
+      mixed_note: "",
       item: "",
       waitingMinutes: "",
       waypointCount: "",
@@ -1256,6 +1318,160 @@ function QuotesPageInner() {
                 </select>
               </div>
 
+              <div className="field" style={{ gridColumn: "1 / -1" }}>
+                <label>적재구분</label>
+                <div style={{ display: "flex", flexWrap: "nowrap", gap: 16, fontSize: 13 }}>
+                  <label
+                    style={{
+                      display: "flex",
+                      flexShrink: 0,
+                      alignItems: "center",
+                      gap: 6,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="loading_type"
+                      style={CHECKBOX_STYLE}
+                      checked={form.loading_type === "exclusive"}
+                      onChange={() => setForm({ ...form, loading_type: "exclusive" })}
+                    />
+                    독차
+                  </label>
+                  <label
+                    style={{
+                      display: "flex",
+                      flexShrink: 0,
+                      alignItems: "center",
+                      gap: 6,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="loading_type"
+                      style={CHECKBOX_STYLE}
+                      checked={form.loading_type === "mixable"}
+                      onChange={() => setForm({ ...form, loading_type: "mixable" })}
+                    />
+                    혼적가능
+                  </label>
+                </div>
+
+                {form.loading_type === "mixable" && (
+                  <div
+                    style={{
+                      marginTop: 10,
+                      padding: 12,
+                      background: "var(--bg)",
+                      borderRadius: 8,
+                    }}
+                  >
+                    <label
+                      style={{
+                        display: "flex",
+                        flexWrap: "nowrap",
+                        alignItems: "center",
+                        gap: 6,
+                        fontSize: 13,
+                        marginBottom: 10,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        style={CHECKBOX_STYLE}
+                        checked={form.mixed_shipper_consent}
+                        onChange={(e) =>
+                          setForm({ ...form, mixed_shipper_consent: e.target.checked })
+                        }
+                      />
+                      화주 동의 확인됨
+                    </label>
+
+                    <div style={{ display: "flex", flexWrap: "nowrap", gap: 16, fontSize: 13, marginBottom: 10 }}>
+                      <label
+                        style={{
+                          display: "flex",
+                          flexShrink: 0,
+                          alignItems: "center",
+                          gap: 6,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name="mixed_discount_type"
+                          style={CHECKBOX_STYLE}
+                          checked={form.mixed_discount_type === "percent"}
+                          onChange={() =>
+                            setForm((f) => ({
+                              ...f,
+                              mixed_discount_type: "percent",
+                              mixed_discount_percent:
+                                f.mixed_discount_percent || String(standardMixedDiscountPercent),
+                            }))
+                          }
+                        />
+                        할인율(%)
+                      </label>
+                      <label
+                        style={{
+                          display: "flex",
+                          flexShrink: 0,
+                          alignItems: "center",
+                          gap: 6,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name="mixed_discount_type"
+                          style={CHECKBOX_STYLE}
+                          checked={form.mixed_discount_type === "amount"}
+                          onChange={() => setForm({ ...form, mixed_discount_type: "amount" })}
+                        />
+                        할인금액(원)
+                      </label>
+                    </div>
+
+                    {form.mixed_discount_type === "percent" && (
+                      <div className="field" style={{ maxWidth: 160, marginBottom: 10 }}>
+                        <label>혼적 할인율(%)</label>
+                        <input
+                          type="number"
+                          step={0.1}
+                          value={form.mixed_discount_percent}
+                          onChange={(e) =>
+                            setForm({ ...form, mixed_discount_percent: e.target.value })
+                          }
+                        />
+                      </div>
+                    )}
+                    {form.mixed_discount_type === "amount" && (
+                      <div className="field" style={{ maxWidth: 200, marginBottom: 10 }}>
+                        <label>혼적 할인금액(원)</label>
+                        <MoneyInput
+                          value={form.mixed_discount_amount}
+                          onChange={(v) => setForm({ ...form, mixed_discount_amount: v })}
+                        />
+                      </div>
+                    )}
+
+                    <div className="field" style={{ marginBottom: 0 }}>
+                      <label>혼적 주의사항</label>
+                      <textarea
+                        rows={2}
+                        value={form.mixed_note}
+                        onChange={(e) => setForm({ ...form, mixed_note: e.target.value })}
+                        placeholder="예: 파손주의 화물 별도 적재, 냉동/냉장 화물과 혼적 불가, 위험물 동승 불가 등"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="field">
                 <label>대기시간(분)</label>
                 <input
@@ -1349,8 +1565,8 @@ function QuotesPageInner() {
                     color: "var(--text-muted)",
                   }}
                 >
-                  <span>+ {b.label}</span>
-                  <span className="num">{won(b.amount)}</span>
+                  <span>{b.amount < 0 ? "-" : "+"} {b.label}</span>
+                  <span className="num">{won(Math.abs(b.amount))}</span>
                 </div>
               ))}
               <div

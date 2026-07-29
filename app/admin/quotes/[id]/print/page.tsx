@@ -22,6 +22,11 @@ type QuoteDetail = {
   guest_name: string | null;
   guest_phone: string | null;
   selected_options: Record<string, any> | null;
+  loading_type: string | null;
+  mixed_shipper_consent: boolean | null;
+  mixed_discount_type: string | null;
+  mixed_discount_amount: number | null;
+  mixed_discount_percent: number | null;
   notes: string | null;
   requested_pickup_at: string | null;
   requested_dropoff_at: string | null;

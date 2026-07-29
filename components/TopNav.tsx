@@ -39,7 +39,6 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/admin/dispatches", label: "배차 관리" },
       { href: "/admin/invoices", label: "정산 관리" },
       { href: "/admin/settings/external-networks", label: "외부 정보망 관리" },
-      { href: "/admin/settings/insurance-rate", label: "산재보험료 요율 설정" },
     ],
   },
 ];

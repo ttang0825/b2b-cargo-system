@@ -15,6 +15,14 @@ import ProcessedByFooter from "@/components/ProcessedByFooter";
 import ConflictWarning from "@/components/ConflictWarning";
 import { optimisticUpdate } from "@/lib/optimisticUpdate";
 import { logSettlementTypeChange } from "@/lib/settlementTypeChangeLog";
+import MoneyInput from "@/components/MoneyInput";
+import { getLatestMixedLoadingDiscountSettings } from "@/lib/mixedLoadingDiscountSettings";
+import { localInputToISOString, toLocalDateTimeInput } from "@/lib/localDateTime";
+
+function won(n: number | null) {
+  if (n === null || n === undefined) return "-";
+  return Math.round(n).toLocaleString("ko-KR") + "원";
+}
 
 type OrderDetail = {
   id: string;
@@ -25,6 +33,12 @@ type OrderDetail = {
   item: string | null;
   status: string;
   settlement_type: string | null;
+  loading_type: string | null;
+  mixed_shipper_consent: boolean | null;
+  mixed_discount_type: string | null;
+  mixed_discount_amount: number | null;
+  mixed_discount_percent: number | null;
+  mixed_note: string | null;
   requested_pickup_at: string | null;
   requested_delivery_at: string | null;
   load_condition: string | null;
@@ -41,6 +55,11 @@ type OrderDetail = {
   individual_customer_id: string | null;
   companies: { id: string; name: string; phone: string | null } | null;
 };
+
+// .field input 전역 CSS(width:100%, padding, border-radius 등)가 텍스트
+// 입력창 기준이라 체크박스/라디오에 그대로 적용되면 뭉개져 보임 — 명시적으로
+// 원래 크기로 되돌림
+const CHECKBOX_STYLE: React.CSSProperties = { width: "auto", flexShrink: 0 };
 
 function Field({ label, value }: { label: string; value: any }) {
   if (value === null || value === undefined || value === "") return null;
@@ -76,9 +95,13 @@ export default function OrderDetailPage() {
   const [linkedDispatchId, setLinkedDispatchId] = useState<string | null>(null);
   const [settlementModalOpen, setSettlementModalOpen] = useState(false);
   const [settlementSaving, setSettlementSaving] = useState(false);
+  const [standardMixedDiscountPercent, setStandardMixedDiscountPercent] = useState(0);
 
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
+    getLatestMixedLoadingDiscountSettings().then((row) => {
+      if (row) setStandardMixedDiscountPercent(row.standard_discount_percent);
+    });
   }, []);
 
   const [editForm, setEditForm] = useState({
@@ -92,6 +115,12 @@ export default function OrderDetailPage() {
     destinationSido: "",
     destinationSigungu: "",
     vehicle_type: "",
+    loading_type: "exclusive" as "exclusive" | "mixable",
+    mixed_shipper_consent: false,
+    mixed_discount_type: null as "amount" | "percent" | null,
+    mixed_discount_amount: "",
+    mixed_discount_percent: "",
+    mixed_note: "",
     item: "",
     requested_pickup_at: "",
     requested_delivery_at: "",
@@ -124,13 +153,15 @@ export default function OrderDetailPage() {
       destinationSido: data.destination_sido || "",
       destinationSigungu: data.destination_sigungu || "",
       vehicle_type: data.vehicle_type || "",
+      loading_type: (data.loading_type as "exclusive" | "mixable") || "exclusive",
+      mixed_shipper_consent: data.mixed_shipper_consent || false,
+      mixed_discount_type: (data.mixed_discount_type as "amount" | "percent" | null) || null,
+      mixed_discount_amount: data.mixed_discount_amount ? String(data.mixed_discount_amount) : "",
+      mixed_discount_percent: data.mixed_discount_percent ? String(data.mixed_discount_percent) : "",
+      mixed_note: data.mixed_note || "",
       item: data.item || "",
-      requested_pickup_at: data.requested_pickup_at
-        ? data.requested_pickup_at.slice(0, 16)
-        : "",
-      requested_delivery_at: data.requested_delivery_at
-        ? data.requested_delivery_at.slice(0, 16)
-        : "",
+      requested_pickup_at: toLocalDateTimeInput(data.requested_pickup_at),
+      requested_delivery_at: toLocalDateTimeInput(data.requested_delivery_at),
       load_condition: data.load_condition || "",
       unload_condition: data.unload_condition || "",
       special_notes: data.special_notes || "",
@@ -167,9 +198,15 @@ export default function OrderDetailPage() {
       destination_sido: editForm.destinationSido || null,
       destination_sigungu: editForm.destinationSigungu || null,
       vehicle_type: editForm.vehicle_type || null,
+      loading_type: editForm.loading_type,
+      mixed_shipper_consent: editForm.loading_type === "mixable" ? editForm.mixed_shipper_consent : false,
+      mixed_discount_type: editForm.loading_type === "mixable" ? editForm.mixed_discount_type : null,
+      mixed_discount_amount: Number(editForm.mixed_discount_amount) || 0,
+      mixed_discount_percent: Number(editForm.mixed_discount_percent) || 0,
+      mixed_note: editForm.loading_type === "mixable" ? editForm.mixed_note || null : null,
       item: editForm.item || null,
-      requested_pickup_at: editForm.requested_pickup_at || null,
-      requested_delivery_at: editForm.requested_delivery_at || null,
+      requested_pickup_at: localInputToISOString(editForm.requested_pickup_at),
+      requested_delivery_at: localInputToISOString(editForm.requested_delivery_at),
       load_condition: editForm.load_condition || null,
       unload_condition: editForm.unload_condition || null,
       special_notes: editForm.special_notes || null,
@@ -581,6 +618,152 @@ export default function OrderDetailPage() {
               />
             </div>
             <div className="field" style={{ gridColumn: "1 / -1" }}>
+              <label>적재구분</label>
+              <div style={{ display: "flex", flexWrap: "nowrap", gap: 16, fontSize: 13 }}>
+                <label
+                  style={{
+                    display: "flex",
+                    flexShrink: 0,
+                    alignItems: "center",
+                    gap: 6,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="order_loading_type"
+                    style={CHECKBOX_STYLE}
+                    checked={editForm.loading_type === "exclusive"}
+                    onChange={() => setEditForm({ ...editForm, loading_type: "exclusive" })}
+                  />
+                  독차
+                </label>
+                <label
+                  style={{
+                    display: "flex",
+                    flexShrink: 0,
+                    alignItems: "center",
+                    gap: 6,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="order_loading_type"
+                    style={CHECKBOX_STYLE}
+                    checked={editForm.loading_type === "mixable"}
+                    onChange={() => setEditForm({ ...editForm, loading_type: "mixable" })}
+                  />
+                  혼적가능
+                </label>
+              </div>
+
+              {editForm.loading_type === "mixable" && (
+                <div style={{ marginTop: 10, padding: 12, background: "var(--bg)", borderRadius: 8 }}>
+                  <label
+                    style={{
+                      display: "flex",
+                      flexWrap: "nowrap",
+                      alignItems: "center",
+                      gap: 6,
+                      fontSize: 13,
+                      marginBottom: 10,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      style={CHECKBOX_STYLE}
+                      checked={editForm.mixed_shipper_consent}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, mixed_shipper_consent: e.target.checked })
+                      }
+                    />
+                    화주 동의 확인됨
+                  </label>
+
+                  <div style={{ display: "flex", flexWrap: "nowrap", gap: 16, fontSize: 13, marginBottom: 10 }}>
+                    <label
+                      style={{
+                        display: "flex",
+                        flexShrink: 0,
+                        alignItems: "center",
+                        gap: 6,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="order_mixed_discount_type"
+                        style={CHECKBOX_STYLE}
+                        checked={editForm.mixed_discount_type === "percent"}
+                        onChange={() =>
+                          setEditForm((f) => ({
+                            ...f,
+                            mixed_discount_type: "percent",
+                            mixed_discount_percent:
+                              f.mixed_discount_percent || String(standardMixedDiscountPercent),
+                          }))
+                        }
+                      />
+                      할인율(%)
+                    </label>
+                    <label
+                      style={{
+                        display: "flex",
+                        flexShrink: 0,
+                        alignItems: "center",
+                        gap: 6,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="order_mixed_discount_type"
+                        style={CHECKBOX_STYLE}
+                        checked={editForm.mixed_discount_type === "amount"}
+                        onChange={() => setEditForm({ ...editForm, mixed_discount_type: "amount" })}
+                      />
+                      할인금액(원)
+                    </label>
+                  </div>
+
+                  {editForm.mixed_discount_type === "percent" && (
+                    <div className="field" style={{ maxWidth: 160, marginBottom: 10 }}>
+                      <label>혼적 할인율(%)</label>
+                      <input
+                        type="number"
+                        step={0.1}
+                        value={editForm.mixed_discount_percent}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, mixed_discount_percent: e.target.value })
+                        }
+                      />
+                    </div>
+                  )}
+                  {editForm.mixed_discount_type === "amount" && (
+                    <div className="field" style={{ maxWidth: 200, marginBottom: 10 }}>
+                      <label>혼적 할인금액(원)</label>
+                      <MoneyInput
+                        value={editForm.mixed_discount_amount}
+                        onChange={(v) => setEditForm({ ...editForm, mixed_discount_amount: v })}
+                      />
+                    </div>
+                  )}
+
+                  <div className="field" style={{ marginBottom: 0 }}>
+                    <label>혼적 주의사항</label>
+                    <textarea
+                      rows={2}
+                      value={editForm.mixed_note}
+                      onChange={(e) => setEditForm({ ...editForm, mixed_note: e.target.value })}
+                      placeholder="예: 파손주의 화물 별도 적재, 냉동/냉장 화물과 혼적 불가, 위험물 동승 불가 등"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="field" style={{ gridColumn: "1 / -1" }}>
               <label>특이사항</label>
               <textarea
                 rows={3}
@@ -643,6 +826,30 @@ export default function OrderDetailPage() {
             <Field label="하차 조건" value={order.unload_condition} />
             <Field label="품목" value={order.item} />
             <Field label="고객 연락처" value={order.guest_phone} />
+            <Field
+              label="적재구분"
+              value={order.loading_type === "mixable" ? "혼적가능" : "독차"}
+            />
+          </div>
+        )}
+        {order.loading_type === "mixable" && !editing && (
+          <div style={{ marginTop: 12, borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+            <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 4 }}>
+              혼적 옵션
+            </div>
+            <div style={{ fontSize: 13.5 }}>
+              화주 동의: {order.mixed_shipper_consent ? "확인됨" : "미확인"} · 할인방식:{" "}
+              {order.mixed_discount_type === "percent"
+                ? `할인율 ${order.mixed_discount_percent}%`
+                : order.mixed_discount_type === "amount"
+                ? `할인금액 ${won(order.mixed_discount_amount)}`
+                : "-"}
+            </div>
+            {order.mixed_note && (
+              <div style={{ fontSize: 13, whiteSpace: "pre-wrap", marginTop: 6 }}>
+                {order.mixed_note}
+              </div>
+            )}
           </div>
         )}
         {order.special_notes && !editing && (

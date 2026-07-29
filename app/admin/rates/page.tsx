@@ -3,8 +3,27 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getCurrentStaffRole } from "@/lib/currentStaff";
+import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
+import ProcessedByFooter from "@/components/ProcessedByFooter";
+import {
+  getLatestInsuranceRateSettings,
+  DEFAULT_INSURANCE_RATE_SETTINGS,
+  type InsuranceRateSettingsRow,
+} from "@/lib/insuranceRateSettings";
+import {
+  getLatestMixedLoadingDiscountSettings,
+  DEFAULT_MIXED_LOADING_DISCOUNT_SETTINGS,
+  type MixedLoadingDiscountSettingsRow,
+} from "@/lib/mixedLoadingDiscountSettings";
 
 const VEHICLES = ["1톤", "1.4톤", "2.5톤", "3.5톤", "5톤", "5톤 플러스/축"];
+
+const RATE_TABS = [
+  { key: "base", label: "기본운임" },
+  { key: "surcharge", label: "가산기준" },
+  { key: "insurance", label: "산재보험료 요율" },
+] as const;
+type RateTabKey = (typeof RATE_TABS)[number]["key"];
 
 type Tier = {
   id: string;
@@ -100,7 +119,249 @@ function EditableNumber({
   );
 }
 
+// 산재보험료 요율 탭 — 예전엔 /admin/settings/insurance-rate 독립 경로였으나,
+// 운임기준표 화면이 "이 사업의 모든 요율/기준값을 모아두는 화면"이라는 성격에
+// 맞춰 이 탭 안으로 이동함(3차 세션 보정)
+function InsuranceRateTab({ isAdmin }: { isAdmin: boolean }) {
+  const [row, setRow] = useState<InsuranceRateSettingsRow | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const [expenseDeductionRate, setExpenseDeductionRate] = useState(
+    String(DEFAULT_INSURANCE_RATE_SETTINGS.expense_deduction_rate)
+  );
+  const [insuranceRateTotal, setInsuranceRateTotal] = useState(
+    String(DEFAULT_INSURANCE_RATE_SETTINGS.insurance_rate_total)
+  );
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  async function load() {
+    setLoading(true);
+    setError(null);
+    const data = await getLatestInsuranceRateSettings();
+    if (!data) {
+      setError("설정값을 불러오지 못했습니다.");
+      setLoading(false);
+      return;
+    }
+    setRow(data);
+    setExpenseDeductionRate(String(data.expense_deduction_rate));
+    setInsuranceRateTotal(String(data.insurance_rate_total));
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!row) return;
+    setSaving(true);
+    setActionError(null);
+    setSaved(false);
+    try {
+      const res = await fetch("/api/admin/insurance-rate-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: row.id,
+          expense_deduction_rate: Number(expenseDeductionRate),
+          insurance_rate_total: Number(insuranceRateTotal),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setActionError(data.error || "저장에 실패했습니다.");
+        setSaving(false);
+        return;
+      }
+      setSaved(true);
+      await load();
+    } catch {
+      setActionError("저장 중 오류가 발생했습니다.");
+    }
+    setSaving(false);
+  }
+
+  if (loading) {
+    return <div className="empty-state">불러오는 중...</div>;
+  }
+
+  return (
+    <>
+      <p className="page-desc" style={{ marginBottom: 16 }}>
+        배차 상세의 "차주 운임 상세 계산"에서 산재보험료를 계산할 때 쓰이는 필요경비공제율/
+        산재보험료율입니다. 고용노동부가 매년 재고시하는 값이라 필요할 때마다 관리자가 직접
+        수정할 수 있게 되어 있습니다. 저장 즉시 이후의 모든 계산에 반영되며, 이미 저장된 과거
+        배차 건의 값은 바뀌지 않습니다.
+      </p>
+
+      {error && <div className="error-box">오류: {error}</div>}
+      {actionError && <div className="error-box">{actionError}</div>}
+
+      {row ? (
+        <div className="card" style={{ padding: 20, maxWidth: 420 }}>
+          <form onSubmit={handleSave} onKeyDown={handleFormKeyDown} className="form-grid" style={{ padding: 0 }}>
+            <div className="field">
+              <label>필요경비공제율(%)</label>
+              <input
+                type="number"
+                step={0.1}
+                value={expenseDeductionRate}
+                onChange={(e) => setExpenseDeductionRate(e.target.value)}
+                disabled={!isAdmin}
+              />
+            </div>
+            <div className="field">
+              <label>산재보험료율 총계(%)</label>
+              <input
+                type="number"
+                step={0.01}
+                value={insuranceRateTotal}
+                onChange={(e) => setInsuranceRateTotal(e.target.value)}
+                disabled={!isAdmin}
+              />
+              <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 4, marginBottom: 0 }}>
+                차주부담분·주선사부담분은 이 값의 절반씩(현재 설정 기준 {(Number(insuranceRateTotal) / 2 || 0).toFixed(2)}%씩)입니다.
+              </p>
+            </div>
+
+            {isAdmin ? (
+              <div style={{ gridColumn: "1 / -1" }}>
+                <button className="btn" type="submit" disabled={saving}>
+                  {saving ? "저장 중..." : "저장"}
+                </button>
+                {saved && (
+                  <span style={{ marginLeft: 10, fontSize: 12.5, color: "var(--accent)" }}>저장되었습니다.</span>
+                )}
+              </div>
+            ) : (
+              <p style={{ gridColumn: "1 / -1", fontSize: 12.5, color: "var(--text-muted)" }}>
+                조회만 가능합니다. 수정은 관리자만 할 수 있습니다.
+              </p>
+            )}
+          </form>
+
+          <ProcessedByFooter updatedBy={row.updated_by} updatedAt={row.updated_at} />
+        </div>
+      ) : (
+        <div className="empty-state">설정값이 없습니다.</div>
+      )}
+    </>
+  );
+}
+
+// 표준 혼적 할인율(%) — 가산기준 탭 안의 소섹션. 혼적 할인 중 율(%) 방식에만
+// 쓰는 회사 자체 기본값으로, 견적에서 "혼적가능"+"할인유형: 율"을 선택하면
+// 이 값이 입력창 기본값으로 채워짐(담당자가 건별 수정 가능). 금액(정액)
+// 방식은 표준값 없이 계속 수동 입력만 지원(4차 세션 결정사항).
+function MixedLoadingDiscountCard({ isAdmin }: { isAdmin: boolean }) {
+  const [row, setRow] = useState<MixedLoadingDiscountSettingsRow | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [discountPercent, setDiscountPercent] = useState(
+    String(DEFAULT_MIXED_LOADING_DISCOUNT_SETTINGS.standard_discount_percent)
+  );
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  async function load() {
+    setLoading(true);
+    setError(null);
+    const data = await getLatestMixedLoadingDiscountSettings();
+    if (!data) {
+      setError("설정값을 불러오지 못했습니다.");
+      setLoading(false);
+      return;
+    }
+    setRow(data);
+    setDiscountPercent(String(data.standard_discount_percent));
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!row) return;
+    setSaving(true);
+    setActionError(null);
+    setSaved(false);
+    try {
+      const res = await fetch("/api/admin/mixed-loading-discount-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: row.id, standard_discount_percent: Number(discountPercent) }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setActionError(data.error || "저장에 실패했습니다.");
+        setSaving(false);
+        return;
+      }
+      setSaved(true);
+      await load();
+    } catch {
+      setActionError("저장 중 오류가 발생했습니다.");
+    }
+    setSaving(false);
+  }
+
+  if (loading) return <div className="empty-state">불러오는 중...</div>;
+
+  return (
+    <div className="card" style={{ padding: 16, marginBottom: 24, maxWidth: 380 }}>
+      <h3 style={{ fontSize: 13.5, marginTop: 0, marginBottom: 10 }}>표준 혼적 할인율</h3>
+      <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 0, marginBottom: 12 }}>
+        견적에서 "혼적가능" + 할인유형을 "율(%)"로 선택하면 이 값이 기본값으로 채워집니다
+        (건별로 수정 가능). 금액(정액) 할인은 표준값 없이 항상 직접 입력합니다.
+      </p>
+      {error && <div className="error-box">오류: {error}</div>}
+      {actionError && <div className="error-box">{actionError}</div>}
+      {row && (
+        <>
+          <form onSubmit={handleSave} onKeyDown={handleFormKeyDown} style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+            <div className="field" style={{ marginBottom: 0, maxWidth: 140 }}>
+              <label>표준 할인율(%)</label>
+              <input
+                type="number"
+                step={0.1}
+                value={discountPercent}
+                onChange={(e) => setDiscountPercent(e.target.value)}
+                disabled={!isAdmin}
+              />
+            </div>
+            {isAdmin && (
+              <button className="btn" type="submit" disabled={saving}>
+                {saving ? "저장 중..." : "저장"}
+              </button>
+            )}
+          </form>
+          {saved && (
+            <span style={{ display: "block", marginTop: 8, fontSize: 12.5, color: "var(--accent)" }}>
+              저장되었습니다.
+            </span>
+          )}
+          {!isAdmin && (
+            <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 8, marginBottom: 0 }}>
+              조회만 가능합니다. 수정은 관리자만 할 수 있습니다.
+            </p>
+          )}
+          <ProcessedByFooter updatedBy={row.updated_by} updatedAt={row.updated_at} />
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function RatesPage() {
+  const [activeTab, setActiveTab] = useState<RateTabKey>("base");
   const [tiers, setTiers] = useState<Tier[]>([]);
   const [surcharges, setSurcharges] = useState<Surcharge[]>([]);
   const [extraFees, setExtraFees] = useState<ExtraFee[]>([]);
@@ -296,6 +557,19 @@ export default function RatesPage() {
 
       {error && <div className="error-box">오류: {error}</div>}
 
+      <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+        {RATE_TABS.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={activeTab === tab.key ? "btn" : "btn btn-ghost"}
+            style={{ fontSize: 12.5, padding: "7px 12px" }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {pendingScale && (
         <div
           style={{
@@ -356,12 +630,12 @@ export default function RatesPage() {
         </div>
       )}
 
-      {tiers.length === 0 ? (
-        <div className="error-box">
-          아직 등록된 운임기준이 없습니다. Supabase에 CSV 임포트가 필요합니다.
-        </div>
-      ) : (
-        <>
+      {activeTab === "base" &&
+        (tiers.length === 0 ? (
+          <div className="error-box">
+            아직 등록된 운임기준이 없습니다. Supabase에 CSV 임포트가 필요합니다.
+          </div>
+        ) : (
           <div className="card" style={{ marginBottom: 24, overflowX: "auto" }}>
             <table>
               <thead>
@@ -397,7 +671,11 @@ export default function RatesPage() {
               </tbody>
             </table>
           </div>
+        ))}
 
+      {activeTab === "surcharge" && (
+        <>
+          <MixedLoadingDiscountCard isAdmin={isAdmin} />
           <div
             style={{
               display: "grid",
@@ -499,6 +777,8 @@ export default function RatesPage() {
           </div>
         </>
       )}
+
+      {activeTab === "insurance" && <InsuranceRateTab isAdmin={isAdmin} />}
     </main>
   );
 }
