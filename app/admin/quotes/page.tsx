@@ -17,6 +17,11 @@ import { getLatestMixedLoadingDiscountSettings } from "@/lib/mixedLoadingDiscoun
 
 const VEHICLES = ["1톤", "1.4톤", "2.5톤", "3.5톤", "5톤", "5톤 플러스/축"];
 
+// .field input 전역 CSS(width:100%, padding, border-radius 등)가 텍스트
+// 입력창 기준이라 체크박스/라디오에 그대로 적용되면 뭉개져 보임 — 명시적으로
+// 원래 크기로 되돌림
+const CHECKBOX_STYLE: React.CSSProperties = { width: "auto", flexShrink: 0 };
+
 type Tier = {
   distance_from_km: number;
   distance_to_km: number | null;
@@ -1295,6 +1300,7 @@ function QuotesPageInner() {
                     <input
                       type="radio"
                       name="loading_type"
+                      style={CHECKBOX_STYLE}
                       checked={form.loading_type === "exclusive"}
                       onChange={() => setForm({ ...form, loading_type: "exclusive" })}
                     />
@@ -1312,6 +1318,7 @@ function QuotesPageInner() {
                     <input
                       type="radio"
                       name="loading_type"
+                      style={CHECKBOX_STYLE}
                       checked={form.loading_type === "mixable"}
                       onChange={() => setForm({ ...form, loading_type: "mixable" })}
                     />
@@ -1341,6 +1348,7 @@ function QuotesPageInner() {
                     >
                       <input
                         type="checkbox"
+                        style={CHECKBOX_STYLE}
                         checked={form.mixed_shipper_consent}
                         onChange={(e) =>
                           setForm({ ...form, mixed_shipper_consent: e.target.checked })
@@ -1362,6 +1370,7 @@ function QuotesPageInner() {
                         <input
                           type="radio"
                           name="mixed_discount_type"
+                          style={CHECKBOX_STYLE}
                           checked={form.mixed_discount_type === "percent"}
                           onChange={() =>
                             setForm((f) => ({
@@ -1386,6 +1395,7 @@ function QuotesPageInner() {
                         <input
                           type="radio"
                           name="mixed_discount_type"
+                          style={CHECKBOX_STYLE}
                           checked={form.mixed_discount_type === "amount"}
                           onChange={() => setForm({ ...form, mixed_discount_type: "amount" })}
                         />
@@ -1422,7 +1432,7 @@ function QuotesPageInner() {
                         rows={2}
                         value={form.mixed_note}
                         onChange={(e) => setForm({ ...form, mixed_note: e.target.value })}
-                        placeholder="혼적 시 유의할 점 등"
+                        placeholder="예: 파손주의 화물 별도 적재, 냉동/냉장 화물과 혼적 불가, 위험물 동승 불가 등"
                       />
                     </div>
                   </div>

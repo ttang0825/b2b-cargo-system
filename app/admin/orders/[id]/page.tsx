@@ -55,6 +55,11 @@ type OrderDetail = {
   companies: { id: string; name: string; phone: string | null } | null;
 };
 
+// .field input 전역 CSS(width:100%, padding, border-radius 등)가 텍스트
+// 입력창 기준이라 체크박스/라디오에 그대로 적용되면 뭉개져 보임 — 명시적으로
+// 원래 크기로 되돌림
+const CHECKBOX_STYLE: React.CSSProperties = { width: "auto", flexShrink: 0 };
+
 function Field({ label, value }: { label: string; value: any }) {
   if (value === null || value === undefined || value === "") return null;
   return (
@@ -630,6 +635,7 @@ export default function OrderDetailPage() {
                   <input
                     type="radio"
                     name="order_loading_type"
+                    style={CHECKBOX_STYLE}
                     checked={editForm.loading_type === "exclusive"}
                     onChange={() => setEditForm({ ...editForm, loading_type: "exclusive" })}
                   />
@@ -647,6 +653,7 @@ export default function OrderDetailPage() {
                   <input
                     type="radio"
                     name="order_loading_type"
+                    style={CHECKBOX_STYLE}
                     checked={editForm.loading_type === "mixable"}
                     onChange={() => setEditForm({ ...editForm, loading_type: "mixable" })}
                   />
@@ -669,6 +676,7 @@ export default function OrderDetailPage() {
                   >
                     <input
                       type="checkbox"
+                      style={CHECKBOX_STYLE}
                       checked={editForm.mixed_shipper_consent}
                       onChange={(e) =>
                         setEditForm({ ...editForm, mixed_shipper_consent: e.target.checked })
@@ -690,6 +698,7 @@ export default function OrderDetailPage() {
                       <input
                         type="radio"
                         name="order_mixed_discount_type"
+                        style={CHECKBOX_STYLE}
                         checked={editForm.mixed_discount_type === "percent"}
                         onChange={() =>
                           setEditForm((f) => ({
@@ -714,6 +723,7 @@ export default function OrderDetailPage() {
                       <input
                         type="radio"
                         name="order_mixed_discount_type"
+                        style={CHECKBOX_STYLE}
                         checked={editForm.mixed_discount_type === "amount"}
                         onChange={() => setEditForm({ ...editForm, mixed_discount_type: "amount" })}
                       />
@@ -750,6 +760,7 @@ export default function OrderDetailPage() {
                       rows={2}
                       value={editForm.mixed_note}
                       onChange={(e) => setEditForm({ ...editForm, mixed_note: e.target.value })}
+                      placeholder="예: 파손주의 화물 별도 적재, 냉동/냉장 화물과 혼적 불가, 위험물 동승 불가 등"
                     />
                   </div>
                 </div>
