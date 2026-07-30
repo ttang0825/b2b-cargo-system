@@ -13,9 +13,10 @@ import { getSettlementTypeLabel } from "@/lib/constants";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
 import ConflictWarning from "@/components/ConflictWarning";
 import SettlementTypeChangeModal from "@/components/SettlementTypeChangeModal";
-import { optimisticUpdate } from "@/lib/optimisticUpdate";
 import { logSettlementTypeChange } from "@/lib/settlementTypeChangeLog";
 import MixableBadge from "@/components/MixableBadge";
+import LockedBadge from "@/components/LockedBadge";
+import AmendmentReasonModal from "@/components/AmendmentReasonModal";
 
 function won(n: number | null) {
   if (n === null || n === undefined) return "-";
@@ -37,6 +38,8 @@ export default function InvoiceDetailPage() {
   const [conflict, setConflict] = useState(false);
   const [settlementModalOpen, setSettlementModalOpen] = useState(false);
   const [settlementSaving, setSettlementSaving] = useState(false);
+  const [amendmentReasonOpen, setAmendmentReasonOpen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   // 차주 지급금액이 배차 상세 계산기를 거친 값인지 — 목록과 동일한 판단 기준
   const [driverCalcInfo, setDriverCalcInfo] = useState<{ throughCalc: boolean; insuranceApplied: boolean } | null>(
     null
@@ -118,7 +121,7 @@ export default function InvoiceDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editForm.payment_received, editForm.driver_paid]);
 
-  async function handleSave(force = false) {
+  async function handleSave(force = false, reason?: string) {
     setSaveError(null);
     setConflict(false);
 
@@ -135,6 +138,13 @@ export default function InvoiceDetailPage() {
       return;
     }
 
+    // 확정(잠금)된 건이고 아직 수정 사유를 안 받았다면, 저장 대신 사유 입력
+    // 모달부터 띄움(원칙 39번 패턴) — 실제 저장은 사유와 함께 다시 호출됨
+    if (invoice.locked && !reason) {
+      setAmendmentReasonOpen(true);
+      return;
+    }
+
     setSaving(true);
 
     const wasReceived = invoice.payment_received;
@@ -148,33 +158,33 @@ export default function InvoiceDetailPage() {
       payment_received_date: editForm.payment_received_date || null,
       driver_paid: editForm.driver_paid,
       driver_paid_date: editForm.driver_paid_date || null,
-      updated_by: await getCurrentStaffId(),
     };
 
-    if (force) {
-      const { error } = await supabase.from("invoices").update(payload).eq("id", id);
-      if (error) {
-        setSaving(false);
-        setSaveError(error.message);
-        return;
-      }
-    } else {
-      const { conflict: hasConflict, error } = await optimisticUpdate(
-        "invoices",
+    // 이 저장 지점은 "잠긴 건인지"를 서버가 매번 새로 확인해야 해서 서버
+    // API를 거침(클라이언트가 들고 있는 invoice.locked는 신선하지 않을 수
+    // 있어 믿을 수 없음 — anon 클라이언트 직접 update는 더 이상 안 씀)
+    const res = await fetch("/api/admin/invoices/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
         id,
         payload,
-        invoice?.updated_at
-      );
-      if (error) {
-        setSaving(false);
-        setSaveError(error);
-        return;
-      }
-      if (hasConflict) {
-        setSaving(false);
-        setConflict(true);
-        return;
-      }
+        lastKnownUpdatedAt: invoice?.updated_at,
+        force,
+        reason,
+      }),
+    });
+    const result = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      setSaving(false);
+      setSaveError(result.error || "저장에 실패했습니다.");
+      return;
+    }
+    if (result.conflict) {
+      setSaving(false);
+      setConflict(true);
+      return;
     }
 
     // 입금 확인 상태가 바뀌면, 연결된 화주의 미수금을 전체 재계산합니다
@@ -197,12 +207,36 @@ export default function InvoiceDetailPage() {
     }
 
     setSaving(false);
+    setAmendmentReasonOpen(false);
     router.push("/admin/invoices");
   }
 
-  // 8차 세션(월정산 마감/확정)에서 정산 건 잠금 로직이 생기면, 잠금된 건은
-  // 정산방식 변경 자체를 막아야 함. 지금은 잠금이 없어서 사유 입력만으로 항상
-  // 변경 가능하게 해둠 — 즉시 저장 후 load()로 전체 재조회 (원칙 36번)
+  async function handleConfirmSettlement() {
+    if (!invoice) return;
+    const confirmed = window.confirm(
+      "정산을 확정하시겠습니까?\n\n확정 후에는 관리자만 사유를 남기고 예외적으로 수정할 수 있습니다.\n청구완료·입금완료·차주지급완료 상태인지 확인해주세요(리마인더용 안내이며, 다른 상태여도 확정 자체는 막지 않습니다)."
+    );
+    if (!confirmed) return;
+    setConfirming(true);
+    setSaveError(null);
+    const res = await fetch("/api/admin/invoices/confirm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    const result = await res.json().catch(() => ({}));
+    setConfirming(false);
+    if (!res.ok) {
+      setSaveError(result.error || "정산확정에 실패했습니다.");
+      return;
+    }
+    load();
+  }
+
+  // 12차 세션(정산 마감·확정·잠금)에서 잠금 로직이 도입됐지만, 이 저장
+  // 경로는 화면단 버튼 비활성화(fieldsLocked)로만 막아둠 — 서버단 잠금
+  // 체크는 아직 없음(범위 밖으로 남겨둔 잔여 위험, 원칙 44번 설명 참고).
+  // 즉시 저장 후 load()로 전체 재조회 (원칙 36번)
   async function handleSettlementTypeChange(newType: string, reason: string) {
     if (!invoice) return;
     setSettlementSaving(true);
@@ -272,6 +306,7 @@ export default function InvoiceDetailPage() {
   }
 
   const statusColor = getInvoiceStatusColor(editForm.status);
+  const fieldsLocked = invoice.locked && !isAdmin;
 
   return (
     <main className="container">
@@ -289,28 +324,47 @@ export default function InvoiceDetailPage() {
           <h1 className="page-title" style={{ display: "flex", alignItems: "center", gap: 10 }}>
             {invoice.orders?.order_no || "정산 상세"}
             {invoice.orders?.loading_type === "mixable" && <MixableBadge />}
+            {invoice.locked && <LockedBadge />}
           </h1>
           <p className="page-desc">
             {invoice.companies?.name || invoice.orders?.guest_name || "-"} ·{" "}
             {invoice.billing_period || "-"}
           </p>
         </div>
-        {isAdmin && (
-          <button
-            className="btn-danger"
-            onClick={handleDelete}
-            disabled={deleting}
-            style={{
-              padding: "9px 16px",
-              borderRadius: "var(--radius)",
-              fontSize: 13.5,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            {deleting ? "확인 중..." : "삭제"}
-          </button>
-        )}
+        <div style={{ display: "flex", gap: 8 }}>
+          {isAdmin && !invoice.locked && (
+            <button
+              className="btn"
+              onClick={handleConfirmSettlement}
+              disabled={confirming}
+              style={{
+                padding: "9px 16px",
+                borderRadius: "var(--radius)",
+                fontSize: 13.5,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              {confirming ? "확정 중..." : "정산확정"}
+            </button>
+          )}
+          {isAdmin && (
+            <button
+              className="btn-danger"
+              onClick={handleDelete}
+              disabled={deleting}
+              style={{
+                padding: "9px 16px",
+                borderRadius: "var(--radius)",
+                fontSize: 13.5,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              {deleting ? "확인 중..." : "삭제"}
+            </button>
+          )}
+        </div>
       </div>
 
       {saveError && <div className="error-box">오류: {saveError}</div>}
@@ -323,6 +377,7 @@ export default function InvoiceDetailPage() {
           <select
             value={editForm.status}
             onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+            disabled={fieldsLocked}
             style={{
               fontWeight: 600,
               padding: "5px 10px",
@@ -359,6 +414,7 @@ export default function InvoiceDetailPage() {
             <button
               type="button"
               className="btn-ghost"
+              disabled={fieldsLocked}
               style={{ padding: "6px 12px", borderRadius: 6, fontSize: 12.5, cursor: "pointer" }}
               onClick={() => setSettlementModalOpen(true)}
             >
@@ -366,8 +422,8 @@ export default function InvoiceDetailPage() {
             </button>
           </div>
           <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 8, marginBottom: 0 }}>
-            정산방식을 바꾸려면 사유를 입력해야 합니다. (정산 확정/잠금 로직은 8차
-            세션에서 처리 예정 — 지금은 잠긴 건이 없어 항상 변경 가능)
+            정산방식을 바꾸려면 사유를 입력해야 합니다.
+            {invoice.locked && (isAdmin ? " (확정된 건 — 관리자만 변경 가능)" : " (확정된 건이라 변경할 수 없습니다)")}
           </p>
         </div>
 
@@ -488,6 +544,7 @@ export default function InvoiceDetailPage() {
               <input
                 type="checkbox"
                 checked={editForm.tax_invoice_issued}
+                disabled={fieldsLocked}
                 onChange={(e) =>
                   setEditForm({
                     ...editForm,
@@ -503,7 +560,7 @@ export default function InvoiceDetailPage() {
               onChange={(e) =>
                 setEditForm({ ...editForm, tax_invoice_date: e.target.value })
               }
-              disabled={!editForm.tax_invoice_issued}
+              disabled={fieldsLocked || !editForm.tax_invoice_issued}
             />
           </div>
 
@@ -520,6 +577,7 @@ export default function InvoiceDetailPage() {
               <input
                 type="checkbox"
                 checked={editForm.payment_received}
+                disabled={fieldsLocked}
                 onChange={(e) =>
                   setEditForm({
                     ...editForm,
@@ -538,7 +596,7 @@ export default function InvoiceDetailPage() {
                   payment_received_date: e.target.value,
                 })
               }
-              disabled={!editForm.payment_received}
+              disabled={fieldsLocked || !editForm.payment_received}
             />
           </div>
 
@@ -555,6 +613,7 @@ export default function InvoiceDetailPage() {
               <input
                 type="checkbox"
                 checked={editForm.driver_paid}
+                disabled={fieldsLocked}
                 onChange={(e) =>
                   setEditForm({ ...editForm, driver_paid: e.target.checked })
                 }
@@ -567,7 +626,7 @@ export default function InvoiceDetailPage() {
               onChange={(e) =>
                 setEditForm({ ...editForm, driver_paid_date: e.target.value })
               }
-              disabled={!editForm.driver_paid}
+              disabled={fieldsLocked || !editForm.driver_paid}
             />
           </div>
         </div>
@@ -575,6 +634,7 @@ export default function InvoiceDetailPage() {
         <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 14 }}>
           "화주 입금완료"를 체크하면 연결된 화주의 미수금이 자동으로
           차감됩니다.
+          {fieldsLocked && " 이 건은 확정(잠금)되어 관리자만 수정할 수 있습니다."}
         </p>
       </div>
 
@@ -590,9 +650,21 @@ export default function InvoiceDetailPage() {
       )}
 
       {saveError && <div className="error-box">오류: {saveError}</div>}
-      <button className="btn" onClick={() => handleSave()} disabled={saving}>
-        {saving ? "저장 중..." : "변경사항 저장"}
-      </button>
+      {!fieldsLocked && (
+        <button className="btn" onClick={() => handleSave()} disabled={saving}>
+          {saving ? "저장 중..." : "변경사항 저장"}
+        </button>
+      )}
+
+      {amendmentReasonOpen && (
+        <AmendmentReasonModal
+          title="확정된 정산 건 수정"
+          description="이미 확정(잠금)된 정산 건입니다. 수정하려면 사유를 남겨야 하며, 수정 전/후 내용이 기록됩니다."
+          onCancel={() => setAmendmentReasonOpen(false)}
+          onConfirm={(reason) => handleSave(false, reason)}
+          saving={saving}
+        />
+      )}
 
       <ProcessedByFooter
         createdBy={invoice.created_by}

@@ -14,6 +14,7 @@ import { getCurrentStaffId } from "@/lib/currentStaff";
 import { SETTLEMENT_TYPES, getSettlementTypeLabel } from "@/lib/constants";
 import MoneyInput from "@/components/MoneyInput";
 import MixableBadge from "@/components/MixableBadge";
+import LockedBadge from "@/components/LockedBadge";
 
 type OrderLite = {
   id: string;
@@ -38,6 +39,7 @@ type InvoiceRow = {
   driver_paid: boolean;
   status: string;
   settlement_type: string | null;
+  locked: boolean;
   created_at: string;
   orders: { order_no: string | null; guest_name: string | null; loading_type: string | null } | null;
   companies: { name: string } | null;
@@ -106,7 +108,7 @@ export default function InvoicesPage() {
     let query = supabase
       .from("invoices")
       .select(
-        "id,order_id,billing_period,customer_charge_total,driver_payout_total,commission_total,tax_invoice_issued,payment_received,driver_paid,status,settlement_type,created_at,orders(order_no,guest_name,loading_type),companies(name)"
+        "id,order_id,billing_period,customer_charge_total,driver_payout_total,commission_total,tax_invoice_issued,payment_received,driver_paid,status,settlement_type,locked,created_at,orders(order_no,guest_name,loading_type),companies(name)"
       )
       .order("created_at", { ascending: false })
       .limit(preset === "all" ? ALL_PERIOD_LIMIT : FILTERED_PERIOD_LIMIT);
@@ -588,6 +590,11 @@ export default function InvoicesPage() {
                     >
                       {i.status}
                     </span>
+                    {i.locked && (
+                      <div style={{ marginTop: 3 }}>
+                        <LockedBadge />
+                      </div>
+                    )}
                   </td>
                   <td>
                     <span
