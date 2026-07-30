@@ -13,6 +13,7 @@ import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRang
 import { getCurrentStaffId } from "@/lib/currentStaff";
 import MoneyInput from "@/components/MoneyInput";
 import MixableBadge from "@/components/MixableBadge";
+import { shortAddress } from "@/lib/shortAddress";
 
 type OrderLite = {
   id: string;
@@ -687,15 +688,15 @@ function DispatchesPageInner() {
           <table>
             <thead>
               <tr>
-                <th>오더번호</th>
-                <th>고객</th>
-                <th>구간</th>
-                <th>배정</th>
-                <th>청구운임</th>
-                <th>지급운임</th>
-                <th>마진</th>
-                <th>마진율</th>
-                <th>배차상태</th>
+                <th style={{ whiteSpace: "nowrap" }}>오더번호</th>
+                <th style={{ whiteSpace: "nowrap" }}>고객</th>
+                <th style={{ width: 170 }}>구간</th>
+                <th style={{ whiteSpace: "nowrap" }}>배정</th>
+                <th style={{ whiteSpace: "nowrap" }}>청구운임</th>
+                <th style={{ whiteSpace: "nowrap" }}>지급운임</th>
+                <th style={{ whiteSpace: "nowrap" }}>마진</th>
+                <th style={{ whiteSpace: "nowrap" }}>마진율</th>
+                <th style={{ whiteSpace: "nowrap" }}>배차상태</th>
               </tr>
             </thead>
             <tbody>
@@ -716,7 +717,7 @@ function DispatchesPageInner() {
                   onClick={() => router.push(`/admin/dispatches/${d.id}`)}
                   style={{ cursor: "pointer" }}
                 >
-                  <td>
+                  <td style={{ whiteSpace: "nowrap" }}>
                     <span className="num">{d.orders?.order_no || "-"}</span>
                     {d.orders?.loading_type === "mixable" && (
                       <div style={{ marginTop: 3 }}>
@@ -724,28 +725,29 @@ function DispatchesPageInner() {
                       </div>
                     )}
                   </td>
-                  <td>{d.orders?.companies?.name || d.orders?.guest_name || "-"}</td>
-                  <td>
-                    {d.orders?.origin || "-"} → {d.orders?.destination || "-"}
+                  <td style={{ whiteSpace: "nowrap" }}>{d.orders?.companies?.name || d.orders?.guest_name || "-"}</td>
+                  <td style={{ width: 170, fontSize: 12.5 }}>
+                    <div>{shortAddress(d.orders?.origin)}</div>
+                    <div style={{ color: "var(--text-muted)" }}>→ {shortAddress(d.orders?.destination)}</div>
                   </td>
-                  <td style={{ fontSize: 12.5 }}>{assignmentText}</td>
-                  <td>
+                  <td style={{ fontSize: 12.5, whiteSpace: "nowrap" }}>{assignmentText}</td>
+                  <td style={{ whiteSpace: "nowrap" }}>
                     <span className="num">{won(d.customer_charge)}</span>
                   </td>
-                  <td>
+                  <td style={{ whiteSpace: "nowrap" }}>
                     <span className="num">{won(d.driver_payout)}</span>
                   </td>
-                  <td>
+                  <td style={{ whiteSpace: "nowrap" }}>
                     <span className="num">{won(d.margin)}</span>
                   </td>
-                  <td>
+                  <td style={{ whiteSpace: "nowrap" }}>
                     <span className="num">
                       {d.margin !== null && d.customer_charge
                         ? `${((d.margin / d.customer_charge) * 100).toFixed(1)}%`
                         : "-"}
                     </span>
                   </td>
-                  <td onClick={(e) => e.stopPropagation()}>
+                  <td onClick={(e) => e.stopPropagation()} style={{ whiteSpace: "nowrap" }}>
                     {d.dispatch_status === "접수중" ? (
                       <button
                         type="button"

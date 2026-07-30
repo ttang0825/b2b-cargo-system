@@ -15,6 +15,7 @@ import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRang
 import AddressSearch from "@/components/AddressSearch";
 import { localInputToISOString, toLocalDateTimeInput } from "@/lib/localDateTime";
 import MixableBadge from "@/components/MixableBadge";
+import { shortAddress } from "@/lib/shortAddress";
 
 type CompanyLite = { id: string; name: string; phone: string | null };
 
@@ -43,14 +44,6 @@ const SORT_OPTIONS = [
 // "전체" 기간을 선택해도 한 번에 너무 많은 데이터를 불러오지 않도록 안전장치로 상한을 둠
 const ALL_PERIOD_LIMIT = 500;
 const FILTERED_PERIOD_LIMIT = 500;
-
-// 목록에서는 저장된 전체 주소(도로명주소+상세주소 fullOrigin 패턴, 원칙 37번)
-// 대신 "시/도 시/군/구 도로명"까지만 간략히 보여줌 — 상세번지·건물명은 생략
-function shortAddress(addr: string | null | undefined): string {
-  if (!addr) return "-";
-  const match = addr.match(/^(.*?(?:로|길))(?=\s|$)/);
-  return match ? match[1] : addr;
-}
 
 function OrdersPageInner() {
   const router = useRouter();
