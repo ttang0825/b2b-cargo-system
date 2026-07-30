@@ -107,8 +107,12 @@ export default function InvoiceDetailPage() {
   }, [id]);
 
   // 화주 입금완료 + 차주 지급완료가 둘 다 체크되면 "입금완료"로,
-  // 둘 중 하나라도 체크 해제되면(자동으로 입금완료가 된 상태였을 때만) "정산대기"로 되돌림
+  // 둘 중 하나라도 체크 해제되면(자동으로 입금완료가 된 상태였을 때만) "정산대기"로 되돌림.
+  // 단, 확정(잠금)된 건은 건드리지 않음 — 안 그러면 "차주지급완료"까지 체크된 채로
+  // 정산확정한 건을 다시 열었을 때 이 효과가 즉시 "입금완료"로 덮어써버리는 버그가 있었음
+  // (PR #61 실사용 리뷰에서 발견)
   useEffect(() => {
+    if (invoice?.locked) return;
     if (editForm.payment_received && editForm.driver_paid) {
       if (editForm.status !== "입금완료") {
         setEditForm((prev) => ({ ...prev, status: "입금완료" }));
@@ -119,7 +123,7 @@ export default function InvoiceDetailPage() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editForm.payment_received, editForm.driver_paid]);
+  }, [editForm.payment_received, editForm.driver_paid, invoice?.locked]);
 
   async function handleSave(force = false, reason?: string) {
     setSaveError(null);
