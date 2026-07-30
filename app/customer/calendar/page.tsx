@@ -3,6 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import { getOrderStatusColor } from "@/lib/orderStatusColors";
+import MixableBadge from "@/components/MixableBadge";
+
+function won(n: number | null | undefined) {
+  if (!n) return "-";
+  return Math.round(n).toLocaleString("ko-KR") + "원";
+}
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -16,7 +22,9 @@ export default function PortalCalendarPage() {
     async function load() {
       const { data } = await supabase
         .from("orders")
-        .select("id,order_no,origin,destination,requested_pickup_at,status")
+        .select(
+          "id,order_no,origin,destination,requested_pickup_at,status,item,vehicle_type,loading_type,quotes(final_amount)"
+        )
         .not("requested_pickup_at", "is", null)
         .order("requested_pickup_at", { ascending: true });
       setOrders(data || []);
@@ -212,39 +220,53 @@ export default function PortalCalendarPage() {
                   <div
                     key={o.id}
                     style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
                       padding: "10px 0",
                       borderBottom: "1px solid var(--border)",
                       fontSize: 13,
-                      gap: 10,
-                      flexWrap: "wrap",
                     }}
                   >
-                    <span className="num">{o.order_no}</span>
-                    <span style={{ flex: 1, minWidth: 120 }}>
-                      {o.origin} → {o.destination}
-                    </span>
-                    <span className="num" style={{ color: "var(--text-muted)" }}>
-                      {new Date(o.requested_pickup_at).toLocaleTimeString("ko-KR", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                    <span
+                    <div
                       style={{
-                        display: "inline-block",
-                        padding: "3px 10px",
-                        borderRadius: 999,
-                        fontSize: 11.5,
-                        fontWeight: 700,
-                        background: getOrderStatusColor(o.status).bg,
-                        color: getOrderStatusColor(o.status).text,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: 10,
+                        flexWrap: "wrap",
+                        marginBottom: 6,
                       }}
                     >
-                      {o.status}
-                    </span>
+                      <span className="num" style={{ fontWeight: 700 }}>{o.order_no}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span className="num" style={{ color: "var(--text-muted)" }}>
+                          {new Date(o.requested_pickup_at).toLocaleTimeString("ko-KR", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                        <span
+                          style={{
+                            display: "inline-block",
+                            padding: "3px 10px",
+                            borderRadius: 999,
+                            fontSize: 11.5,
+                            fontWeight: 700,
+                            background: getOrderStatusColor(o.status).bg,
+                            color: getOrderStatusColor(o.status).text,
+                          }}
+                        >
+                          {o.status}
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ marginBottom: 4 }}>
+                      {o.origin} → {o.destination}
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", color: "var(--text-muted)", fontSize: 12 }}>
+                      <span>품목 {o.item || "-"}</span>
+                      <span>· 차량 {o.vehicle_type || "-"}</span>
+                      <span className="num">· 금액 {won(o.quotes?.final_amount)}</span>
+                      {o.loading_type === "mixable" && <MixableBadge />}
+                    </div>
                   </div>
                 ))
               )}

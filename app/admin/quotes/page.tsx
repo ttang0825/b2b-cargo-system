@@ -92,6 +92,11 @@ function won(n: number) {
   return Math.round(n).toLocaleString("ko-KR") + "원";
 }
 
+function wonVatIncluded(n: number | null | undefined) {
+  if (!n) return null;
+  return Math.round(n * 1.1).toLocaleString("ko-KR") + "원";
+}
+
 // 거리 기준 최소 상차→하차 간격 (2~5시간, 100km당 1시간씩 증가)
 function calcMinGapHours(distanceKm: number) {
   return Math.min(5, Math.max(2, 2 + Math.floor(distanceKm / 100)));
@@ -1587,6 +1592,11 @@ function QuotesPageInner() {
               </div>
               <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 6, marginBottom: 0 }}>
                 부가세 별도
+                {(() => {
+                  const shown = useManualFinalAmount && finalAmountOverride ? Number(finalAmountOverride) : calc.final;
+                  const inclusive = wonVatIncluded(shown);
+                  return inclusive ? <> (부가세 포함 {inclusive})</> : null;
+                })()}
                 {useManualFinalAmount && finalAmountOverride && (
                   <> · 자동계산값 {won(calc.final)}에서 직접 수정됨</>
                 )}
@@ -1691,6 +1701,11 @@ function QuotesPageInner() {
                     <span className="num">
                       {q.final_amount ? won(q.final_amount) : "-"}
                     </span>
+                    {wonVatIncluded(q.final_amount) && (
+                      <div style={{ fontSize: 10.5, color: "var(--text-muted)" }}>
+                        (포함 {wonVatIncluded(q.final_amount)})
+                      </div>
+                    )}
                   </td>
                   <td className="cell-nowrap">{q.status}</td>
                   <td className="cell-nowrap">

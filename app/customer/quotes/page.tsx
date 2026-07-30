@@ -2,10 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
+import MixableBadge from "@/components/MixableBadge";
 
 function won(n: number | null) {
   if (!n) return "-";
   return Math.round(n).toLocaleString("ko-KR") + "원";
+}
+
+function wonVatIncluded(n: number | null) {
+  if (!n) return null;
+  return Math.round(n * 1.1).toLocaleString("ko-KR") + "원";
 }
 
 function formatDateTime(v: string | null) {
@@ -49,7 +55,7 @@ export default function CustomerQuotesPage() {
     const { data } = await supabase
       .from("quotes")
       .select(
-        "id,quote_no,origin,destination,distance_km,vehicle_type,item,base_fare,final_amount,status,selected_options,notes,requested_pickup_at,requested_dropoff_at,created_at"
+        "id,quote_no,origin,destination,distance_km,vehicle_type,item,base_fare,final_amount,status,selected_options,notes,requested_pickup_at,requested_dropoff_at,loading_type,created_at"
       )
       .order("created_at", { ascending: false })
       .limit(100);
@@ -135,9 +141,21 @@ export default function CustomerQuotesPage() {
                     <div style={{ fontSize: 14, fontWeight: 700 }}>
                       {q.origin} → {q.destination}
                     </div>
+                    {q.loading_type === "mixable" && (
+                      <div style={{ marginTop: 4 }}>
+                        <MixableBadge />
+                      </div>
+                    )}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <span className="num" style={{ fontSize: 16, fontWeight: 800 }}>{won(q.final_amount)}</span>
+                    <div style={{ textAlign: "right" }}>
+                      <span className="num" style={{ fontSize: 16, fontWeight: 800 }}>{won(q.final_amount)}</span>
+                      {wonVatIncluded(q.final_amount) && (
+                        <div style={{ fontSize: 10.5, color: "var(--text-muted)" }}>
+                          (부가세 포함 {wonVatIncluded(q.final_amount)})
+                        </div>
+                      )}
+                    </div>
                     <span
                       style={{
                         display: "inline-block",
@@ -235,7 +253,12 @@ export default function CustomerQuotesPage() {
                         <span>최종 견적금액</span>
                         <span className="num">{won(q.final_amount)}</span>
                       </div>
-                      <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, marginBottom: 14 }}>부가세 별도</p>
+                      <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, marginBottom: 14 }}>
+                        부가세 별도
+                        {wonVatIncluded(q.final_amount) && (
+                          <> (부가세 포함 {wonVatIncluded(q.final_amount)})</>
+                        )}
+                      </p>
                       <button
                         className="btn"
                         style={{ padding: "8px 16px", borderRadius: 8, fontSize: 12.5 }}

@@ -93,6 +93,11 @@ function won(n: number | null) {
   return Math.round(n).toLocaleString("ko-KR") + "원";
 }
 
+function wonVatIncluded(n: number | null | undefined) {
+  if (!n) return null;
+  return Math.round(n * 1.1).toLocaleString("ko-KR") + "원";
+}
+
 // 견적 관리는 거리기반 최소 간격(100km당 1h, 2~5h 범위) 규칙을 씀 (원칙 6번)
 function calcMinGapHours(distanceKm: number) {
   return Math.min(5, Math.max(2, 2 + Math.floor(distanceKm / 100)));
@@ -1036,6 +1041,9 @@ export default function QuoteDetailPage() {
         </div>
         <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 6 }}>
           부가세 별도
+          {wonVatIncluded(quote.final_amount) && (
+            <> (부가세 포함 {wonVatIncluded(quote.final_amount)})</>
+          )}
         </p>
       </div>
 

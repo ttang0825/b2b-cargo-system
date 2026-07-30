@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import { getDispatchStatusColor } from "@/lib/dispatchStatusColors";
+import MixableBadge from "@/components/MixableBadge";
 
 export default function CustomerDispatchesPage() {
   const [dispatches, setDispatches] = useState<any[]>([]);
@@ -14,7 +15,7 @@ export default function CustomerDispatchesPage() {
       const { data } = await supabase
         .from("dispatches")
         .select(
-          "id,dispatch_status,created_at,orders(order_no,origin,destination,requested_pickup_at)"
+          "id,dispatch_status,created_at,orders(order_no,origin,destination,requested_pickup_at,item,loading_type)"
         )
         .order("created_at", { ascending: false })
         .limit(100);
@@ -61,6 +62,7 @@ export default function CustomerDispatchesPage() {
                 <tr>
                   <th>오더번호</th>
                   <th>구간</th>
+                  <th>품목</th>
                   <th>상차 예정</th>
                   <th>배차상태</th>
                 </tr>
@@ -70,9 +72,17 @@ export default function CustomerDispatchesPage() {
                   <tr key={d.id}>
                     <td className="cell-nowrap">
                       <span className="num">{d.orders?.order_no || "-"}</span>
+                      {d.orders?.loading_type === "mixable" && (
+                        <div style={{ marginTop: 4 }}>
+                          <MixableBadge />
+                        </div>
+                      )}
                     </td>
                     <td>
                       {d.orders?.origin || "-"} → {d.orders?.destination || "-"}
+                    </td>
+                    <td style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {d.orders?.item || "-"}
                     </td>
                     <td className="cell-nowrap">
                       <span className="num">
@@ -127,9 +137,18 @@ export default function CustomerDispatchesPage() {
                       {d.dispatch_status}
                     </span>
                   </div>
+                  {d.orders?.loading_type === "mixable" && (
+                    <div style={{ marginBottom: 6 }}>
+                      <MixableBadge />
+                    </div>
+                  )}
                   <div className="mobile-row-line">
                     <span className="mobile-row-label">구간</span>
                     <span>{d.orders?.origin || "-"} → {d.orders?.destination || "-"}</span>
+                  </div>
+                  <div className="mobile-row-line">
+                    <span className="mobile-row-label">품목</span>
+                    <span>{d.orders?.item || "-"}</span>
                   </div>
                   <div className="mobile-row-line">
                     <span className="mobile-row-label">상차 예정</span>

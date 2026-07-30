@@ -3,10 +3,16 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
+import MixableBadge from "@/components/MixableBadge";
 
 function won(n: number | null) {
   if (!n) return "-";
   return Math.round(n).toLocaleString("ko-KR") + "원";
+}
+
+function wonVatIncluded(n: number | null) {
+  if (!n) return null;
+  return Math.round(n * 1.1).toLocaleString("ko-KR") + "원";
 }
 
 function formatDate(d: string | null) {
@@ -23,7 +29,7 @@ export default function CustomerInvoicesPage() {
       const { data } = await supabase
         .from("invoices")
         .select(
-          "id,billing_period,customer_charge_total,tax_invoice_issued,tax_invoice_date,payment_received,payment_received_date,status,created_at,orders(order_no)"
+          "id,billing_period,customer_charge_total,tax_invoice_issued,tax_invoice_date,payment_received,payment_received_date,status,created_at,orders(order_no,loading_type)"
         )
         .order("created_at", { ascending: false })
         .limit(100);
@@ -82,12 +88,23 @@ export default function CustomerInvoicesPage() {
                   <tr key={i.id}>
                     <td className="cell-nowrap">
                       <span className="num">{i.orders?.order_no || "-"}</span>
+                      {i.orders?.loading_type === "mixable" && (
+                        <div style={{ marginTop: 4 }}>
+                          <MixableBadge />
+                        </div>
+                      )}
                     </td>
                     <td className="cell-nowrap">
                       <span className="num">{i.billing_period || "-"}</span>
                     </td>
                     <td className="cell-nowrap">
                       <span className="num">{won(i.customer_charge_total)}</span>
+                      <div style={{ fontSize: 10.5, color: "var(--text-muted)" }}>
+                        부가세 별도
+                        {wonVatIncluded(i.customer_charge_total) && (
+                          <> (포함 {wonVatIncluded(i.customer_charge_total)})</>
+                        )}
+                      </div>
                     </td>
                     <td className="cell-nowrap">{i.tax_invoice_issued ? "발행완료" : "미발행"}</td>
                     <td className="cell-nowrap">
@@ -124,13 +141,25 @@ export default function CustomerInvoicesPage() {
                       {i.status}
                     </span>
                   </div>
+                  {i.orders?.loading_type === "mixable" && (
+                    <div style={{ marginBottom: 6 }}>
+                      <MixableBadge />
+                    </div>
+                  )}
                   <div className="mobile-row-line">
                     <span className="mobile-row-label">정산월</span>
                     <span className="num">{i.billing_period || "-"}</span>
                   </div>
                   <div className="mobile-row-line">
                     <span className="mobile-row-label">청구금액</span>
-                    <span className="num">{won(i.customer_charge_total)}</span>
+                    <span className="num">
+                      {won(i.customer_charge_total)}
+                      {wonVatIncluded(i.customer_charge_total) && (
+                        <span style={{ fontSize: 10.5, color: "var(--text-muted)", marginLeft: 4 }}>
+                          (부가세 별도, 포함 {wonVatIncluded(i.customer_charge_total)})
+                        </span>
+                      )}
+                    </span>
                   </div>
                   <div className="mobile-row-line">
                     <span className="mobile-row-label">세금계산서</span>
