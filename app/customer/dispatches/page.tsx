@@ -4,6 +4,23 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import { getDispatchStatusColor } from "@/lib/dispatchStatusColors";
+import MixableBadge from "@/components/MixableBadge";
+import { getSettlementTypeLabel } from "@/lib/constants";
+
+// admin 정산관리 목록과 동일한 줄바꿈 처리 — "/"가 있는 라벨만 "/" 뒤에서
+// 한 번 줄바꿈("일반오더/주선사정산"이 3줄로 들쭉날쭉 갈라지는 것 방지)
+function SettlementBadgeLabel({ value }: { value: string | null | undefined }) {
+  const label = getSettlementTypeLabel(value);
+  const slashIdx = label.indexOf("/");
+  if (slashIdx === -1) return <>{label}</>;
+  return (
+    <>
+      {label.slice(0, slashIdx + 1)}
+      <br />
+      {label.slice(slashIdx + 1)}
+    </>
+  );
+}
 
 export default function CustomerDispatchesPage() {
   const [dispatches, setDispatches] = useState<any[]>([]);
@@ -14,7 +31,7 @@ export default function CustomerDispatchesPage() {
       const { data } = await supabase
         .from("dispatches")
         .select(
-          "id,dispatch_status,created_at,orders(order_no,origin,destination,requested_pickup_at)"
+          "id,dispatch_status,created_at,orders(order_no,origin,destination,requested_pickup_at,item,loading_type,settlement_type)"
         )
         .order("created_at", { ascending: false })
         .limit(100);
@@ -61,8 +78,10 @@ export default function CustomerDispatchesPage() {
                 <tr>
                   <th>오더번호</th>
                   <th>구간</th>
+                  <th>품목</th>
                   <th>상차 예정</th>
                   <th>배차상태</th>
+                  <th>정산방식</th>
                 </tr>
               </thead>
               <tbody>
@@ -70,9 +89,17 @@ export default function CustomerDispatchesPage() {
                   <tr key={d.id}>
                     <td className="cell-nowrap">
                       <span className="num">{d.orders?.order_no || "-"}</span>
+                      {d.orders?.loading_type === "mixable" && (
+                        <div style={{ marginTop: 4 }}>
+                          <MixableBadge />
+                        </div>
+                      )}
                     </td>
                     <td>
                       {d.orders?.origin || "-"} → {d.orders?.destination || "-"}
+                    </td>
+                    <td style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {d.orders?.item || "-"}
                     </td>
                     <td className="cell-nowrap">
                       <span className="num">
@@ -101,6 +128,14 @@ export default function CustomerDispatchesPage() {
                         {d.dispatch_status}
                       </span>
                     </td>
+                    <td>
+                      <span
+                        className="badge"
+                        style={{ display: "inline-block", textAlign: "center", lineHeight: 1.5 }}
+                      >
+                        <SettlementBadgeLabel value={d.orders?.settlement_type} />
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -127,9 +162,18 @@ export default function CustomerDispatchesPage() {
                       {d.dispatch_status}
                     </span>
                   </div>
+                  {d.orders?.loading_type === "mixable" && (
+                    <div style={{ marginBottom: 6 }}>
+                      <MixableBadge />
+                    </div>
+                  )}
                   <div className="mobile-row-line">
                     <span className="mobile-row-label">구간</span>
                     <span>{d.orders?.origin || "-"} → {d.orders?.destination || "-"}</span>
+                  </div>
+                  <div className="mobile-row-line">
+                    <span className="mobile-row-label">품목</span>
+                    <span>{d.orders?.item || "-"}</span>
                   </div>
                   <div className="mobile-row-line">
                     <span className="mobile-row-label">상차 예정</span>
@@ -143,6 +187,10 @@ export default function CustomerDispatchesPage() {
                           })
                         : "-"}
                     </span>
+                  </div>
+                  <div className="mobile-row-line">
+                    <span className="mobile-row-label">정산방식</span>
+                    <span>{getSettlementTypeLabel(d.orders?.settlement_type)}</span>
                   </div>
                 </div>
               ))}

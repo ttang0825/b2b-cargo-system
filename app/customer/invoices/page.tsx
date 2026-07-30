@@ -3,10 +3,32 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
+import MixableBadge from "@/components/MixableBadge";
+import { getSettlementTypeLabel } from "@/lib/constants";
 
 function won(n: number | null) {
   if (!n) return "-";
   return Math.round(n).toLocaleString("ko-KR") + "원";
+}
+
+function wonVatIncluded(n: number | null) {
+  if (!n) return null;
+  return Math.round(n * 1.1).toLocaleString("ko-KR") + "원";
+}
+
+// admin 정산관리 목록(SettlementBadgeLabel)과 동일한 줄바꿈 처리 — "/"가
+// 있는 라벨("일반오더/주선사정산")만 "/" 뒤에서 한 번 줄바꿈
+function SettlementBadgeLabel({ value }: { value: string | null | undefined }) {
+  const label = getSettlementTypeLabel(value);
+  const slashIdx = label.indexOf("/");
+  if (slashIdx === -1) return <>{label}</>;
+  return (
+    <>
+      {label.slice(0, slashIdx + 1)}
+      <br />
+      {label.slice(slashIdx + 1)}
+    </>
+  );
 }
 
 function formatDate(d: string | null) {
@@ -23,7 +45,7 @@ export default function CustomerInvoicesPage() {
       const { data } = await supabase
         .from("invoices")
         .select(
-          "id,billing_period,customer_charge_total,tax_invoice_issued,tax_invoice_date,payment_received,payment_received_date,status,created_at,orders(order_no)"
+          "id,billing_period,customer_charge_total,tax_invoice_issued,tax_invoice_date,payment_received,payment_received_date,status,settlement_type,created_at,orders(order_no,loading_type)"
         )
         .order("created_at", { ascending: false })
         .limit(100);
@@ -75,6 +97,7 @@ export default function CustomerInvoicesPage() {
                   <th>입금</th>
                   <th>입금일</th>
                   <th>상태</th>
+                  <th>정산방식</th>
                 </tr>
               </thead>
               <tbody>
@@ -82,12 +105,23 @@ export default function CustomerInvoicesPage() {
                   <tr key={i.id}>
                     <td className="cell-nowrap">
                       <span className="num">{i.orders?.order_no || "-"}</span>
+                      {i.orders?.loading_type === "mixable" && (
+                        <div style={{ marginTop: 4 }}>
+                          <MixableBadge />
+                        </div>
+                      )}
                     </td>
                     <td className="cell-nowrap">
                       <span className="num">{i.billing_period || "-"}</span>
                     </td>
                     <td className="cell-nowrap">
                       <span className="num">{won(i.customer_charge_total)}</span>
+                      <div style={{ fontSize: 10.5, color: "var(--text-muted)" }}>
+                        부가세 별도
+                        {wonVatIncluded(i.customer_charge_total) && (
+                          <> (부가세 포함 {wonVatIncluded(i.customer_charge_total)})</>
+                        )}
+                      </div>
                     </td>
                     <td className="cell-nowrap">{i.tax_invoice_issued ? "발행완료" : "미발행"}</td>
                     <td className="cell-nowrap">
@@ -98,6 +132,14 @@ export default function CustomerInvoicesPage() {
                       <span className="num">{formatDate(i.payment_received_date)}</span>
                     </td>
                     <td className="cell-nowrap">{i.status}</td>
+                    <td>
+                      <span
+                        className="badge"
+                        style={{ display: "inline-block", textAlign: "center", lineHeight: 1.5 }}
+                      >
+                        <SettlementBadgeLabel value={i.settlement_type} />
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -124,13 +166,25 @@ export default function CustomerInvoicesPage() {
                       {i.status}
                     </span>
                   </div>
+                  {i.orders?.loading_type === "mixable" && (
+                    <div style={{ marginBottom: 6 }}>
+                      <MixableBadge />
+                    </div>
+                  )}
                   <div className="mobile-row-line">
                     <span className="mobile-row-label">정산월</span>
                     <span className="num">{i.billing_period || "-"}</span>
                   </div>
                   <div className="mobile-row-line">
                     <span className="mobile-row-label">청구금액</span>
-                    <span className="num">{won(i.customer_charge_total)}</span>
+                    <span className="num">
+                      {won(i.customer_charge_total)}
+                      {wonVatIncluded(i.customer_charge_total) && (
+                        <span style={{ fontSize: 10.5, color: "var(--text-muted)", marginLeft: 4 }}>
+                          (부가세 별도, 포함 {wonVatIncluded(i.customer_charge_total)})
+                        </span>
+                      )}
+                    </span>
                   </div>
                   <div className="mobile-row-line">
                     <span className="mobile-row-label">세금계산서</span>
@@ -141,6 +195,10 @@ export default function CustomerInvoicesPage() {
                   <div className="mobile-row-line">
                     <span className="mobile-row-label">입금</span>
                     <span>{i.payment_received ? `완료 (${formatDate(i.payment_received_date)})` : "대기"}</span>
+                  </div>
+                  <div className="mobile-row-line">
+                    <span className="mobile-row-label">정산방식</span>
+                    <span>{getSettlementTypeLabel(i.settlement_type)}</span>
                   </div>
                 </div>
               ))}
