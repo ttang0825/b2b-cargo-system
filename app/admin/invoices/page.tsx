@@ -517,8 +517,8 @@ export default function InvoicesPage() {
                 <th>오더번호</th>
                 <th>화주</th>
                 <th style={{ whiteSpace: "nowrap" }}>정산월</th>
-                <th style={{ whiteSpace: "nowrap" }}>청구금액</th>
-                <th style={{ whiteSpace: "nowrap" }}>지급금액</th>
+                <th style={{ whiteSpace: "nowrap" }}>화주 청구금액</th>
+                <th style={{ whiteSpace: "nowrap" }}>차주 지급금액</th>
                 <th style={{ whiteSpace: "nowrap" }}>수수료</th>
                 <th style={{ whiteSpace: "nowrap" }}>세금계산서</th>
                 <th style={{ whiteSpace: "nowrap" }}>입금</th>
@@ -536,6 +536,11 @@ export default function InvoicesPage() {
                 >
                   <td>
                     <span className="num">{i.orders?.order_no || "-"}</span>
+                    {i.orders?.loading_type === "mixable" && (
+                      <div style={{ marginTop: 3 }}>
+                        <MixableBadge />
+                      </div>
+                    )}
                   </td>
                   <td>
                     {i.companies?.name || i.orders?.guest_name || "-"}
@@ -552,11 +557,6 @@ export default function InvoicesPage() {
                     <span className="num">{won(i.customer_charge_total)}</span>
                     {i.customer_charge_total != null && (
                       <div style={{ fontSize: 11, color: "var(--text-muted)" }}>부가세 별도</div>
-                    )}
-                    {i.orders?.loading_type === "mixable" && (
-                      <div style={{ marginTop: 3 }}>
-                        <MixableBadge />
-                      </div>
                     )}
                   </td>
                   <td style={{ whiteSpace: "nowrap" }}>
