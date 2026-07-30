@@ -3,11 +3,20 @@
 import { useEffect, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import { ANNOUNCEMENTS_LAST_SEEN_KEY as LAST_SEEN_KEY } from "@/lib/portalNotifications";
+import { useListSearchSort } from "@/lib/useListSearchSort";
 
 export default function PortalAnnouncementsPage() {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
+
+  const { search, setSearch, result: visibleItems } = useListSearchSort(
+    items,
+    (a) => [a.title],
+    { created_at: (a) => a.created_at },
+    "created_at",
+    "desc"
+  );
 
   useEffect(() => {
     async function load() {
@@ -45,16 +54,32 @@ export default function PortalAnnouncementsPage() {
         </div>
       </div>
 
+      {items.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <input
+            type="text"
+            placeholder="제목 검색"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ width: "100%", maxWidth: 320, fontSize: 13, padding: "8px 12px" }}
+          />
+        </div>
+      )}
+
       {loading ? (
         <div className="empty-state">불러오는 중...</div>
       ) : items.length === 0 ? (
         <div className="empty-state">등록된 공지사항이 없습니다.</div>
+      ) : visibleItems.length === 0 ? (
+        <div className="card">
+          <div className="empty-state">검색 결과가 없습니다.</div>
+        </div>
       ) : (
         <div className="card">
-          {items.map((a, i) => {
+          {visibleItems.map((a, i) => {
             const isOpen = openId === a.id;
             return (
-              <div key={a.id} style={{ borderBottom: i < items.length - 1 ? "1px solid var(--border)" : "none" }}>
+              <div key={a.id} style={{ borderBottom: i < visibleItems.length - 1 ? "1px solid var(--border)" : "none" }}>
                 <button
                   type="button"
                   onClick={() => setOpenId(isOpen ? null : a.id)}

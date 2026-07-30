@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import MixableBadge from "@/components/MixableBadge";
 import { getSettlementTypeLabel } from "@/lib/constants";
+import { useListSearchSort, sortIndicator } from "@/lib/useListSearchSort";
 
 function won(n: number | null) {
   if (!n) return "-";
@@ -39,6 +40,27 @@ function formatDate(d: string | null) {
 export default function CustomerInvoicesPage() {
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const {
+    search,
+    setSearch,
+    sortKey,
+    setSortKey,
+    sortDir,
+    setSortDir,
+    toggleSort,
+    result: visibleInvoices,
+  } = useListSearchSort(
+    invoices,
+    (i) => [i.orders?.order_no, i.billing_period, i.status],
+    {
+      created_at: (i) => i.created_at,
+      billing_period: (i) => i.billing_period,
+      customer_charge_total: (i) => i.customer_charge_total,
+    },
+    "created_at",
+    "desc"
+  );
 
   useEffect(() => {
     async function load() {
@@ -79,19 +101,53 @@ export default function CustomerInvoicesPage() {
         </div>
       </div>
 
+      {invoices.length > 0 && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+          <input
+            type="text"
+            placeholder="오더번호·정산월·상태 검색"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ flex: 1, minWidth: 180, fontSize: 13, padding: "8px 12px" }}
+          />
+          <select
+            className="mobile-only"
+            value={`${sortKey}:${sortDir}`}
+            onChange={(e) => {
+              const [key, dir] = e.target.value.split(":");
+              setSortKey(key);
+              setSortDir(dir as "asc" | "desc");
+            }}
+            style={{ fontSize: 13, padding: "8px 12px" }}
+          >
+            <option value="created_at:desc">최신 등록순</option>
+            <option value="billing_period:desc">정산월 최신순</option>
+            <option value="billing_period:asc">정산월 오래된순</option>
+            <option value="customer_charge_total:desc">청구금액 높은순</option>
+            <option value="customer_charge_total:asc">청구금액 낮은순</option>
+          </select>
+        </div>
+      )}
+
       <div className="card" style={{ overflowX: "auto" }}>
         {loading ? (
           <div className="empty-state">불러오는 중...</div>
         ) : invoices.length === 0 ? (
           <div className="empty-state">정산 내역이 없습니다.</div>
+        ) : visibleInvoices.length === 0 ? (
+          <div className="empty-state">검색 결과가 없습니다.</div>
         ) : (
           <>
             <table className="desktop-only" style={{ minWidth: 860 }}>
               <thead>
                 <tr>
                   <th>오더번호</th>
-                  <th>정산월</th>
-                  <th>청구금액</th>
+                  <th style={{ cursor: "pointer" }} onClick={() => toggleSort("billing_period")}>
+                    정산월{sortIndicator(sortKey, "billing_period", sortDir)}
+                  </th>
+                  <th style={{ cursor: "pointer" }} onClick={() => toggleSort("customer_charge_total")}>
+                    청구금액{sortIndicator(sortKey, "customer_charge_total", sortDir)}
+                  </th>
                   <th>세금계산서</th>
                   <th>발행일</th>
                   <th>입금</th>
@@ -101,7 +157,7 @@ export default function CustomerInvoicesPage() {
                 </tr>
               </thead>
               <tbody>
-                {invoices.map((i) => (
+                {visibleInvoices.map((i) => (
                   <tr key={i.id}>
                     <td className="cell-nowrap">
                       <span className="num">{i.orders?.order_no || "-"}</span>
@@ -146,7 +202,7 @@ export default function CustomerInvoicesPage() {
             </table>
 
             <div className="mobile-only">
-              {invoices.map((i) => (
+              {visibleInvoices.map((i) => (
                 <div key={i.id} className="mobile-row-card">
                   <div className="mobile-row-top">
                     <span className="num" style={{ fontSize: 13, fontWeight: 700 }}>

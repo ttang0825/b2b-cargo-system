@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import MixableBadge from "@/components/MixableBadge";
+import { useListSearchSort } from "@/lib/useListSearchSort";
 
 function won(n: number | null) {
   if (!n) return "-";
@@ -50,6 +51,25 @@ export default function CustomerQuotesPage() {
   const [itemsByQuote, setItemsByQuote] = useState<Record<string, any[]>>({});
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
+
+  const {
+    search,
+    setSearch,
+    sortKey,
+    setSortKey,
+    sortDir,
+    setSortDir,
+    result: visibleQuotes,
+  } = useListSearchSort(
+    quotes,
+    (q) => [q.quote_no, q.origin, q.destination, q.item],
+    {
+      created_at: (q) => q.created_at,
+      final_amount: (q) => q.final_amount,
+    },
+    "created_at",
+    "desc"
+  );
 
   async function load() {
     const { data } = await supabase
@@ -99,15 +119,45 @@ export default function CustomerQuotesPage() {
         </div>
       </div>
 
+      {quotes.length > 0 && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+          <input
+            type="text"
+            placeholder="견적번호·구간·품목 검색"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ flex: 1, minWidth: 180, fontSize: 13, padding: "8px 12px" }}
+          />
+          <select
+            value={`${sortKey}:${sortDir}`}
+            onChange={(e) => {
+              const [key, dir] = e.target.value.split(":");
+              setSortKey(key);
+              setSortDir(dir as "asc" | "desc");
+            }}
+            style={{ fontSize: 13, padding: "8px 12px" }}
+          >
+            <option value="created_at:desc">견적일 최신순</option>
+            <option value="created_at:asc">견적일 오래된순</option>
+            <option value="final_amount:desc">금액 높은순</option>
+            <option value="final_amount:asc">금액 낮은순</option>
+          </select>
+        </div>
+      )}
+
       {loading ? (
         <div className="empty-state">불러오는 중...</div>
       ) : quotes.length === 0 ? (
         <div className="card">
           <div className="empty-state">아직 받은 견적이 없습니다.</div>
         </div>
+      ) : visibleQuotes.length === 0 ? (
+        <div className="card">
+          <div className="empty-state">검색 결과가 없습니다.</div>
+        </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {quotes.map((q) => {
+          {visibleQuotes.map((q) => {
             const isOpen = openId === q.id;
             const statusColor = STATUS_COLORS[q.status] || { bg: "var(--bg)", text: "var(--text-muted)" };
             const options = q.selected_options || {};
