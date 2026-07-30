@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import AddressSearch from "@/components/AddressSearch";
+import { useListSearchSort } from "@/lib/useListSearchSort";
 
 type Location = {
   id: string;
@@ -24,6 +25,13 @@ export default function PortalLocationsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  const { search, setSearch, result: visibleLocations } = useListSearchSort(
+    locations,
+    (l) => [l.address],
+    {},
+    "address"
+  );
 
   async function loadLocations(cid: string) {
     const { data } = await supabase
@@ -100,12 +108,27 @@ export default function PortalLocationsPage() {
 
       {error && <div className="error-box">{error}</div>}
 
+      {locations.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <input
+            type="text"
+            placeholder="주소 검색"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ width: "100%", maxWidth: 320, fontSize: 13, padding: "8px 12px" }}
+          />
+        </div>
+      )}
+
       {loading ? (
         <div className="empty-state">불러오는 중...</div>
       ) : (
         <div className="card" style={{ padding: 20 }}>
+          {search.trim() && visibleLocations.length === 0 && (
+            <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginBottom: 12 }}>검색 결과가 없습니다.</p>
+          )}
           {["상차지", "하차지"].map((type) => {
-            const list = locations.filter((l) => l.location_type === type);
+            const list = visibleLocations.filter((l) => l.location_type === type);
             return (
               <div key={type} style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 12.5, color: "var(--text-muted)", marginBottom: 8, fontWeight: 700 }}>

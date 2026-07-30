@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import { getDispatchStatusColor } from "@/lib/dispatchStatusColors";
 import MixableBadge from "@/components/MixableBadge";
 import { getSettlementTypeLabel } from "@/lib/constants";
+import { useListSearchSort, sortIndicator } from "@/lib/useListSearchSort";
+import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 
 // admin 정산관리 목록과 동일한 줄바꿈 처리 — "/"가 있는 라벨만 "/" 뒤에서
 // 한 번 줄바꿈("일반오더/주선사정산"이 3줄로 들쭉날쭉 갈라지는 것 방지)
@@ -25,6 +27,34 @@ function SettlementBadgeLabel({ value }: { value: string | null | undefined }) {
 export default function CustomerDispatchesPage() {
   const [dispatches, setDispatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState<DatePreset>("all");
+
+  const periodFiltered = useMemo(() => {
+    const { from } = getDateRange(period);
+    if (!from) return dispatches;
+    return dispatches.filter((d) => d.created_at && d.created_at >= from);
+  }, [dispatches, period]);
+
+  const {
+    search,
+    setSearch,
+    sortKey,
+    setSortKey,
+    sortDir,
+    setSortDir,
+    toggleSort,
+    result: visibleDispatches,
+  } = useListSearchSort(
+    periodFiltered,
+    (d) => [d.orders?.order_no, d.orders?.origin, d.orders?.destination, d.orders?.item, d.dispatch_status],
+    {
+      created_at: (d) => d.created_at,
+      requested_pickup_at: (d) => d.orders?.requested_pickup_at,
+      dispatch_status: (d) => d.dispatch_status,
+    },
+    "created_at",
+    "desc"
+  );
 
   useEffect(() => {
     async function load() {
@@ -66,11 +96,46 @@ export default function CustomerDispatchesPage() {
         </div>
       </div>
 
+      {dispatches.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <DateRangeFilter value={period} onChange={setPeriod} />
+        </div>
+      )}
+
+      {dispatches.length > 0 && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+          <input
+            type="text"
+            placeholder="오더번호·구간·품목·상태 검색"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ flex: 1, minWidth: 180, fontSize: 13, padding: "8px 12px" }}
+          />
+          <select
+            className="mobile-only"
+            value={`${sortKey}:${sortDir}`}
+            onChange={(e) => {
+              const [key, dir] = e.target.value.split(":");
+              setSortKey(key);
+              setSortDir(dir as "asc" | "desc");
+            }}
+            style={{ fontSize: 13, padding: "8px 12px" }}
+          >
+            <option value="created_at:desc">최신 등록순</option>
+            <option value="requested_pickup_at:asc">상차 빠른순</option>
+            <option value="requested_pickup_at:desc">상차 늦은순</option>
+            <option value="dispatch_status:asc">배차상태순</option>
+          </select>
+        </div>
+      )}
+
       <div className="card" style={{ overflowX: "auto" }}>
         {loading ? (
           <div className="empty-state">불러오는 중...</div>
         ) : dispatches.length === 0 ? (
           <div className="empty-state">진행 중인 운송이 없습니다.</div>
+        ) : visibleDispatches.length === 0 ? (
+          <div className="empty-state">검색 결과가 없습니다.</div>
         ) : (
           <>
             <table className="desktop-only" style={{ minWidth: 720 }}>
@@ -79,13 +144,17 @@ export default function CustomerDispatchesPage() {
                   <th>오더번호</th>
                   <th>구간</th>
                   <th>품목</th>
-                  <th>상차 예정</th>
-                  <th>배차상태</th>
+                  <th style={{ cursor: "pointer" }} onClick={() => toggleSort("requested_pickup_at")}>
+                    상차 예정{sortIndicator(sortKey, "requested_pickup_at", sortDir)}
+                  </th>
+                  <th style={{ cursor: "pointer" }} onClick={() => toggleSort("dispatch_status")}>
+                    배차상태{sortIndicator(sortKey, "dispatch_status", sortDir)}
+                  </th>
                   <th>정산방식</th>
                 </tr>
               </thead>
               <tbody>
-                {dispatches.map((d) => (
+                {visibleDispatches.map((d) => (
                   <tr key={d.id}>
                     <td className="cell-nowrap">
                       <span className="num">{d.orders?.order_no || "-"}</span>
@@ -142,7 +211,7 @@ export default function CustomerDispatchesPage() {
             </table>
 
             <div className="mobile-only">
-              {dispatches.map((d) => (
+              {visibleDispatches.map((d) => (
                 <div key={d.id} className="mobile-row-card">
                   <div className="mobile-row-top">
                     <span className="num" style={{ fontSize: 13, fontWeight: 700 }}>
