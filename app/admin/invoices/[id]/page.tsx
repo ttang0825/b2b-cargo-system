@@ -37,6 +37,10 @@ export default function InvoiceDetailPage() {
   const [conflict, setConflict] = useState(false);
   const [settlementModalOpen, setSettlementModalOpen] = useState(false);
   const [settlementSaving, setSettlementSaving] = useState(false);
+  // 차주 지급금액이 배차 상세 계산기를 거친 값인지 — 목록과 동일한 판단 기준
+  const [driverCalcInfo, setDriverCalcInfo] = useState<{ throughCalc: boolean; insuranceApplied: boolean } | null>(
+    null
+  );
 
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
@@ -65,6 +69,23 @@ export default function InvoiceDetailPage() {
       return;
     }
     setInvoice(data);
+    if (data.order_id) {
+      const { data: dispatchRow } = await supabase
+        .from("dispatches")
+        .select("driver_base_fare,industrial_insurance_applicable")
+        .eq("order_id", data.order_id)
+        .maybeSingle();
+      setDriverCalcInfo(
+        dispatchRow
+          ? {
+              throughCalc: dispatchRow.driver_base_fare != null,
+              insuranceApplied: !!dispatchRow.industrial_insurance_applicable,
+            }
+          : null
+      );
+    } else {
+      setDriverCalcInfo(null);
+    }
     setEditForm({
       status: data.status || "정산대기",
       tax_invoice_issued: data.tax_invoice_issued || false,
@@ -373,6 +394,9 @@ export default function InvoiceDetailPage() {
             <div style={{ fontSize: 14, fontWeight: 600 }}>
               {won(invoice.customer_charge_total)}
             </div>
+            {invoice.customer_charge_total != null && (
+              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>부가세 별도</div>
+            )}
           </div>
           <div>
             <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
@@ -381,6 +405,12 @@ export default function InvoiceDetailPage() {
             <div style={{ fontSize: 14, fontWeight: 600 }}>
               {won(invoice.driver_payout_total)}
             </div>
+            {invoice.driver_payout_total != null && driverCalcInfo?.throughCalc && (
+              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                부가세 포함
+                {driverCalcInfo.insuranceApplied && " · 산재보험료 차감됨"}
+              </div>
+            )}
           </div>
           <div>
             <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>

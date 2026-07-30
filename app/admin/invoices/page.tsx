@@ -91,6 +91,14 @@ export default function InvoicesPage() {
   const [customerChargeTotal, setCustomerChargeTotal] = useState("");
   const [driverPayoutTotal, setDriverPayoutTotal] = useState("");
   const [paymentDueDate, setPaymentDueDate] = useState("");
+  // 차주 지급금액이 배차 상세 "차주 운임 상세 계산" 계산기를 거쳐 산출된
+  // 값인지 order_id 기준으로 판단하는 맵 — 계산기를 거친 값은 항상 부가세
+  // 포함으로 산출되고(lib/settlementCalc.ts), 산재보험료 적용대상이면 그만큼
+  // 차감된 금액이라 목록에 그 사실을 캡션으로 안내함(계산기 없이 직접
+  // 입력한 값은 부가세·산재보험료 여부를 알 수 없어 캡션을 붙이지 않음)
+  const [driverCalcInfoByOrderId, setDriverCalcInfoByOrderId] = useState<
+    Record<string, { throughCalc: boolean; insuranceApplied: boolean }>
+  >({});
 
   async function loadInvoices(preset: DatePreset = period) {
     setLoading(true);
@@ -107,6 +115,28 @@ export default function InvoicesPage() {
     const { data, error } = await query;
     if (error) setError(error.message);
     else setInvoices(data as any as InvoiceRow[]);
+
+    const orderIds = ((data as any as InvoiceRow[]) || [])
+      .map((i) => i.order_id)
+      .filter((v): v is string => !!v);
+    if (orderIds.length > 0) {
+      const { data: dispatchRows } = await supabase
+        .from("dispatches")
+        .select("order_id,driver_base_fare,industrial_insurance_applicable")
+        .in("order_id", orderIds);
+      const map: Record<string, { throughCalc: boolean; insuranceApplied: boolean }> = {};
+      (dispatchRows || []).forEach((d: any) => {
+        if (d.order_id) {
+          map[d.order_id] = {
+            throughCalc: d.driver_base_fare != null,
+            insuranceApplied: !!d.industrial_insurance_applicable,
+          };
+        }
+      });
+      setDriverCalcInfoByOrderId(map);
+    } else {
+      setDriverCalcInfoByOrderId({});
+    }
     setLoading(false);
   }
 
@@ -520,6 +550,9 @@ export default function InvoicesPage() {
                   </td>
                   <td style={{ whiteSpace: "nowrap" }}>
                     <span className="num">{won(i.customer_charge_total)}</span>
+                    {i.customer_charge_total != null && (
+                      <div style={{ fontSize: 11, color: "var(--text-muted)" }}>부가세 별도</div>
+                    )}
                     {i.orders?.loading_type === "mixable" && (
                       <div style={{ marginTop: 3 }}>
                         <MixableBadge />
@@ -528,6 +561,12 @@ export default function InvoicesPage() {
                   </td>
                   <td style={{ whiteSpace: "nowrap" }}>
                     <span className="num">{won(i.driver_payout_total)}</span>
+                    {i.driver_payout_total != null && i.order_id && driverCalcInfoByOrderId[i.order_id]?.throughCalc && (
+                      <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                        부가세 포함
+                        {driverCalcInfoByOrderId[i.order_id].insuranceApplied && " · 산재보험료 차감됨"}
+                      </div>
+                    )}
                   </td>
                   <td style={{ whiteSpace: "nowrap" }}>
                     <span className="num">{won(i.commission_total)}</span>
