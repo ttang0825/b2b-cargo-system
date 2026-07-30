@@ -14,6 +14,8 @@ import DateTimePicker from "@/components/DateTimePicker";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import AddressSearch from "@/components/AddressSearch";
 import { localInputToISOString, toLocalDateTimeInput } from "@/lib/localDateTime";
+import MixableBadge from "@/components/MixableBadge";
+import { shortAddress } from "@/lib/shortAddress";
 
 type CompanyLite = { id: string; name: string; phone: string | null };
 
@@ -28,6 +30,7 @@ type OrderRow = {
   requested_pickup_at: string | null;
   created_at: string;
   guest_name: string | null;
+  loading_type: string | null;
   companies: { name: string } | null;
 };
 
@@ -115,7 +118,7 @@ function OrdersPageInner() {
     let query = supabase
       .from("orders")
       .select(
-        "id,order_no,origin,destination,vehicle_type,item,status,requested_pickup_at,created_at,guest_name,companies(name)"
+        "id,order_no,origin,destination,vehicle_type,item,status,requested_pickup_at,created_at,guest_name,loading_type,companies(name)"
       )
       .order("created_at", { ascending: false })
       .limit(preset === "all" ? ALL_PERIOD_LIMIT : FILTERED_PERIOD_LIMIT);
@@ -748,13 +751,13 @@ function OrdersPageInner() {
           <table>
             <thead>
               <tr>
-                <th>오더번호</th>
-                <th>고객</th>
-                <th>구간</th>
-                <th>차량</th>
-                <th>상차일</th>
-                <th>배차상태</th>
-                <th>등록일</th>
+                <th style={{ whiteSpace: "nowrap" }}>오더번호</th>
+                <th style={{ whiteSpace: "nowrap" }}>고객</th>
+                <th style={{ width: 170 }}>구간</th>
+                <th style={{ whiteSpace: "nowrap" }}>차량</th>
+                <th style={{ whiteSpace: "nowrap" }}>상차일</th>
+                <th style={{ whiteSpace: "nowrap" }}>배차상태</th>
+                <th style={{ whiteSpace: "nowrap" }}>등록일</th>
               </tr>
             </thead>
             <tbody>
@@ -764,10 +767,15 @@ function OrdersPageInner() {
                   onClick={() => router.push(`/admin/orders/${o.id}`)}
                   style={{ cursor: "pointer" }}
                 >
-                  <td>
+                  <td style={{ whiteSpace: "nowrap" }}>
                     <span className="num">{o.order_no}</span>
+                    {o.loading_type === "mixable" && (
+                      <div style={{ marginTop: 3 }}>
+                        <MixableBadge />
+                      </div>
+                    )}
                   </td>
-                  <td>
+                  <td style={{ whiteSpace: "nowrap" }}>
                     {o.companies?.name || o.guest_name || "-"}
                     {!o.companies?.name && o.guest_name && (
                       <span className="badge" style={{ marginLeft: 6 }}>
@@ -775,23 +783,32 @@ function OrdersPageInner() {
                       </span>
                     )}
                   </td>
-                  <td>
-                    {o.origin || "-"} → {o.destination || "-"}
+                  <td style={{ width: 170, fontSize: 12.5 }}>
+                    <div>{shortAddress(o.origin)}</div>
+                    <div style={{ color: "var(--text-muted)" }}>→ {shortAddress(o.destination)}</div>
                   </td>
-                  <td>{o.vehicle_type || "-"}</td>
-                  <td>
-                    <span className="num">
-                      {o.requested_pickup_at
-                        ? new Date(o.requested_pickup_at).toLocaleString("ko-KR", {
+                  <td style={{ whiteSpace: "nowrap" }}>{o.vehicle_type || "-"}</td>
+                  <td style={{ whiteSpace: "nowrap" }}>
+                    {o.requested_pickup_at ? (
+                      <>
+                        <div className="num">
+                          {new Date(o.requested_pickup_at).toLocaleDateString("ko-KR", {
                             month: "2-digit",
                             day: "2-digit",
+                          })}
+                        </div>
+                        <div className="num" style={{ color: "var(--text-muted)" }}>
+                          {new Date(o.requested_pickup_at).toLocaleTimeString("ko-KR", {
                             hour: "2-digit",
                             minute: "2-digit",
-                          })
-                        : "-"}
-                    </span>
+                          })}
+                        </div>
+                      </>
+                    ) : (
+                      "-"
+                    )}
                   </td>
-                  <td onClick={(e) => e.stopPropagation()}>
+                  <td onClick={(e) => e.stopPropagation()} style={{ whiteSpace: "nowrap" }}>
                     <select
                       value={o.status}
                       onChange={(e) => handleStatusChange(o.id, e.target.value)}
@@ -812,7 +829,7 @@ function OrdersPageInner() {
                       ))}
                     </select>
                   </td>
-                  <td>
+                  <td style={{ whiteSpace: "nowrap" }}>
                     <span className="num">
                       {new Date(o.created_at).toLocaleDateString("ko-KR")}
                     </span>

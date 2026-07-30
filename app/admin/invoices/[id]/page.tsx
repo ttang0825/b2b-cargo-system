@@ -15,14 +15,11 @@ import ConflictWarning from "@/components/ConflictWarning";
 import SettlementTypeChangeModal from "@/components/SettlementTypeChangeModal";
 import { optimisticUpdate } from "@/lib/optimisticUpdate";
 import { logSettlementTypeChange } from "@/lib/settlementTypeChangeLog";
+import MixableBadge from "@/components/MixableBadge";
 
 function won(n: number | null) {
   if (n === null || n === undefined) return "-";
   return Math.round(n).toLocaleString("ko-KR") + "원";
-}
-
-function vatLabel(included: boolean | null | undefined) {
-  return included ? "부가세 포함" : "부가세 별도";
 }
 
 export default function InvoiceDetailPage() {
@@ -40,7 +37,10 @@ export default function InvoiceDetailPage() {
   const [conflict, setConflict] = useState(false);
   const [settlementModalOpen, setSettlementModalOpen] = useState(false);
   const [settlementSaving, setSettlementSaving] = useState(false);
-  const [mixedExecuted, setMixedExecuted] = useState(false);
+  // 차주 지급금액이 배차 상세 계산기를 거친 값인지 — 목록과 동일한 판단 기준
+  const [driverCalcInfo, setDriverCalcInfo] = useState<{ throughCalc: boolean; insuranceApplied: boolean } | null>(
+    null
+  );
 
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
@@ -60,7 +60,7 @@ export default function InvoiceDetailPage() {
     setLoading(true);
     const { data, error } = await supabase
       .from("invoices")
-      .select("*, orders(id,order_no,guest_name,loading_type,mixed_discount_type,mixed_discount_amount,mixed_discount_percent), companies(id,name)")
+      .select("*, orders(id,order_no,guest_name,loading_type), companies(id,name)")
       .eq("id", id)
       .single();
     if (error) {
@@ -69,15 +69,22 @@ export default function InvoiceDetailPage() {
       return;
     }
     setInvoice(data);
-    if (data.order_id && data.orders?.loading_type === "mixable") {
+    if (data.order_id) {
       const { data: dispatchRow } = await supabase
         .from("dispatches")
-        .select("mixed_executed")
+        .select("driver_base_fare,industrial_insurance_applicable")
         .eq("order_id", data.order_id)
         .maybeSingle();
-      setMixedExecuted(!!dispatchRow?.mixed_executed);
+      setDriverCalcInfo(
+        dispatchRow
+          ? {
+              throughCalc: dispatchRow.driver_base_fare != null,
+              insuranceApplied: !!dispatchRow.industrial_insurance_applicable,
+            }
+          : null
+      );
     } else {
-      setMixedExecuted(false);
+      setDriverCalcInfo(null);
     }
     setEditForm({
       status: data.status || "정산대기",
@@ -279,8 +286,9 @@ export default function InvoiceDetailPage() {
 
       <div className="page-header">
         <div>
-          <h1 className="page-title">
+          <h1 className="page-title" style={{ display: "flex", alignItems: "center", gap: 10 }}>
             {invoice.orders?.order_no || "정산 상세"}
+            {invoice.orders?.loading_type === "mixable" && <MixableBadge />}
           </h1>
           <p className="page-desc">
             {invoice.companies?.name || invoice.orders?.guest_name || "-"} ·{" "}
@@ -387,22 +395,7 @@ export default function InvoiceDetailPage() {
               {won(invoice.customer_charge_total)}
             </div>
             {invoice.customer_charge_total != null && (
-              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                {vatLabel(invoice.customer_charge_vat_included)}
-              </div>
-            )}
-            {invoice.orders?.loading_type === "mixable" && (
-              <div style={{ marginTop: 4 }}>
-                <span
-                  className="badge"
-                  style={{
-                    background: mixedExecuted ? "#D1FAE5" : "#F3F4F6",
-                    color: mixedExecuted ? "#059669" : "#6B7280",
-                  }}
-                >
-                  {mixedExecuted ? "혼적 실행됨" : "혼적 미실행"}
-                </span>
-              </div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>부가세 별도</div>
             )}
           </div>
           <div>
@@ -412,9 +405,10 @@ export default function InvoiceDetailPage() {
             <div style={{ fontSize: 14, fontWeight: 600 }}>
               {won(invoice.driver_payout_total)}
             </div>
-            {invoice.driver_payout_total != null && (
+            {invoice.driver_payout_total != null && driverCalcInfo?.throughCalc && (
               <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                {vatLabel(invoice.driver_vat_included)}
+                부가세 포함
+                {driverCalcInfo.insuranceApplied && " · 산재보험료 차감됨"}
               </div>
             )}
           </div>

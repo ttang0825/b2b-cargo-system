@@ -18,6 +18,7 @@ import { optimisticUpdate } from "@/lib/optimisticUpdate";
 import { logSettlementTypeChange } from "@/lib/settlementTypeChangeLog";
 import { calcSettlement } from "@/lib/settlementCalc";
 import MoneyInput from "@/components/MoneyInput";
+import MixableBadge from "@/components/MixableBadge";
 import {
   getLatestInsuranceRateSettings,
   DEFAULT_INSURANCE_RATE_SETTINGS,
@@ -65,7 +66,6 @@ export default function DispatchDetailPage() {
   const [payoutCalcSaving, setPayoutCalcSaving] = useState(false);
   const [payoutCalcForm, setPayoutCalcForm] = useState({
     driver_base_fare: "",
-    driver_vat_included: false,
     industrial_insurance_applicable: true,
   });
   const [rateSettings, setRateSettings] = useState(DEFAULT_INSURANCE_RATE_SETTINGS);
@@ -108,7 +108,6 @@ export default function DispatchDetailPage() {
 
   const [editForm, setEditForm] = useState({
     customer_charge: "",
-    customer_charge_vat_included: false,
     driver_payout: "",
     pickup_confirmed: false,
     delivery_confirmed: false,
@@ -118,7 +117,6 @@ export default function DispatchDetailPage() {
     assignment_type: "internal" as "internal" | "external",
     driver_id: null as string | null,
     requested_network_ids: [] as string[],
-    mixed_executed: false,
   });
 
   async function load() {
@@ -138,7 +136,6 @@ export default function DispatchDetailPage() {
     setDispatch(data);
     setEditForm({
       customer_charge: data.customer_charge ?? "",
-      customer_charge_vat_included: data.customer_charge_vat_included ?? false,
       driver_payout: data.driver_payout ?? "",
       pickup_confirmed: data.pickup_confirmed || false,
       delivery_confirmed: data.delivery_confirmed || false,
@@ -148,7 +145,6 @@ export default function DispatchDetailPage() {
       assignment_type: (data.assignment_type as "internal" | "external") || "internal",
       driver_id: data.driver_id || null,
       requested_network_ids: data.requested_network_ids || [],
-      mixed_executed: data.mixed_executed || false,
     });
     setSelectedDriverInfo(data.drivers || null);
     setConfirmedNetworkId(data.confirmed_network_id || "");
@@ -160,15 +156,14 @@ export default function DispatchDetailPage() {
       // 이미 한 번 저장된 적 있는 배차 — 저장된 값 그대로 표시
       setPayoutCalcForm({
         driver_base_fare: String(data.driver_base_fare),
-        driver_vat_included: data.driver_vat_included ?? false,
         industrial_insurance_applicable: data.industrial_insurance_applicable ?? true,
       });
     } else {
-      // 처음 입력하는 배차 — 가장 최근에 저장된 다른 배차 건의 부가세/산재보험
-      // 설정을 기본값으로 미리 채워줌(매번 토글을 새로 누르지 않아도 되게)
+      // 처음 입력하는 배차 — 가장 최근에 저장된 다른 배차 건의 산재보험 설정을
+      // 기본값으로 미리 채워줌(매번 토글을 새로 누르지 않아도 되게)
       const { data: recent } = await supabase
         .from("dispatches")
-        .select("driver_vat_included,industrial_insurance_applicable")
+        .select("industrial_insurance_applicable")
         .neq("id", id)
         .not("driver_base_fare", "is", null)
         .order("created_at", { ascending: false })
@@ -176,7 +171,6 @@ export default function DispatchDetailPage() {
         .maybeSingle();
       setPayoutCalcForm({
         driver_base_fare: "",
-        driver_vat_included: recent?.driver_vat_included ?? false,
         industrial_insurance_applicable: recent?.industrial_insurance_applicable ?? true,
       });
     }
@@ -240,7 +234,6 @@ export default function DispatchDetailPage() {
       external_vehicle_plate:
         editForm.assignment_type === "external" ? externalVehiclePlate.trim() || null : null,
       customer_charge: editForm.customer_charge ? Number(editForm.customer_charge) : null,
-      customer_charge_vat_included: editForm.customer_charge_vat_included,
       driver_payout: editForm.driver_payout ? Number(editForm.driver_payout) : null,
       updated_by: await getCurrentStaffId(),
     };
@@ -350,10 +343,8 @@ export default function DispatchDetailPage() {
     setError(null);
     const result = calcSettlement({
       driverBaseFare: Number(payoutCalcForm.driver_base_fare) || 0,
-      driverVatIncluded: payoutCalcForm.driver_vat_included,
       industrialInsuranceApplicable: payoutCalcForm.industrial_insurance_applicable,
       customerCharge: Number(editForm.customer_charge) || 0,
-      customerChargeVatIncluded: editForm.customer_charge_vat_included,
       rateSettings: {
         expenseDeductionRate: rateSettings.expense_deduction_rate,
         insuranceRateTotal: rateSettings.insurance_rate_total,
@@ -363,7 +354,6 @@ export default function DispatchDetailPage() {
       .from("dispatches")
       .update({
         driver_base_fare: Number(payoutCalcForm.driver_base_fare) || null,
-        driver_vat_included: payoutCalcForm.driver_vat_included,
         industrial_insurance_applicable: payoutCalcForm.industrial_insurance_applicable,
         industrial_insurance_rate: result.appliedInsuranceRate,
         industrial_insurance_base_amount: result.industrialInsuranceBaseAmount,
@@ -430,13 +420,6 @@ export default function DispatchDetailPage() {
       billing_period: billingPeriod,
       customer_charge_total: charge || null,
       driver_payout_total: payout || null,
-      customer_charge_vat_included: editForm.customer_charge_vat_included,
-      // driver_vat_included(계산기의 "부가세 포함" 토글)는 "입력한 기본운임을
-      // 어떻게 해석할지"만 나타내는 값이고, 계산 결과인 driver_payout(차주
-      // 최종 수금액)은 토글 상태와 무관하게 항상 부가세 포함 금액으로
-      // 산출됨(lib/settlementCalc.ts의 collectAmount 참고) — 계산기를 거친
-      // 값이면(driver_base_fare가 있으면) 항상 "포함"으로 표시해야 함
-      driver_vat_included: dispatch?.driver_base_fare != null ? true : dispatch?.driver_vat_included ?? false,
       commission_total: charge - payout || null,
       receivable_amount: charge || null,
       payable_amount: payout || null,
@@ -504,28 +487,6 @@ export default function DispatchDetailPage() {
     load();
   }
 
-  // 오더의 loading_type이 mixable인 건에만 노출되는 "혼적 실행" 체크 — 실제로
-  // 혼적으로 운행됐는지 여부만 기록하는 플래그(원칙 36번, load()로 전체 재조회).
-  // 할인은 이미 견적 단계 최종금액에 반영되어 오더·배차로 그대로 승계되므로,
-  // 이 체크박스는 더 이상 화주 청구운임을 직접 건드리지 않음(6차 세션 보정 —
-  // 아래 handleSave 근처 주석 참고)
-  async function handleMixedExecutedChange(checked: boolean) {
-    if (!dispatch) return;
-    setError(null);
-    const { error } = await supabase
-      .from("dispatches")
-      .update({
-        mixed_executed: checked,
-        updated_by: await getCurrentStaffId(),
-      })
-      .eq("id", id);
-    if (error) {
-      setError(error.message);
-      return;
-    }
-    load();
-  }
-
   async function handleSave(force = false) {
     setSaving(true);
     setError(null);
@@ -534,7 +495,6 @@ export default function DispatchDetailPage() {
       customer_charge: editForm.customer_charge
         ? Number(editForm.customer_charge)
         : null,
-      customer_charge_vat_included: editForm.customer_charge_vat_included,
       driver_payout: editForm.driver_payout
         ? Number(editForm.driver_payout)
         : null,
@@ -650,8 +610,9 @@ export default function DispatchDetailPage() {
 
       <div className="page-header">
         <div>
-          <h1 className="page-title">
+          <h1 className="page-title" style={{ display: "flex", alignItems: "center", gap: 10 }}>
             {dispatch.orders?.order_no || "배차 상세"}
+            {dispatch.orders?.loading_type === "mixable" && <MixableBadge />}
           </h1>
           <p className="page-desc">
             {dispatch.orders?.origin} → {dispatch.orders?.destination}
@@ -1012,62 +973,13 @@ export default function DispatchDetailPage() {
           정산 정보
         </h3>
 
-        {dispatch.orders?.loading_type === "mixable" && (
-          <div style={{ marginBottom: 14 }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-              <input
-                type="checkbox"
-                checked={editForm.mixed_executed}
-                onChange={(e) => handleMixedExecutedChange(e.target.checked)}
-              />
-              혼적 실행
-            </label>
-            <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 4, marginBottom: 0 }}>
-              설정된 할인:{" "}
-              {dispatch.orders?.mixed_discount_type === "percent"
-                ? `할인율 ${dispatch.orders.mixed_discount_percent}%`
-                : dispatch.orders?.mixed_discount_type === "amount"
-                ? `할인금액 ${won(dispatch.orders.mixed_discount_amount)}`
-                : "-"}
-              {" · "}
-              할인은 이미 견적 단계 최종금액에 반영되어 아래 화주 청구운임으로
-              승계되어 있습니다. 이 체크박스는 실제로 혼적 운행됐는지만
-              기록하는 용도이며, 체크 여부는 청구운임에 영향을 주지 않습니다.
-            </p>
-          </div>
-        )}
-
         <div className="form-grid" style={{ padding: 0, marginBottom: 10 }}>
           <div className="field">
-            <label>화주 청구운임(원)</label>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <MoneyInput
-                value={String(editForm.customer_charge)}
-                onChange={(v) => setEditForm({ ...editForm, customer_charge: v })}
-                style={{ flex: 1, minWidth: 0 }}
-              />
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  fontSize: 12.5,
-                  fontWeight: 400,
-                  color: "var(--text-muted)",
-                  whiteSpace: "nowrap",
-                  flexShrink: 0,
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={editForm.customer_charge_vat_included}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, customer_charge_vat_included: e.target.checked })
-                  }
-                />
-                부가세 포함
-              </label>
-            </div>
+            <label>화주 청구금액(공급가액, 원)</label>
+            <MoneyInput
+              value={String(editForm.customer_charge)}
+              onChange={(v) => setEditForm({ ...editForm, customer_charge: v })}
+            />
           </div>
           <div className="field">
             <label>차주 지급운임(원)</label>
@@ -1107,7 +1019,7 @@ export default function DispatchDetailPage() {
               <div style={{ marginTop: 12 }}>
                 <div className="form-grid" style={{ padding: 0, marginBottom: 10 }}>
                   <div className="field">
-                    <label>차주 기본운임(원)</label>
+                    <label>차주 기본운임(공급가액, 원)</label>
                     <MoneyInput
                       value={payoutCalcForm.driver_base_fare}
                       onChange={(v) => setPayoutCalcForm({ ...payoutCalcForm, driver_base_fare: v })}
@@ -1115,16 +1027,6 @@ export default function DispatchDetailPage() {
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 20, marginBottom: 10, fontSize: 13 }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <input
-                      type="checkbox"
-                      checked={payoutCalcForm.driver_vat_included}
-                      onChange={(e) =>
-                        setPayoutCalcForm({ ...payoutCalcForm, driver_vat_included: e.target.checked })
-                      }
-                    />
-                    부가세 포함
-                  </label>
                   <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <input
                       type="checkbox"
@@ -1143,10 +1045,8 @@ export default function DispatchDetailPage() {
                 {(() => {
                   const preview = calcSettlement({
                     driverBaseFare: Number(payoutCalcForm.driver_base_fare) || 0,
-                    driverVatIncluded: payoutCalcForm.driver_vat_included,
                     industrialInsuranceApplicable: payoutCalcForm.industrial_insurance_applicable,
                     customerCharge: Number(editForm.customer_charge) || 0,
-                    customerChargeVatIncluded: editForm.customer_charge_vat_included,
                     rateSettings: {
                       expenseDeductionRate: rateSettings.expense_deduction_rate,
                       insuranceRateTotal: rateSettings.insurance_rate_total,
@@ -1174,7 +1074,7 @@ export default function DispatchDetailPage() {
                         </>
                       )}
                       <div style={{ fontWeight: 700, marginTop: 4 }}>
-                        차주 최종 수금/지급액: {won(preview.driverTotalPayout)}
+                        차주 최종 수금액(부가세 포함): {won(preview.driverTotalPayout)}
                       </div>
                       <div
                         style={{
@@ -1182,7 +1082,7 @@ export default function DispatchDetailPage() {
                           color: preview.realMargin < 0 ? "var(--danger)" : "var(--accent)",
                         }}
                       >
-                        실질마진(정산기준, 부가세 제외): {won(preview.realMargin)}
+                        실질마진(정산기준): {won(preview.realMargin)}
                       </div>
                       <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>
                         실제 고지 금액은 근로복지공단 고지서 기준으로 1~2원 오차가 있을 수 있습니다.

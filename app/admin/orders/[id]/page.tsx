@@ -18,6 +18,7 @@ import { logSettlementTypeChange } from "@/lib/settlementTypeChangeLog";
 import MoneyInput from "@/components/MoneyInput";
 import { getLatestMixedLoadingDiscountSettings } from "@/lib/mixedLoadingDiscountSettings";
 import { localInputToISOString, toLocalDateTimeInput } from "@/lib/localDateTime";
+import MixableBadge from "@/components/MixableBadge";
 
 function won(n: number | null) {
   if (n === null || n === undefined) return "-";
@@ -359,7 +360,10 @@ export default function OrderDetailPage() {
 
       <div className="page-header">
         <div>
-          <h1 className="page-title">{order.order_no}</h1>
+          <h1 className="page-title" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {order.order_no}
+            {order.loading_type === "mixable" && <MixableBadge />}
+          </h1>
           <p className="page-desc">
             {order.companies?.name || order.guest_name}
             {!order.companies && order.guest_name && (
