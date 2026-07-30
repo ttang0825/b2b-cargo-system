@@ -5,6 +5,22 @@ import Link from "next/link";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import { getDispatchStatusColor } from "@/lib/dispatchStatusColors";
 import MixableBadge from "@/components/MixableBadge";
+import { getSettlementTypeLabel } from "@/lib/constants";
+
+// admin 정산관리 목록과 동일한 줄바꿈 처리 — "/"가 있는 라벨만 "/" 뒤에서
+// 한 번 줄바꿈("일반오더/주선사정산"이 3줄로 들쭉날쭉 갈라지는 것 방지)
+function SettlementBadgeLabel({ value }: { value: string | null | undefined }) {
+  const label = getSettlementTypeLabel(value);
+  const slashIdx = label.indexOf("/");
+  if (slashIdx === -1) return <>{label}</>;
+  return (
+    <>
+      {label.slice(0, slashIdx + 1)}
+      <br />
+      {label.slice(slashIdx + 1)}
+    </>
+  );
+}
 
 export default function CustomerDispatchesPage() {
   const [dispatches, setDispatches] = useState<any[]>([]);
@@ -15,7 +31,7 @@ export default function CustomerDispatchesPage() {
       const { data } = await supabase
         .from("dispatches")
         .select(
-          "id,dispatch_status,created_at,orders(order_no,origin,destination,requested_pickup_at,item,loading_type)"
+          "id,dispatch_status,created_at,orders(order_no,origin,destination,requested_pickup_at,item,loading_type,settlement_type)"
         )
         .order("created_at", { ascending: false })
         .limit(100);
@@ -65,6 +81,7 @@ export default function CustomerDispatchesPage() {
                   <th>품목</th>
                   <th>상차 예정</th>
                   <th>배차상태</th>
+                  <th>정산방식</th>
                 </tr>
               </thead>
               <tbody>
@@ -109,6 +126,14 @@ export default function CustomerDispatchesPage() {
                         }}
                       >
                         {d.dispatch_status}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className="badge"
+                        style={{ display: "inline-block", textAlign: "center", lineHeight: 1.5 }}
+                      >
+                        <SettlementBadgeLabel value={d.orders?.settlement_type} />
                       </span>
                     </td>
                   </tr>
@@ -162,6 +187,10 @@ export default function CustomerDispatchesPage() {
                           })
                         : "-"}
                     </span>
+                  </div>
+                  <div className="mobile-row-line">
+                    <span className="mobile-row-label">정산방식</span>
+                    <span>{getSettlementTypeLabel(d.orders?.settlement_type)}</span>
                   </div>
                 </div>
               ))}
