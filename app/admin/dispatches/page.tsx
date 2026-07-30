@@ -12,6 +12,7 @@ import {
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import { getCurrentStaffId } from "@/lib/currentStaff";
 import MoneyInput from "@/components/MoneyInput";
+import MixableBadge from "@/components/MixableBadge";
 
 type OrderLite = {
   id: string;
@@ -52,6 +53,7 @@ type DispatchRow = {
     order_no: string | null;
     origin: string | null;
     destination: string | null;
+    loading_type: string | null;
     companies: { name: string } | null;
     guest_name: string | null;
   } | null;
@@ -108,7 +110,7 @@ function DispatchesPageInner() {
     let query = supabase
       .from("dispatches")
       .select(
-        "id,dispatch_status,customer_charge,driver_payout,margin,created_at,order_id,driver_id,assignment_type,requested_network_ids,confirmed_network_id,external_driver_name,orders(order_no,origin,destination,companies(name),guest_name),drivers(name,phone)"
+        "id,dispatch_status,customer_charge,driver_payout,margin,created_at,order_id,driver_id,assignment_type,requested_network_ids,confirmed_network_id,external_driver_name,orders(order_no,origin,destination,loading_type,companies(name),guest_name),drivers(name,phone)"
       )
       .order("created_at", { ascending: false })
       .limit(preset === "all" ? ALL_PERIOD_LIMIT : FILTERED_PERIOD_LIMIT);
@@ -716,6 +718,11 @@ function DispatchesPageInner() {
                 >
                   <td>
                     <span className="num">{d.orders?.order_no || "-"}</span>
+                    {d.orders?.loading_type === "mixable" && (
+                      <div style={{ marginTop: 3 }}>
+                        <MixableBadge />
+                      </div>
+                    )}
                   </td>
                   <td>{d.orders?.companies?.name || d.orders?.guest_name || "-"}</td>
                   <td>

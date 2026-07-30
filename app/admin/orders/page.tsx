@@ -14,6 +14,7 @@ import DateTimePicker from "@/components/DateTimePicker";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import AddressSearch from "@/components/AddressSearch";
 import { localInputToISOString, toLocalDateTimeInput } from "@/lib/localDateTime";
+import MixableBadge from "@/components/MixableBadge";
 
 type CompanyLite = { id: string; name: string; phone: string | null };
 
@@ -28,6 +29,7 @@ type OrderRow = {
   requested_pickup_at: string | null;
   created_at: string;
   guest_name: string | null;
+  loading_type: string | null;
   companies: { name: string } | null;
 };
 
@@ -115,7 +117,7 @@ function OrdersPageInner() {
     let query = supabase
       .from("orders")
       .select(
-        "id,order_no,origin,destination,vehicle_type,item,status,requested_pickup_at,created_at,guest_name,companies(name)"
+        "id,order_no,origin,destination,vehicle_type,item,status,requested_pickup_at,created_at,guest_name,loading_type,companies(name)"
       )
       .order("created_at", { ascending: false })
       .limit(preset === "all" ? ALL_PERIOD_LIMIT : FILTERED_PERIOD_LIMIT);
@@ -766,6 +768,11 @@ function OrdersPageInner() {
                 >
                   <td>
                     <span className="num">{o.order_no}</span>
+                    {o.loading_type === "mixable" && (
+                      <div style={{ marginTop: 3 }}>
+                        <MixableBadge />
+                      </div>
+                    )}
                   </td>
                   <td>
                     {o.companies?.name || o.guest_name || "-"}

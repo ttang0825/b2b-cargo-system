@@ -13,6 +13,7 @@ import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRang
 import { getCurrentStaffId } from "@/lib/currentStaff";
 import { SETTLEMENT_TYPES, getSettlementTypeLabel } from "@/lib/constants";
 import MoneyInput from "@/components/MoneyInput";
+import MixableBadge from "@/components/MixableBadge";
 
 type OrderLite = {
   id: string;
@@ -31,8 +32,6 @@ type InvoiceRow = {
   billing_period: string | null;
   customer_charge_total: number | null;
   driver_payout_total: number | null;
-  customer_charge_vat_included: boolean | null;
-  driver_vat_included: boolean | null;
   commission_total: number | null;
   tax_invoice_issued: boolean;
   payment_received: boolean;
@@ -43,10 +42,6 @@ type InvoiceRow = {
   orders: { order_no: string | null; guest_name: string | null; loading_type: string | null } | null;
   companies: { name: string } | null;
 };
-
-function vatLabel(included: boolean | null | undefined) {
-  return included ? "부가세 포함" : "부가세 별도";
-}
 
 // "일반오더/주선사정산"처럼 "/"가 들어간 라벨은 폭에 따라 auto-wrap이
 // 들쭉날쭉해지는 문제가 있어("/" 앞뒤로 안 끊기고 3줄로 갈라짐), "/" 뒤에서
@@ -95,10 +90,7 @@ export default function InvoicesPage() {
   const [billingPeriod, setBillingPeriod] = useState(currentMonth());
   const [customerChargeTotal, setCustomerChargeTotal] = useState("");
   const [driverPayoutTotal, setDriverPayoutTotal] = useState("");
-  const [customerChargeVatIncluded, setCustomerChargeVatIncluded] = useState(false);
-  const [driverVatIncluded, setDriverVatIncluded] = useState(false);
   const [paymentDueDate, setPaymentDueDate] = useState("");
-  const [mixedExecutedByOrderId, setMixedExecutedByOrderId] = useState<Record<string, boolean>>({});
 
   async function loadInvoices(preset: DatePreset = period) {
     setLoading(true);
@@ -106,7 +98,7 @@ export default function InvoicesPage() {
     let query = supabase
       .from("invoices")
       .select(
-        "id,order_id,billing_period,customer_charge_total,driver_payout_total,customer_charge_vat_included,driver_vat_included,commission_total,tax_invoice_issued,payment_received,driver_paid,status,settlement_type,created_at,orders(order_no,guest_name,loading_type),companies(name)"
+        "id,order_id,billing_period,customer_charge_total,driver_payout_total,commission_total,tax_invoice_issued,payment_received,driver_paid,status,settlement_type,created_at,orders(order_no,guest_name,loading_type),companies(name)"
       )
       .order("created_at", { ascending: false })
       .limit(preset === "all" ? ALL_PERIOD_LIMIT : FILTERED_PERIOD_LIMIT);
@@ -115,25 +107,6 @@ export default function InvoicesPage() {
     const { data, error } = await query;
     if (error) setError(error.message);
     else setInvoices(data as any as InvoiceRow[]);
-
-    // 배차의 혼적 실행여부는 invoices와 직접 연결되어 있지 않아(order_id를
-    // 공유할 뿐) 별도로 한 번에 조회해서 order_id 기준 맵으로 만들어 씀
-    const orderIds = ((data as any as InvoiceRow[]) || [])
-      .map((i) => i.order_id)
-      .filter((v): v is string => !!v);
-    if (orderIds.length > 0) {
-      const { data: dispatchRows } = await supabase
-        .from("dispatches")
-        .select("order_id,mixed_executed")
-        .in("order_id", orderIds);
-      const map: Record<string, boolean> = {};
-      (dispatchRows || []).forEach((d: any) => {
-        if (d.order_id) map[d.order_id] = !!d.mixed_executed;
-      });
-      setMixedExecutedByOrderId(map);
-    } else {
-      setMixedExecutedByOrderId({});
-    }
     setLoading(false);
   }
 
@@ -172,12 +145,10 @@ export default function InvoicesPage() {
     setSelectedOrderId(orderId);
     setCustomerChargeTotal("");
     setDriverPayoutTotal("");
-    setCustomerChargeVatIncluded(false);
-    setDriverVatIncluded(false);
 
     const { data: dispatch } = await supabase
       .from("dispatches")
-      .select("customer_charge, driver_payout, customer_charge_vat_included, driver_vat_included, driver_base_fare")
+      .select("customer_charge, driver_payout")
       .eq("order_id", orderId)
       .maybeSingle();
     if (dispatch && (dispatch.customer_charge || dispatch.driver_payout)) {
@@ -187,12 +158,6 @@ export default function InvoicesPage() {
       setDriverPayoutTotal(
         dispatch.driver_payout ? String(Math.round(dispatch.driver_payout)) : ""
       );
-      setCustomerChargeVatIncluded(dispatch.customer_charge_vat_included ?? false);
-      // driver_vat_included(계산기 입력 토글)는 dispatch.driver_payout이 계산기를
-      // 거친 값이면 항상 부가세 포함으로 산출되므로(driver_base_fare가 있으면),
-      // 토글을 그대로 복사하지 않고 항상 true로 맞춤 — dispatches/[id]/page.tsx의
-      // autoCreateInvoiceIfNeeded와 동일한 판단
-      setDriverVatIncluded(dispatch.driver_base_fare != null ? true : dispatch.driver_vat_included ?? false);
       return;
     }
 
@@ -236,8 +201,6 @@ export default function InvoicesPage() {
       billing_period: billingPeriod || null,
       customer_charge_total: chargeNum || null,
       driver_payout_total: payoutNum || null,
-      customer_charge_vat_included: customerChargeVatIncluded,
-      driver_vat_included: driverVatIncluded,
       commission_total: commission || null,
       payment_due_date: paymentDueDate || null,
       receivable_amount: chargeNum || null,
@@ -318,8 +281,6 @@ export default function InvoicesPage() {
     setSelectedOrderId("");
     setCustomerChargeTotal("");
     setDriverPayoutTotal("");
-    setCustomerChargeVatIncluded(false);
-    setDriverVatIncluded(false);
     setPaymentDueDate("");
     loadInvoices(period);
     loadAvailableOrders();
@@ -409,61 +370,11 @@ export default function InvoicesPage() {
               </div>
               <div className="field">
                 <label>화주 청구금액(원) *</label>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <MoneyInput
-                    value={customerChargeTotal}
-                    onChange={setCustomerChargeTotal}
-                    style={{ flex: 1, minWidth: 0 }}
-                  />
-                  <label
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      fontSize: 12.5,
-                      fontWeight: 400,
-                      color: "var(--text-muted)",
-                      whiteSpace: "nowrap",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={customerChargeVatIncluded}
-                      onChange={(e) => setCustomerChargeVatIncluded(e.target.checked)}
-                    />
-                    부가세 포함
-                  </label>
-                </div>
+                <MoneyInput value={customerChargeTotal} onChange={setCustomerChargeTotal} />
               </div>
               <div className="field">
                 <label>차주 지급금액(원) *</label>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <MoneyInput
-                    value={driverPayoutTotal}
-                    onChange={setDriverPayoutTotal}
-                    style={{ flex: 1, minWidth: 0 }}
-                  />
-                  <label
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      fontSize: 12.5,
-                      fontWeight: 400,
-                      color: "var(--text-muted)",
-                      whiteSpace: "nowrap",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={driverVatIncluded}
-                      onChange={(e) => setDriverVatIncluded(e.target.checked)}
-                    />
-                    부가세 포함
-                  </label>
-                </div>
+                <MoneyInput value={driverPayoutTotal} onChange={setDriverPayoutTotal} />
               </div>
             </div>
 
@@ -609,32 +520,14 @@ export default function InvoicesPage() {
                   </td>
                   <td style={{ whiteSpace: "nowrap" }}>
                     <span className="num">{won(i.customer_charge_total)}</span>
-                    {i.customer_charge_total != null && (
-                      <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                        {vatLabel(i.customer_charge_vat_included)}
-                      </div>
-                    )}
                     {i.orders?.loading_type === "mixable" && (
-                      <div style={{ fontSize: 11, marginTop: 2 }}>
-                        <span
-                          className="badge"
-                          style={{
-                            background: i.order_id && mixedExecutedByOrderId[i.order_id] ? "#D1FAE5" : "#F3F4F6",
-                            color: i.order_id && mixedExecutedByOrderId[i.order_id] ? "#059669" : "#6B7280",
-                          }}
-                        >
-                          {i.order_id && mixedExecutedByOrderId[i.order_id] ? "혼적 실행됨" : "혼적 미실행"}
-                        </span>
+                      <div style={{ marginTop: 3 }}>
+                        <MixableBadge />
                       </div>
                     )}
                   </td>
                   <td style={{ whiteSpace: "nowrap" }}>
                     <span className="num">{won(i.driver_payout_total)}</span>
-                    {i.driver_payout_total != null && (
-                      <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                        {vatLabel(i.driver_vat_included)}
-                      </div>
-                    )}
                   </td>
                   <td style={{ whiteSpace: "nowrap" }}>
                     <span className="num">{won(i.commission_total)}</span>

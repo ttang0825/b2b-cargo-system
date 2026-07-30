@@ -1,5 +1,6 @@
 // 차주 수금/지급 운임 계산 (3차 세션: 차주 수금/지급 운임 표시 구조, 3차 세션
-// 보정: 산재보험료 계산 로직 수정).
+// 보정: 산재보험료 계산 로직 수정, 7차 세션 보정: 부가세 포함/별도 토글 제거
+// — 입력값은 항상 공급가액(부가세 별도)으로 고정.
 //
 // 화물차주는 '노무제공자' 신분으로, 산재보험료를 주선사·차주가 절반씩(50%)
 // 공동부담한다. 차주 부담분은 차주가 받을 금액에서 원천징수(차감)하고,
@@ -25,35 +26,28 @@ export type InsuranceRateSettingsInput = {
 };
 
 export type SettlementCalcInput = {
-  driverBaseFare: number; // 차주 기본운임 입력값
-  driverVatIncluded: boolean; // 위 입력값에 부가세가 이미 포함되어 있는지
+  driverBaseFare: number; // 차주 기본운임(공급가액) 입력값
   industrialInsuranceApplicable: boolean; // 산재보험료 적용대상 여부
-  customerCharge: number; // 화주청구금액 (dispatches.customer_charge)
-  customerChargeVatIncluded: boolean; // 화주청구금액에 부가세가 포함되어 있는지
+  customerCharge: number; // 화주청구금액(공급가액, dispatches.customer_charge)
   rateSettings: InsuranceRateSettingsInput;
 };
 
 export type SettlementCalcResult = {
-  driverSupplyAmount: number; // 차주 기본운임의 공급가액(부가세 제외)
+  driverSupplyAmount: number; // 차주 기본운임(공급가액) — 입력값 그대로
   vatAmount: number;
   industrialInsuranceBaseAmount: number; // 월보수액
   industrialInsuranceDriverShare: number; // 차주부담분(원천징수액)
   industrialInsuranceBrokerShare: number; // 주선사부담분(비용)
   appliedInsuranceRate: number; // 계산에 실제 적용된 산재보험료율(%) 스냅샷
-  driverTotalPayout: number; // 차주 최종 수금/지급액
-  simpleMargin: number; // 단순마진(참고) — 화주청구금액(세포함 여부 무관) - 차주지급액
+  driverTotalPayout: number; // 차주 최종 수금/지급액(부가세 포함)
+  simpleMargin: number; // 단순마진(참고) — 화주청구금액 - 차주지급액
   realMargin: number; // 실질마진(정산기준) — 공급가액 기준, 주선사부담 산재보험료 반영
 };
 
-function toSupplyAmount(amount: number, vatIncluded: boolean): number {
-  return vatIncluded ? amount / 1.1 : amount;
-}
-
 export function calcSettlement(input: SettlementCalcInput): SettlementCalcResult {
-  const base = input.driverBaseFare || 0;
-  const driverSupplyAmount = toSupplyAmount(base, input.driverVatIncluded);
-  const vatAmount = input.driverVatIncluded ? 0 : base * 0.1;
-  const collectAmount = base + vatAmount; // 부가세 포함 기준 차주 수금액
+  const driverSupplyAmount = input.driverBaseFare || 0;
+  const vatAmount = driverSupplyAmount * 0.1;
+  const collectAmount = driverSupplyAmount + vatAmount; // 차주 수금액(부가세 포함)
 
   let industrialInsuranceBaseAmount = 0;
   let industrialInsuranceDriverShare = 0;
@@ -73,7 +67,7 @@ export function calcSettlement(input: SettlementCalcInput): SettlementCalcResult
 
   const driverTotalPayout = Math.round(collectAmount - industrialInsuranceDriverShare);
 
-  const customerSupply = toSupplyAmount(input.customerCharge || 0, input.customerChargeVatIncluded);
+  const customerSupply = input.customerCharge || 0;
   const realMargin = Math.round(customerSupply - driverSupplyAmount - industrialInsuranceBrokerShare);
   const simpleMargin = Math.round((input.customerCharge || 0) - driverTotalPayout);
 
