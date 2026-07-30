@@ -119,7 +119,7 @@ export default function CustomerInvoicesPage() {
                       <div style={{ fontSize: 10.5, color: "var(--text-muted)" }}>
                         부가세 별도
                         {wonVatIncluded(i.customer_charge_total) && (
-                          <> (포함 {wonVatIncluded(i.customer_charge_total)})</>
+                          <> (부가세 포함 {wonVatIncluded(i.customer_charge_total)})</>
                         )}
                       </div>
                     </td>

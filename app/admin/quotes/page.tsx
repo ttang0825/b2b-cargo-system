@@ -1703,7 +1703,7 @@ function QuotesPageInner() {
                     </span>
                     {wonVatIncluded(q.final_amount) && (
                       <div style={{ fontSize: 10.5, color: "var(--text-muted)" }}>
-                        (포함 {wonVatIncluded(q.final_amount)})
+                        (부가세 포함 {wonVatIncluded(q.final_amount)})
                       </div>
                     )}
                   </td>
