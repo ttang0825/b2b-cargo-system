@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import { VEHICLE_TYPES } from "@/lib/constants";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
@@ -8,6 +8,8 @@ import DateTimePicker from "@/components/DateTimePicker";
 import AddressSearch from "@/components/AddressSearch";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import { localInputToISOString } from "@/lib/localDateTime";
+import { useListSearchSort, sortIndicator } from "@/lib/useListSearchSort";
+import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 
 const REQUEST_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   대기중: { bg: "#fff1e2", text: "#d9730d" },
@@ -57,6 +59,34 @@ export default function PortalRequestPage() {
   const [success, setSuccess] = useState(false);
   const [saveOrigin, setSaveOrigin] = useState(false);
   const [saveDestination, setSaveDestination] = useState(false);
+  const [period, setPeriod] = useState<DatePreset>("all");
+
+  const periodFilteredRequests = useMemo(() => {
+    const { from } = getDateRange(period);
+    if (!from) return requests;
+    return requests.filter((r) => r.created_at && r.created_at >= from);
+  }, [requests, period]);
+
+  const {
+    search: requestSearch,
+    setSearch: setRequestSearch,
+    sortKey: requestSortKey,
+    setSortKey: setRequestSortKey,
+    sortDir: requestSortDir,
+    setSortDir: setRequestSortDir,
+    toggleSort: toggleRequestSort,
+    result: visibleRequests,
+  } = useListSearchSort(
+    periodFilteredRequests,
+    (r) => [r.origin, r.destination, r.vehicle_type, r.body_type, r.status],
+    {
+      created_at: (r) => r.created_at,
+      requested_pickup_at: (r) => r.requested_pickup_at,
+      status: (r) => r.status,
+    },
+    "created_at",
+    "desc"
+  );
 
   const [form, setForm] = useState({
     origin: "",
@@ -509,10 +539,43 @@ export default function PortalRequestPage() {
         <div style={{ padding: "16px 20px", fontSize: 14, fontWeight: 700, borderBottom: "1px solid var(--border)" }}>
           내 요청 내역
         </div>
+        {requests.length > 0 && (
+          <div style={{ padding: "0 20px", marginTop: 16 }}>
+            <div style={{ marginBottom: 10 }}>
+              <DateRangeFilter value={period} onChange={setPeriod} />
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+              <input
+                type="text"
+                placeholder="구간·차량·상태 검색"
+                value={requestSearch}
+                onChange={(e) => setRequestSearch(e.target.value)}
+                style={{ flex: 1, minWidth: 180, fontSize: 13, padding: "8px 12px" }}
+              />
+              <select
+                className="mobile-only"
+                value={`${requestSortKey}:${requestSortDir}`}
+                onChange={(e) => {
+                  const [key, dir] = e.target.value.split(":");
+                  setRequestSortKey(key);
+                  setRequestSortDir(dir as "asc" | "desc");
+                }}
+                style={{ fontSize: 13, padding: "8px 12px" }}
+              >
+                <option value="created_at:desc">최신 등록순</option>
+                <option value="requested_pickup_at:asc">상차 빠른순</option>
+                <option value="requested_pickup_at:desc">상차 늦은순</option>
+                <option value="status:asc">상태순</option>
+              </select>
+            </div>
+          </div>
+        )}
         {loading ? (
           <div className="empty-state">불러오는 중...</div>
         ) : requests.length === 0 ? (
           <div className="empty-state">아직 보낸 요청이 없습니다.</div>
+        ) : visibleRequests.length === 0 ? (
+          <div className="empty-state">검색 결과가 없습니다.</div>
         ) : (
           <>
             <table className="desktop-only" style={{ minWidth: 880 }}>
@@ -520,8 +583,12 @@ export default function PortalRequestPage() {
                 <tr>
                   <th>구간</th>
                   <th>차량</th>
-                  <th>희망 상차일</th>
-                  <th>상태</th>
+                  <th style={{ cursor: "pointer" }} onClick={() => toggleRequestSort("requested_pickup_at")}>
+                    희망 상차일{sortIndicator(requestSortKey, "requested_pickup_at", requestSortDir)}
+                  </th>
+                  <th style={{ cursor: "pointer" }} onClick={() => toggleRequestSort("status")}>
+                    상태{sortIndicator(requestSortKey, "status", requestSortDir)}
+                  </th>
                   <th>진행상황</th>
                   <th>특이사항</th>
                   <th>반려 사유</th>
@@ -529,7 +596,7 @@ export default function PortalRequestPage() {
                 </tr>
               </thead>
               <tbody>
-                {requests.map((r) => (
+                {visibleRequests.map((r) => (
                   <tr key={r.id}>
                     <td>{r.origin} → {r.destination}</td>
                     <td className="cell-nowrap">{[r.vehicle_type, r.body_type].filter(Boolean).join(" ") || "-"}</td>
@@ -573,7 +640,7 @@ export default function PortalRequestPage() {
             </table>
 
             <div className="mobile-only">
-              {requests.map((r) => (
+              {visibleRequests.map((r) => (
                 <div key={r.id} className="mobile-row-card">
                   <div className="mobile-row-top">
                     <span style={{ fontSize: 13, fontWeight: 700 }}>

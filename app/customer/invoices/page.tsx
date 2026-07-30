@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import MixableBadge from "@/components/MixableBadge";
 import { getSettlementTypeLabel } from "@/lib/constants";
 import { useListSearchSort, sortIndicator } from "@/lib/useListSearchSort";
+import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 
 function won(n: number | null) {
   if (!n) return "-";
@@ -40,6 +41,13 @@ function formatDate(d: string | null) {
 export default function CustomerInvoicesPage() {
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState<DatePreset>("all");
+
+  const periodFiltered = useMemo(() => {
+    const { from } = getDateRange(period);
+    if (!from) return invoices;
+    return invoices.filter((i) => i.created_at && i.created_at >= from);
+  }, [invoices, period]);
 
   const {
     search,
@@ -51,12 +59,14 @@ export default function CustomerInvoicesPage() {
     toggleSort,
     result: visibleInvoices,
   } = useListSearchSort(
-    invoices,
+    periodFiltered,
     (i) => [i.orders?.order_no, i.billing_period, i.status],
     {
       created_at: (i) => i.created_at,
       billing_period: (i) => i.billing_period,
       customer_charge_total: (i) => i.customer_charge_total,
+      status: (i) => i.status,
+      settlement_type: (i) => getSettlementTypeLabel(i.settlement_type),
     },
     "created_at",
     "desc"
@@ -102,6 +112,12 @@ export default function CustomerInvoicesPage() {
       </div>
 
       {invoices.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <DateRangeFilter value={period} onChange={setPeriod} />
+        </div>
+      )}
+
+      {invoices.length > 0 && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
           <input
             type="text"
@@ -125,6 +141,8 @@ export default function CustomerInvoicesPage() {
             <option value="billing_period:asc">정산월 오래된순</option>
             <option value="customer_charge_total:desc">청구금액 높은순</option>
             <option value="customer_charge_total:asc">청구금액 낮은순</option>
+            <option value="status:asc">상태순</option>
+            <option value="settlement_type:asc">정산방식순</option>
           </select>
         </div>
       )}
@@ -152,8 +170,12 @@ export default function CustomerInvoicesPage() {
                   <th>발행일</th>
                   <th>입금</th>
                   <th>입금일</th>
-                  <th>상태</th>
-                  <th>정산방식</th>
+                  <th style={{ cursor: "pointer" }} onClick={() => toggleSort("status")}>
+                    상태{sortIndicator(sortKey, "status", sortDir)}
+                  </th>
+                  <th style={{ cursor: "pointer" }} onClick={() => toggleSort("settlement_type")}>
+                    정산방식{sortIndicator(sortKey, "settlement_type", sortDir)}
+                  </th>
                 </tr>
               </thead>
               <tbody>

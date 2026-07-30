@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import MixableBadge from "@/components/MixableBadge";
 import { useListSearchSort } from "@/lib/useListSearchSort";
+import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 
 function won(n: number | null) {
   if (!n) return "-";
@@ -51,6 +52,13 @@ export default function CustomerQuotesPage() {
   const [itemsByQuote, setItemsByQuote] = useState<Record<string, any[]>>({});
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [period, setPeriod] = useState<DatePreset>("all");
+
+  const periodFiltered = useMemo(() => {
+    const { from } = getDateRange(period);
+    if (!from) return quotes;
+    return quotes.filter((q) => q.created_at && q.created_at >= from);
+  }, [quotes, period]);
 
   const {
     search,
@@ -61,7 +69,7 @@ export default function CustomerQuotesPage() {
     setSortDir,
     result: visibleQuotes,
   } = useListSearchSort(
-    quotes,
+    periodFiltered,
     (q) => [q.quote_no, q.origin, q.destination, q.item],
     {
       created_at: (q) => q.created_at,
@@ -118,6 +126,12 @@ export default function CustomerQuotesPage() {
           <p className="page-desc">받으신 견적 내역입니다. 카드를 클릭하면 자세히 볼 수 있습니다. (부가세 별도)</p>
         </div>
       </div>
+
+      {quotes.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <DateRangeFilter value={period} onChange={setPeriod} />
+        </div>
+      )}
 
       {quotes.length > 0 && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>

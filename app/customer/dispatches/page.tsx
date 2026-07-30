@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import { getDispatchStatusColor } from "@/lib/dispatchStatusColors";
 import MixableBadge from "@/components/MixableBadge";
 import { getSettlementTypeLabel } from "@/lib/constants";
 import { useListSearchSort, sortIndicator } from "@/lib/useListSearchSort";
+import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 
 // admin 정산관리 목록과 동일한 줄바꿈 처리 — "/"가 있는 라벨만 "/" 뒤에서
 // 한 번 줄바꿈("일반오더/주선사정산"이 3줄로 들쭉날쭉 갈라지는 것 방지)
@@ -26,6 +27,13 @@ function SettlementBadgeLabel({ value }: { value: string | null | undefined }) {
 export default function CustomerDispatchesPage() {
   const [dispatches, setDispatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState<DatePreset>("all");
+
+  const periodFiltered = useMemo(() => {
+    const { from } = getDateRange(period);
+    if (!from) return dispatches;
+    return dispatches.filter((d) => d.created_at && d.created_at >= from);
+  }, [dispatches, period]);
 
   const {
     search,
@@ -37,7 +45,7 @@ export default function CustomerDispatchesPage() {
     toggleSort,
     result: visibleDispatches,
   } = useListSearchSort(
-    dispatches,
+    periodFiltered,
     (d) => [d.orders?.order_no, d.orders?.origin, d.orders?.destination, d.orders?.item, d.dispatch_status],
     {
       created_at: (d) => d.created_at,
@@ -87,6 +95,12 @@ export default function CustomerDispatchesPage() {
           </p>
         </div>
       </div>
+
+      {dispatches.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <DateRangeFilter value={period} onChange={setPeriod} />
+        </div>
+      )}
 
       {dispatches.length > 0 && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
