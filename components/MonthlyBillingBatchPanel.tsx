@@ -41,6 +41,8 @@ type CandidateRow = {
   order_id: string | null;
 };
 
+type AllCandidateRow = CandidateRow & { company_name: string; order_no: string };
+
 type ActiveItem = {
   id: string;
   invoice_id: string;
@@ -105,10 +107,12 @@ export default function MonthlyBillingBatchPanel({
   const [showReleaseReason, setShowReleaseReason] = useState(false);
   const [dueDate, setDueDate] = useState("");
   const [recentBatches, setRecentBatches] = useState<Batch[]>([]);
+  const [allCandidates, setAllCandidates] = useState<AllCandidateRow[]>([]);
 
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
     loadRecentBatches();
+    loadAllCandidates();
     if (initialCompanyId) {
       supabase
         .from("companies")
@@ -156,6 +160,51 @@ export default function MonthlyBillingBatchPanel({
     setRecentBatches((data as any) || []);
   }
 
+  // 화주를 하나씩 찾아서 확인하지 않아도 조건에 맞는 후보(주선사정산·월정산·
+  // 정산대기, 아직 어느 묶음에도 안 담긴 건)가 전체 화주 기준으로 한눈에
+  // 보이도록 함(PR #64 실사용 피드백) — customer_billing_batch_candidates
+  // 뷰는 회사명/오더번호가 없어서 별도로 조회해 붙여줌
+  async function loadAllCandidates() {
+    const { data: rows } = await supabase
+      .from("customer_billing_batch_candidates")
+      .select("invoice_id,company_id,billing_period,customer_charge_total,order_id")
+      .order("billing_period", { ascending: false })
+      .limit(200);
+    const list = (rows as CandidateRow[]) || [];
+    if (list.length === 0) {
+      setAllCandidates([]);
+      return;
+    }
+
+    const companyIds = Array.from(new Set(list.map((r) => r.company_id).filter(Boolean)));
+    const orderIds = Array.from(new Set(list.map((r) => r.order_id).filter(Boolean))) as string[];
+    const [{ data: companiesData }, { data: ordersData }] = await Promise.all([
+      companyIds.length
+        ? supabase.from("companies").select("id,name").in("id", companyIds)
+        : Promise.resolve({ data: [] as any[] }),
+      orderIds.length
+        ? supabase.from("orders").select("id,order_no").in("id", orderIds)
+        : Promise.resolve({ data: [] as any[] }),
+    ]);
+    const companyNameById: Record<string, string> = {};
+    (companiesData || []).forEach((c: any) => (companyNameById[c.id] = c.name));
+    const orderNoById: Record<string, string> = {};
+    (ordersData || []).forEach((o: any) => (orderNoById[o.id] = o.order_no || "-"));
+
+    setAllCandidates(
+      list.map((r) => ({
+        ...r,
+        company_name: companyNameById[r.company_id] || "-",
+        order_no: r.order_id ? orderNoById[r.order_id] || "-" : "-",
+      }))
+    );
+  }
+
+  async function refreshOverview() {
+    await loadRecentBatches();
+    await loadAllCandidates();
+  }
+
   async function loadBatchFor(targetCompanyId: string, targetMonth: string) {
     setActionError(null);
     setValidatePreview(null);
@@ -189,7 +238,12 @@ export default function MonthlyBillingBatchPanel({
       if ((latest as any).batch_status === "draft") {
         await loadDraftContents((latest as any).id, targetCompanyId, targetMonth);
       } else {
+        // 확정된 묶음이어도, 확정 이후에 새로 정산등록된 건이 있으면
+        // 보충 묶음으로 담을 수 있어야 하므로 후보도 같이 조회해둔다
+        // (PR #64 리뷰 피드백 — "묶음 확정되면 추가되는 정산은 어떻게
+        // 추가하나?")
         await loadActiveItems((latest as any).id);
+        await loadCandidatesOnly(targetCompanyId, targetMonth);
       }
     } else {
       if (latest) setBatch(latest as any);
@@ -254,7 +308,7 @@ export default function MonthlyBillingBatchPanel({
       return;
     }
     await loadBatchFor(companyId, month);
-    await loadRecentBatches();
+    await refreshOverview();
   }
 
   async function handleAddItem(invoiceId: string) {
@@ -293,7 +347,7 @@ export default function MonthlyBillingBatchPanel({
       return;
     }
     await loadBatchFor(companyId, month);
-    await loadRecentBatches();
+    await refreshOverview();
   }
 
   // "최근 묶음" 목록에서 바로 삭제(현재 화면에 로드된 batch와 무관한 다른
@@ -309,7 +363,7 @@ export default function MonthlyBillingBatchPanel({
     if (batch?.id === batchId) {
       await loadBatchFor(companyId, month);
     }
-    await loadRecentBatches();
+    await refreshOverview();
   }
 
   async function handleValidate() {
@@ -335,7 +389,7 @@ export default function MonthlyBillingBatchPanel({
     }
     setValidatePreview(null);
     await loadBatchFor(companyId, month);
-    await loadRecentBatches();
+    await refreshOverview();
   }
 
   async function handleRelease() {
@@ -353,7 +407,7 @@ export default function MonthlyBillingBatchPanel({
     setShowReleaseReason(false);
     setReleaseReason("");
     await loadBatchFor(companyId, month);
-    await loadRecentBatches();
+    await refreshOverview();
   }
 
   async function handleMarkTaxInvoiceIssued() {
@@ -365,7 +419,7 @@ export default function MonthlyBillingBatchPanel({
       return;
     }
     await loadBatchFor(companyId, month);
-    await loadRecentBatches();
+    await refreshOverview();
   }
 
   async function handleMarkPaymentReceived() {
@@ -378,7 +432,7 @@ export default function MonthlyBillingBatchPanel({
       return;
     }
     await loadBatchFor(companyId, month);
-    await loadRecentBatches();
+    await refreshOverview();
   }
 
   async function handleSetDueDate() {
@@ -390,7 +444,7 @@ export default function MonthlyBillingBatchPanel({
       return;
     }
     await loadBatchFor(companyId, month);
-    await loadRecentBatches();
+    await refreshOverview();
   }
 
   const activeTotal = activeItems.reduce((sum, i) => sum + (i.total_amount_snapshot || 0), 0);
@@ -401,6 +455,55 @@ export default function MonthlyBillingBatchPanel({
 
   return (
     <div>
+      <div className="card" style={{ padding: 20, marginBottom: 20 }}>
+        <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 4 }}>
+          전체 묶음 후보 ({allCandidates.length}건)
+        </h3>
+        <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 0, marginBottom: 12 }}>
+          화주를 하나씩 찾아보지 않아도, 조건에 맞는(주선사 정산·월정산·정산대기) 정산 건이 전체
+          화주 기준으로 여기 자동으로 표시됩니다. 원하는 건의 "선택"을 누르면 그 화주·정산월로
+          바로 이동합니다.
+        </p>
+        {allCandidates.length === 0 ? (
+          <p style={{ fontSize: 13, color: "var(--text-muted)" }}>현재 묶을 수 있는 후보가 없습니다.</p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>화주</th>
+                <th>정산월</th>
+                <th>오더번호</th>
+                <th>화주 청구금액</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {allCandidates.map((c) => (
+                <tr key={c.invoice_id}>
+                  <td>{c.company_name}</td>
+                  <td>{c.billing_period || "-"}</td>
+                  <td>{c.order_no}</td>
+                  <td>{won(c.customer_charge_total)}</td>
+                  <td>
+                    <button
+                      className="btn btn-ghost"
+                      style={{ fontSize: 12, padding: "4px 10px" }}
+                      onClick={() => {
+                        setSelectedCompany({ id: c.company_id, name: c.company_name });
+                        setCompanyId(c.company_id);
+                        setMonth(c.billing_period || currentMonthInput());
+                      }}
+                    >
+                      선택
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
       <div className="form-grid" style={{ padding: 0, marginBottom: 6, maxWidth: 480 }}>
         <div className="field">
           <label>화주 검색</label>
@@ -660,6 +763,19 @@ export default function MonthlyBillingBatchPanel({
                   </tbody>
                 </table>
               </div>
+
+              {candidates.length > 0 && (
+                <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14, marginBottom: 14 }}>
+                  <p style={{ fontSize: 13, marginTop: 0 }}>
+                    이 묶음이 확정된 뒤 새로 정산등록된 건이 {candidates.length}건 있습니다. 확정된
+                    묶음에는 항목을 추가할 수 없으므로, 이 건들을 담을 <b>보충 묶음</b>을 같은 화주·
+                    정산월로 새로 만들 수 있습니다.
+                  </p>
+                  <button className="btn" onClick={handleCreateBatch}>
+                    보충 묶음 만들기
+                  </button>
+                </div>
+              )}
 
               {isAdmin && (
                 <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14 }}>
