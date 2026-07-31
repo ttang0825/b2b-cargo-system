@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { ORDER_STATUS_OPTIONS, getOrderStatusColor } from "@/lib/orderStatusColors";
-import { formatPhoneNumber, SETTLEMENT_TYPES, getSettlementTypeLabel } from "@/lib/constants";
+import { formatPhoneNumber } from "@/lib/constants";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import { generateDailyNumber } from "@/lib/generateNumber";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
@@ -16,6 +16,8 @@ import AddressSearch from "@/components/AddressSearch";
 import { localInputToISOString, toLocalDateTimeInput } from "@/lib/localDateTime";
 import MixableBadge from "@/components/MixableBadge";
 import { shortAddress } from "@/lib/shortAddress";
+import CollectionMethodInput, { CollectionMethodValue } from "@/components/CollectionMethodInput";
+import { getSettlementDisplayLabel, mapToLegacySettlementType } from "@/lib/settlementLabels";
 
 type CompanyLite = { id: string; name: string; phone: string | null };
 
@@ -85,7 +87,9 @@ function OrdersPageInner() {
     destinationSido: "",
     destinationSigungu: "",
     vehicle_type: "",
-    settlement_type: "general" as string,
+    collection_method: "broker" as CollectionMethodValue["collection_method"],
+    billing_cycle: "per_order" as CollectionMethodValue["billing_cycle"],
+    direct_collection_point: null as CollectionMethodValue["direct_collection_point"],
     loading_type: "exclusive" as "exclusive" | "mixable",
     mixed_shipper_consent: false,
     mixed_discount_type: null as "amount" | "percent" | null,
@@ -148,7 +152,7 @@ function OrdersPageInner() {
       const { data: q } = await supabase
         .from("quotes")
         .select(
-          "id,company_id,guest_name,guest_phone,origin,origin_sido,origin_sigungu,destination,destination_sido,destination_sigungu,vehicle_type,settlement_type,loading_type,mixed_shipper_consent,mixed_discount_type,mixed_discount_amount,mixed_discount_percent,mixed_note,item,selected_options,notes,requested_pickup_at,requested_dropoff_at,companies(id,name,phone)"
+          "id,company_id,guest_name,guest_phone,origin,origin_sido,origin_sigungu,destination,destination_sido,destination_sigungu,vehicle_type,settlement_type,collection_method,billing_cycle,direct_collection_point,loading_type,mixed_shipper_consent,mixed_discount_type,mixed_discount_amount,mixed_discount_percent,mixed_note,item,selected_options,notes,requested_pickup_at,requested_dropoff_at,companies(id,name,phone)"
         )
         .eq("id", fromQuoteId)
         .single();
@@ -166,7 +170,10 @@ function OrdersPageInner() {
         destinationSido: q.destination_sido || "",
         destinationSigungu: q.destination_sigungu || "",
         vehicle_type: q.vehicle_type || "",
-        settlement_type: q.settlement_type || "general",
+        collection_method: (q.collection_method as CollectionMethodValue["collection_method"]) || "broker",
+        billing_cycle: (q.billing_cycle as CollectionMethodValue["billing_cycle"]) || "per_order",
+        direct_collection_point:
+          (q.direct_collection_point as CollectionMethodValue["direct_collection_point"]) || null,
         loading_type: (q.loading_type as "exclusive" | "mixable") || "exclusive",
         mixed_shipper_consent: q.mixed_shipper_consent || false,
         mixed_discount_type: (q.mixed_discount_type as "amount" | "percent" | null) || null,
@@ -301,7 +308,18 @@ function OrdersPageInner() {
       destination_sido: form.destinationSido || null,
       destination_sigungu: form.destinationSigungu || null,
       vehicle_type: form.vehicle_type || null,
-      settlement_type: form.settlement_type,
+      collection_method: form.collection_method,
+      billing_cycle: form.billing_cycle,
+      direct_collection_point: form.collection_method === "driver_direct" ? form.direct_collection_point : null,
+      ...(mapToLegacySettlementType(form.collection_method, form.billing_cycle, form.direct_collection_point)
+        ? {
+            settlement_type: mapToLegacySettlementType(
+              form.collection_method,
+              form.billing_cycle,
+              form.direct_collection_point
+            ),
+          }
+        : {}),
       loading_type: form.loading_type,
       mixed_shipper_consent: form.loading_type === "mixable" ? form.mixed_shipper_consent : false,
       mixed_discount_type: form.loading_type === "mixable" ? form.mixed_discount_type : null,
@@ -339,7 +357,9 @@ function OrdersPageInner() {
       destinationSido: "",
       destinationSigungu: "",
       vehicle_type: "",
-      settlement_type: "general",
+      collection_method: "broker",
+      billing_cycle: "per_order",
+      direct_collection_point: null,
       loading_type: "exclusive",
       mixed_shipper_consent: false,
       mixed_discount_type: null,
@@ -562,19 +582,22 @@ function OrdersPageInner() {
                   placeholder="예: 1톤 탑차"
                 />
               </div>
-              <div className="field">
-                <label>정산방식</label>
-                <select
-                  value={form.settlement_type}
-                  onChange={(e) => setForm({ ...form, settlement_type: e.target.value })}
-                >
-                  {SETTLEMENT_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <CollectionMethodInput
+                namePrefix="order_new"
+                value={{
+                  collection_method: form.collection_method,
+                  billing_cycle: form.billing_cycle,
+                  direct_collection_point: form.direct_collection_point,
+                }}
+                onChange={(next) =>
+                  setForm({
+                    ...form,
+                    collection_method: next.collection_method,
+                    billing_cycle: next.billing_cycle,
+                    direct_collection_point: next.direct_collection_point,
+                  })
+                }
+              />
               <div style={{ gridColumn: "1 / -1" }}>
                 <DateTimePicker
                   label="상차 예정일시"

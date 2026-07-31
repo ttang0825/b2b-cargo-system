@@ -4,9 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import MixableBadge from "@/components/MixableBadge";
-import { getSettlementTypeLabel } from "@/lib/constants";
+import { getSettlementDisplayLabel, getPaymentConditionLabel } from "@/lib/settlementLabels";
+import { PORTAL_INVOICE_FIELDS } from "@/lib/portalInvoiceFields";
 import { useListSearchSort, sortIndicator } from "@/lib/useListSearchSort";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
+import { calcInclusiveAmount } from "@/lib/vat";
 
 function won(n: number | null) {
   if (!n) return "-";
@@ -15,20 +17,44 @@ function won(n: number | null) {
 
 function wonVatIncluded(n: number | null) {
   if (!n) return null;
-  return Math.round(n * 1.1).toLocaleString("ko-KR") + "원";
+  return calcInclusiveAmount(n).toLocaleString("ko-KR") + "원";
 }
 
 // admin 정산관리 목록(SettlementBadgeLabel)과 동일한 줄바꿈 처리 — "/"가
-// 있는 라벨("일반오더/주선사정산")만 "/" 뒤에서 한 번 줄바꿈
-function SettlementBadgeLabel({ value }: { value: string | null | undefined }) {
-  const label = getSettlementTypeLabel(value);
+// 있는 라벨("선착불 / 수수료 월정산")만 "/" 뒤에서 한 번 줄바꿈. 주선수수료
+// 금액/지급자·정보망 정산방식은 애초에 조회하지 않으므로(PORTAL_INVOICE_FIELDS,
+// 작업지시서 4-6) 여기 표시될 수 없음
+function SettlementBadgeLabel({
+  collectionMethod,
+  billingCycle,
+  directCollectionPoint,
+}: {
+  collectionMethod: string | null | undefined;
+  billingCycle: string | null | undefined;
+  directCollectionPoint: string | null | undefined;
+}) {
+  const label = getSettlementDisplayLabel(collectionMethod, billingCycle);
+  const condition = getPaymentConditionLabel(directCollectionPoint);
   const slashIdx = label.indexOf("/");
-  if (slashIdx === -1) return <>{label}</>;
+  const labelNode =
+    slashIdx === -1 ? (
+      <>{label}</>
+    ) : (
+      <>
+        {label.slice(0, slashIdx + 1)}
+        <br />
+        {label.slice(slashIdx + 1)}
+      </>
+    );
   return (
     <>
-      {label.slice(0, slashIdx + 1)}
-      <br />
-      {label.slice(slashIdx + 1)}
+      {labelNode}
+      {condition && (
+        <>
+          <br />
+          {condition}
+        </>
+      )}
     </>
   );
 }
@@ -66,7 +92,7 @@ export default function CustomerInvoicesPage() {
       billing_period: (i) => i.billing_period,
       customer_charge_total: (i) => i.customer_charge_total,
       status: (i) => i.status,
-      settlement_type: (i) => getSettlementTypeLabel(i.settlement_type),
+      settlement_type: (i) => getSettlementDisplayLabel(i.collection_method, i.billing_cycle),
     },
     "created_at",
     "desc"
@@ -76,9 +102,7 @@ export default function CustomerInvoicesPage() {
     async function load() {
       const { data } = await supabase
         .from("invoices")
-        .select(
-          "id,billing_period,customer_charge_total,tax_invoice_issued,tax_invoice_date,payment_received,payment_received_date,status,settlement_type,created_at,orders(order_no,loading_type)"
-        )
+        .select(PORTAL_INVOICE_FIELDS)
         .order("created_at", { ascending: false })
         .limit(100);
       setInvoices(data || []);
@@ -215,7 +239,11 @@ export default function CustomerInvoicesPage() {
                         className="badge"
                         style={{ display: "inline-block", textAlign: "center", lineHeight: 1.5 }}
                       >
-                        <SettlementBadgeLabel value={i.settlement_type} />
+                        <SettlementBadgeLabel
+                        collectionMethod={i.collection_method}
+                        billingCycle={i.billing_cycle}
+                        directCollectionPoint={i.direct_collection_point}
+                      />
                       </span>
                     </td>
                   </tr>
@@ -276,7 +304,12 @@ export default function CustomerInvoicesPage() {
                   </div>
                   <div className="mobile-row-line">
                     <span className="mobile-row-label">정산방식</span>
-                    <span>{getSettlementTypeLabel(i.settlement_type)}</span>
+                    <span>
+                      {getSettlementDisplayLabel(i.collection_method, i.billing_cycle)}
+                      {getPaymentConditionLabel(i.direct_collection_point) && (
+                        <> · {getPaymentConditionLabel(i.direct_collection_point)}</>
+                      )}
+                    </span>
                   </div>
                 </div>
               ))}

@@ -20,6 +20,19 @@ const ALLOWED_FIELDS = [
   "payment_received_date",
   "driver_paid",
   "driver_paid_date",
+  // 로드맵 ②-A: 신규 정산방식 필드 — 정산방식 변경(collection_method 등)과
+  // 선착불 건의 주선수수료 입금 처리를 이 저장 경로로 통합(작업지시서 4-5,
+  // 원칙 44번의 잠금검증 패턴 재사용). locked/confirmed_* 는 여전히 이
+  // 화이트리스트 밖이라 이 API로 못 바꿈(정산확정은 별도 API로만 가능).
+  "settlement_type",
+  "collection_method",
+  "billing_cycle",
+  "direct_collection_point",
+  "brokerage_fee_paid",
+  "brokerage_fee_paid_at",
+  "brokerage_fee",
+  "brokerage_fee_payer",
+  "driver_direct_collection_amount",
 ];
 
 function getAdminClient() {

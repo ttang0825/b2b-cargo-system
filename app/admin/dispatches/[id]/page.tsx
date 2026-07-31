@@ -10,13 +10,24 @@ import {
   DISPATCH_TO_ORDER_STATUS,
 } from "@/lib/dispatchStatusColors";
 import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
-import { formatPhoneNumber, SETTLEMENT_TYPES, getSettlementTypeLabel } from "@/lib/constants";
+import { formatPhoneNumber } from "@/lib/constants";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
 import ConflictWarning from "@/components/ConflictWarning";
-import SettlementTypeChangeModal from "@/components/SettlementTypeChangeModal";
+import SettlementFieldsChangeModal from "@/components/SettlementFieldsChangeModal";
+import CollectionMethodInput, { CollectionMethodValue } from "@/components/CollectionMethodInput";
 import { optimisticUpdate } from "@/lib/optimisticUpdate";
-import { logSettlementTypeChange } from "@/lib/settlementTypeChangeLog";
+import { logSettlementFieldChange } from "@/lib/settlementFieldChangeLog";
+import {
+  getSettlementDisplayLabel,
+  getPaymentConditionLabel,
+  getNetworkSettlementTypeLabel,
+  NETWORK_SETTLEMENT_TYPE_LABELS,
+  getBrokerageFeePayerLabel,
+  BROKERAGE_FEE_PAYER_LABELS,
+  mapToLegacySettlementType,
+} from "@/lib/settlementLabels";
 import { calcSettlement } from "@/lib/settlementCalc";
+import { calcVatAmount, calcInclusiveAmount } from "@/lib/vat";
 import MoneyInput from "@/components/MoneyInput";
 import MixableBadge from "@/components/MixableBadge";
 import {
@@ -109,6 +120,7 @@ export default function DispatchDetailPage() {
   const [editForm, setEditForm] = useState({
     customer_charge: "",
     driver_payout: "",
+    total_freight_amount: "",
     pickup_confirmed: false,
     delivery_confirmed: false,
     issue_occurred: false,
@@ -117,6 +129,15 @@ export default function DispatchDetailPage() {
     assignment_type: "internal" as "internal" | "external",
     driver_id: null as string | null,
     requested_network_ids: [] as string[],
+    network_settlement_type: "none" as string,
+    driver_direct_collection_amount: "",
+    brokerage_fee: "",
+    brokerage_fee_payer: "" as string,
+  });
+  const [settlementValue, setSettlementValue] = useState<CollectionMethodValue>({
+    collection_method: "broker",
+    billing_cycle: "per_order",
+    direct_collection_point: null,
   });
 
   async function load() {
@@ -137,6 +158,7 @@ export default function DispatchDetailPage() {
     setEditForm({
       customer_charge: data.customer_charge ?? "",
       driver_payout: data.driver_payout ?? "",
+      total_freight_amount: data.total_freight_amount != null ? String(data.total_freight_amount) : "",
       pickup_confirmed: data.pickup_confirmed || false,
       delivery_confirmed: data.delivery_confirmed || false,
       issue_occurred: data.issue_occurred || false,
@@ -145,6 +167,16 @@ export default function DispatchDetailPage() {
       assignment_type: (data.assignment_type as "internal" | "external") || "internal",
       driver_id: data.driver_id || null,
       requested_network_ids: data.requested_network_ids || [],
+      network_settlement_type: data.network_settlement_type || "none",
+      driver_direct_collection_amount:
+        data.driver_direct_collection_amount != null ? String(data.driver_direct_collection_amount) : "",
+      brokerage_fee: data.brokerage_fee != null ? String(data.brokerage_fee) : "",
+      brokerage_fee_payer: data.brokerage_fee_payer || "",
+    });
+    setSettlementValue({
+      collection_method: (data.collection_method as any) || "broker",
+      billing_cycle: (data.billing_cycle as any) || "per_order",
+      direct_collection_point: (data.direct_collection_point as any) || null,
     });
     setSelectedDriverInfo(data.drivers || null);
     setConfirmedNetworkId(data.confirmed_network_id || "");
@@ -206,6 +238,13 @@ export default function DispatchDetailPage() {
 
   async function handleConfirm() {
     setError(null);
+    if (
+      settlementValue.collection_method === "driver_direct" &&
+      (!settlementValue.direct_collection_point || settlementValue.direct_collection_point === "undecided")
+    ) {
+      setError("선착불(차주 직접수금) 건은 배차확정 전에 지급조건(선불/착불)을 먼저 확정해주세요.");
+      return;
+    }
     if (editForm.assignment_type === "internal") {
       if (!editForm.driver_id) {
         setError("배차확정하려면 차주를 먼저 선택해주세요.");
@@ -300,15 +339,26 @@ export default function DispatchDetailPage() {
   // "접수중" 단계에서는 자유롭게 변경, 배차확정 이후는 사유 입력 모달을 거쳐야만
   // 변경 가능 (오더 상세와 동일한 패턴). 즉시 저장 후 load()로 전체 재조회
   // (원칙 36번 — 부분 병합 금지)
-  async function handleSettlementTypeChange(newType: string, reason: string | null) {
+  async function handleSettlementFieldsChange(next: CollectionMethodValue, reason: string | null) {
     if (!dispatch) return;
     setSettlementSaving(true);
     setError(null);
     const staffId = await getCurrentStaffId();
-    const beforeType = dispatch.settlement_type;
+    const before = settlementValue;
+    const legacyMapped = mapToLegacySettlementType(
+      next.collection_method,
+      next.billing_cycle,
+      next.direct_collection_point
+    );
     const { error } = await supabase
       .from("dispatches")
-      .update({ settlement_type: newType, updated_by: staffId })
+      .update({
+        collection_method: next.collection_method,
+        billing_cycle: next.billing_cycle,
+        direct_collection_point: next.collection_method === "driver_direct" ? next.direct_collection_point : null,
+        ...(legacyMapped ? { settlement_type: legacyMapped } : {}),
+        updated_by: staffId,
+      })
       .eq("id", id);
     if (error) {
       setSettlementSaving(false);
@@ -316,14 +366,22 @@ export default function DispatchDetailPage() {
       return;
     }
     if (reason) {
-      await logSettlementTypeChange({
-        targetTable: "dispatches",
-        targetId: id,
-        beforeType,
-        afterType: newType,
-        reason,
-        changedBy: staffId,
-      });
+      const changes: [string, string | null, string | null][] = [
+        ["collection_method", before.collection_method, next.collection_method],
+        ["billing_cycle", before.billing_cycle, next.billing_cycle],
+        ["direct_collection_point", before.direct_collection_point, next.direct_collection_point],
+      ];
+      for (const [fieldName, beforeValue, afterValue] of changes) {
+        if (beforeValue === afterValue) continue;
+        await logSettlementFieldChange({
+          targetTable: "dispatches",
+          targetId: id,
+          fieldName,
+          beforeValue,
+          afterValue,
+          reason,
+        });
+      }
     }
     setSettlementSaving(false);
     setSettlementModalOpen(false);
@@ -412,6 +470,10 @@ export default function DispatchDetailPage() {
     const payout = Number(editForm.driver_payout) || 0;
     const now = new Date();
     const billingPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    // 화주 청구금액은 공급가액, 차주 지급금액은 실제 지급되는 최종금액
+    // (부가세 포함 기준)이라 기준이 달랐음 — 청구금액을 부가세 포함가로
+    // 환산해서 맞춘 뒤 차감(PR #63 리뷰 피드백)
+    const commission = calcInclusiveAmount(charge) - payout;
 
     const { error: invoiceError } = await supabase.from("invoices").insert({
       order_id: orderId,
@@ -420,10 +482,21 @@ export default function DispatchDetailPage() {
       billing_period: billingPeriod,
       customer_charge_total: charge || null,
       driver_payout_total: payout || null,
-      commission_total: charge - payout || null,
+      commission_total: commission || null,
       receivable_amount: charge || null,
       payable_amount: payout || null,
       settlement_type: dispatch?.settlement_type || "general",
+      collection_method: dispatch?.collection_method || "broker",
+      billing_cycle: dispatch?.billing_cycle || "per_order",
+      direct_collection_point: dispatch?.direct_collection_point || null,
+      network_settlement_type: dispatch?.network_settlement_type || "none",
+      total_freight_amount:
+        (editForm.total_freight_amount ? Number(editForm.total_freight_amount) : null) ?? charge ?? null,
+      driver_direct_collection_amount: editForm.driver_direct_collection_amount
+        ? Number(editForm.driver_direct_collection_amount)
+        : null,
+      brokerage_fee: editForm.brokerage_fee ? Number(editForm.brokerage_fee) : null,
+      brokerage_fee_payer: editForm.brokerage_fee_payer || null,
       status: "정산대기",
       created_by: await getCurrentStaffId(),
     });
@@ -491,12 +564,27 @@ export default function DispatchDetailPage() {
     setSaving(true);
     setError(null);
     setConflict(false);
+    if (editForm.brokerage_fee && Number(editForm.brokerage_fee) < 0) {
+      setSaving(false);
+      setError("주선수수료는 음수로 입력할 수 없습니다.");
+      return;
+    }
+    if (editForm.driver_direct_collection_amount && Number(editForm.driver_direct_collection_amount) < 0) {
+      setSaving(false);
+      setError("차주 직접수금액은 음수로 입력할 수 없습니다.");
+      return;
+    }
     const payload = {
       customer_charge: editForm.customer_charge
         ? Number(editForm.customer_charge)
         : null,
       driver_payout: editForm.driver_payout
         ? Number(editForm.driver_payout)
+        : null,
+      total_freight_amount: editForm.total_freight_amount
+        ? Number(editForm.total_freight_amount)
+        : editForm.customer_charge
+        ? Number(editForm.customer_charge)
         : null,
       pickup_confirmed: editForm.pickup_confirmed,
       delivery_confirmed: editForm.delivery_confirmed,
@@ -506,6 +594,17 @@ export default function DispatchDetailPage() {
       assignment_type: editForm.assignment_type,
       driver_id: editForm.assignment_type === "internal" ? editForm.driver_id : null,
       requested_network_ids: editForm.requested_network_ids,
+      network_settlement_type: editForm.network_settlement_type,
+      ...(settlementValue.collection_method === "driver_direct"
+        ? {
+            driver_direct_collection_amount: editForm.driver_direct_collection_amount
+              ? Number(editForm.driver_direct_collection_amount)
+              : null,
+            brokerage_fee:
+              editForm.brokerage_fee_payer === "waived" ? 0 : editForm.brokerage_fee ? Number(editForm.brokerage_fee) : null,
+            brokerage_fee_payer: editForm.brokerage_fee_payer || null,
+          }
+        : {}),
       updated_by: await getCurrentStaffId(),
     };
 
@@ -591,10 +690,13 @@ export default function DispatchDetailPage() {
 
   const statusColor = getDispatchStatusColor(dispatch.dispatch_status);
   // 혼적 할인은 이미 견적 단계 최종금액에 반영되어 있으므로, 마진 계산은
-  // 별도 변환 없이 화주 청구운임을 그대로 사용한다.
+  // 별도 변환 없이 화주 청구운임을 그대로 사용한다. 화주 청구운임은
+  // 공급가액이고 차주 지급운임은 실제 지급되는 최종금액(부가세 포함
+  // 기준)이라 기준이 달랐던 것을 부가세 포함가로 맞춰서 계산(PR #63
+  // 리뷰 피드백, 정산관리 "수수료(마진)"과 동일한 계산식으로 통일)
   const margin =
     editForm.customer_charge && editForm.driver_payout
-      ? Number(editForm.customer_charge) - Number(editForm.driver_payout)
+      ? calcInclusiveAmount(Number(editForm.customer_charge)) - Number(editForm.driver_payout)
       : null;
 
   return (
@@ -701,20 +803,20 @@ export default function DispatchDetailPage() {
                 정산방식
               </div>
               {dispatch.dispatch_status === "접수중" ? (
-                <select
-                  value={dispatch.settlement_type || "general"}
-                  onChange={(e) => handleSettlementTypeChange(e.target.value, null)}
-                  disabled={settlementSaving}
-                  style={{ fontWeight: 600 }}
-                >
-                  {SETTLEMENT_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
+                <div style={{ maxWidth: 420 }}>
+                  <CollectionMethodInput
+                    namePrefix="dispatch_settlement"
+                    value={settlementValue}
+                    onChange={(next) => handleSettlementFieldsChange(next, null)}
+                  />
+                </div>
               ) : (
-                <span className="badge">{getSettlementTypeLabel(dispatch.settlement_type)}</span>
+                <span className="badge">
+                  {getSettlementDisplayLabel(dispatch.collection_method, dispatch.billing_cycle)}
+                  {getPaymentConditionLabel(dispatch.direct_collection_point) && (
+                    <> · {getPaymentConditionLabel(dispatch.direct_collection_point)}</>
+                  )}
+                </span>
               )}
             </div>
             {dispatch.dispatch_status !== "접수중" && (
@@ -736,10 +838,10 @@ export default function DispatchDetailPage() {
         </div>
 
         {settlementModalOpen && (
-          <SettlementTypeChangeModal
-            currentType={dispatch.settlement_type || "general"}
+          <SettlementFieldsChangeModal
+            currentValue={settlementValue}
             onCancel={() => setSettlementModalOpen(false)}
-            onConfirm={(newType, reason) => handleSettlementTypeChange(newType, reason)}
+            onConfirm={(next, reason) => handleSettlementFieldsChange(next, reason)}
             saving={settlementSaving}
           />
         )}
@@ -992,6 +1094,80 @@ export default function DispatchDetailPage() {
         <p style={{ fontSize: 13.5, fontWeight: 600 }}>
           단순마진(참고): {margin !== null ? won(margin) : "-"}
         </p>
+
+        <div className="field" style={{ maxWidth: 320, marginBottom: 14 }}>
+          <label>정보망 정산방식 (내부 운영 전용, 화주포털 비노출)</label>
+          <select
+            value={editForm.network_settlement_type}
+            onChange={(e) => setEditForm({ ...editForm, network_settlement_type: e.target.value })}
+          >
+            {Object.entries(NETWORK_SETTLEMENT_TYPE_LABELS).map(([v, label]) => (
+              <option key={v} value={v}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {settlementValue.collection_method === "driver_direct" && (
+          <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14, marginBottom: 14 }}>
+            <h4 style={{ fontSize: 13, marginTop: 0, marginBottom: 10 }}>선착불 정산 정보</h4>
+            <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 0, marginBottom: 10 }}>
+              선착불 건은 화주 청구금액(WeCarry 실수금액)이 0이 될 수 있어, 전체 운송료를
+              별도로 입력해주세요.
+            </p>
+            <div className="form-grid" style={{ padding: 0, marginBottom: 10 }}>
+              <div className="field">
+                <label>전체 운송료(원)</label>
+                <MoneyInput
+                  value={editForm.total_freight_amount}
+                  onChange={(v) => setEditForm({ ...editForm, total_freight_amount: v })}
+                />
+              </div>
+              <div className="field">
+                <label>차주 직접수금액(공급가액, 원)</label>
+                <MoneyInput
+                  value={editForm.driver_direct_collection_amount}
+                  onChange={(v) => setEditForm({ ...editForm, driver_direct_collection_amount: v })}
+                />
+              </div>
+              <div className="field">
+                <label>주선수수료(공급가액, 원)</label>
+                <MoneyInput
+                  value={editForm.brokerage_fee_payer === "waived" ? "0" : editForm.brokerage_fee}
+                  onChange={(v) => setEditForm({ ...editForm, brokerage_fee: v })}
+                  disabled={editForm.brokerage_fee_payer === "waived"}
+                />
+                {editForm.brokerage_fee && Number(editForm.brokerage_fee) > 0 && editForm.brokerage_fee_payer !== "waived" && (
+                  <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, marginBottom: 0 }}>
+                    부가세 {won(calcVatAmount(Number(editForm.brokerage_fee)))} · 부가세 포함{" "}
+                    {won(calcInclusiveAmount(Number(editForm.brokerage_fee)))}
+                  </p>
+                )}
+              </div>
+              <div className="field">
+                <label>수수료 지급자</label>
+                <select
+                  value={editForm.brokerage_fee_payer}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      brokerage_fee_payer: e.target.value,
+                      brokerage_fee: e.target.value === "waived" ? "0" : editForm.brokerage_fee,
+                    })
+                  }
+                >
+                  <option value="">선택</option>
+                  {Object.entries(BROKERAGE_FEE_PAYER_LABELS).map(([v, label]) => (
+                    <option key={v} value={v}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
 
         {dispatch.dispatch_status !== "접수중" && (
           <div style={{ marginTop: 14, borderTop: "1px solid var(--border)", paddingTop: 14 }}>

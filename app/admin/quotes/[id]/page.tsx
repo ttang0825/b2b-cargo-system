@@ -8,6 +8,7 @@ import { STATUS_OPTIONS as COMPANY_STATUS_ORDER } from "@/lib/statusColors";
 import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
+import { calcInclusiveAmount } from "@/lib/vat";
 import { optimisticUpdate } from "@/lib/optimisticUpdate";
 import {
   getLatestMixedLoadingDiscountSettings,
@@ -19,6 +20,8 @@ import { localInputToISOString, toLocalDateTimeInput } from "@/lib/localDateTime
 import MoneyInput from "@/components/MoneyInput";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
 import ConflictWarning from "@/components/ConflictWarning";
+import CollectionMethodInput, { CollectionMethodValue } from "@/components/CollectionMethodInput";
+import { getSettlementDisplayLabel, getPaymentConditionLabel, mapToLegacySettlementType } from "@/lib/settlementLabels";
 
 const STATUS_OPTIONS = ["상담중", "견적제출", "수주", "보류", "실패"];
 
@@ -74,6 +77,9 @@ type QuoteDetail = {
   notes: string | null;
   requested_pickup_at: string | null;
   requested_dropoff_at: string | null;
+  collection_method: string | null;
+  billing_cycle: string | null;
+  direct_collection_point: string | null;
   companies: { id: string; name: string; phone: string | null } | null;
 };
 
@@ -95,7 +101,7 @@ function won(n: number | null) {
 
 function wonVatIncluded(n: number | null | undefined) {
   if (!n) return null;
-  return Math.round(n * 1.1).toLocaleString("ko-KR") + "원";
+  return calcInclusiveAmount(n).toLocaleString("ko-KR") + "원";
 }
 
 // 견적 관리는 거리기반 최소 간격(100km당 1h, 2~5h 범위) 규칙을 씀 (원칙 6번)
@@ -120,8 +126,12 @@ export default function QuoteDetailPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const [standardMixedDiscountPercent, setStandardMixedDiscountPercent] = useState(0);
+  const [hasOrder, setHasOrder] = useState(false);
 
   const [editForm, setEditForm] = useState({
+    collection_method: "broker" as CollectionMethodValue["collection_method"],
+    billing_cycle: "per_order" as CollectionMethodValue["billing_cycle"],
+    direct_collection_point: null as CollectionMethodValue["direct_collection_point"],
     origin: "",
     originDetail: "",
     originSido: "",
@@ -224,6 +234,10 @@ export default function QuoteDetailPage() {
       mixed_discount_amount: data.mixed_discount_amount ? String(data.mixed_discount_amount) : "",
       mixed_discount_percent: data.mixed_discount_percent ? String(data.mixed_discount_percent) : "",
       mixed_note: data.mixed_note || "",
+      collection_method: (data.collection_method as CollectionMethodValue["collection_method"]) || "broker",
+      billing_cycle: (data.billing_cycle as CollectionMethodValue["billing_cycle"]) || "per_order",
+      direct_collection_point:
+        (data.direct_collection_point as CollectionMethodValue["direct_collection_point"]) || null,
     });
 
     const { data: itemData } = await supabase
@@ -231,6 +245,13 @@ export default function QuoteDetailPage() {
       .select("id,item_name,amount")
       .eq("quote_id", id);
     setItems(itemData || []);
+
+    const { count: orderCount } = await supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("quote_id", id);
+    setHasOrder((orderCount || 0) > 0);
+
     setLoading(false);
   }
 
@@ -278,6 +299,17 @@ export default function QuoteDetailPage() {
     setSaveError(null);
     setConflict(false);
 
+    const settlementFieldsChanged =
+      editForm.collection_method !== (quote.collection_method || "broker") ||
+      editForm.billing_cycle !== (quote.billing_cycle || "per_order") ||
+      editForm.direct_collection_point !== (quote.direct_collection_point || null);
+    if (hasOrder && settlementFieldsChanged) {
+      const proceed = window.confirm(
+        "이 견적은 이미 오더로 전환되어, 여기서 수정해도 기존 오더에는 반영되지 않습니다. 계속 저장하시겠습니까?"
+      );
+      if (!proceed) return;
+    }
+
     if (
       editForm.requested_pickup_at &&
       new Date(editForm.requested_pickup_at).getTime() < Date.now() - 60000
@@ -323,6 +355,19 @@ export default function QuoteDetailPage() {
       mixed_discount_amount: Number(editForm.mixed_discount_amount) || 0,
       mixed_discount_percent: Number(editForm.mixed_discount_percent) || 0,
       mixed_note: editForm.loading_type === "mixable" ? editForm.mixed_note || null : null,
+      collection_method: editForm.collection_method,
+      billing_cycle: editForm.billing_cycle,
+      direct_collection_point:
+        editForm.collection_method === "driver_direct" ? editForm.direct_collection_point : null,
+      ...(mapToLegacySettlementType(editForm.collection_method, editForm.billing_cycle, editForm.direct_collection_point)
+        ? {
+            settlement_type: mapToLegacySettlementType(
+              editForm.collection_method,
+              editForm.billing_cycle,
+              editForm.direct_collection_point
+            ),
+          }
+        : {}),
       selected_options: {
         톤수: editForm.vehicle_type,
         차량형태: editForm.차량형태,
@@ -533,6 +578,15 @@ export default function QuoteDetailPage() {
               <div>
                 <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>품목</div>
                 <div style={{ fontSize: 13.5 }}>{quote.item || "-"}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>정산방식</div>
+                <div style={{ fontSize: 13.5 }}>
+                  {getSettlementDisplayLabel(quote.collection_method, quote.billing_cycle)}
+                  {getPaymentConditionLabel(quote.direct_collection_point) && (
+                    <> · {getPaymentConditionLabel(quote.direct_collection_point)}</>
+                  )}
+                </div>
               </div>
               {quote.guest_phone && (
                 <div>
@@ -760,6 +814,28 @@ export default function QuoteDetailPage() {
                 onChange={(e) => setEditForm({ ...editForm, waypointCount: e.target.value })}
               />
             </div>
+
+            <CollectionMethodInput
+              namePrefix="quote_edit"
+              value={{
+                collection_method: editForm.collection_method,
+                billing_cycle: editForm.billing_cycle,
+                direct_collection_point: editForm.direct_collection_point,
+              }}
+              onChange={(next) =>
+                setEditForm({
+                  ...editForm,
+                  collection_method: next.collection_method,
+                  billing_cycle: next.billing_cycle,
+                  direct_collection_point: next.direct_collection_point,
+                })
+              }
+            />
+            {hasOrder && (
+              <p style={{ gridColumn: "1 / -1", fontSize: 11, color: "var(--text-muted)", margin: "-6px 0 0" }}>
+                이 견적은 이미 오더로 전환되었습니다. 정산방식을 수정해도 기존 오더에는 자동 반영되지 않습니다.
+              </p>
+            )}
 
             <div className="field" style={{ gridColumn: "1 / -1" }}>
               <label>적재구분</label>

@@ -7,12 +7,15 @@ import { supabase } from "@/lib/supabaseClient";
 import { generateDailyNumber } from "@/lib/generateNumber";
 import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
-import { formatPhoneNumber, SETTLEMENT_TYPES } from "@/lib/constants";
+import { formatPhoneNumber } from "@/lib/constants";
+import { calcInclusiveAmount } from "@/lib/vat";
+import { mapToLegacySettlementType } from "@/lib/settlementLabels";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import DateTimePicker from "@/components/DateTimePicker";
 import AddressSearch from "@/components/AddressSearch";
 import MoneyInput from "@/components/MoneyInput";
+import CollectionMethodInput, { CollectionMethodValue } from "@/components/CollectionMethodInput";
 import { getLatestMixedLoadingDiscountSettings } from "@/lib/mixedLoadingDiscountSettings";
 import { localInputToISOString, toLocalDateTimeInput } from "@/lib/localDateTime";
 import { applyMixedDiscount } from "@/lib/settlementCalc";
@@ -94,7 +97,7 @@ function won(n: number) {
 
 function wonVatIncluded(n: number | null | undefined) {
   if (!n) return null;
-  return Math.round(n * 1.1).toLocaleString("ko-KR") + "원";
+  return calcInclusiveAmount(n).toLocaleString("ko-KR") + "원";
 }
 
 // 거리 기준 최소 상차→하차 간격 (2~5시간, 100km당 1시간씩 증가)
@@ -167,7 +170,9 @@ function QuotesPageInner() {
     destinationSigungu: "",
     distance_km: "",
     vehicle_type: "1톤",
-    settlement_type: "general" as string,
+    collection_method: "broker" as CollectionMethodValue["collection_method"],
+    billing_cycle: "per_order" as CollectionMethodValue["billing_cycle"],
+    direct_collection_point: null as CollectionMethodValue["direct_collection_point"],
     loading_type: "exclusive" as "exclusive" | "mixable",
     mixed_shipper_consent: false,
     mixed_discount_type: null as "amount" | "percent" | null,
@@ -674,7 +679,19 @@ function QuotesPageInner() {
         destination_sigungu: form.destinationSigungu || null,
         distance_km: Number(form.distance_km) || null,
         vehicle_type: form.vehicle_type,
-        settlement_type: form.settlement_type,
+        collection_method: form.collection_method,
+        billing_cycle: form.billing_cycle,
+        direct_collection_point:
+          form.collection_method === "driver_direct" ? form.direct_collection_point : null,
+        ...(mapToLegacySettlementType(form.collection_method, form.billing_cycle, form.direct_collection_point)
+          ? {
+              settlement_type: mapToLegacySettlementType(
+                form.collection_method,
+                form.billing_cycle,
+                form.direct_collection_point
+              ),
+            }
+          : {}),
         loading_type: form.loading_type,
         mixed_shipper_consent: form.loading_type === "mixable" ? form.mixed_shipper_consent : false,
         mixed_discount_type: form.loading_type === "mixable" ? form.mixed_discount_type : null,
@@ -799,7 +816,9 @@ function QuotesPageInner() {
       destinationSido: "",
       destinationSigungu: "",
       distance_km: "",
-      settlement_type: "general",
+      collection_method: "broker",
+      billing_cycle: "per_order",
+      direct_collection_point: null,
       loading_type: "exclusive",
       mixed_shipper_consent: false,
       mixed_discount_type: null,
@@ -893,18 +912,23 @@ function QuotesPageInner() {
               </button>
             </div>
 
-            <div className="field" style={{ marginBottom: 14 }}>
-              <label>정산방식</label>
-              <select
-                value={form.settlement_type}
-                onChange={(e) => setForm({ ...form, settlement_type: e.target.value })}
-              >
-                {SETTLEMENT_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
+            <div style={{ marginBottom: 14 }}>
+              <CollectionMethodInput
+                namePrefix="quote_new"
+                value={{
+                  collection_method: form.collection_method,
+                  billing_cycle: form.billing_cycle,
+                  direct_collection_point: form.direct_collection_point,
+                }}
+                onChange={(next) =>
+                  setForm({
+                    ...form,
+                    collection_method: next.collection_method,
+                    billing_cycle: next.billing_cycle,
+                    direct_collection_point: next.direct_collection_point,
+                  })
+                }
+              />
             </div>
 
             {customerMode === "company" ? (
