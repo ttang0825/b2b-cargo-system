@@ -952,7 +952,12 @@ export default function MonthlyBillingBatchPanel({
                       onClick={() => {
                         setSelectedCompany({ id: b.company_id, name: b.companies?.name || "-" });
                         setCompanyId(b.company_id);
-                        setMonth(String(b.period_start).slice(0, 7));
+                        // 정산 마감일이 설정된 화주는 period_start가 전월에 걸쳐있어
+                        // period_start 기준으로 월을 구하면 다른 주기로 계산되어
+                        // 확정된 묶음을 못 찾는 버그가 있었음(PR #64 리뷰 피드백) —
+                        // period_end의 날짜가 항상 그 주기의 라벨 월과 같으므로
+                        // period_end 기준으로 구함
+                        setMonth(String(b.period_end).slice(0, 7));
                       }}
                     >
                       {b.companies?.name || "-"}
