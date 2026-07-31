@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { STATUS_OPTIONS } from "@/lib/statusColors";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
@@ -16,6 +16,7 @@ import MixableBadge from "@/components/MixableBadge";
 import LockedBadge from "@/components/LockedBadge";
 import { getSettlementDisplayLabel, mapToLegacySettlementType } from "@/lib/settlementLabels";
 import { calcInclusiveAmount } from "@/lib/vat";
+import MonthlyBillingBatchPanel from "@/components/MonthlyBillingBatchPanel";
 
 type OrderLite = {
   id: string;
@@ -91,8 +92,13 @@ function currentMonth() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-export default function InvoicesPage() {
+function InvoicesPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialTab = searchParams.get("tab") === "monthly" ? "monthly" : "individual";
+  const initialBatchCompanyId = searchParams.get("company") || "";
+  const initialBatchMonth = searchParams.get("month") || "";
+  const [activeTab, setActiveTab] = useState<"individual" | "monthly">(initialTab);
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
   const [availableOrders, setAvailableOrders] = useState<OrderLite[]>([]);
   const [loading, setLoading] = useState(true);
@@ -415,14 +421,39 @@ export default function InvoicesPage() {
             관리합니다.
           </p>
         </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <DateRangeFilter value={period} onChange={setPeriod} />
-          <button className="btn" onClick={() => setShowForm((v) => !v)}>
-            {showForm ? "닫기" : "+ 신규 정산 등록"}
-          </button>
-        </div>
+        {activeTab === "individual" && (
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <DateRangeFilter value={period} onChange={setPeriod} />
+            <button className="btn" onClick={() => setShowForm((v) => !v)}>
+              {showForm ? "닫기" : "+ 신규 정산 등록"}
+            </button>
+          </div>
+        )}
       </div>
 
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        <button
+          onClick={() => setActiveTab("individual")}
+          className={activeTab === "individual" ? "btn" : "btn btn-ghost"}
+          style={{ fontSize: 12.5, padding: "7px 12px" }}
+        >
+          개별 정산
+        </button>
+        <button
+          onClick={() => setActiveTab("monthly")}
+          className={activeTab === "monthly" ? "btn" : "btn btn-ghost"}
+          style={{ fontSize: 12.5, padding: "7px 12px" }}
+        >
+          월정산 묶음
+        </button>
+      </div>
+
+      {activeTab === "monthly" && (
+        <MonthlyBillingBatchPanel initialCompanyId={initialBatchCompanyId} initialMonth={initialBatchMonth} />
+      )}
+
+      {activeTab === "individual" && (
+        <>
       {error && <div className="error-box">오류: {error}</div>}
 
       {period === "all" && invoices.length >= ALL_PERIOD_LIMIT && (
@@ -713,6 +744,22 @@ export default function InvoicesPage() {
           </table>
         )}
       </div>
+        </>
+      )}
     </main>
+  );
+}
+
+export default function InvoicesPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="container">
+          <div className="empty-state">불러오는 중...</div>
+        </main>
+      }
+    >
+      <InvoicesPageInner />
+    </Suspense>
   );
 }

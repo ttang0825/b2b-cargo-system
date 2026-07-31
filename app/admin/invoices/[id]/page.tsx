@@ -395,6 +395,12 @@ export default function InvoiceDetailPage() {
 
   const statusColor = getInvoiceStatusColor(editForm.status);
   const fieldsLocked = invoice.locked && !isAdmin;
+  // 로드맵 ②-B(작업지시서 6-2): 화주 측 상태의 기준값은 월정산 묶음이다 —
+  // 이 건이 묶음에 담기면(customer_side_locked=true) 화주 측 필드(정산상태/
+  // 정산방식/세금계산서/화주입금)는 개별 화면에서 손대지 않고 묶음 쪽
+  // 처리 함수(mark_billing_batch_*)로만 바뀐다. 차주 지급 관련 필드는
+  // 계속 활성화(관리자 여부와 무관 — fieldsLocked만 적용)
+  const customerSideLocked = invoice.customer_side_locked === true;
 
   return (
     <main className="container">
@@ -465,7 +471,7 @@ export default function InvoiceDetailPage() {
           <select
             value={editForm.status}
             onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
-            disabled={fieldsLocked}
+            disabled={fieldsLocked || customerSideLocked}
             style={{
               fontWeight: 600,
               padding: "5px 10px",
@@ -483,6 +489,25 @@ export default function InvoiceDetailPage() {
           </select>
         </div>
 
+        {customerSideLocked && (
+          <div
+            className="badge"
+            style={{ display: "block", marginBottom: 14, padding: "10px 12px", fontSize: 12.5 }}
+          >
+            이 건은 [{invoice.companies?.name || "-"}] {invoice.billing_period || "-"} 월정산
+            묶음에 포함되어 있습니다. 세금계산서·화주입금·정산상태는 이 화면이 아니라{" "}
+            <Link
+              href={`/admin/invoices?tab=monthly&company=${invoice.company_id || ""}&month=${
+                invoice.billing_period || ""
+              }`}
+              style={{ textDecoration: "underline" }}
+            >
+              월정산 묶음 화면
+            </Link>
+            에서 처리해주세요.
+          </div>
+        )}
+
         <div style={{ marginBottom: 14 }}>
           <div
             style={{
@@ -497,7 +522,7 @@ export default function InvoiceDetailPage() {
               <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 4 }}>
                 정산방식
               </div>
-              {!invoice.locked ? (
+              {!invoice.locked && !customerSideLocked ? (
                 <div style={{ maxWidth: 420 }}>
                   <CollectionMethodInput
                     namePrefix="invoice_settlement"
@@ -514,7 +539,7 @@ export default function InvoiceDetailPage() {
                 </span>
               )}
             </div>
-            {invoice.locked && (
+            {invoice.locked && !customerSideLocked && (
               <button
                 type="button"
                 className="btn-ghost"
@@ -680,7 +705,7 @@ export default function InvoiceDetailPage() {
               <input
                 type="checkbox"
                 checked={editForm.tax_invoice_issued}
-                disabled={fieldsLocked}
+                disabled={fieldsLocked || customerSideLocked}
                 onChange={(e) =>
                   setEditForm({
                     ...editForm,
@@ -696,7 +721,7 @@ export default function InvoiceDetailPage() {
               onChange={(e) =>
                 setEditForm({ ...editForm, tax_invoice_date: e.target.value })
               }
-              disabled={fieldsLocked || !editForm.tax_invoice_issued}
+              disabled={fieldsLocked || customerSideLocked || !editForm.tax_invoice_issued}
             />
           </div>
 
@@ -715,7 +740,7 @@ export default function InvoiceDetailPage() {
                   <input
                     type="checkbox"
                     checked={editForm.payment_received}
-                    disabled={fieldsLocked}
+                    disabled={fieldsLocked || customerSideLocked}
                     onChange={(e) =>
                       setEditForm({
                         ...editForm,
@@ -734,7 +759,7 @@ export default function InvoiceDetailPage() {
                       payment_received_date: e.target.value,
                     })
                   }
-                  disabled={fieldsLocked || !editForm.payment_received}
+                  disabled={fieldsLocked || customerSideLocked || !editForm.payment_received}
                 />
               </div>
 
@@ -806,6 +831,7 @@ export default function InvoiceDetailPage() {
             ? "\"화주 입금완료\"를 체크하면 연결된 화주의 미수금이 자동으로 차감됩니다."
             : "주선수수료 입금완료 체크는 화주 미수금 계산에 영향을 주지 않습니다."}
           {fieldsLocked && " 이 건은 확정(잠금)되어 관리자만 수정할 수 있습니다."}
+          {customerSideLocked && " 세금계산서·화주입금은 월정산 묶음에서만 처리할 수 있습니다."}
         </p>
       </div>
 
