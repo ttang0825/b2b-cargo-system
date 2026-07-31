@@ -47,6 +47,7 @@ type InvoiceRow = {
   billing_cycle: string | null;
   brokerage_fee: number | null;
   brokerage_fee_paid: boolean | null;
+  total_freight_amount: number | null;
   locked: boolean;
   created_at: string;
   orders: { order_no: string | null; guest_name: string | null; loading_type: string | null } | null;
@@ -135,7 +136,7 @@ export default function InvoicesPage() {
     let query = supabase
       .from("invoices")
       .select(
-        "id,order_id,billing_period,customer_charge_total,driver_payout_total,commission_total,tax_invoice_issued,payment_received,driver_paid,status,settlement_type,collection_method,billing_cycle,brokerage_fee,brokerage_fee_paid,locked,created_at,orders(order_no,guest_name,loading_type),companies(name)"
+        "id,order_id,billing_period,customer_charge_total,driver_payout_total,commission_total,tax_invoice_issued,payment_received,driver_paid,status,settlement_type,collection_method,billing_cycle,brokerage_fee,brokerage_fee_paid,total_freight_amount,locked,created_at,orders(order_no,guest_name,loading_type),companies(name)"
       )
       .order("created_at", { ascending: false })
       .limit(preset === "all" ? ALL_PERIOD_LIMIT : FILTERED_PERIOD_LIMIT);
@@ -659,6 +660,11 @@ export default function InvoicesPage() {
                           <br />
                           (차주 직접수금)
                         </span>
+                        {i.total_freight_amount != null && (
+                          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                            전체 운송료 {won(i.total_freight_amount)}
+                          </div>
+                        )}
                       </td>
                       <td style={{ whiteSpace: "nowrap" }}>
                         <span className="num">{won(i.brokerage_fee)}</span>
