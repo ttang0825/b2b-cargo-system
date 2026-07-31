@@ -7,6 +7,7 @@ import MixableBadge from "@/components/MixableBadge";
 import { getSettlementTypeLabel } from "@/lib/constants";
 import { useListSearchSort, sortIndicator } from "@/lib/useListSearchSort";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
+import { calcInclusiveAmount } from "@/lib/vat";
 
 function won(n: number | null) {
   if (!n) return "-";
@@ -15,7 +16,7 @@ function won(n: number | null) {
 
 function wonVatIncluded(n: number | null) {
   if (!n) return null;
-  return Math.round(n * 1.1).toLocaleString("ko-KR") + "원";
+  return calcInclusiveAmount(n).toLocaleString("ko-KR") + "원";
 }
 
 // admin 정산관리 목록(SettlementBadgeLabel)과 동일한 줄바꿈 처리 — "/"가

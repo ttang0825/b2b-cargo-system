@@ -8,6 +8,7 @@ import { generateDailyNumber } from "@/lib/generateNumber";
 import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import { formatPhoneNumber, SETTLEMENT_TYPES } from "@/lib/constants";
+import { calcInclusiveAmount } from "@/lib/vat";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import DateTimePicker from "@/components/DateTimePicker";
@@ -94,7 +95,7 @@ function won(n: number) {
 
 function wonVatIncluded(n: number | null | undefined) {
   if (!n) return null;
-  return Math.round(n * 1.1).toLocaleString("ko-KR") + "원";
+  return calcInclusiveAmount(n).toLocaleString("ko-KR") + "원";
 }
 
 // 거리 기준 최소 상차→하차 간격 (2~5시간, 100km당 1시간씩 증가)

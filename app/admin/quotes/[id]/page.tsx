@@ -8,6 +8,7 @@ import { STATUS_OPTIONS as COMPANY_STATUS_ORDER } from "@/lib/statusColors";
 import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
+import { calcInclusiveAmount } from "@/lib/vat";
 import { optimisticUpdate } from "@/lib/optimisticUpdate";
 import {
   getLatestMixedLoadingDiscountSettings,
@@ -95,7 +96,7 @@ function won(n: number | null) {
 
 function wonVatIncluded(n: number | null | undefined) {
   if (!n) return null;
-  return Math.round(n * 1.1).toLocaleString("ko-KR") + "원";
+  return calcInclusiveAmount(n).toLocaleString("ko-KR") + "원";
 }
 
 // 견적 관리는 거리기반 최소 간격(100km당 1h, 2~5h 범위) 규칙을 씀 (원칙 6번)

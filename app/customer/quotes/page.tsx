@@ -5,6 +5,7 @@ import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import MixableBadge from "@/components/MixableBadge";
 import { useListSearchSort } from "@/lib/useListSearchSort";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
+import { calcInclusiveAmount } from "@/lib/vat";
 
 function won(n: number | null) {
   if (!n) return "-";
@@ -13,7 +14,7 @@ function won(n: number | null) {
 
 function wonVatIncluded(n: number | null) {
   if (!n) return null;
-  return Math.round(n * 1.1).toLocaleString("ko-KR") + "원";
+  return calcInclusiveAmount(n).toLocaleString("ko-KR") + "원";
 }
 
 function formatDateTime(v: string | null) {

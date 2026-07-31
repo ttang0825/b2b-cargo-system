@@ -19,6 +19,11 @@
 //
 // 참고: 6차 세션(현장 추가비)이 진행되면 마진 계산에서 "승인된 추가비 합계"를
 // 빼는 로직이 추가될 예정.
+//
+// 부가세(×0.1) 계산은 lib/vat.ts의 calcVatAmount()를 재사용(로드맵②-A
+// 세션에서 여러 곳에 흩어져 있던 부가세 계산을 하나로 통합).
+
+import { calcVatAmount } from "./vat";
 
 export type InsuranceRateSettingsInput = {
   expenseDeductionRate: number; // 필요경비공제율(%)
@@ -46,7 +51,7 @@ export type SettlementCalcResult = {
 
 export function calcSettlement(input: SettlementCalcInput): SettlementCalcResult {
   const driverSupplyAmount = input.driverBaseFare || 0;
-  const vatAmount = driverSupplyAmount * 0.1;
+  const vatAmount = calcVatAmount(driverSupplyAmount);
   const collectAmount = driverSupplyAmount + vatAmount; // 차주 수금액(부가세 포함)
 
   let industrialInsuranceBaseAmount = 0;
@@ -73,7 +78,7 @@ export function calcSettlement(input: SettlementCalcInput): SettlementCalcResult
 
   return {
     driverSupplyAmount: Math.round(driverSupplyAmount),
-    vatAmount: Math.round(vatAmount),
+    vatAmount,
     industrialInsuranceBaseAmount,
     industrialInsuranceDriverShare,
     industrialInsuranceBrokerShare,
