@@ -15,6 +15,7 @@ import MoneyInput from "@/components/MoneyInput";
 import MixableBadge from "@/components/MixableBadge";
 import LockedBadge from "@/components/LockedBadge";
 import { getSettlementDisplayLabel, mapToLegacySettlementType } from "@/lib/settlementLabels";
+import { calcInclusiveAmount } from "@/lib/vat";
 
 type OrderLite = {
   id: string;
@@ -281,7 +282,11 @@ export default function InvoicesPage() {
     const order = availableOrders.find((o) => o.id === selectedOrderId);
     const chargeNum = Number(customerChargeTotal) || 0;
     const payoutNum = Number(driverPayoutTotal) || 0;
-    const commission = chargeNum - payoutNum;
+    // 화주 청구금액(customer_charge_total)은 항상 공급가액(부가세 별도)으로
+    // 저장되지만, 차주 지급금액(driver_payout_total)은 실제로 차주에게
+    // 지급되는 최종 금액(부가세 포함 기준)이므로, 기준을 맞추기 위해
+    // 화주 청구금액도 부가세 포함가로 환산한 뒤 차감한다(PR #63 리뷰 피드백)
+    const commission = calcInclusiveAmount(chargeNum) - payoutNum;
 
     const { error } = await supabase.from("invoices").insert({
       order_id: selectedOrderId,
@@ -626,12 +631,19 @@ export default function InvoicesPage() {
                           <div style={{ fontSize: 11, color: "var(--text-muted)" }}>부가세 별도</div>
                         )}
                       </td>
-                      <td style={{ whiteSpace: "nowrap" }}>
-                        <span className="num">{won(i.driver_payout_total)}</span>
+                      <td>
+                        <span className="num" style={{ whiteSpace: "nowrap" }}>
+                          {won(i.driver_payout_total)}
+                        </span>
                         {i.driver_payout_total != null && i.order_id && driverCalcInfoByOrderId[i.order_id]?.throughCalc && (
-                          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                          <div style={{ fontSize: 11, color: "var(--text-muted)", whiteSpace: "normal", maxWidth: 100 }}>
                             부가세 포함
-                            {driverCalcInfoByOrderId[i.order_id].insuranceApplied && " · 산재보험료 차감됨"}
+                            {driverCalcInfoByOrderId[i.order_id].insuranceApplied && (
+                              <>
+                                <br />
+                                산재보험료 차감됨
+                              </>
+                            )}
                           </div>
                         )}
                       </td>
@@ -641,13 +653,19 @@ export default function InvoicesPage() {
                     </>
                   ) : (
                     <>
-                      <td style={{ whiteSpace: "nowrap" }} colSpan={2}>
-                        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>선착불(차주 직접수금)</span>
+                      <td colSpan={2}>
+                        <span style={{ fontSize: 12, color: "var(--text-muted)", whiteSpace: "normal", maxWidth: 130, display: "inline-block" }}>
+                          선착불
+                          <br />
+                          (차주 직접수금)
+                        </span>
                       </td>
                       <td style={{ whiteSpace: "nowrap" }}>
                         <span className="num">{won(i.brokerage_fee)}</span>
-                        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                          주선수수료 · {i.brokerage_fee_paid ? "입금완료" : "입금대기"}
+                        <div style={{ fontSize: 11, color: "var(--text-muted)", whiteSpace: "normal", maxWidth: 100 }}>
+                          주선수수료
+                          <br />
+                          {i.brokerage_fee_paid ? "입금완료" : "입금대기"}
                         </div>
                       </td>
                     </>

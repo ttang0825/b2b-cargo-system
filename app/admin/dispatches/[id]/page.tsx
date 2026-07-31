@@ -470,6 +470,10 @@ export default function DispatchDetailPage() {
     const payout = Number(editForm.driver_payout) || 0;
     const now = new Date();
     const billingPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    // 화주 청구금액은 공급가액, 차주 지급금액은 실제 지급되는 최종금액
+    // (부가세 포함 기준)이라 기준이 달랐음 — 청구금액을 부가세 포함가로
+    // 환산해서 맞춘 뒤 차감(PR #63 리뷰 피드백)
+    const commission = calcInclusiveAmount(charge) - payout;
 
     const { error: invoiceError } = await supabase.from("invoices").insert({
       order_id: orderId,
@@ -478,7 +482,7 @@ export default function DispatchDetailPage() {
       billing_period: billingPeriod,
       customer_charge_total: charge || null,
       driver_payout_total: payout || null,
-      commission_total: charge - payout || null,
+      commission_total: commission || null,
       receivable_amount: charge || null,
       payable_amount: payout || null,
       settlement_type: dispatch?.settlement_type || "general",
@@ -686,10 +690,13 @@ export default function DispatchDetailPage() {
 
   const statusColor = getDispatchStatusColor(dispatch.dispatch_status);
   // 혼적 할인은 이미 견적 단계 최종금액에 반영되어 있으므로, 마진 계산은
-  // 별도 변환 없이 화주 청구운임을 그대로 사용한다.
+  // 별도 변환 없이 화주 청구운임을 그대로 사용한다. 화주 청구운임은
+  // 공급가액이고 차주 지급운임은 실제 지급되는 최종금액(부가세 포함
+  // 기준)이라 기준이 달랐던 것을 부가세 포함가로 맞춰서 계산(PR #63
+  // 리뷰 피드백, 정산관리 "수수료(마진)"과 동일한 계산식으로 통일)
   const margin =
     editForm.customer_charge && editForm.driver_payout
-      ? Number(editForm.customer_charge) - Number(editForm.driver_payout)
+      ? calcInclusiveAmount(Number(editForm.customer_charge)) - Number(editForm.driver_payout)
       : null;
 
   return (

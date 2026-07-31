@@ -14,6 +14,7 @@ import { getCurrentStaffId } from "@/lib/currentStaff";
 import MoneyInput from "@/components/MoneyInput";
 import MixableBadge from "@/components/MixableBadge";
 import { shortAddress } from "@/lib/shortAddress";
+import { calcInclusiveAmount } from "@/lib/vat";
 
 type OrderLite = {
   id: string;
@@ -393,6 +394,10 @@ function DispatchesPageInner() {
     const payout = target.driver_payout || 0;
     const now = new Date();
     const billingPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    // 화주 청구금액은 공급가액, 차주 지급금액은 실제 지급되는 최종금액
+    // (부가세 포함 기준)이라 기준이 달랐음 — 청구금액을 부가세 포함가로
+    // 환산해서 맞춘 뒤 차감(PR #63 리뷰 피드백)
+    const commission = calcInclusiveAmount(charge) - payout;
 
     // 배차 확정 시점의 정산방식·선착불 관련 값을 정산건 생성 시 그대로
     // 스냅샷 복사(작업지시서 4-5) — 이 목록화면 경로는 예전부터
@@ -405,7 +410,7 @@ function DispatchesPageInner() {
       billing_period: billingPeriod,
       customer_charge_total: charge || null,
       driver_payout_total: payout || null,
-      commission_total: charge - payout || null,
+      commission_total: commission || null,
       receivable_amount: charge || null,
       payable_amount: payout || null,
       settlement_type: target.settlement_type || "general",
