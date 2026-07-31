@@ -585,7 +585,7 @@ export default function InvoicesPage() {
             <thead>
               <tr>
                 <th>오더번호</th>
-                <th>화주</th>
+                <th style={{ whiteSpace: "nowrap", minWidth: 108 }}>화주</th>
                 <th style={{ whiteSpace: "nowrap" }}>정산월</th>
                 <th style={{ whiteSpace: "nowrap" }}>화주 청구금액</th>
                 <th style={{ whiteSpace: "nowrap" }}>차주 지급금액</th>
@@ -612,7 +612,7 @@ export default function InvoicesPage() {
                       </div>
                     )}
                   </td>
-                  <td>
+                  <td style={{ whiteSpace: "nowrap" }}>
                     {i.companies?.name || i.orders?.guest_name || "-"}
                     {!i.companies?.name && i.orders?.guest_name && (
                       <span className="badge" style={{ marginLeft: 6 }}>
@@ -641,7 +641,7 @@ export default function InvoicesPage() {
                             {driverCalcInfoByOrderId[i.order_id].insuranceApplied && (
                               <>
                                 <br />
-                                산재보험료 차감됨
+                                산재보험료 차감
                               </>
                             )}
                           </div>
