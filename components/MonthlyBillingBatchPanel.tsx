@@ -573,7 +573,11 @@ export default function MonthlyBillingBatchPanel({
               {isAdmin && (
                 <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14 }}>
                   {!showReleaseReason ? (
-                    <button className="btn-danger" onClick={() => setShowReleaseReason(true)}>
+                    <button
+                      className="btn-danger"
+                      onClick={() => setShowReleaseReason(true)}
+                      disabled={batch.tax_invoice_status === "issued" || batch.payment_status !== "unpaid"}
+                    >
                       묶음 해제
                     </button>
                   ) : (
