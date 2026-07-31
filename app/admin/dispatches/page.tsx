@@ -22,6 +22,9 @@ type OrderLite = {
   destination: string | null;
   vehicle_type: string | null;
   settlement_type: string | null;
+  collection_method: string | null;
+  billing_cycle: string | null;
+  direct_collection_point: string | null;
   quote_id: string | null;
   companies: { name: string } | null;
   guest_name: string | null;
@@ -50,6 +53,15 @@ type DispatchRow = {
   requested_network_ids: string[] | null;
   confirmed_network_id: string | null;
   external_driver_name: string | null;
+  settlement_type: string | null;
+  collection_method: string | null;
+  billing_cycle: string | null;
+  direct_collection_point: string | null;
+  network_settlement_type: string | null;
+  total_freight_amount: number | null;
+  driver_direct_collection_amount: number | null;
+  brokerage_fee: number | null;
+  brokerage_fee_payer: string | null;
   orders: {
     order_no: string | null;
     origin: string | null;
@@ -111,7 +123,7 @@ function DispatchesPageInner() {
     let query = supabase
       .from("dispatches")
       .select(
-        "id,dispatch_status,customer_charge,driver_payout,margin,created_at,order_id,driver_id,assignment_type,requested_network_ids,confirmed_network_id,external_driver_name,orders(order_no,origin,destination,loading_type,companies(name),guest_name),drivers(name,phone)"
+        "id,dispatch_status,customer_charge,driver_payout,margin,created_at,order_id,driver_id,assignment_type,requested_network_ids,confirmed_network_id,external_driver_name,settlement_type,collection_method,billing_cycle,direct_collection_point,network_settlement_type,total_freight_amount,driver_direct_collection_amount,brokerage_fee,brokerage_fee_payer,orders(order_no,origin,destination,loading_type,companies(name),guest_name),drivers(name,phone)"
       )
       .order("created_at", { ascending: false })
       .limit(preset === "all" ? ALL_PERIOD_LIMIT : FILTERED_PERIOD_LIMIT);
@@ -128,7 +140,7 @@ function DispatchesPageInner() {
     const { data } = await supabase
       .from("orders")
       .select(
-        "id,order_no,origin,destination,vehicle_type,settlement_type,quote_id,companies(name),guest_name"
+        "id,order_no,origin,destination,vehicle_type,settlement_type,collection_method,billing_cycle,direct_collection_point,quote_id,companies(name),guest_name"
       )
       .in("status", ["접수", "배차중"])
       .order("created_at", { ascending: false });
@@ -257,6 +269,11 @@ function DispatchesPageInner() {
       assignment_type: assignmentType,
       requested_network_ids: assignmentType === "external" ? selectedNetworkIds : [],
       settlement_type: sourceOrder?.settlement_type || "general",
+      collection_method: sourceOrder?.collection_method || "broker",
+      billing_cycle: sourceOrder?.billing_cycle || "per_order",
+      direct_collection_point:
+        sourceOrder?.collection_method === "driver_direct" ? sourceOrder?.direct_collection_point : null,
+      total_freight_amount: customerCharge ? Number(customerCharge) : null,
       customer_charge: customerCharge ? Number(customerCharge) : null,
       driver_payout: driverPayout ? Number(driverPayout) : null,
       memo: memo || null,
@@ -377,6 +394,10 @@ function DispatchesPageInner() {
     const now = new Date();
     const billingPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
+    // 배차 확정 시점의 정산방식·선착불 관련 값을 정산건 생성 시 그대로
+    // 스냅샷 복사(작업지시서 4-5) — 이 목록화면 경로는 예전부터
+    // settlement_type 자체가 누락돼있던 버그가 있었음(상세화면 경로에는
+    // 있었음), 이번에 신규 필드와 함께 같이 채움
     const { error: invoiceError } = await supabase.from("invoices").insert({
       order_id: target.order_id,
       company_id: order?.company_id || null,
@@ -387,6 +408,15 @@ function DispatchesPageInner() {
       commission_total: charge - payout || null,
       receivable_amount: charge || null,
       payable_amount: payout || null,
+      settlement_type: target.settlement_type || "general",
+      collection_method: target.collection_method || "broker",
+      billing_cycle: target.billing_cycle || "per_order",
+      direct_collection_point: target.direct_collection_point || null,
+      network_settlement_type: target.network_settlement_type || "none",
+      total_freight_amount: target.total_freight_amount ?? charge ?? null,
+      driver_direct_collection_amount: target.driver_direct_collection_amount ?? null,
+      brokerage_fee: target.brokerage_fee ?? null,
+      brokerage_fee_payer: target.brokerage_fee_payer ?? null,
       status: "정산대기",
       created_by: await getCurrentStaffId(),
     });

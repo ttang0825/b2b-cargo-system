@@ -11,10 +11,10 @@ import {
 } from "@/lib/invoiceStatusColors";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import { getCurrentStaffId } from "@/lib/currentStaff";
-import { SETTLEMENT_TYPES, getSettlementTypeLabel } from "@/lib/constants";
 import MoneyInput from "@/components/MoneyInput";
 import MixableBadge from "@/components/MixableBadge";
 import LockedBadge from "@/components/LockedBadge";
+import { getSettlementDisplayLabel, mapToLegacySettlementType } from "@/lib/settlementLabels";
 
 type OrderLite = {
   id: string;
@@ -23,6 +23,9 @@ type OrderLite = {
   quote_id: string | null;
   individual_customer_id: string | null;
   settlement_type: string | null;
+  collection_method: string | null;
+  billing_cycle: string | null;
+  direct_collection_point: string | null;
   companies: { name: string } | null;
   guest_name: string | null;
 };
@@ -39,17 +42,28 @@ type InvoiceRow = {
   driver_paid: boolean;
   status: string;
   settlement_type: string | null;
+  collection_method: string | null;
+  billing_cycle: string | null;
+  brokerage_fee: number | null;
+  brokerage_fee_paid: boolean | null;
   locked: boolean;
   created_at: string;
   orders: { order_no: string | null; guest_name: string | null; loading_type: string | null } | null;
   companies: { name: string } | null;
 };
 
-// "일반오더/주선사정산"처럼 "/"가 들어간 라벨은 폭에 따라 auto-wrap이
+// 로드맵 ②-A 이후로는 collection_method/billing_cycle이 기준 필드 —
+// "선착불 / 수수료 월정산"처럼 "/"가 들어간 라벨은 폭에 따라 auto-wrap이
 // 들쭉날쭉해지는 문제가 있어("/" 앞뒤로 안 끊기고 3줄로 갈라짐), "/" 뒤에서
 // 확실하게 한 번만 줄바꿈되도록 직접 나눈다. "/"가 없는 라벨은 그대로 한 줄.
-function SettlementBadgeLabel({ value }: { value: string | null | undefined }) {
-  const label = getSettlementTypeLabel(value);
+function SettlementBadgeLabel({
+  collectionMethod,
+  billingCycle,
+}: {
+  collectionMethod: string | null | undefined;
+  billingCycle: string | null | undefined;
+}) {
+  const label = getSettlementDisplayLabel(collectionMethod, billingCycle);
   const slashIdx = label.indexOf("/");
   if (slashIdx === -1) return <>{label}</>;
   return (
@@ -101,6 +115,18 @@ export default function InvoicesPage() {
   const [driverCalcInfoByOrderId, setDriverCalcInfoByOrderId] = useState<
     Record<string, { throughCalc: boolean; insuranceApplied: boolean }>
   >({});
+  // 선택한 오더에 연결된 배차의 정산방식·선착불 관련 값 스냅샷 — 정산 등록 시
+  // 그대로 복사(작업지시서 4-5, 배차가 없으면 오더 값으로 폴백)
+  const [settlementSnapshot, setSettlementSnapshot] = useState<{
+    collection_method: string | null;
+    billing_cycle: string | null;
+    direct_collection_point: string | null;
+    network_settlement_type: string | null;
+    total_freight_amount: number | null;
+    driver_direct_collection_amount: number | null;
+    brokerage_fee: number | null;
+    brokerage_fee_payer: string | null;
+  } | null>(null);
 
   async function loadInvoices(preset: DatePreset = period) {
     setLoading(true);
@@ -108,7 +134,7 @@ export default function InvoicesPage() {
     let query = supabase
       .from("invoices")
       .select(
-        "id,order_id,billing_period,customer_charge_total,driver_payout_total,commission_total,tax_invoice_issued,payment_received,driver_paid,status,settlement_type,locked,created_at,orders(order_no,guest_name,loading_type),companies(name)"
+        "id,order_id,billing_period,customer_charge_total,driver_payout_total,commission_total,tax_invoice_issued,payment_received,driver_paid,status,settlement_type,collection_method,billing_cycle,brokerage_fee,brokerage_fee_paid,locked,created_at,orders(order_no,guest_name,loading_type),companies(name)"
       )
       .order("created_at", { ascending: false })
       .limit(preset === "all" ? ALL_PERIOD_LIMIT : FILTERED_PERIOD_LIMIT);
@@ -151,7 +177,9 @@ export default function InvoicesPage() {
     );
     const { data } = await supabase
       .from("orders")
-      .select("id,order_no,company_id,quote_id,individual_customer_id,settlement_type,companies(name),guest_name")
+      .select(
+        "id,order_no,company_id,quote_id,individual_customer_id,settlement_type,collection_method,billing_cycle,direct_collection_point,companies(name),guest_name"
+      )
       .eq("status", "운송완료")
       .order("created_at", { ascending: false });
     setAvailableOrders(
@@ -177,12 +205,42 @@ export default function InvoicesPage() {
     setSelectedOrderId(orderId);
     setCustomerChargeTotal("");
     setDriverPayoutTotal("");
+    setSettlementSnapshot(null);
+
+    const order = availableOrders.find((o) => o.id === orderId);
 
     const { data: dispatch } = await supabase
       .from("dispatches")
-      .select("customer_charge, driver_payout")
+      .select(
+        "customer_charge, driver_payout, collection_method, billing_cycle, direct_collection_point, network_settlement_type, total_freight_amount, driver_direct_collection_amount, brokerage_fee, brokerage_fee_payer"
+      )
       .eq("order_id", orderId)
       .maybeSingle();
+
+    if (dispatch) {
+      setSettlementSnapshot({
+        collection_method: dispatch.collection_method || order?.collection_method || "broker",
+        billing_cycle: dispatch.billing_cycle || order?.billing_cycle || "per_order",
+        direct_collection_point: dispatch.direct_collection_point || order?.direct_collection_point || null,
+        network_settlement_type: dispatch.network_settlement_type || "none",
+        total_freight_amount: dispatch.total_freight_amount ?? null,
+        driver_direct_collection_amount: dispatch.driver_direct_collection_amount ?? null,
+        brokerage_fee: dispatch.brokerage_fee ?? null,
+        brokerage_fee_payer: dispatch.brokerage_fee_payer ?? null,
+      });
+    } else {
+      setSettlementSnapshot({
+        collection_method: order?.collection_method || "broker",
+        billing_cycle: order?.billing_cycle || "per_order",
+        direct_collection_point: order?.direct_collection_point || null,
+        network_settlement_type: "none",
+        total_freight_amount: null,
+        driver_direct_collection_amount: null,
+        brokerage_fee: null,
+        brokerage_fee_payer: null,
+      });
+    }
+
     if (dispatch && (dispatch.customer_charge || dispatch.driver_payout)) {
       setCustomerChargeTotal(
         dispatch.customer_charge ? String(Math.round(dispatch.customer_charge)) : ""
@@ -195,7 +253,6 @@ export default function InvoicesPage() {
 
     // 배차 기록에 청구운임이 없으면(배차 관리를 거치지 않고 오더 상태만 바로
     // 운송완료로 바꾼 경우 등), 연결된 견적의 최종금액으로 화주 청구금액만이라도 채워줌
-    const order = availableOrders.find((o) => o.id === orderId);
     if (order?.quote_id) {
       const { data: quote } = await supabase
         .from("quotes")
@@ -238,6 +295,14 @@ export default function InvoicesPage() {
       receivable_amount: chargeNum || null,
       payable_amount: payoutNum || null,
       settlement_type: order?.settlement_type || "general",
+      collection_method: settlementSnapshot?.collection_method || "broker",
+      billing_cycle: settlementSnapshot?.billing_cycle || "per_order",
+      direct_collection_point: settlementSnapshot?.direct_collection_point || null,
+      network_settlement_type: settlementSnapshot?.network_settlement_type || "none",
+      total_freight_amount: settlementSnapshot?.total_freight_amount ?? chargeNum ?? null,
+      driver_direct_collection_amount: settlementSnapshot?.driver_direct_collection_amount ?? null,
+      brokerage_fee: settlementSnapshot?.brokerage_fee ?? null,
+      brokerage_fee_payer: settlementSnapshot?.brokerage_fee_payer ?? null,
       status: "정산대기",
       created_by: await getCurrentStaffId(),
     });
@@ -314,6 +379,7 @@ export default function InvoicesPage() {
     setCustomerChargeTotal("");
     setDriverPayoutTotal("");
     setPaymentDueDate("");
+    setSettlementSnapshot(null);
     loadInvoices(period);
     loadAvailableOrders();
   }
@@ -321,7 +387,7 @@ export default function InvoicesPage() {
   const filtered = useMemo(() => {
     return invoices
       .filter((i) => statusFilter === "전체" || i.status === statusFilter)
-      .filter((i) => settlementFilter === "전체" || i.settlement_type === settlementFilter)
+      .filter((i) => settlementFilter === "전체" || (i.collection_method || "broker") === settlementFilter)
       .filter((i) => {
         if (!search.trim()) return true;
         const q = search.trim().toLowerCase();
@@ -494,12 +560,9 @@ export default function InvoicesPage() {
           onChange={(e) => setSettlementFilter(e.target.value)}
           style={{ fontSize: 12.5, padding: "7px 8px" }}
         >
-          <option value="전체">전체 정산방식</option>
-          {SETTLEMENT_TYPES.map((t) => (
-            <option key={t.value} value={t.value}>
-              {t.label}
-            </option>
-          ))}
+          <option value="전체">전체 수금방식</option>
+          <option value="broker">주선사 정산</option>
+          <option value="driver_direct">선착불</option>
         </select>
       </div>
 
@@ -555,24 +618,40 @@ export default function InvoicesPage() {
                   <td style={{ whiteSpace: "nowrap" }}>
                     <span className="num">{i.billing_period || "-"}</span>
                   </td>
-                  <td style={{ whiteSpace: "nowrap" }}>
-                    <span className="num">{won(i.customer_charge_total)}</span>
-                    {i.customer_charge_total != null && (
-                      <div style={{ fontSize: 11, color: "var(--text-muted)" }}>부가세 별도</div>
-                    )}
-                  </td>
-                  <td style={{ whiteSpace: "nowrap" }}>
-                    <span className="num">{won(i.driver_payout_total)}</span>
-                    {i.driver_payout_total != null && i.order_id && driverCalcInfoByOrderId[i.order_id]?.throughCalc && (
-                      <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                        부가세 포함
-                        {driverCalcInfoByOrderId[i.order_id].insuranceApplied && " · 산재보험료 차감됨"}
-                      </div>
-                    )}
-                  </td>
-                  <td style={{ whiteSpace: "nowrap" }}>
-                    <span className="num">{won(i.commission_total)}</span>
-                  </td>
+                  {(i.collection_method || "broker") === "broker" ? (
+                    <>
+                      <td style={{ whiteSpace: "nowrap" }}>
+                        <span className="num">{won(i.customer_charge_total)}</span>
+                        {i.customer_charge_total != null && (
+                          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>부가세 별도</div>
+                        )}
+                      </td>
+                      <td style={{ whiteSpace: "nowrap" }}>
+                        <span className="num">{won(i.driver_payout_total)}</span>
+                        {i.driver_payout_total != null && i.order_id && driverCalcInfoByOrderId[i.order_id]?.throughCalc && (
+                          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                            부가세 포함
+                            {driverCalcInfoByOrderId[i.order_id].insuranceApplied && " · 산재보험료 차감됨"}
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ whiteSpace: "nowrap" }}>
+                        <span className="num">{won(i.commission_total)}</span>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td style={{ whiteSpace: "nowrap" }} colSpan={2}>
+                        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>선착불(차주 직접수금)</span>
+                      </td>
+                      <td style={{ whiteSpace: "nowrap" }}>
+                        <span className="num">{won(i.brokerage_fee)}</span>
+                        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                          주선수수료 · {i.brokerage_fee_paid ? "입금완료" : "입금대기"}
+                        </div>
+                      </td>
+                    </>
+                  )}
                   <td style={{ whiteSpace: "nowrap" }}>{i.tax_invoice_issued ? "발행" : "-"}</td>
                   <td style={{ whiteSpace: "nowrap" }}>{i.payment_received ? "완료" : "대기"}</td>
                   <td style={{ whiteSpace: "nowrap" }}>{i.driver_paid ? "완료" : "대기"}</td>
@@ -601,7 +680,7 @@ export default function InvoicesPage() {
                       className="badge"
                       style={{ display: "inline-block", textAlign: "center", lineHeight: 1.5 }}
                     >
-                      <SettlementBadgeLabel value={i.settlement_type} />
+                      <SettlementBadgeLabel collectionMethod={i.collection_method} billingCycle={i.billing_cycle} />
                     </span>
                   </td>
                 </tr>

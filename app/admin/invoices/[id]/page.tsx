@@ -8,12 +8,19 @@ import {
   INVOICE_STATUS_OPTIONS,
   getInvoiceStatusColor,
 } from "@/lib/invoiceStatusColors";
-import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
-import { getSettlementTypeLabel } from "@/lib/constants";
+import { getCurrentStaffRole } from "@/lib/currentStaff";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
 import ConflictWarning from "@/components/ConflictWarning";
-import SettlementTypeChangeModal from "@/components/SettlementTypeChangeModal";
-import { logSettlementTypeChange } from "@/lib/settlementTypeChangeLog";
+import SettlementFieldsChangeModal from "@/components/SettlementFieldsChangeModal";
+import CollectionMethodInput, { CollectionMethodValue } from "@/components/CollectionMethodInput";
+import { logSettlementFieldChange } from "@/lib/settlementFieldChangeLog";
+import {
+  getSettlementDisplayLabel,
+  getPaymentConditionLabel,
+  getBrokerageFeePayerLabel,
+  mapToLegacySettlementType,
+} from "@/lib/settlementLabels";
+import { calcVatAmount, calcInclusiveAmount } from "@/lib/vat";
 import MixableBadge from "@/components/MixableBadge";
 import LockedBadge from "@/components/LockedBadge";
 import AmendmentReasonModal from "@/components/AmendmentReasonModal";
@@ -57,6 +64,13 @@ export default function InvoiceDetailPage() {
     payment_received_date: "",
     driver_paid: false,
     driver_paid_date: "",
+    brokerage_fee_paid: false,
+    brokerage_fee_paid_at: "",
+  });
+  const [settlementValue, setSettlementValue] = useState<CollectionMethodValue>({
+    collection_method: "broker",
+    billing_cycle: "per_order",
+    direct_collection_point: null,
   });
 
   async function load() {
@@ -97,6 +111,15 @@ export default function InvoiceDetailPage() {
       payment_received_date: data.payment_received_date || "",
       driver_paid: data.driver_paid || false,
       driver_paid_date: data.driver_paid_date || "",
+      brokerage_fee_paid: data.brokerage_fee_paid || false,
+      brokerage_fee_paid_at: data.brokerage_fee_paid_at
+        ? String(data.brokerage_fee_paid_at).slice(0, 10)
+        : "",
+    });
+    setSettlementValue({
+      collection_method: (data.collection_method as any) || "broker",
+      billing_cycle: (data.billing_cycle as any) || "per_order",
+      direct_collection_point: (data.direct_collection_point as any) || null,
     });
     setLoading(false);
   }
@@ -111,8 +134,13 @@ export default function InvoiceDetailPage() {
   // 단, 확정(잠금)된 건은 건드리지 않음 — 안 그러면 "차주지급완료"까지 체크된 채로
   // 정산확정한 건을 다시 열었을 때 이 효과가 즉시 "입금완료"로 덮어써버리는 버그가 있었음
   // (PR #61 실사용 리뷰에서 발견)
+  // 자동상태동기화는 collection_method로 가장 먼저 분기(작업지시서 4-5) —
+  // driver_direct 건은 WeCarry가 화주 수금·차주 지급을 하지 않으므로 이
+  // 로직을 아예 타지 않고, brokerage_fee_paid 기준 별도 경로(정산확정 시
+  // 검증)로 처리한다.
   useEffect(() => {
     if (invoice?.locked) return;
+    if (settlementValue.collection_method !== "broker") return;
     if (editForm.payment_received && editForm.driver_paid) {
       if (editForm.status !== "입금완료") {
         setEditForm((prev) => ({ ...prev, status: "입금완료" }));
@@ -123,7 +151,7 @@ export default function InvoiceDetailPage() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editForm.payment_received, editForm.driver_paid, invoice?.locked]);
+  }, [editForm.payment_received, editForm.driver_paid, invoice?.locked, settlementValue.collection_method]);
 
   async function handleSave(force = false, reason?: string) {
     setSaveError(null);
@@ -133,13 +161,20 @@ export default function InvoiceDetailPage() {
       setSaveError("세금계산서 발행완료를 체크하셨습니다. 발행일을 입력해주세요.");
       return;
     }
-    if (editForm.payment_received && !editForm.payment_received_date) {
-      setSaveError("화주 입금완료를 체크하셨습니다. 입금일을 입력해주세요.");
-      return;
-    }
-    if (editForm.driver_paid && !editForm.driver_paid_date) {
-      setSaveError("차주 지급완료를 체크하셨습니다. 지급일을 입력해주세요.");
-      return;
+    if (settlementValue.collection_method === "broker") {
+      if (editForm.payment_received && !editForm.payment_received_date) {
+        setSaveError("화주 입금완료를 체크하셨습니다. 입금일을 입력해주세요.");
+        return;
+      }
+      if (editForm.driver_paid && !editForm.driver_paid_date) {
+        setSaveError("차주 지급완료를 체크하셨습니다. 지급일을 입력해주세요.");
+        return;
+      }
+    } else {
+      if (editForm.brokerage_fee_paid && !editForm.brokerage_fee_paid_at) {
+        setSaveError("주선수수료 입금완료를 체크하셨습니다. 입금일을 입력해주세요.");
+        return;
+      }
     }
 
     // 확정(잠금)된 건이고 아직 수정 사유를 안 받았다면, 저장 대신 사유 입력
@@ -154,15 +189,20 @@ export default function InvoiceDetailPage() {
     const wasReceived = invoice.payment_received;
     const nowReceived = editForm.payment_received;
 
-    const payload = {
+    const payload: Record<string, any> = {
       status: editForm.status,
       tax_invoice_issued: editForm.tax_invoice_issued,
       tax_invoice_date: editForm.tax_invoice_date || null,
-      payment_received: editForm.payment_received,
-      payment_received_date: editForm.payment_received_date || null,
-      driver_paid: editForm.driver_paid,
-      driver_paid_date: editForm.driver_paid_date || null,
     };
+    if (settlementValue.collection_method === "broker") {
+      payload.payment_received = editForm.payment_received;
+      payload.payment_received_date = editForm.payment_received_date || null;
+      payload.driver_paid = editForm.driver_paid;
+      payload.driver_paid_date = editForm.driver_paid_date || null;
+    } else {
+      payload.brokerage_fee_paid = editForm.brokerage_fee_paid;
+      payload.brokerage_fee_paid_at = editForm.brokerage_fee_paid_at || null;
+    }
 
     // 이 저장 지점은 "잠긴 건인지"를 서버가 매번 새로 확인해야 해서 서버
     // API를 거침(클라이언트가 들고 있는 invoice.locked는 신선하지 않을 수
@@ -194,7 +234,7 @@ export default function InvoiceDetailPage() {
     // 입금 확인 상태가 바뀌면, 연결된 화주의 미수금을 전체 재계산합니다
     // (증분 방식 대신, 그 화주의 모든 미입금 정산건을 다시 합산 - 삭제된
     // 기록이 있어도 항상 정확합니다).
-    if (invoice.companies?.id && wasReceived !== nowReceived) {
+    if (settlementValue.collection_method === "broker" && invoice.companies?.id && wasReceived !== nowReceived) {
       const { data: allInvoices } = await supabase
         .from("invoices")
         .select("id,customer_charge_total,payment_received")
@@ -215,8 +255,25 @@ export default function InvoiceDetailPage() {
     router.push("/admin/invoices");
   }
 
+  // driver_direct(선착불) 건은 "정산확정 가능 조건"(작업지시서 4-5)을 실제로
+  // 강제한다 — brokerage_fee>0이면 입금완료 체크가 먼저 필요하고, 0원+면제인
+  // 경우만 입금확인 없이 바로 확정 가능. broker 건은 기존처럼 리마인더
+  // 안내만 하고 강제 검증은 하지 않음(상태값 조합이 다양해 하드 검증이
+  // 부적절하다고 판단, 기존 동작 유지).
   async function handleConfirmSettlement() {
     if (!invoice) return;
+    if (settlementValue.collection_method === "driver_direct") {
+      const fee = invoice.brokerage_fee || 0;
+      const waived = invoice.brokerage_fee_payer === "waived";
+      if (fee > 0 && !invoice.brokerage_fee_paid) {
+        setSaveError("주선수수료가 아직 입금완료 처리되지 않았습니다. 먼저 입금완료를 체크하고 저장해주세요.");
+        return;
+      }
+      if (fee === 0 && !waived) {
+        setSaveError("주선수수료가 0원인데 지급자가 '면제'로 설정되어 있지 않습니다. 배차 상세에서 먼저 확인해주세요.");
+        return;
+      }
+    }
     const confirmed = window.confirm(
       "정산을 확정하시겠습니까?\n\n확정 후에는 관리자만 사유를 남기고 예외적으로 수정할 수 있습니다.\n청구완료·입금완료·차주지급완료 상태인지 확인해주세요(리마인더용 안내이며, 다른 상태여도 확정 자체는 막지 않습니다)."
     );
@@ -237,33 +294,60 @@ export default function InvoiceDetailPage() {
     load();
   }
 
-  // 12차 세션(정산 마감·확정·잠금)에서 잠금 로직이 도입됐지만, 이 저장
-  // 경로는 화면단 버튼 비활성화(fieldsLocked)로만 막아둠 — 서버단 잠금
-  // 체크는 아직 없음(범위 밖으로 남겨둔 잔여 위험, 원칙 44번 설명 참고).
-  // 즉시 저장 후 load()로 전체 재조회 (원칙 36번)
-  async function handleSettlementTypeChange(newType: string, reason: string) {
+  // 로드맵 ②-A(작업지시서 4-5): 정산방식 변경도 원칙 44번 잠금검증 서버
+  // API(app/api/admin/invoices/save)를 그대로 재사용 — 저장 직전 서버가
+  // locked를 fresh 조회해서, 확정된 건은 관리자+사유입력만 허용한다.
+  // 확정 전에는 사유 없이 자유롭게 변경 가능(오더/배차와 달리, 정산관리는
+  // "확정 여부" 자체가 이미 사유 필요 기준이라 별도 임계값 판단이 필요 없음).
+  async function handleSettlementFieldsChange(next: CollectionMethodValue, reason: string | null) {
     if (!invoice) return;
     setSettlementSaving(true);
     setSaveError(null);
-    const staffId = await getCurrentStaffId();
-    const beforeType = invoice.settlement_type;
-    const { error } = await supabase
-      .from("invoices")
-      .update({ settlement_type: newType, updated_by: staffId })
-      .eq("id", id);
-    if (error) {
+    const before = settlementValue;
+    const legacyMapped = mapToLegacySettlementType(
+      next.collection_method,
+      next.billing_cycle,
+      next.direct_collection_point
+    );
+    const res = await fetch("/api/admin/invoices/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id,
+        payload: {
+          collection_method: next.collection_method,
+          billing_cycle: next.billing_cycle,
+          direct_collection_point: next.collection_method === "driver_direct" ? next.direct_collection_point : null,
+          ...(legacyMapped ? { settlement_type: legacyMapped } : {}),
+        },
+        lastKnownUpdatedAt: invoice?.updated_at,
+        reason: reason || undefined,
+      }),
+    });
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok) {
       setSettlementSaving(false);
-      setSaveError(error.message);
+      setSaveError(result.error || "정산방식 변경에 실패했습니다.");
       return;
     }
-    await logSettlementTypeChange({
-      targetTable: "invoices",
-      targetId: id,
-      beforeType,
-      afterType: newType,
-      reason,
-      changedBy: staffId,
-    });
+    if (reason) {
+      const changes: [string, string | null, string | null][] = [
+        ["collection_method", before.collection_method, next.collection_method],
+        ["billing_cycle", before.billing_cycle, next.billing_cycle],
+        ["direct_collection_point", before.direct_collection_point, next.direct_collection_point],
+      ];
+      for (const [fieldName, beforeValue, afterValue] of changes) {
+        if (beforeValue === afterValue) continue;
+        await logSettlementFieldChange({
+          targetTable: "invoices",
+          targetId: id,
+          fieldName,
+          beforeValue,
+          afterValue,
+          reason,
+        });
+      }
+    }
     setSettlementSaving(false);
     setSettlementModalOpen(false);
     load();
@@ -413,29 +497,48 @@ export default function InvoiceDetailPage() {
               <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 4 }}>
                 정산방식
               </div>
-              <span className="badge">{getSettlementTypeLabel(invoice.settlement_type)}</span>
+              {!invoice.locked ? (
+                <div style={{ maxWidth: 420 }}>
+                  <CollectionMethodInput
+                    namePrefix="invoice_settlement"
+                    value={settlementValue}
+                    onChange={(next) => handleSettlementFieldsChange(next, null)}
+                  />
+                </div>
+              ) : (
+                <span className="badge">
+                  {getSettlementDisplayLabel(invoice.collection_method, invoice.billing_cycle)}
+                  {getPaymentConditionLabel(invoice.direct_collection_point) && (
+                    <> · {getPaymentConditionLabel(invoice.direct_collection_point)}</>
+                  )}
+                </span>
+              )}
             </div>
-            <button
-              type="button"
-              className="btn-ghost"
-              disabled={fieldsLocked}
-              style={{ padding: "6px 12px", borderRadius: 6, fontSize: 12.5, cursor: "pointer" }}
-              onClick={() => setSettlementModalOpen(true)}
-            >
-              정산방식 변경
-            </button>
+            {invoice.locked && (
+              <button
+                type="button"
+                className="btn-ghost"
+                disabled={fieldsLocked}
+                style={{ padding: "6px 12px", borderRadius: 6, fontSize: 12.5, cursor: "pointer" }}
+                onClick={() => setSettlementModalOpen(true)}
+              >
+                정산방식 변경
+              </button>
+            )}
           </div>
-          <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 8, marginBottom: 0 }}>
-            정산방식을 바꾸려면 사유를 입력해야 합니다.
-            {invoice.locked && (isAdmin ? " (확정된 건 — 관리자만 변경 가능)" : " (확정된 건이라 변경할 수 없습니다)")}
-          </p>
+          {invoice.locked && (
+            <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 8, marginBottom: 0 }}>
+              확정된 건이라 정산방식을 바꾸려면 사유를 입력해야 합니다.
+              {!isAdmin && " (관리자만 변경 가능)"}
+            </p>
+          )}
         </div>
 
         {settlementModalOpen && (
-          <SettlementTypeChangeModal
-            currentType={invoice.settlement_type || "general"}
+          <SettlementFieldsChangeModal
+            currentValue={settlementValue}
             onCancel={() => setSettlementModalOpen(false)}
-            onConfirm={(newType, reason) => handleSettlementTypeChange(newType, reason)}
+            onConfirm={(next, reason) => handleSettlementFieldsChange(next, reason)}
             saving={settlementSaving}
           />
         )}
@@ -447,39 +550,68 @@ export default function InvoiceDetailPage() {
             gap: 10,
           }}
         >
-          <div>
-            <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
-              화주 청구금액
-            </div>
-            <div style={{ fontSize: 14, fontWeight: 600 }}>
-              {won(invoice.customer_charge_total)}
-            </div>
-            {invoice.customer_charge_total != null && (
-              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>부가세 별도</div>
-            )}
-          </div>
-          <div>
-            <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
-              차주 지급금액
-            </div>
-            <div style={{ fontSize: 14, fontWeight: 600 }}>
-              {won(invoice.driver_payout_total)}
-            </div>
-            {invoice.driver_payout_total != null && driverCalcInfo?.throughCalc && (
-              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                부가세 포함
-                {driverCalcInfo.insuranceApplied && " · 산재보험료 차감됨"}
+          {settlementValue.collection_method === "broker" ? (
+            <>
+              <div>
+                <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
+                  화주 청구금액
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>
+                  {won(invoice.customer_charge_total)}
+                </div>
+                {invoice.customer_charge_total != null && (
+                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>부가세 별도</div>
+                )}
               </div>
-            )}
-          </div>
-          <div>
-            <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
-              수수료(마진)
-            </div>
-            <div style={{ fontSize: 14, fontWeight: 600 }}>
-              {won(invoice.commission_total)}
-            </div>
-          </div>
+              <div>
+                <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
+                  차주 지급금액
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>
+                  {won(invoice.driver_payout_total)}
+                </div>
+                {invoice.driver_payout_total != null && driverCalcInfo?.throughCalc && (
+                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                    부가세 포함
+                    {driverCalcInfo.insuranceApplied && " · 산재보험료 차감됨"}
+                  </div>
+                )}
+              </div>
+              <div>
+                <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
+                  수수료(마진)
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>
+                  {won(invoice.commission_total)}
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>전체 운송료</div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>{won(invoice.total_freight_amount)}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>차주 직접수금액</div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>{won(invoice.driver_direct_collection_amount)}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>주선수수료(실질수익)</div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>{won(invoice.brokerage_fee)}</div>
+                {invoice.brokerage_fee != null && invoice.brokerage_fee > 0 && (
+                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                    부가세 {won(calcVatAmount(invoice.brokerage_fee))} · 포함{" "}
+                    {won(calcInclusiveAmount(invoice.brokerage_fee))}
+                  </div>
+                )}
+              </div>
+              <div>
+                <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>수수료 지급자</div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>{getBrokerageFeePayerLabel(invoice.brokerage_fee_payer)}</div>
+              </div>
+            </>
+          )}
           {invoice.orders?.id && (
             <div>
               <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
@@ -568,76 +700,111 @@ export default function InvoiceDetailPage() {
             />
           </div>
 
-          <div>
-            <label
-              style={{
-                display: "flex",
-                gap: 6,
-                alignItems: "center",
-                fontSize: 13,
-                marginBottom: 8,
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={editForm.payment_received}
-                disabled={fieldsLocked}
-                onChange={(e) =>
-                  setEditForm({
-                    ...editForm,
-                    payment_received: e.target.checked,
-                  })
-                }
-              />
-              화주 입금완료
-            </label>
-            <input
-              type="date"
-              value={editForm.payment_received_date}
-              onChange={(e) =>
-                setEditForm({
-                  ...editForm,
-                  payment_received_date: e.target.value,
-                })
-              }
-              disabled={fieldsLocked || !editForm.payment_received}
-            />
-          </div>
+          {settlementValue.collection_method === "broker" ? (
+            <>
+              <div>
+                <label
+                  style={{
+                    display: "flex",
+                    gap: 6,
+                    alignItems: "center",
+                    fontSize: 13,
+                    marginBottom: 8,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={editForm.payment_received}
+                    disabled={fieldsLocked}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        payment_received: e.target.checked,
+                      })
+                    }
+                  />
+                  화주 입금완료
+                </label>
+                <input
+                  type="date"
+                  value={editForm.payment_received_date}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      payment_received_date: e.target.value,
+                    })
+                  }
+                  disabled={fieldsLocked || !editForm.payment_received}
+                />
+              </div>
 
-          <div>
-            <label
-              style={{
-                display: "flex",
-                gap: 6,
-                alignItems: "center",
-                fontSize: 13,
-                marginBottom: 8,
-              }}
-            >
+              <div>
+                <label
+                  style={{
+                    display: "flex",
+                    gap: 6,
+                    alignItems: "center",
+                    fontSize: 13,
+                    marginBottom: 8,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={editForm.driver_paid}
+                    disabled={fieldsLocked}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, driver_paid: e.target.checked })
+                    }
+                  />
+                  차주 지급완료
+                </label>
+                <input
+                  type="date"
+                  value={editForm.driver_paid_date}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, driver_paid_date: e.target.value })
+                  }
+                  disabled={fieldsLocked || !editForm.driver_paid}
+                />
+              </div>
+            </>
+          ) : (
+            <div>
+              <label
+                style={{
+                  display: "flex",
+                  gap: 6,
+                  alignItems: "center",
+                  fontSize: 13,
+                  marginBottom: 8,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={editForm.brokerage_fee_paid}
+                  disabled={fieldsLocked}
+                  onChange={(e) => setEditForm({ ...editForm, brokerage_fee_paid: e.target.checked })}
+                />
+                주선수수료 입금완료
+              </label>
               <input
-                type="checkbox"
-                checked={editForm.driver_paid}
-                disabled={fieldsLocked}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, driver_paid: e.target.checked })
-                }
+                type="date"
+                value={editForm.brokerage_fee_paid_at}
+                onChange={(e) => setEditForm({ ...editForm, brokerage_fee_paid_at: e.target.value })}
+                disabled={fieldsLocked || !editForm.brokerage_fee_paid}
               />
-              차주 지급완료
-            </label>
-            <input
-              type="date"
-              value={editForm.driver_paid_date}
-              onChange={(e) =>
-                setEditForm({ ...editForm, driver_paid_date: e.target.value })
-              }
-              disabled={fieldsLocked || !editForm.driver_paid}
-            />
-          </div>
+              <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6, marginBottom: 0 }}>
+                선착불(차주 직접수금) 건이라 화주 입금·차주 지급 개념이 적용되지 않습니다 —
+                차주는 화주에게 직접 운임을 수금하고, WeCarry는 주선수수료만 정산받습니다.
+              </p>
+            </div>
+          )}
         </div>
 
         <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 14 }}>
-          "화주 입금완료"를 체크하면 연결된 화주의 미수금이 자동으로
-          차감됩니다.
+          {settlementValue.collection_method === "broker"
+            ? "\"화주 입금완료\"를 체크하면 연결된 화주의 미수금이 자동으로 차감됩니다."
+            : "주선수수료 입금완료 체크는 화주 미수금 계산에 영향을 주지 않습니다."}
           {fieldsLocked && " 이 건은 확정(잠금)되어 관리자만 수정할 수 있습니다."}
         </p>
       </div>

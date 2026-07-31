@@ -6,15 +6,16 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { ORDER_STATUS_OPTIONS, getOrderStatusColor } from "@/lib/orderStatusColors";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
-import { SETTLEMENT_TYPES, getSettlementTypeLabel } from "@/lib/constants";
 import DateTimePicker from "@/components/DateTimePicker";
 import AddressSearch from "@/components/AddressSearch";
-import SettlementTypeChangeModal from "@/components/SettlementTypeChangeModal";
+import SettlementFieldsChangeModal from "@/components/SettlementFieldsChangeModal";
+import CollectionMethodInput, { CollectionMethodValue } from "@/components/CollectionMethodInput";
 import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
 import ConflictWarning from "@/components/ConflictWarning";
 import { optimisticUpdate } from "@/lib/optimisticUpdate";
-import { logSettlementTypeChange } from "@/lib/settlementTypeChangeLog";
+import { logSettlementFieldChange } from "@/lib/settlementFieldChangeLog";
+import { getSettlementDisplayLabel, getPaymentConditionLabel, mapToLegacySettlementType } from "@/lib/settlementLabels";
 import MoneyInput from "@/components/MoneyInput";
 import { getLatestMixedLoadingDiscountSettings } from "@/lib/mixedLoadingDiscountSettings";
 import { localInputToISOString, toLocalDateTimeInput } from "@/lib/localDateTime";
@@ -34,6 +35,9 @@ type OrderDetail = {
   item: string | null;
   status: string;
   settlement_type: string | null;
+  collection_method: string | null;
+  billing_cycle: string | null;
+  direct_collection_point: string | null;
   loading_type: string | null;
   mixed_shipper_consent: boolean | null;
   mixed_discount_type: string | null;
@@ -245,18 +249,33 @@ export default function OrderDetailPage() {
     load();
   }
 
-  // "접수" 단계에서는 자유롭게 변경, 그 이후(배차중~운송완료)는 이미 진행 중인
-  // 오더라 사유 입력 모달(SettlementTypeChangeModal)을 거쳐야만 변경 가능.
+  // "접수" 단계에서는 자유롭게 변경, 그 이후(배차완료~운송완료)는 이미 진행 중인
+  // 오더라 사유 입력 모달(SettlementFieldsChangeModal)을 거쳐야만 변경 가능.
   // 두 경로 다 즉시 저장 후 load()로 전체를 다시 불러옴 (원칙 36번 — 부분 병합 금지)
-  async function handleSettlementTypeChange(newType: string, reason: string | null) {
+  async function handleSettlementFieldsChange(next: CollectionMethodValue, reason: string | null) {
     if (!order) return;
     setSettlementSaving(true);
     setError(null);
     const staffId = await getCurrentStaffId();
-    const beforeType = order.settlement_type;
+    const before: CollectionMethodValue = {
+      collection_method: (order.collection_method as any) || "broker",
+      billing_cycle: (order.billing_cycle as any) || "per_order",
+      direct_collection_point: (order.direct_collection_point as any) || null,
+    };
+    const legacyMapped = mapToLegacySettlementType(
+      next.collection_method,
+      next.billing_cycle,
+      next.direct_collection_point
+    );
     const { error } = await supabase
       .from("orders")
-      .update({ settlement_type: newType, updated_by: staffId })
+      .update({
+        collection_method: next.collection_method,
+        billing_cycle: next.billing_cycle,
+        direct_collection_point: next.collection_method === "driver_direct" ? next.direct_collection_point : null,
+        ...(legacyMapped ? { settlement_type: legacyMapped } : {}),
+        updated_by: staffId,
+      })
       .eq("id", id);
     if (error) {
       setSettlementSaving(false);
@@ -264,14 +283,22 @@ export default function OrderDetailPage() {
       return;
     }
     if (reason) {
-      await logSettlementTypeChange({
-        targetTable: "orders",
-        targetId: id,
-        beforeType,
-        afterType: newType,
-        reason,
-        changedBy: staffId,
-      });
+      const changes: [string, string | null, string | null][] = [
+        ["collection_method", before.collection_method, next.collection_method],
+        ["billing_cycle", before.billing_cycle, next.billing_cycle],
+        ["direct_collection_point", before.direct_collection_point, next.direct_collection_point],
+      ];
+      for (const [fieldName, beforeValue, afterValue] of changes) {
+        if (beforeValue === afterValue) continue;
+        await logSettlementFieldChange({
+          targetTable: "orders",
+          targetId: id,
+          fieldName,
+          beforeValue,
+          afterValue,
+          reason,
+        });
+      }
     }
     setSettlementSaving(false);
     setSettlementModalOpen(false);
@@ -464,20 +491,24 @@ export default function OrderDetailPage() {
               정산방식
             </div>
             {!settlementNeedsReason ? (
-              <select
-                value={order.settlement_type || "general"}
-                onChange={(e) => handleSettlementTypeChange(e.target.value, null)}
-                disabled={settlementSaving}
-                style={{ fontWeight: 600 }}
-              >
-                {SETTLEMENT_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
+              <div style={{ maxWidth: 420 }}>
+                <CollectionMethodInput
+                  namePrefix="order_settlement"
+                  value={{
+                    collection_method: (order.collection_method as any) || "broker",
+                    billing_cycle: (order.billing_cycle as any) || "per_order",
+                    direct_collection_point: (order.direct_collection_point as any) || null,
+                  }}
+                  onChange={(next) => handleSettlementFieldsChange(next, null)}
+                />
+              </div>
             ) : (
-              <span className="badge">{getSettlementTypeLabel(order.settlement_type)}</span>
+              <span className="badge">
+                {getSettlementDisplayLabel(order.collection_method, order.billing_cycle)}
+                {getPaymentConditionLabel(order.direct_collection_point) && (
+                  <> · {getPaymentConditionLabel(order.direct_collection_point)}</>
+                )}
+              </span>
             )}
           </div>
           {settlementNeedsReason && (
@@ -499,10 +530,14 @@ export default function OrderDetailPage() {
       </div>
 
       {settlementModalOpen && (
-        <SettlementTypeChangeModal
-          currentType={order.settlement_type || "general"}
+        <SettlementFieldsChangeModal
+          currentValue={{
+            collection_method: (order.collection_method as any) || "broker",
+            billing_cycle: (order.billing_cycle as any) || "per_order",
+            direct_collection_point: (order.direct_collection_point as any) || null,
+          }}
           onCancel={() => setSettlementModalOpen(false)}
-          onConfirm={(newType, reason) => handleSettlementTypeChange(newType, reason)}
+          onConfirm={(next, reason) => handleSettlementFieldsChange(next, reason)}
           saving={settlementSaving}
         />
       )}
