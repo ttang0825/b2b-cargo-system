@@ -89,8 +89,10 @@ export default function MonthlyBillingBatchPanel({
   initialMonth?: string;
 }) {
   const [isAdmin, setIsAdmin] = useState(false);
-  const [companies, setCompanies] = useState<Company[]>([]);
   const [companyId, setCompanyId] = useState(initialCompanyId);
+  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
+  const [companySearch, setCompanySearch] = useState("");
+  const [companyResults, setCompanyResults] = useState<Company[]>([]);
   const [month, setMonth] = useState(initialMonth || currentMonthInput());
   const [batch, setBatch] = useState<Batch | null>(null);
   const [candidates, setCandidates] = useState<CandidateRow[]>([]);
@@ -106,14 +108,42 @@ export default function MonthlyBillingBatchPanel({
 
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
-    supabase
-      .from("companies")
-      .select("id,name")
-      .order("name", { ascending: true })
-      .then(({ data }) => setCompanies((data as any) || []));
     loadRecentBatches();
+    if (initialCompanyId) {
+      supabase
+        .from("companies")
+        .select("id,name")
+        .eq("id", initialCompanyId)
+        .maybeSingle()
+        .then(({ data }) => data && setSelectedCompany(data as Company));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 화주 업체 검색(admin/orders의 화주 검색과 동일한 패턴) — 업체 수가
+  // 많아지면 드롭다운을 스크롤하며 찾아야 해서 불편하다는 실사용 피드백으로
+  // 전체 목록 대신 이름 검색 방식으로 교체
+  useEffect(() => {
+    let active = true;
+    async function search() {
+      if (companySearch.trim().length < 1) {
+        setCompanyResults([]);
+        return;
+      }
+      const { data } = await supabase
+        .from("companies")
+        .select("id,name")
+        .ilike("name", `%${companySearch}%`)
+        .order("name", { ascending: true })
+        .limit(8);
+      if (active) setCompanyResults((data as Company[]) || []);
+    }
+    const t = setTimeout(search, 250);
+    return () => {
+      active = false;
+      clearTimeout(t);
+    };
+  }, [companySearch]);
 
   async function loadRecentBatches() {
     const { data } = await supabase
@@ -345,23 +375,58 @@ export default function MonthlyBillingBatchPanel({
 
   return (
     <div>
-      <div className="form-grid" style={{ padding: 0, marginBottom: 16, maxWidth: 480 }}>
+      <div className="form-grid" style={{ padding: 0, marginBottom: 6, maxWidth: 480 }}>
         <div className="field">
-          <label>화주</label>
-          <select value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
-            <option value="">선택</option>
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <label>화주 검색</label>
+          <input
+            value={selectedCompany ? selectedCompany.name : companySearch}
+            onChange={(e) => {
+              setSelectedCompany(null);
+              setCompanyId("");
+              setCompanySearch(e.target.value);
+            }}
+            placeholder="회사명을 입력해서 검색"
+            autoComplete="off"
+          />
         </div>
         <div className="field">
           <label>정산월</label>
           <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
         </div>
       </div>
+      {!selectedCompany && companyResults.length > 0 && (
+        <div className="card" style={{ maxWidth: 220, marginBottom: 16, maxHeight: 180, overflowY: "auto" }}>
+          {companyResults.map((c) => (
+            <div
+              key={c.id}
+              onClick={() => {
+                setSelectedCompany(c);
+                setCompanyId(c.id);
+                setCompanyResults([]);
+              }}
+              style={{
+                padding: "8px 12px",
+                fontSize: 13,
+                cursor: "pointer",
+                borderBottom: "1px solid var(--border)",
+              }}
+            >
+              {c.name}
+            </div>
+          ))}
+        </div>
+      )}
+      {!selectedCompany && <div style={{ marginBottom: 16 }} />}
+
+      <details style={{ marginBottom: 16, fontSize: 12.5, color: "var(--text-muted)" }}>
+        <summary style={{ cursor: "pointer" }}>묶음 후보가 되는 조건 보기</summary>
+        <ul style={{ marginTop: 8, paddingLeft: 18, lineHeight: 1.7 }}>
+          <li>정산방식이 "주선사 정산 · 월정산"(수금방식 broker, 청구주기 monthly)인 건</li>
+          <li>정산 상태가 "정산대기"인 건(이미 청구·입금 처리가 시작된 건은 제외)</li>
+          <li>정산월(billing_period)이 위에서 고른 정산월과 같은 건</li>
+          <li>화주 청구금액이 확정되어 있고(0원·미입력 아님), 아직 다른 묶음에 포함되지 않은 건</li>
+        </ul>
+      </details>
 
       {actionError && <div className="error-box">오류: {actionError}</div>}
 
@@ -643,6 +708,7 @@ export default function MonthlyBillingBatchPanel({
                   key={b.id}
                   style={{ cursor: "pointer" }}
                   onClick={() => {
+                    setSelectedCompany({ id: b.company_id, name: b.companies?.name || "-" });
                     setCompanyId(b.company_id);
                     setMonth(String(b.period_start).slice(0, 7));
                   }}
