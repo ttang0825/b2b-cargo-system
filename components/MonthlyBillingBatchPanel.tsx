@@ -166,11 +166,16 @@ export default function MonthlyBillingBatchPanel({
     setLoading(true);
 
     const { period_start, period_end } = monthToPeriod(targetMonth);
-    const { data: existing } = await supabase
+    const commonSelect =
+      "id,company_id,period_start,period_end,batch_status,tax_invoice_status,tax_invoice_issued_at,payment_status,payment_due_date,paid_at,supply_amount,vat_amount,total_amount,cancel_reason,confirmed_by_name_snapshot,cancelled_by_name_snapshot";
+
+    // 이 화주·기간의 가장 최근 묶음을 가져온다. draft/confirmed(=아직
+    // 살아있는 묶음)면 그 내용을 그대로 보여주고, cancelled(해제됨)면
+    // 참고용으로 보여주면서도 새 묶음을 다시 만들 수 있게 후보를 같이
+    // 조회한다(해제 후 재묶음이 안 되던 버그, PR #64 리뷰 피드백)
+    const { data: latest } = await supabase
       .from("customer_billing_batches")
-      .select(
-        "id,company_id,period_start,period_end,batch_status,tax_invoice_status,tax_invoice_issued_at,payment_status,payment_due_date,paid_at,supply_amount,vat_amount,total_amount,cancel_reason,confirmed_by_name_snapshot,cancelled_by_name_snapshot"
-      )
+      .select(commonSelect)
       .eq("company_id", targetCompanyId)
       .eq("period_start", period_start)
       .eq("period_end", period_end)
@@ -178,15 +183,16 @@ export default function MonthlyBillingBatchPanel({
       .limit(1)
       .maybeSingle();
 
-    if (existing) {
-      setBatch(existing as any);
-      setDueDate((existing as any).payment_due_date || "");
-      if ((existing as any).batch_status === "draft") {
-        await loadDraftContents((existing as any).id, targetCompanyId, targetMonth);
+    if (latest && (latest as any).batch_status !== "cancelled") {
+      setBatch(latest as any);
+      setDueDate((latest as any).payment_due_date || "");
+      if ((latest as any).batch_status === "draft") {
+        await loadDraftContents((latest as any).id, targetCompanyId, targetMonth);
       } else {
-        await loadActiveItems((existing as any).id);
+        await loadActiveItems((latest as any).id);
       }
     } else {
+      if (latest) setBatch(latest as any);
       await loadCandidatesOnly(targetCompanyId, targetMonth);
     }
     setLoading(false);
@@ -273,16 +279,36 @@ export default function MonthlyBillingBatchPanel({
     await loadDraftContents(batch.id, companyId, month);
   }
 
-  async function handleDeleteDraft() {
+  async function handleDeleteBatch() {
     if (!batch) return;
-    if (!confirm("이 작성 중인 묶음을 삭제할까요? 담긴 항목도 모두 제거됩니다.")) return;
+    const msg =
+      batch.batch_status === "draft"
+        ? "이 작성 중인 묶음을 삭제할까요? 담긴 항목도 모두 제거됩니다."
+        : "해제(취소)된 이 묶음 기록을 완전히 삭제할까요? 되돌릴 수 없습니다.";
+    if (!confirm(msg)) return;
     setActionError(null);
-    const result = await callBatchApi("delete-draft", { batch_id: batch.id });
+    const result = await callBatchApi("delete", { batch_id: batch.id });
     if (!result.success) {
       setActionError(result.error || getBillingBatchReasonLabel(result.reason));
       return;
     }
     await loadBatchFor(companyId, month);
+    await loadRecentBatches();
+  }
+
+  // "최근 묶음" 목록에서 바로 삭제(현재 화면에 로드된 batch와 무관한 다른
+  // 행일 수 있음) — 테스트 기록 정리 목적(PR #64 리뷰 피드백)
+  async function handleDeleteRecentBatch(batchId: string) {
+    if (!confirm("이 묶음 기록을 삭제할까요? 되돌릴 수 없습니다.")) return;
+    setActionError(null);
+    const result = await callBatchApi("delete", { batch_id: batchId });
+    if (!result.success) {
+      setActionError(result.error || getBillingBatchReasonLabel(result.reason));
+      return;
+    }
+    if (batch?.id === batchId) {
+      await loadBatchFor(companyId, month);
+    }
     await loadRecentBatches();
   }
 
@@ -454,7 +480,7 @@ export default function MonthlyBillingBatchPanel({
             <>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                 <h3 style={{ fontSize: 14, margin: 0 }}>작성 중(draft)</h3>
-                <button className="btn-danger" style={{ fontSize: 12.5, padding: "6px 10px" }} onClick={handleDeleteDraft}>
+                <button className="btn-danger" style={{ fontSize: 12.5, padding: "6px 10px" }} onClick={handleDeleteBatch}>
                   묶음 삭제
                 </button>
               </div>
@@ -676,18 +702,41 @@ export default function MonthlyBillingBatchPanel({
 
           {batch && batch.batch_status === "cancelled" && (
             <>
-              <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 8 }}>해제됨(취소)</h3>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <h3 style={{ fontSize: 14, margin: 0 }}>해제됨(취소)</h3>
+                {isAdmin && (
+                  <button className="btn-danger" style={{ fontSize: 12.5, padding: "6px 10px" }} onClick={handleDeleteBatch}>
+                    기록 삭제
+                  </button>
+                )}
+              </div>
               <p style={{ fontSize: 13, color: "var(--text-muted)" }}>사유: {batch.cancel_reason || "-"}</p>
               <p style={{ fontSize: 12.5, color: "var(--text-muted)" }}>
                 해제 처리자: {batch.cancelled_by_name_snapshot || "-"}
               </p>
+              <p style={{ fontSize: 13.5, marginTop: 12 }}>
+                같은 화주·기간으로 새 묶음을 다시 만들 수 있습니다.
+              </p>
+              <button className="btn" onClick={handleCreateBatch} disabled={candidates.length === 0}>
+                새 묶음 만들기
+              </button>
+              {candidates.length === 0 && (
+                <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 8 }}>
+                  묶을 수 있는 정산 건(주선사 정산·월정산, 정산대기 상태)이 없습니다.
+                </p>
+              )}
             </>
           )}
         </div>
       )}
 
       <div className="card" style={{ padding: 20 }}>
-        <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 12 }}>최근 묶음 30건</h3>
+        <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 4 }}>최근 묶음 30건</h3>
+        {recentBatches.length >= 30 && (
+          <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 0, marginBottom: 12 }}>
+            최근 30건만 표시 중입니다. 더 오래된 묶음은 위에서 화주·정산월을 직접 선택해서 확인해주세요.
+          </p>
+        )}
         {recentBatches.length === 0 ? (
           <p style={{ fontSize: 13, color: "var(--text-muted)" }}>아직 만들어진 묶음이 없습니다.</p>
         ) : (
@@ -700,29 +749,45 @@ export default function MonthlyBillingBatchPanel({
                 <th>세금계산서</th>
                 <th>입금</th>
                 <th>총액</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
-              {recentBatches.map((b: any) => (
-                <tr
-                  key={b.id}
-                  style={{ cursor: "pointer" }}
-                  onClick={() => {
-                    setSelectedCompany({ id: b.company_id, name: b.companies?.name || "-" });
-                    setCompanyId(b.company_id);
-                    setMonth(String(b.period_start).slice(0, 7));
-                  }}
-                >
-                  <td>{b.companies?.name || "-"}</td>
-                  <td>{b.period_start} ~ {b.period_end}</td>
-                  <td>
-                    {b.batch_status === "draft" ? "작성중" : b.batch_status === "confirmed" ? "확정" : "해제됨"}
-                  </td>
-                  <td>{b.tax_invoice_status === "issued" ? "발행완료" : "미발행"}</td>
-                  <td>{b.payment_status === "paid" ? "완료" : b.payment_status === "overdue" ? "연체" : "대기"}</td>
-                  <td>{won(b.total_amount)}</td>
-                </tr>
-              ))}
+              {recentBatches.map((b: any) => {
+                const canDelete = b.batch_status === "draft" || (b.batch_status === "cancelled" && isAdmin);
+                return (
+                  <tr key={b.id}>
+                    <td
+                      style={{ cursor: "pointer" }}
+                      onClick={() => {
+                        setSelectedCompany({ id: b.company_id, name: b.companies?.name || "-" });
+                        setCompanyId(b.company_id);
+                        setMonth(String(b.period_start).slice(0, 7));
+                      }}
+                    >
+                      {b.companies?.name || "-"}
+                    </td>
+                    <td>{b.period_start} ~ {b.period_end}</td>
+                    <td>
+                      {b.batch_status === "draft" ? "작성중" : b.batch_status === "confirmed" ? "확정" : "해제됨"}
+                    </td>
+                    <td>{b.tax_invoice_status === "issued" ? "발행완료" : "미발행"}</td>
+                    <td>{b.payment_status === "paid" ? "완료" : b.payment_status === "overdue" ? "연체" : "대기"}</td>
+                    <td>{won(b.total_amount)}</td>
+                    <td>
+                      {canDelete && (
+                        <button
+                          className="btn btn-ghost"
+                          style={{ fontSize: 11.5, padding: "4px 8px" }}
+                          onClick={() => handleDeleteRecentBatch(b.id)}
+                        >
+                          삭제
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}

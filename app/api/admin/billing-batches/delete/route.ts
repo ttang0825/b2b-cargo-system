@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
 
+// draft 묶음은 아무 직원이나, cancelled(해제됨) 묶음은 관리자만 삭제 가능
+// (DB 함수 delete_billing_batch 내부에서 상태별로 판단, PR #64 리뷰 피드백).
 export const dynamic = "force-dynamic";
 
 function getAdminClient() {
@@ -32,8 +34,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 });
   }
 
-  const { data, error } = await admin.rpc("delete_billing_batch_draft", {
+  const { data, error } = await admin.rpc("delete_billing_batch", {
     p_batch_id: batch_id,
+    p_staff_id: currentStaff.id,
   });
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
