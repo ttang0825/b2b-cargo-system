@@ -4,6 +4,7 @@
 export const BILLING_BATCH_REASON_LABELS: Record<string, string> = {
   company_not_found: "화주 정보를 찾을 수 없습니다.",
   period_not_full_month: "기간은 반드시 월 단위(1일~말일)여야 합니다.",
+  period_not_matching_cutoff_day: "이 화주의 정산 마감일 설정과 기간이 맞지 않습니다.",
   draft_already_exists: "이 화주·기간으로 이미 작성 중인 묶음이 있습니다.",
   batch_not_found: "묶음을 찾을 수 없습니다.",
   batch_not_draft: "작성 중(draft) 상태의 묶음에서만 가능합니다.",

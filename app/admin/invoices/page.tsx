@@ -92,6 +92,10 @@ function currentMonth() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function InvoicesPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -112,6 +116,7 @@ function InvoicesPageInner() {
 
   const [selectedOrderId, setSelectedOrderId] = useState("");
   const [billingPeriod, setBillingPeriod] = useState(currentMonth());
+  const [settlementReferenceDate, setSettlementReferenceDate] = useState(today());
   const [customerChargeTotal, setCustomerChargeTotal] = useState("");
   const [driverPayoutTotal, setDriverPayoutTotal] = useState("");
   const [paymentDueDate, setPaymentDueDate] = useState("");
@@ -300,6 +305,7 @@ function InvoicesPageInner() {
       company_id: order?.company_id || null,
       individual_customer_id: order?.individual_customer_id || null,
       billing_period: billingPeriod || null,
+      settlement_reference_date: settlementReferenceDate || null,
       customer_charge_total: chargeNum || null,
       driver_payout_total: payoutNum || null,
       commission_total: commission || null,
@@ -494,6 +500,17 @@ function InvoicesPageInner() {
                   value={billingPeriod}
                   onChange={(e) => setBillingPeriod(e.target.value)}
                 />
+              </div>
+              <div className="field">
+                <label>정산 기준일</label>
+                <input
+                  type="date"
+                  value={settlementReferenceDate}
+                  onChange={(e) => setSettlementReferenceDate(e.target.value)}
+                />
+                <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, marginBottom: 0 }}>
+                  월정산 묶음에서 화주별 정산 마감일 기준으로 이 건이 속할 주기를 판단할 때 씁니다.
+                </p>
               </div>
               <div className="field">
                 <label>입금 예정일</label>

@@ -39,9 +39,10 @@ type CandidateRow = {
   billing_period: string | null;
   customer_charge_total: number | null;
   order_id: string | null;
+  settlement_reference_date: string | null;
 };
 
-type AllCandidateRow = CandidateRow & { company_name: string; order_no: string };
+type AllCandidateRow = CandidateRow & { company_name: string; order_no: string; cycle_month: string };
 
 type ActiveItem = {
   id: string;
@@ -61,13 +62,43 @@ function currentMonthInput() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function monthToPeriod(monthInput: string) {
+function fmtDate(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// 화주별 정산 마감일(companies.billing_cutoff_day)이 없으면 기존처럼
+// 달력월(1일~말일), 있으면 "전월 (마감일+1)일 ~ 이번달 마감일" 주기로
+// 계산(PR #64 리뷰 피드백 — 화주마다 정산 마감일이 다를 수 있다는 지적 반영)
+function monthToPeriod(monthInput: string, cutoffDay: number | null) {
   const [y, m] = monthInput.split("-").map(Number);
-  const start = new Date(y, m - 1, 1);
-  const end = new Date(y, m, 0);
-  const fmt = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  return { period_start: fmt(start), period_end: fmt(end) };
+  if (!cutoffDay) {
+    const start = new Date(y, m - 1, 1);
+    const end = new Date(y, m, 0);
+    return { period_start: fmtDate(start), period_end: fmtDate(end) };
+  }
+  const end = new Date(y, m - 1, cutoffDay);
+  const start = new Date(y, m - 2, cutoffDay + 1);
+  return { period_start: fmtDate(start), period_end: fmtDate(end) };
+}
+
+// 특정 날짜가 화주의 정산 마감일 기준으로 어느 "정산월" 라벨에 속하는지
+// 역산 — 전체 후보 목록에서 특정 건을 골랐을 때 정산월 선택창에 자동으로
+// 채워주는 용도
+function monthLabelForDate(dateStr: string, cutoffDay: number | null) {
+  const d = new Date(`${dateStr}T00:00:00`);
+  if (!cutoffDay) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  }
+  let y = d.getFullYear();
+  let m = d.getMonth() + 1;
+  if (d.getDate() > cutoffDay) {
+    m += 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+  }
+  return `${y}-${String(m).padStart(2, "0")}`;
 }
 
 async function callBatchApi(path: string, body: Record<string, any>) {
@@ -108,6 +139,7 @@ export default function MonthlyBillingBatchPanel({
   const [dueDate, setDueDate] = useState("");
   const [recentBatches, setRecentBatches] = useState<Batch[]>([]);
   const [allCandidates, setAllCandidates] = useState<AllCandidateRow[]>([]);
+  const [companyCutoffDay, setCompanyCutoffDay] = useState<number | null>(null);
 
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
@@ -167,8 +199,8 @@ export default function MonthlyBillingBatchPanel({
   async function loadAllCandidates() {
     const { data: rows } = await supabase
       .from("customer_billing_batch_candidates")
-      .select("invoice_id,company_id,billing_period,customer_charge_total,order_id")
-      .order("billing_period", { ascending: false })
+      .select("invoice_id,company_id,billing_period,customer_charge_total,order_id,settlement_reference_date")
+      .order("settlement_reference_date", { ascending: false })
       .limit(200);
     const list = (rows as CandidateRow[]) || [];
     if (list.length === 0) {
@@ -180,14 +212,18 @@ export default function MonthlyBillingBatchPanel({
     const orderIds = Array.from(new Set(list.map((r) => r.order_id).filter(Boolean))) as string[];
     const [{ data: companiesData }, { data: ordersData }] = await Promise.all([
       companyIds.length
-        ? supabase.from("companies").select("id,name").in("id", companyIds)
+        ? supabase.from("companies").select("id,name,billing_cutoff_day").in("id", companyIds)
         : Promise.resolve({ data: [] as any[] }),
       orderIds.length
         ? supabase.from("orders").select("id,order_no").in("id", orderIds)
         : Promise.resolve({ data: [] as any[] }),
     ]);
     const companyNameById: Record<string, string> = {};
-    (companiesData || []).forEach((c: any) => (companyNameById[c.id] = c.name));
+    const cutoffDayById: Record<string, number | null> = {};
+    (companiesData || []).forEach((c: any) => {
+      companyNameById[c.id] = c.name;
+      cutoffDayById[c.id] = c.billing_cutoff_day ?? null;
+    });
     const orderNoById: Record<string, string> = {};
     (ordersData || []).forEach((o: any) => (orderNoById[o.id] = o.order_no || "-"));
 
@@ -196,6 +232,9 @@ export default function MonthlyBillingBatchPanel({
         ...r,
         company_name: companyNameById[r.company_id] || "-",
         order_no: r.order_id ? orderNoById[r.order_id] || "-" : "-",
+        cycle_month: r.settlement_reference_date
+          ? monthLabelForDate(r.settlement_reference_date, cutoffDayById[r.company_id] ?? null)
+          : "-",
       }))
     );
   }
@@ -214,7 +253,17 @@ export default function MonthlyBillingBatchPanel({
     if (!targetCompanyId || !targetMonth) return;
     setLoading(true);
 
-    const { period_start, period_end } = monthToPeriod(targetMonth);
+    // 화주별 정산 마감일 설정을 매번 fresh 조회 — 이 값에 따라 기간 계산
+    // 방식이 달라짐(PR #64 리뷰 피드백)
+    const { data: companyRow } = await supabase
+      .from("companies")
+      .select("billing_cutoff_day")
+      .eq("id", targetCompanyId)
+      .maybeSingle();
+    const cutoffDay = (companyRow as any)?.billing_cutoff_day ?? null;
+    setCompanyCutoffDay(cutoffDay);
+
+    const { period_start, period_end } = monthToPeriod(targetMonth, cutoffDay);
     const commonSelect =
       "id,company_id,period_start,period_end,batch_status,tax_invoice_status,tax_invoice_issued_at,payment_status,payment_due_date,paid_at,supply_amount,vat_amount,total_amount,cancel_reason,confirmed_by_name_snapshot,cancelled_by_name_snapshot";
 
@@ -236,34 +285,39 @@ export default function MonthlyBillingBatchPanel({
       setBatch(latest as any);
       setDueDate((latest as any).payment_due_date || "");
       if ((latest as any).batch_status === "draft") {
-        await loadDraftContents((latest as any).id, targetCompanyId, targetMonth);
+        await loadDraftContents((latest as any).id, targetCompanyId, period_start, period_end);
       } else {
         // 확정된 묶음이어도, 확정 이후에 새로 정산등록된 건이 있으면
         // 보충 묶음으로 담을 수 있어야 하므로 후보도 같이 조회해둔다
         // (PR #64 리뷰 피드백 — "묶음 확정되면 추가되는 정산은 어떻게
         // 추가하나?")
         await loadActiveItems((latest as any).id);
-        await loadCandidatesOnly(targetCompanyId, targetMonth);
+        await loadCandidatesOnly(targetCompanyId, period_start, period_end);
       }
     } else {
       if (latest) setBatch(latest as any);
-      await loadCandidatesOnly(targetCompanyId, targetMonth);
+      await loadCandidatesOnly(targetCompanyId, period_start, period_end);
     }
     setLoading(false);
   }
 
-  async function loadCandidatesOnly(targetCompanyId: string, targetMonth: string) {
+  // 후보 판정은 billing_period 텍스트 일치가 아니라 settlement_reference_date가
+  // 이 기간(period_start~period_end) 안에 있는지로 함 — 화주마다 정산
+  // 마감일이 다를 수 있어서 "YYYY-MM" 한 덩어리로는 표현이 안 됨(PR #64
+  // 리뷰 피드백)
+  async function loadCandidatesOnly(targetCompanyId: string, periodStart: string, periodEnd: string) {
     const { data } = await supabase
       .from("customer_billing_batch_candidates")
-      .select("invoice_id,company_id,billing_period,customer_charge_total,order_id")
+      .select("invoice_id,company_id,billing_period,customer_charge_total,order_id,settlement_reference_date")
       .eq("company_id", targetCompanyId)
-      .eq("billing_period", targetMonth);
+      .gte("settlement_reference_date", periodStart)
+      .lte("settlement_reference_date", periodEnd);
     setCandidates((data as any) || []);
     await loadOrderNumbers((data as any) || []);
   }
 
-  async function loadDraftContents(batchId: string, targetCompanyId: string, targetMonth: string) {
-    await loadCandidatesOnly(targetCompanyId, targetMonth);
+  async function loadDraftContents(batchId: string, targetCompanyId: string, periodStart: string, periodEnd: string) {
+    await loadCandidatesOnly(targetCompanyId, periodStart, periodEnd);
     await loadActiveItems(batchId);
   }
 
@@ -301,7 +355,7 @@ export default function MonthlyBillingBatchPanel({
 
   async function handleCreateBatch() {
     setActionError(null);
-    const { period_start, period_end } = monthToPeriod(month);
+    const { period_start, period_end } = monthToPeriod(month, companyCutoffDay);
     const result = await callBatchApi("create", { company_id: companyId, period_start, period_end });
     if (!result.success) {
       setActionError(result.error || getBillingBatchReasonLabel(result.reason));
@@ -319,7 +373,7 @@ export default function MonthlyBillingBatchPanel({
       setActionError(result.error || getBillingBatchReasonLabel(result.reason));
       return;
     }
-    await loadDraftContents(batch.id, companyId, month);
+    await loadDraftContents(batch.id, companyId, batch.period_start, batch.period_end);
   }
 
   async function handleRemoveItem(itemId: string) {
@@ -330,7 +384,7 @@ export default function MonthlyBillingBatchPanel({
       setActionError(result.error || getBillingBatchReasonLabel(result.reason));
       return;
     }
-    await loadDraftContents(batch.id, companyId, month);
+    await loadDraftContents(batch.id, companyId, batch.period_start, batch.period_end);
   }
 
   async function handleDeleteBatch() {
@@ -471,7 +525,8 @@ export default function MonthlyBillingBatchPanel({
             <thead>
               <tr>
                 <th>화주</th>
-                <th>정산월</th>
+                <th>정산 기준일</th>
+                <th>해당 정산월</th>
                 <th>오더번호</th>
                 <th>화주 청구금액</th>
                 <th></th>
@@ -481,7 +536,8 @@ export default function MonthlyBillingBatchPanel({
               {allCandidates.map((c) => (
                 <tr key={c.invoice_id}>
                   <td>{c.company_name}</td>
-                  <td>{c.billing_period || "-"}</td>
+                  <td>{c.settlement_reference_date || "-"}</td>
+                  <td>{c.cycle_month}</td>
                   <td>{c.order_no}</td>
                   <td>{won(c.customer_charge_total)}</td>
                   <td>
@@ -491,7 +547,7 @@ export default function MonthlyBillingBatchPanel({
                       onClick={() => {
                         setSelectedCompany({ id: c.company_id, name: c.company_name });
                         setCompanyId(c.company_id);
-                        setMonth(c.billing_period || currentMonthInput());
+                        setMonth(c.cycle_month !== "-" ? c.cycle_month : currentMonthInput());
                       }}
                     >
                       선택
@@ -523,6 +579,18 @@ export default function MonthlyBillingBatchPanel({
           <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
         </div>
       </div>
+      {selectedCompany && month && (
+        <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 0, marginBottom: 16 }}>
+          실제 정산 기간:{" "}
+          {(() => {
+            const { period_start, period_end } = monthToPeriod(month, companyCutoffDay);
+            return `${period_start} ~ ${period_end}`;
+          })()}
+          {companyCutoffDay
+            ? ` (이 화주는 매달 ${companyCutoffDay}일 마감으로 설정되어 있습니다)`
+            : " (정산 마감일 미설정 — 달력월 기준)"}
+        </p>
+      )}
       {!selectedCompany && companyResults.length > 0 && (
         <div className="card" style={{ maxWidth: 220, marginBottom: 16, maxHeight: 180, overflowY: "auto" }}>
           {companyResults.map((c) => (
@@ -552,7 +620,11 @@ export default function MonthlyBillingBatchPanel({
         <ul style={{ marginTop: 8, paddingLeft: 18, lineHeight: 1.7 }}>
           <li>정산방식이 "주선사 정산 · 월정산"(수금방식 broker, 청구주기 monthly)인 건</li>
           <li>정산 상태가 "정산대기"인 건(이미 청구·입금 처리가 시작된 건은 제외)</li>
-          <li>정산월(billing_period)이 위에서 고른 정산월과 같은 건</li>
+          <li>
+            정산 기준일(등록 시 자동으로 오늘 날짜가 채워짐)이 위에서 고른 정산월의 실제 기간 안에
+            있는 건 — 화주별 정산 마감일(화주 상세에서 설정)이 있으면 그 기준으로, 없으면 달력월
+            (1일~말일) 기준으로 계산됩니다
+          </li>
           <li>화주 청구금액이 확정되어 있고(0원·미입력 아님), 아직 다른 묶음에 포함되지 않은 건</li>
         </ul>
       </details>
@@ -634,6 +706,7 @@ export default function MonthlyBillingBatchPanel({
                     <thead>
                       <tr>
                         <th>오더번호</th>
+                        <th>정산 기준일</th>
                         <th>화주 청구금액(공급가액)</th>
                         <th></th>
                       </tr>
@@ -642,6 +715,7 @@ export default function MonthlyBillingBatchPanel({
                       {availableCandidates.map((c) => (
                         <tr key={c.invoice_id}>
                           <td>{orderNoByInvoiceId[c.invoice_id] || "-"}</td>
+                          <td>{c.settlement_reference_date || "-"}</td>
                           <td>{won(c.customer_charge_total)}</td>
                           <td>
                             <button className="btn" style={{ fontSize: 12 }} onClick={() => handleAddItem(c.invoice_id)}>

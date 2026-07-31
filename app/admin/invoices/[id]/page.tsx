@@ -423,6 +423,7 @@ export default function InvoiceDetailPage() {
           <p className="page-desc">
             {invoice.companies?.name || invoice.orders?.guest_name || "-"} ·{" "}
             {invoice.billing_period || "-"}
+            {invoice.settlement_reference_date && ` · 정산 기준일 ${invoice.settlement_reference_date}`}
           </p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
