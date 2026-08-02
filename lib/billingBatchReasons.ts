@@ -32,6 +32,7 @@ export const BILLING_BATCH_REASON_LABELS: Record<string, string> = {
   batch_cancelled: "취소된 묶음입니다.",
   batch_confirmed_cannot_delete: "확정된 묶음은 삭제할 수 없습니다. 먼저 해제해주세요.",
   admin_required_for_cancelled: "해제(취소)된 묶음 삭제는 관리자만 할 수 있습니다.",
+  admin_required: "관리자만 할 수 있습니다.",
 };
 
 export function getBillingBatchReasonLabel(reason: string | null | undefined): string {

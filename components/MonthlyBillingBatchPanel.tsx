@@ -136,6 +136,8 @@ export default function MonthlyBillingBatchPanel({
   const [validatePreview, setValidatePreview] = useState<any>(null);
   const [releaseReason, setReleaseReason] = useState("");
   const [showReleaseReason, setShowReleaseReason] = useState(false);
+  const [forceDeleteReason, setForceDeleteReason] = useState("");
+  const [showForceDeleteReason, setShowForceDeleteReason] = useState(false);
   const [dueDate, setDueDate] = useState("");
   const [recentBatches, setRecentBatches] = useState<Batch[]>([]);
   const [allCandidates, setAllCandidates] = useState<AllCandidateRow[]>([]);
@@ -424,18 +426,63 @@ export default function MonthlyBillingBatchPanel({
   }
 
   // "최근 묶음" 목록에서 바로 삭제(현재 화면에 로드된 batch와 무관한 다른
-  // 행일 수 있음) — 테스트 기록 정리 목적(PR #64 리뷰 피드백)
-  async function handleDeleteRecentBatch(batchId: string) {
-    if (!confirm("이 묶음 기록을 삭제할까요? 되돌릴 수 없습니다.")) return;
+  // 행일 수 있음) — 테스트 기록 정리 목적(PR #64 리뷰 피드백). 확정된
+  // 묶음은 사유 입력이 필요해 별도로 force-delete API를 탄다(관리자 전용,
+  // 아래 handleForceDelete와 동일한 경로).
+  async function handleDeleteRecentBatch(batchId: string, batchStatus: string) {
     setActionError(null);
-    const result = await callBatchApi("delete", { batch_id: batchId });
-    if (!result.success) {
-      setActionError(result.error || getBillingBatchReasonLabel(result.reason));
-      return;
+    if (batchStatus === "confirmed") {
+      const reason = window.prompt(
+        "확정된 묶음을 완전삭제합니다. 담긴 정산 건은 개별 정산(정산대기)으로 되돌아가고, 세금계산서·입금 처리 기록은 사라집니다. 삭제 사유를 입력해주세요:"
+      );
+      if (reason === null) return;
+      if (!reason.trim()) {
+        setActionError("삭제 사유를 입력해주세요.");
+        return;
+      }
+      const result = await callBatchApi("force-delete", { batch_id: batchId, reason });
+      if (!result.success) {
+        setActionError(result.error || getBillingBatchReasonLabel(result.reason));
+        return;
+      }
+    } else {
+      if (!confirm("이 묶음 기록을 삭제할까요? 되돌릴 수 없습니다.")) return;
+      const result = await callBatchApi("delete", { batch_id: batchId });
+      if (!result.success) {
+        setActionError(result.error || getBillingBatchReasonLabel(result.reason));
+        return;
+      }
     }
     if (batch?.id === batchId) {
       await loadBatchFor(companyId, month);
     }
+    await refreshOverview();
+  }
+
+  // 확정 화면 안에서 바로 완전삭제(관리자 전용) — 정상 해제(release)는
+  // 세금계산서 발행/입금 처리가 시작되면 막혀있는데, 테스트 중 만든 기록을
+  // 정리할 수 있어야 한다는 실사용 피드백(PR #64)으로 추가.
+  async function handleForceDelete() {
+    if (!batch) return;
+    if (!forceDeleteReason.trim()) {
+      setActionError("삭제 사유를 입력해주세요.");
+      return;
+    }
+    if (
+      !confirm(
+        "이 확정된 묶음을 완전삭제할까요? 담긴 정산 건은 개별 정산(정산대기)으로 되돌아가고, 세금계산서·입금 처리 기록은 사라집니다. 되돌릴 수 없습니다."
+      )
+    )
+      return;
+    setActionError(null);
+    const result = await callBatchApi("force-delete", { batch_id: batch.id, reason: forceDeleteReason });
+    if (!result.success) {
+      setActionError(result.error || getBillingBatchReasonLabel(result.reason));
+      return;
+    }
+    setShowForceDeleteReason(false);
+    setForceDeleteReason("");
+    await loadBatchFor(companyId, month);
     await refreshOverview();
   }
 
@@ -908,6 +955,42 @@ export default function MonthlyBillingBatchPanel({
                   </p>
                 </div>
               )}
+
+              {isAdmin && (
+                <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14, marginTop: 14 }}>
+                  {!showForceDeleteReason ? (
+                    <button className="btn-danger" onClick={() => setShowForceDeleteReason(true)}>
+                      완전삭제(테스트 정리용)
+                    </button>
+                  ) : (
+                    <div>
+                      <div className="field" style={{ maxWidth: 400 }}>
+                        <label>삭제 사유 *</label>
+                        <input
+                          type="text"
+                          value={forceDeleteReason}
+                          onChange={(e) => setForceDeleteReason(e.target.value)}
+                          placeholder="삭제 사유를 입력해주세요"
+                        />
+                      </div>
+                      <div style={{ marginTop: 8 }}>
+                        <button className="btn-danger" onClick={handleForceDelete} style={{ marginRight: 8 }}>
+                          완전삭제 확정
+                        </button>
+                        <button className="btn btn-ghost" onClick={() => setShowForceDeleteReason(false)}>
+                          취소
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 8 }}>
+                    세금계산서 발행/입금 처리가 진행돼 위 "묶음 해제"가 막힌 경우에도 쓸 수 있는
+                    관리자 전용 예외 경로입니다. 담긴 정산 건은 개별 정산(정산대기)으로 되돌아가고,
+                    이 묶음의 세금계산서·입금 처리 기록은 사라집니다 — 되돌릴 수 없으니 테스트 데이터
+                    정리 용도로만 사용해주세요.
+                  </p>
+                </div>
+              )}
             </>
           )}
 
@@ -965,7 +1048,7 @@ export default function MonthlyBillingBatchPanel({
             </thead>
             <tbody>
               {recentBatches.map((b: any) => {
-                const canDelete = b.batch_status === "draft" || (b.batch_status === "cancelled" && isAdmin);
+                const canDelete = b.batch_status === "draft" || isAdmin;
                 return (
                   <tr key={b.id}>
                     <td
@@ -995,7 +1078,7 @@ export default function MonthlyBillingBatchPanel({
                         <button
                           className="btn btn-ghost"
                           style={{ fontSize: 11.5, padding: "4px 8px" }}
-                          onClick={() => handleDeleteRecentBatch(b.id)}
+                          onClick={() => handleDeleteRecentBatch(b.id, b.batch_status)}
                         >
                           삭제
                         </button>
