@@ -263,9 +263,21 @@ export default function MonthlyBillingBatchPanel({
     const cutoffDay = (companyRow as any)?.billing_cutoff_day ?? null;
     setCompanyCutoffDay(cutoffDay);
 
-    const { period_start, period_end } = monthToPeriod(targetMonth, cutoffDay);
     const commonSelect =
       "id,company_id,period_start,period_end,batch_status,tax_invoice_status,tax_invoice_issued_at,payment_status,payment_due_date,paid_at,supply_amount,vat_amount,total_amount,cancel_reason,confirmed_by_name_snapshot,cancelled_by_name_snapshot";
+
+    // 기존 묶음 검색은 "화주의 현재 마감일 설정으로 역산한 기간"과 정확히
+    // 일치하는지 비교하지 않는다 — 마감일 설정이 묶음 생성 이후에 바뀌면
+    // (예: 처음엔 마감일 미설정으로 달력월 묶음을 만들고, 나중에 마감일을
+    // 지정한 경우) 과거 묶음의 저장된 period_start/end는 그 당시 계산값
+    // 그대로라 재계산한 값과 어긋나 못 찾게 된다(실사용 버그 — "최근 묶음"
+    // 목록에서 확정건을 클릭해도 상세가 안 뜨던 문제). 대신 "이 정산월
+    // 라벨에 해당하는 period_end"는 마감일 설정과 무관하게 항상 그 달력월
+    // 안에 있다는 성질(monthToPeriod의 end 계산 방식상 항상 같은 달)을
+    // 이용해, period_end가 이 달력월 범위 안에 있는 묶음을 찾는다.
+    const [labelYear, labelMonth] = targetMonth.split("-").map(Number);
+    const monthRangeStart = `${targetMonth}-01`;
+    const monthRangeEnd = fmtDate(new Date(labelYear, labelMonth, 0));
 
     // 이 화주·기간의 가장 최근 묶음을 가져온다. draft/confirmed(=아직
     // 살아있는 묶음)면 그 내용을 그대로 보여주고, cancelled(해제됨)면
@@ -275,11 +287,18 @@ export default function MonthlyBillingBatchPanel({
       .from("customer_billing_batches")
       .select(commonSelect)
       .eq("company_id", targetCompanyId)
-      .eq("period_start", period_start)
-      .eq("period_end", period_end)
+      .gte("period_end", monthRangeStart)
+      .lte("period_end", monthRangeEnd)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    // 새 묶음을 만들 때 쓸 기간은 화주의 현재 마감일 설정 기준으로 계산하되,
+    // 기존 묶음을 찾았으면 그 묶음 고유의 저장된 기간을 그대로 쓴다(재계산값과
+    // 어긋날 수 있으므로 화면에 보여주는 후보·항목도 실제 저장된 기간 기준이어야 함)
+    const { period_start, period_end } = latest
+      ? { period_start: (latest as any).period_start, period_end: (latest as any).period_end }
+      : monthToPeriod(targetMonth, cutoffDay);
 
     if (latest && (latest as any).batch_status !== "cancelled") {
       setBatch(latest as any);
