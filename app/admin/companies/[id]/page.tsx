@@ -123,12 +123,20 @@ const CRM_CONTACT_FIELDS = [
 
 const CRM_BIZ_FIELDS = [
   ["payment_terms", "결제조건"],
+  ["billing_cutoff_day", "정산 마감일"],
   ["main_pickup_region", "주요 상차지역"],
   ["main_dropoff_region", "주요 하차지역"],
   ["main_pickup_address", "주요 상차지 정확주소"],
   ["main_dropoff_address", "주요 하차지 정확주소"],
   ["assigned_staff", "담당직원"],
 ];
+
+// 로드맵 ②-B: 월정산 묶음 후보 기간 계산에 쓰는 화주별 정산 마감일.
+// null(값 없음)이면 기존처럼 달력월(1일~말일) 기준으로 묶는다.
+function billingCutoffDayLabel(v: string | number | null | undefined) {
+  if (v === null || v === undefined || v === "") return "말일(달력월 기준)";
+  return `${v}일`;
+}
 
 const CRM_PERFORMANCE_FIELDS: [string, string, string?][] = [
   ["total_orders_count", "누적 오더수", "number"],
@@ -481,6 +489,7 @@ export default function CompanyDetailPage() {
       let v = editForm[key];
       if (key === "main_pickup_address") v = fullMainPickupAddress;
       if (key === "main_dropoff_address") v = fullMainDropoffAddress;
+      if (key === "billing_cutoff_day") v = v ? Number(v) : null;
       if (v === "") v = null;
       if (
         CRM_PERFORMANCE_FIELDS.some(
@@ -1017,6 +1026,33 @@ export default function CompanyDetailPage() {
           }
         >
           {CRM_BIZ_FIELDS.map(([key, label]) => {
+            if (key === "billing_cutoff_day") {
+              if (!editing) {
+                return (
+                  <div className="field" key={key} style={{ minWidth: 0 }}>
+                    <label>{label}</label>
+                    <div>{billingCutoffDayLabel(company[key])}</div>
+                  </div>
+                );
+              }
+              return (
+                <div className="field" key={key} style={{ minWidth: 0 }}>
+                  <label>{label}</label>
+                  <select value={editForm[key] || ""} onChange={(e) => set(key, e.target.value)}>
+                    <option value="">말일(달력월 기준)</option>
+                    {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                      <option key={d} value={d}>
+                        {d}일
+                      </option>
+                    ))}
+                  </select>
+                  <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, marginBottom: 0 }}>
+                    월정산 묶음의 정산 기간을 이 날짜 기준으로 계산합니다(예: 15일 선택 시 전월
+                    16일~이번달 15일). 지정하지 않으면 달력월(1일~말일) 기준입니다.
+                  </p>
+                </div>
+              );
+            }
             if (
               (key === "main_pickup_region" || key === "main_dropoff_region") &&
               editing

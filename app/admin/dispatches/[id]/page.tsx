@@ -480,6 +480,7 @@ export default function DispatchDetailPage() {
       company_id: order?.company_id || null,
       individual_customer_id: order?.individual_customer_id || null,
       billing_period: billingPeriod,
+      settlement_reference_date: new Date().toISOString().slice(0, 10),
       customer_charge_total: charge || null,
       driver_payout_total: payout || null,
       commission_total: commission || null,
