@@ -678,7 +678,9 @@ export default function MonthlyBillingBatchPanel({
                     <tbody>
                       {activeItems.map((it) => (
                         <tr key={it.id}>
-                          <td>{orderNoByInvoiceId[it.invoice_id] || "-"}</td>
+                          <td>
+                            <Link href={`/admin/invoices/${it.invoice_id}`}>{orderNoByInvoiceId[it.invoice_id] || "-"}</Link>
+                          </td>
                           <td>{won(it.supply_amount_snapshot)}</td>
                           <td>{won(it.vat_amount_snapshot)}</td>
                           <td>{won(it.total_amount_snapshot)}</td>
