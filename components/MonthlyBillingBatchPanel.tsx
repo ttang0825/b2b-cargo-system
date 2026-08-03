@@ -142,6 +142,8 @@ export default function MonthlyBillingBatchPanel({
   const [recentBatches, setRecentBatches] = useState<Batch[]>([]);
   const [allCandidates, setAllCandidates] = useState<AllCandidateRow[]>([]);
   const [companyCutoffDay, setCompanyCutoffDay] = useState<number | null>(null);
+  // 로드맵③ 현장 추가비 — draft 묶음 항목 중 스냅샷 새로고침이 필요한 항목
+  const [needsRefreshByItemId, setNeedsRefreshByItemId] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
@@ -351,6 +353,80 @@ export default function MonthlyBillingBatchPanel({
     const items = (data as any as ActiveItem[]) || [];
     setActiveItems(items);
     await loadOrderNumbers(items.map((i) => ({ invoice_id: i.invoice_id })) as any);
+    await loadNeedsRefreshInfo(items);
+  }
+
+  // 로드맵③ 현장 추가비 — draft 묶음 항목의 invoice 생성 이후 새로 등록된
+  // 활성 추가비가 있으면 "스냅샷 새로고침 필요" 배지를 보여줌(3-3). 확정된
+  // 묶음(activeItems가 confirmed 케이스로 로드된 경우)은 새로고침 대상이
+  // 아니므로 draft일 때만 호출됨(handleRefreshItemSnapshot도 draft 전용)
+  async function loadNeedsRefreshInfo(items: ActiveItem[]) {
+    const invoiceIds = items.map((i) => i.invoice_id).filter(Boolean);
+    if (invoiceIds.length === 0) {
+      setNeedsRefreshByItemId({});
+      return;
+    }
+    const { data: invs } = await supabase
+      .from("invoices")
+      .select("id,order_id,created_at")
+      .in("id", invoiceIds);
+    const orderIds = ((invs as any[]) || []).map((i) => i.order_id).filter(Boolean);
+    if (orderIds.length === 0) {
+      setNeedsRefreshByItemId({});
+      return;
+    }
+    const { data: dispatchRows } = await supabase
+      .from("dispatches")
+      .select("id,order_id")
+      .in("order_id", orderIds);
+    const dispatchIdByOrderId: Record<string, string> = {};
+    (dispatchRows || []).forEach((d: any) => {
+      if (d.order_id) dispatchIdByOrderId[d.order_id] = d.id;
+    });
+    const dispatchIds = Object.values(dispatchIdByOrderId);
+    if (dispatchIds.length === 0) {
+      setNeedsRefreshByItemId({});
+      return;
+    }
+    const { data: extraRows } = await supabase
+      .from("dispatch_extra_charges")
+      .select("dispatch_id,created_at")
+      .in("dispatch_id", dispatchIds)
+      .eq("status", "active")
+      .is("correction_invoice_id", null);
+
+    const invoiceById: Record<string, { order_id: string | null; created_at: string }> = {};
+    ((invs as any[]) || []).forEach((i) => (invoiceById[i.id] = i));
+
+    const result: Record<string, boolean> = {};
+    items.forEach((item) => {
+      const inv = invoiceById[item.invoice_id];
+      if (!inv || !inv.order_id) return;
+      const dispatchId = dispatchIdByOrderId[inv.order_id];
+      if (!dispatchId) return;
+      const hasNewExtra = (extraRows || []).some(
+        (e: any) => e.dispatch_id === dispatchId && new Date(e.created_at) > new Date(inv.created_at)
+      );
+      if (hasNewExtra) result[item.id] = true;
+    });
+    setNeedsRefreshByItemId(result);
+  }
+
+  async function handleRefreshItemSnapshot(itemId: string) {
+    setActionError(null);
+    const res = await fetch("/api/admin/billing-batches/refresh-item", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ item_id: itemId }),
+    });
+    const result = await res.json().catch(() => ({}));
+    if (!result.success) {
+      setActionError(result.error || getBillingBatchReasonLabel(result.reason));
+      return;
+    }
+    if (batch) {
+      await loadDraftContents(batch.id, companyId, batch.period_start, batch.period_end);
+    }
   }
 
   async function loadOrderNumbers(rows: { invoice_id: string }[]) {
@@ -746,11 +822,27 @@ export default function MonthlyBillingBatchPanel({
                         <tr key={it.id}>
                           <td>
                             <Link href={`/admin/invoices/${it.invoice_id}`}>{orderNoByInvoiceId[it.invoice_id] || "-"}</Link>
+                            {needsRefreshByItemId[it.id] && (
+                              <div style={{ marginTop: 4 }}>
+                                <span className="badge" style={{ fontSize: 11 }}>
+                                  현장 추가비 등록됨 — 새로고침 필요
+                                </span>
+                              </div>
+                            )}
                           </td>
                           <td>{won(it.supply_amount_snapshot)}</td>
                           <td>{won(it.vat_amount_snapshot)}</td>
                           <td>{won(it.total_amount_snapshot)}</td>
                           <td>
+                            {needsRefreshByItemId[it.id] && (
+                              <button
+                                className="btn btn-ghost"
+                                style={{ fontSize: 12, marginRight: 6 }}
+                                onClick={() => handleRefreshItemSnapshot(it.id)}
+                              >
+                                새로고침
+                              </button>
+                            )}
                             <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => handleRemoveItem(it.id)}>
                               제거
                             </button>

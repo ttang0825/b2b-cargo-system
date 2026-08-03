@@ -24,6 +24,7 @@ import { calcVatAmount, calcInclusiveAmount } from "@/lib/vat";
 import MixableBadge from "@/components/MixableBadge";
 import LockedBadge from "@/components/LockedBadge";
 import AmendmentReasonModal from "@/components/AmendmentReasonModal";
+import { getDispatchExtraChargeCategoryLabel } from "@/lib/dispatchExtraCharges";
 
 function won(n: number | null) {
   if (n === null || n === undefined) return "-";
@@ -51,6 +52,11 @@ export default function InvoiceDetailPage() {
   const [driverCalcInfo, setDriverCalcInfo] = useState<{ throughCalc: boolean; insuranceApplied: boolean } | null>(
     null
   );
+  // 로드맵③ 현장 추가비 — 이 invoice 생성 이후 등록된, 아직 다른 정정청구
+  // invoice로 안 빠진 활성 추가비(표시 시점 합산, 3-1). 이 invoice 자체가
+  // 정정청구로 생성된 건인지 여부도 함께 표시(5-2)
+  const [trailingExtraCharges, setTrailingExtraCharges] = useState<any[]>([]);
+  const [isCorrectionInvoice, setIsCorrectionInvoice] = useState(false);
 
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
@@ -89,7 +95,7 @@ export default function InvoiceDetailPage() {
     if (data.order_id) {
       const { data: dispatchRow } = await supabase
         .from("dispatches")
-        .select("driver_base_fare,industrial_insurance_applicable")
+        .select("id,driver_base_fare,industrial_insurance_applicable")
         .eq("order_id", data.order_id)
         .maybeSingle();
       setDriverCalcInfo(
@@ -100,8 +106,40 @@ export default function InvoiceDetailPage() {
             }
           : null
       );
+
+      // 로드맵③ 현장 추가비 — 표시 시점 합산은 오더의 "가장 최근 invoice"에만
+      // 붙인다(한 오더에 정정청구 invoice가 추가로 있을 수 있음, 3-1)
+      const { data: latestInvoice } = await supabase
+        .from("invoices")
+        .select("id")
+        .eq("order_id", data.order_id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (dispatchRow && latestInvoice?.id === data.id) {
+        const { data: extraRows } = await supabase
+          .from("dispatch_extra_charges")
+          .select("id,category,customer_charge_amount,driver_payout_amount,note,created_at,correction_invoice_id")
+          .eq("dispatch_id", dispatchRow.id)
+          .eq("status", "active")
+          .is("correction_invoice_id", null)
+          .gt("created_at", data.created_at);
+        setTrailingExtraCharges(extraRows || []);
+      } else {
+        setTrailingExtraCharges([]);
+      }
+
+      const { data: correctionSource } = await supabase
+        .from("dispatch_extra_charges")
+        .select("id")
+        .eq("correction_invoice_id", data.id)
+        .limit(1);
+      setIsCorrectionInvoice(!!(correctionSource && correctionSource.length > 0));
     } else {
       setDriverCalcInfo(null);
+      setTrailingExtraCharges([]);
+      setIsCorrectionInvoice(false);
     }
     setEditForm({
       status: data.status || "정산대기",
@@ -419,6 +457,7 @@ export default function InvoiceDetailPage() {
             {invoice.orders?.order_no || "정산 상세"}
             {invoice.orders?.loading_type === "mixable" && <MixableBadge />}
             {invoice.locked && <LockedBadge />}
+            {isCorrectionInvoice && <span className="badge">현장추가비 정정청구</span>}
           </h1>
           <p className="page-desc">
             {invoice.companies?.name || invoice.orders?.guest_name || "-"} ·{" "}
@@ -580,7 +619,7 @@ export default function InvoiceDetailPage() {
             <>
               <div>
                 <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
-                  화주 청구금액
+                  화주 청구금액(확정)
                 </div>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>
                   {won(invoice.customer_charge_total)}
@@ -588,10 +627,22 @@ export default function InvoiceDetailPage() {
                 {invoice.customer_charge_total != null && (
                   <div style={{ fontSize: 11, color: "var(--text-muted)" }}>부가세 별도</div>
                 )}
+                {trailingExtraCharges.length > 0 && (
+                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                    현장 추가비 +
+                    {won(trailingExtraCharges.reduce((s, c) => s + (c.customer_charge_amount || 0), 0))}
+                    <br />
+                    총 청구액(참고):{" "}
+                    {won(
+                      (invoice.customer_charge_total || 0) +
+                        trailingExtraCharges.reduce((s, c) => s + (c.customer_charge_amount || 0), 0)
+                    )}
+                  </div>
+                )}
               </div>
               <div>
                 <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
-                  차주 지급금액
+                  차주 지급금액(확정)
                 </div>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>
                   {won(invoice.driver_payout_total)}
@@ -600,6 +651,18 @@ export default function InvoiceDetailPage() {
                   <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
                     부가세 포함
                     {driverCalcInfo.insuranceApplied && " · 산재보험료 차감됨"}
+                  </div>
+                )}
+                {trailingExtraCharges.length > 0 && (
+                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                    현장 추가비 +
+                    {won(trailingExtraCharges.reduce((s, c) => s + (c.driver_payout_amount || 0), 0))}
+                    <br />
+                    총 지급액(참고):{" "}
+                    {won(
+                      (invoice.driver_payout_total || 0) +
+                        trailingExtraCharges.reduce((s, c) => s + (c.driver_payout_amount || 0), 0)
+                    )}
                   </div>
                 )}
               </div>
@@ -679,6 +742,37 @@ export default function InvoiceDetailPage() {
             )
           )}
         </div>
+
+        {trailingExtraCharges.length > 0 && (
+          <div style={{ marginTop: 14, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
+            <h4 style={{ fontSize: 13, marginTop: 0, marginBottom: 8 }}>
+              현장 추가비 내역 (아직 확정 청구금액에 반영 안 됨 — 참고용)
+            </h4>
+            <table>
+              <thead>
+                <tr>
+                  <th>항목</th>
+                  <th>화주 청구액</th>
+                  <th>차주 지급액</th>
+                  <th>메모</th>
+                </tr>
+              </thead>
+              <tbody>
+                {trailingExtraCharges.map((c) => (
+                  <tr key={c.id}>
+                    <td>{getDispatchExtraChargeCategoryLabel(c.category)}</td>
+                    <td>{won(c.customer_charge_amount)}</td>
+                    <td>{won(c.driver_payout_amount)}</td>
+                    <td>{c.note || "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 8, marginBottom: 0 }}>
+              등록·취소는 연결된 배차 상세의 "현장 추가비" 섹션에서 처리합니다.
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="card" style={{ padding: 20, marginBottom: 20 }}>
