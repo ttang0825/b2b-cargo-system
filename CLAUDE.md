@@ -4,7 +4,25 @@
 > 최종 버전입니다. 앞으로는 이 문서(또는 `CLAUDE.md`)를 참고해서 Claude Code가
 > 작업을 이어갑니다.
 
-**작성일: 2026-07-23** (최종 갱신: 2026-08-02, Claude Code 세션에서 직접 갱신 — 14차
+**작성일: 2026-07-23** (최종 갱신: 2026-08-02, Claude Code 세션에서 직접 갱신 — 15차
+세션: "월정산 묶음 후보 자격조건 단일 함수 통합"(로드맵 ②-B 후속, PR #64
+merge 후 리팩터링 세션) — 사용자가 "`customer_billing_batch_candidates` 뷰를
+`add_item_to_billing_batch`/`validate_billing_batch`/`confirm_billing_batch`
+3개 함수가 실제로 재사용하는지, 조건을 각자 따로 넣어서 어긋날 위험이
+남아있는지" 재확인 요청 — 조사 결과 뷰는 화면 조회 전용이고 4곳 모두 같은
+자격조건을 각자 인라인으로 재작성한 구조였음(이번 마감일 변경까지는 로직이
+어긋난 곳은 없었지만 구조적 위험은 실재). `is_billing_batch_candidate(invoices)`
+SQL 함수 신규(IMMUTABLE, 묶음/기간과 무관한 정산 건 1건의 기본 자격만 판정) —
+뷰는 이 함수를 WHERE로 직접 사용, `validate_billing_batch`/
+`confirm_billing_batch`는 완전히 동일하게 복붙되어 있던 재검증 블록을 이
+함수 호출로 교체(반환값 100% 동일, 순수 리팩터링). `add_item_to_billing_batch`는
+조건별로 서로 다른 사유 코드를 반환해야 해서 개별 체크는 전부 그대로 두고
+(반환값 보존), 마지막에 이 함수를 최종 안전장치로만 추가(조건이 어긋나면
+기존 `invoice_no_longer_eligible` 사유로 막아줌). 앱 코드(프론트엔드/API
+라우트)는 전혀 안 건드림 — `npx tsc --noEmit`/`npm run build`(41페이지
+프리렌더 실패, 기존 베이스라인과 동일)로 회귀 없음 확인, DB 함수 자동화
+테스트가 없어 조건 동치성은 코드 대조로 직접 검증. DB 변경은 사용자가
+Supabase SQL Editor에서 직접 실행. 14차
 세션: "화주 월정산 묶음 청구 도입(로드맵 ②-B)" — `collection_method='broker'`+
 `billing_cycle='monthly'`(주선사 정산·월정산) 건을 화주+기간(월 단위)으로 묶어
 한 번에 청구·확정하는 기능. DB(`customer_billing_batches`/
@@ -1515,6 +1533,55 @@ Supabase에 저장하면 `timestamptz` 컬럼이 이를 UTC로 오인식해 실�
   - 로드맵 ②-B 중 "화주 월정산 묶음"(broker+monthly) 부분은 이 세션에서
     완료·merge됨. `driver_direct`+`monthly` 전용 묶음, 화주포털에
     월정산 묶음 노출 등은 여전히 범위 밖(추후 로드맵)
+- **월정산 묶음 "후보 자격조건" 단일 함수 통합(로드맵 ②-B 후속, 15차 세션)**:
+  PR #64 merge 후 사용자가 "`customer_billing_batch_candidates` 뷰와
+  `add_item_to_billing_batch`/`validate_billing_batch`/`confirm_billing_batch`
+  3개 함수가 정말 이 뷰를 재사용하는지, 아니면 조건을 각자 따로 넣어서
+  나중에 어긋날 위험이 있는지"를 재확인 요청 — 코드 조사 결과 뷰는 화면
+  조회 전용이고 4곳(뷰+함수 3개) 모두 같은 자격조건을 각자 인라인으로
+  다시 적어둔 구조였음(로직 자체는 이번 v3 마감일 변경까지는 일관되게
+  맞아있었지만, 구조적으로는 한 곳만 고치면 나머지가 어긋날 수 있는
+  상태). 이를 해소하기 위해 순수 DB 리팩터링 진행(앱 코드 변경 없음,
+  API 반환값·reason 코드 전부 기존과 동일하게 유지).
+  - `is_billing_batch_candidate(p_invoice invoices) returns boolean` 신규
+    (SQL/IMMUTABLE) — 특정 묶음·기간과 무관하게 정산 건 1건 자체가
+    갖춰야 하는 기본 자격(수금방식=broker·청구주기=monthly·상태=정산대기·
+    화주측잠금 없음·정산잠금 없음·청구금액 확정·화주 존재)만 담음.
+    "이미 다른 묶음에 담겨있는지"는 일부러 여기 안 넣음 —
+    validate/confirm이 재검증하는 항목은 정의상 "지금 이 묶음에 이미
+    담긴" 항목이라 그 조건을 넣으면 매번 자기 자신 때문에 부적격
+    판정되는 버그가 생기기 때문(뷰와 `add_item_to_billing_batch`에서만
+    의미가 있어 그 두 곳에서는 계속 별도로 유지)
+  - `customer_billing_batch_candidates` 뷰: WHERE 조건을
+    `is_billing_batch_candidate(i)`(+ 기존처럼 별도의 "다른 묶음에 이미
+    담겼는지" NOT EXISTS)로 교체 — 컬럼 목록·순서는 그대로 유지
+  - `validate_billing_batch`/`confirm_billing_batch`: 두 함수에 토씨
+    하나 안 틀리고 복붙되어 있던 `ineligible_items` 재검증 OR-조건
+    블록을 `is_billing_batch_candidate(i)` 호출로 교체 — 두 함수 모두
+    원래도 개별 사유가 아니라 `'ineligible_items'`라는 단일 사유로
+    묶어서 반환하고 있었기 때문에 이 치환은 반환값이 100% 동일한 순수
+    리팩터링(동작 변화 없음)
+  - `add_item_to_billing_batch`: 이 함수는 조건별로 서로 다른 사유
+    코드(`not_monthly_broker`/`invoice_status_not_eligible`/
+    `already_customer_side_locked`/`invoice_locked`/`amount_not_finalized`
+    등)를 반환해서 화면에 각각 다른 안내 문구를 보여주는데,
+    `is_billing_batch_candidate`는 단일 boolean이라 "어떤 조건이
+    위반됐는지"까지는 알려줄 수 없음 — 그래서 **개별 사유 체크는 전부
+    그대로 남겨 반환값을 100% 보존**하고, 그 마지막에
+    `is_billing_batch_candidate(v_invoice)` 최종 안전장치만 추가.
+    정상 흐름에서는 위 개별 체크가 이미 다 걸러내므로 평소엔 이 게이트가
+    작동할 일이 없지만, 나중에 누군가 `is_billing_batch_candidate`의
+    조건만 고치고 이 함수의 개별 체크는 안 고치는 실수를 하더라도 여기서
+    확실히 막아줌(반환 사유는 기존에 이미 있던 `invoice_no_longer_eligible`
+    재사용 — `refresh_item_snapshot`이 쓰던 것과 같은 문구라
+    `lib/billingBatchReasons.ts` 수정도 필요 없었음)
+  - 순수 DB 함수/뷰 리팩터링이라 프론트엔드·API 라우트 코드는 전혀
+    안 건드림(반환값·reason 코드가 기존과 완전히 동일하므로 화면 쪽
+    회귀 위험 없음) — `npx tsc --noEmit` 통과, `npm run build` 41페이지
+    프리렌더 실패(기존 베이스라인과 동일, 신규 실패 없음)로 회귀 없음
+    확인. DB 함수 자체를 검증하는 자동화 테스트는 이 저장소에 없어서
+    (`package.json`에 test 스크립트 없음), 위 조건 동치성은 코드 대조로
+    직접 검증함. DB 변경은 사용자가 Supabase SQL Editor에서 직접 실행
 
 ---
 
