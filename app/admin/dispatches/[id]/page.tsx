@@ -34,6 +34,11 @@ import {
   getLatestInsuranceRateSettings,
   DEFAULT_INSURANCE_RATE_SETTINGS,
 } from "@/lib/insuranceRateSettings";
+import {
+  DISPATCH_EXTRA_CHARGE_CATEGORIES,
+  getDispatchExtraChargeCategoryLabel,
+  getDispatchExtraChargeReasonLabel,
+} from "@/lib/dispatchExtraCharges";
 
 function won(n: number | null) {
   if (n === null || n === undefined) return "-";
@@ -80,6 +85,19 @@ export default function DispatchDetailPage() {
     industrial_insurance_applicable: true,
   });
   const [rateSettings, setRateSettings] = useState(DEFAULT_INSURANCE_RATE_SETTINGS);
+
+  // 로드맵③ 현장 추가비
+  const [extraCharges, setExtraCharges] = useState<any[]>([]);
+  const [extraChargeForm, setExtraChargeForm] = useState({
+    category: DISPATCH_EXTRA_CHARGE_CATEGORIES[0] as string,
+    customer_charge_amount: "",
+    driver_payout_amount: "",
+    note: "",
+  });
+  const [extraChargeSaving, setExtraChargeSaving] = useState(false);
+  const [extraChargeError, setExtraChargeError] = useState<string | null>(null);
+  const [cancellingExtraChargeId, setCancellingExtraChargeId] = useState<string | null>(null);
+  const [cancelReasonInput, setCancelReasonInput] = useState("");
 
   const networkNameById: Record<string, string> = {};
   networks.forEach((n) => (networkNameById[n.id] = n.name));
@@ -214,7 +232,20 @@ export default function DispatchDetailPage() {
         : DEFAULT_INSURANCE_RATE_SETTINGS
     );
 
+    await loadExtraCharges();
+
     setLoading(false);
+  }
+
+  // 로드맵③ 현장 추가비 — 취소된 것도 이력으로 같이 보여줌(재무 데이터는
+  // 삭제하지 않고 이력 보존)
+  async function loadExtraCharges() {
+    const { data } = await supabase
+      .from("dispatch_extra_charges")
+      .select("*")
+      .eq("dispatch_id", id)
+      .order("created_at", { ascending: false });
+    setExtraCharges(data || []);
   }
 
   useEffect(() => {
@@ -429,6 +460,70 @@ export default function DispatchDetailPage() {
     load();
   }
 
+  // 로드맵③ 현장 추가비 등록 — DB 함수(register_dispatch_extra_charge)가
+  // 배차→오더→정산 건 연쇄 조회, 확정 묶음이면 정정청구 정산 건 자동생성까지
+  // 원자적으로 처리(1-9 조사 결과 반영, 여러 개별 update 나열 방식 사용 안 함)
+  async function handleRegisterExtraCharge() {
+    if (!dispatch) return;
+    setExtraChargeError(null);
+    const chargeNum = Number(extraChargeForm.customer_charge_amount) || 0;
+    const payoutNum = Number(extraChargeForm.driver_payout_amount) || 0;
+    if (chargeNum === 0 && payoutNum === 0) {
+      setExtraChargeError("화주 청구액 또는 차주 지급액 중 하나는 입력해주세요.");
+      return;
+    }
+    if (extraChargeForm.category === "other" && !extraChargeForm.note.trim()) {
+      setExtraChargeError("'기타' 항목은 사유를 입력해주세요.");
+      return;
+    }
+    setExtraChargeSaving(true);
+    const res = await fetch("/api/admin/dispatch-extra-charges/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dispatch_id: id,
+        category: extraChargeForm.category,
+        customer_charge_amount: chargeNum,
+        driver_payout_amount: payoutNum,
+        note: extraChargeForm.note.trim() || null,
+      }),
+    });
+    const result = await res.json().catch(() => ({}));
+    setExtraChargeSaving(false);
+    if (!res.ok || !result.success) {
+      setExtraChargeError(result.error || getDispatchExtraChargeReasonLabel(result.reason));
+      return;
+    }
+    setExtraChargeForm({
+      category: DISPATCH_EXTRA_CHARGE_CATEGORIES[0],
+      customer_charge_amount: "",
+      driver_payout_amount: "",
+      note: "",
+    });
+    await loadExtraCharges();
+  }
+
+  async function handleCancelExtraCharge(chargeId: string) {
+    if (!cancelReasonInput.trim()) {
+      setExtraChargeError("취소 사유를 입력해주세요.");
+      return;
+    }
+    setExtraChargeError(null);
+    const res = await fetch("/api/admin/dispatch-extra-charges/cancel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: chargeId, reason: cancelReasonInput }),
+    });
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok || !result.success) {
+      setExtraChargeError(result.error || getDispatchExtraChargeReasonLabel(result.reason));
+      return;
+    }
+    setCancellingExtraChargeId(null);
+    setCancelReasonInput("");
+    await loadExtraCharges();
+  }
+
   async function adjustDriverTripCount(driverId: string, delta: number) {
     const { data: driver } = await supabase
       .from("drivers")
@@ -451,12 +546,14 @@ export default function DispatchDetailPage() {
   // 운송완료로 바뀐 오더에 정산이 아직 없으면 자동으로 등록
   // (화주 실적은 DB 트리거가 알아서 재계산하므로 여기서 따로 안 건드림)
   async function autoCreateInvoiceIfNeeded(orderId: string) {
+    // 로드맵③ 이후로는 한 오더에 정정청구 invoice가 추가로 있을 수 있어
+    // .maybeSingle()이 2행 이상이면 에러를 던짐 — 존재 여부만 확인
     const { data: existing } = await supabase
       .from("invoices")
       .select("id")
       .eq("order_id", orderId)
-      .maybeSingle();
-    if (existing) return;
+      .limit(1);
+    if (existing && existing.length > 0) return;
 
     const { data: order } = await supabase
       .from("orders")
@@ -464,10 +561,20 @@ export default function DispatchDetailPage() {
       .eq("id", orderId)
       .single();
 
+    // 로드맵③ 현장 추가비 — 정산 건이 아직 없는 상태에서 미리 등록된 활성
+    // 추가비가 있으면 최초 스냅샷에 포함해서 얼림(3-2)
+    const { data: activeExtras } = await supabase
+      .from("dispatch_extra_charges")
+      .select("customer_charge_amount,driver_payout_amount")
+      .eq("dispatch_id", id)
+      .eq("status", "active");
+    const extraCharge = (activeExtras || []).reduce((s, e) => s + (e.customer_charge_amount || 0), 0);
+    const extraPayout = (activeExtras || []).reduce((s, e) => s + (e.driver_payout_amount || 0), 0);
+
     // 혼적 할인은 이미 견적 단계 최종금액에 반영되어 저장되므로 별도 변환
     // 없이 화주 청구운임을 그대로 사용
-    const charge = Number(editForm.customer_charge) || 0;
-    const payout = Number(editForm.driver_payout) || 0;
+    const charge = (Number(editForm.customer_charge) || 0) + extraCharge;
+    const payout = (Number(editForm.driver_payout) || 0) + extraPayout;
     const now = new Date();
     const billingPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
     // 화주 청구금액은 공급가액, 차주 지급금액은 실제 지급되는 최종금액
@@ -1281,6 +1388,157 @@ export default function DispatchDetailPage() {
           </div>
         )}
       </div>
+
+      {/* 로드맵③ 현장 추가비 — 운송 진행/완료 후 현장에서 추가로 발생하는
+          비용(대기료·회차비 등). 1-4 조사 결과, 배차확정 직후(아직 상차 전)엔
+          이 개념 자체가 발생할 수 없어 "차주 운임 상세 계산" 섹션(배차확정
+          이상 노출)보다 좁게, 상차완료 이상부터만 노출 */}
+      {["상차완료", "하차완료", "운송완료", "문제발생"].includes(dispatch.dispatch_status) && (
+        <div className="card" style={{ padding: 20, marginBottom: 20 }}>
+          <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
+            현장 추가비
+          </h3>
+
+          {extraChargeError && <div className="error-box">오류: {extraChargeError}</div>}
+
+          <div className="form-grid" style={{ padding: 0, marginBottom: 10 }}>
+            <div className="field">
+              <label>항목</label>
+              <select
+                value={extraChargeForm.category}
+                onChange={(e) => setExtraChargeForm({ ...extraChargeForm, category: e.target.value })}
+              >
+                {DISPATCH_EXTRA_CHARGE_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {getDispatchExtraChargeCategoryLabel(c)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label>화주 청구액(공급가액, 원)</label>
+              <MoneyInput
+                value={extraChargeForm.customer_charge_amount}
+                onChange={(v) => setExtraChargeForm({ ...extraChargeForm, customer_charge_amount: v })}
+              />
+            </div>
+            <div className="field">
+              <label>차주 지급액(부가세 포함, 원)</label>
+              <MoneyInput
+                value={extraChargeForm.driver_payout_amount}
+                onChange={(v) => setExtraChargeForm({ ...extraChargeForm, driver_payout_amount: v })}
+              />
+            </div>
+            <div className="field">
+              <label>메모{extraChargeForm.category === "other" && " *"}</label>
+              <input
+                type="text"
+                value={extraChargeForm.note}
+                onChange={(e) => setExtraChargeForm({ ...extraChargeForm, note: e.target.value })}
+                placeholder={extraChargeForm.category === "other" ? "사유를 입력해주세요" : "선택 입력"}
+              />
+            </div>
+          </div>
+          <button className="btn" onClick={handleRegisterExtraCharge} disabled={extraChargeSaving}>
+            {extraChargeSaving ? "등록 중..." : "추가"}
+          </button>
+
+          <div style={{ marginTop: 16 }}>
+            {extraCharges.length === 0 ? (
+              <p style={{ fontSize: 12.5, color: "var(--text-muted)" }}>등록된 현장 추가비가 없습니다.</p>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>항목</th>
+                    <th>화주 청구액</th>
+                    <th>차주 지급액</th>
+                    <th>메모</th>
+                    <th>등록</th>
+                    <th>상태</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {extraCharges.map((c) => (
+                    <tr key={c.id} style={c.status === "cancelled" ? { opacity: 0.55 } : undefined}>
+                      <td>{getDispatchExtraChargeCategoryLabel(c.category)}</td>
+                      <td>{won(c.customer_charge_amount)}</td>
+                      <td>{won(c.driver_payout_amount)}</td>
+                      <td style={{ maxWidth: 160, whiteSpace: "normal" }}>{c.note || "-"}</td>
+                      <td style={{ fontSize: 12, whiteSpace: "nowrap" }}>
+                        {c.created_by_name_snapshot || "-"}
+                        <br />
+                        {String(c.created_at).slice(0, 10)}
+                      </td>
+                      <td>
+                        {c.status === "cancelled" ? (
+                          <span className="badge">취소됨</span>
+                        ) : c.correction_invoice_id ? (
+                          <span className="badge">정정청구 생성됨</span>
+                        ) : (
+                          <span className="badge">등록됨</span>
+                        )}
+                      </td>
+                      <td>
+                        {c.status === "active" && !c.correction_invoice_id && (
+                          cancellingExtraChargeId === c.id ? (
+                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                              <input
+                                type="text"
+                                value={cancelReasonInput}
+                                onChange={(e) => setCancelReasonInput(e.target.value)}
+                                placeholder="취소 사유"
+                                style={{ width: 120, fontSize: 12 }}
+                              />
+                              <button
+                                className="btn-danger"
+                                style={{ fontSize: 11.5, padding: "4px 8px" }}
+                                onClick={() => handleCancelExtraCharge(c.id)}
+                              >
+                                확인
+                              </button>
+                              <button
+                                className="btn btn-ghost"
+                                style={{ fontSize: 11.5, padding: "4px 8px" }}
+                                onClick={() => {
+                                  setCancellingExtraChargeId(null);
+                                  setCancelReasonInput("");
+                                }}
+                              >
+                                취소
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              className="btn btn-ghost"
+                              style={{ fontSize: 11.5, padding: "4px 8px" }}
+                              onClick={() => {
+                                setCancellingExtraChargeId(c.id);
+                                setCancelReasonInput("");
+                              }}
+                            >
+                              취소
+                            </button>
+                          )
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {extraCharges.some((c) => c.status === "active") && (
+              <p style={{ fontSize: 13, fontWeight: 600, marginTop: 10 }}>
+                합계: 화주 청구{" "}
+                {won(extraCharges.filter((c) => c.status === "active").reduce((s, c) => s + (c.customer_charge_amount || 0), 0))}{" "}
+                · 차주 지급{" "}
+                {won(extraCharges.filter((c) => c.status === "active").reduce((s, c) => s + (c.driver_payout_amount || 0), 0))}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="card" style={{ padding: 20, marginBottom: 20 }}>
         <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>

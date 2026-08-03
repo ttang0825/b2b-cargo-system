@@ -377,12 +377,14 @@ function DispatchesPageInner() {
   async function autoCreateInvoiceIfNeeded(target: DispatchRow) {
     if (!target.order_id) return;
 
+    // 로드맵③ 이후로는 한 오더에 정정청구 invoice가 추가로 있을 수 있어
+    // .maybeSingle()이 2행 이상이면 에러를 던짐 — 존재 여부만 확인
     const { data: existing } = await supabase
       .from("invoices")
       .select("id")
       .eq("order_id", target.order_id)
-      .maybeSingle();
-    if (existing) return;
+      .limit(1);
+    if (existing && existing.length > 0) return;
 
     const { data: order } = await supabase
       .from("orders")
@@ -390,8 +392,18 @@ function DispatchesPageInner() {
       .eq("id", target.order_id)
       .single();
 
-    const charge = target.customer_charge || 0;
-    const payout = target.driver_payout || 0;
+    // 로드맵③ 현장 추가비 — 정산 건이 아직 없는 상태에서 미리 등록된 활성
+    // 추가비가 있으면 최초 스냅샷에 포함해서 얼림(3-2)
+    const { data: activeExtras } = await supabase
+      .from("dispatch_extra_charges")
+      .select("customer_charge_amount,driver_payout_amount")
+      .eq("dispatch_id", target.id)
+      .eq("status", "active");
+    const extraCharge = (activeExtras || []).reduce((s, e) => s + (e.customer_charge_amount || 0), 0);
+    const extraPayout = (activeExtras || []).reduce((s, e) => s + (e.driver_payout_amount || 0), 0);
+
+    const charge = (target.customer_charge || 0) + extraCharge;
+    const payout = (target.driver_payout || 0) + extraPayout;
     const now = new Date();
     const billingPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
     // 화주 청구금액은 공급가액, 차주 지급금액은 실제 지급되는 최종금액

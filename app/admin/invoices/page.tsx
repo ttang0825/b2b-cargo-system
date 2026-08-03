@@ -128,6 +128,16 @@ function InvoicesPageInner() {
   const [driverCalcInfoByOrderId, setDriverCalcInfoByOrderId] = useState<
     Record<string, { throughCalc: boolean; insuranceApplied: boolean }>
   >({});
+  // 로드맵③ 현장 추가비 — invoice.customer_charge_total/driver_payout_total은
+  // 절대 안 건드리므로(3-1), 그 이후 등록된 활성 추가비는 표시 시점에만
+  // 더해서 캡션으로 보여줌. 한 오더에 invoice가 여러 개(정정청구 포함)일 수
+  // 있어, 각 오더에서 "가장 최근 invoice"에만 트레일링 추가비를 붙인다
+  // (현재 로드된 목록 범위 안에서 판단 — 기간 필터로 더 최근 invoice가
+  // 빠져있으면 부정확할 수 있음, admin 내부 도구라 실용적 근사치로 채택).
+  const [extraChargeInfoByInvoiceId, setExtraChargeInfoByInvoiceId] = useState<
+    Record<string, { count: number; charge: number; payout: number }>
+  >({});
+  const [correctionInvoiceIds, setCorrectionInvoiceIds] = useState<Set<string>>(new Set());
   // 선택한 오더에 연결된 배차의 정산방식·선착불 관련 값 스냅샷 — 정산 등록 시
   // 그대로 복사(작업지시서 4-5, 배차가 없으면 오더 값으로 폴백)
   const [settlementSnapshot, setSettlementSnapshot] = useState<{
@@ -157,13 +167,12 @@ function InvoicesPageInner() {
     if (error) setError(error.message);
     else setInvoices(data as any as InvoiceRow[]);
 
-    const orderIds = ((data as any as InvoiceRow[]) || [])
-      .map((i) => i.order_id)
-      .filter((v): v is string => !!v);
+    const invoiceRows = (data as any as InvoiceRow[]) || [];
+    const orderIds = invoiceRows.map((i) => i.order_id).filter((v): v is string => !!v);
     if (orderIds.length > 0) {
       const { data: dispatchRows } = await supabase
         .from("dispatches")
-        .select("order_id,driver_base_fare,industrial_insurance_applicable")
+        .select("id,order_id,driver_base_fare,industrial_insurance_applicable")
         .in("order_id", orderIds);
       const map: Record<string, { throughCalc: boolean; insuranceApplied: boolean }> = {};
       (dispatchRows || []).forEach((d: any) => {
@@ -175,10 +184,70 @@ function InvoicesPageInner() {
         }
       });
       setDriverCalcInfoByOrderId(map);
+      await loadExtraChargeInfo(invoiceRows, (dispatchRows as any) || []);
     } else {
       setDriverCalcInfoByOrderId({});
+      setExtraChargeInfoByInvoiceId({});
+      setCorrectionInvoiceIds(new Set());
     }
     setLoading(false);
+  }
+
+  // 로드맵③ 현장 추가비 표시 시점 합산(5-2) — dispatchRows는 loadInvoices가
+  // 이미 order_id 기준으로 조회해둔 걸 그대로 재사용(추가 쿼리 최소화)
+  async function loadExtraChargeInfo(invoiceRows: InvoiceRow[], dispatchRows: { id: string; order_id: string | null }[]) {
+    const dispatchIdByOrderId: Record<string, string> = {};
+    dispatchRows.forEach((d) => {
+      if (d.order_id) dispatchIdByOrderId[d.order_id] = d.id;
+    });
+    const dispatchIds = Object.values(dispatchIdByOrderId);
+    if (dispatchIds.length === 0) {
+      setExtraChargeInfoByInvoiceId({});
+      setCorrectionInvoiceIds(new Set());
+      return;
+    }
+
+    const { data: extraRows } = await supabase
+      .from("dispatch_extra_charges")
+      .select("dispatch_id,customer_charge_amount,driver_payout_amount,correction_invoice_id,created_at")
+      .in("dispatch_id", dispatchIds)
+      .eq("status", "active");
+
+    const correctionIds = new Set<string>();
+    (extraRows || []).forEach((e: any) => {
+      if (e.correction_invoice_id) correctionIds.add(e.correction_invoice_id);
+    });
+    setCorrectionInvoiceIds(correctionIds);
+
+    const orderIdByDispatchId: Record<string, string> = {};
+    Object.entries(dispatchIdByOrderId).forEach(([orderId, dispatchId]) => {
+      orderIdByDispatchId[dispatchId] = orderId;
+    });
+
+    // 오더별 "가장 최근 invoice" — 현재 로드된 목록 범위 안에서 판단
+    const latestByOrderId: Record<string, InvoiceRow> = {};
+    invoiceRows.forEach((r) => {
+      if (!r.order_id) return;
+      const cur = latestByOrderId[r.order_id];
+      if (!cur || new Date(r.created_at) > new Date(cur.created_at)) latestByOrderId[r.order_id] = r;
+    });
+
+    const info: Record<string, { count: number; charge: number; payout: number }> = {};
+    (extraRows || []).forEach((e: any) => {
+      if (e.correction_invoice_id) return; // 이미 별도 정정청구 invoice로 반영됨
+      const orderId = orderIdByDispatchId[e.dispatch_id];
+      if (!orderId) return;
+      const invoice = latestByOrderId[orderId];
+      if (!invoice) return;
+      // 이 invoice 생성 이전에 등록된 추가비는 이미 최초 스냅샷에 포함됨(3-2)
+      if (new Date(e.created_at) <= new Date(invoice.created_at)) return;
+      const cur = info[invoice.id] || { count: 0, charge: 0, payout: 0 };
+      cur.count += 1;
+      cur.charge += e.customer_charge_amount || 0;
+      cur.payout += e.driver_payout_amount || 0;
+      info[invoice.id] = cur;
+    });
+    setExtraChargeInfoByInvoiceId(info);
   }
 
   async function loadAvailableOrders() {
@@ -225,7 +294,7 @@ function InvoicesPageInner() {
     const { data: dispatch } = await supabase
       .from("dispatches")
       .select(
-        "customer_charge, driver_payout, collection_method, billing_cycle, direct_collection_point, network_settlement_type, total_freight_amount, driver_direct_collection_amount, brokerage_fee, brokerage_fee_payer"
+        "id, customer_charge, driver_payout, collection_method, billing_cycle, direct_collection_point, network_settlement_type, total_freight_amount, driver_direct_collection_amount, brokerage_fee, brokerage_fee_payer"
       )
       .eq("order_id", orderId)
       .maybeSingle();
@@ -254,14 +323,25 @@ function InvoicesPageInner() {
       });
     }
 
-    if (dispatch && (dispatch.customer_charge || dispatch.driver_payout)) {
-      setCustomerChargeTotal(
-        dispatch.customer_charge ? String(Math.round(dispatch.customer_charge)) : ""
-      );
-      setDriverPayoutTotal(
-        dispatch.driver_payout ? String(Math.round(dispatch.driver_payout)) : ""
-      );
-      return;
+    if (dispatch) {
+      // 로드맵③ 현장 추가비 — 정산 등록 전 미리 등록된 활성 추가비가 있으면
+      // 프리필 금액에 포함해서 보여줌(사용자가 최종 제출 전 그대로 확인 가능,
+      // 3-2 "최초 생성 시점에 스냅샷 포함" 원칙과 동일)
+      const { data: activeExtras } = await supabase
+        .from("dispatch_extra_charges")
+        .select("customer_charge_amount,driver_payout_amount")
+        .eq("dispatch_id", dispatch.id)
+        .eq("status", "active");
+      const extraCharge = (activeExtras || []).reduce((s, e) => s + (e.customer_charge_amount || 0), 0);
+      const extraPayout = (activeExtras || []).reduce((s, e) => s + (e.driver_payout_amount || 0), 0);
+      const chargeTotal = (dispatch.customer_charge || 0) + extraCharge;
+      const payoutTotal = (dispatch.driver_payout || 0) + extraPayout;
+
+      if (chargeTotal || payoutTotal) {
+        setCustomerChargeTotal(chargeTotal ? String(Math.round(chargeTotal)) : "");
+        setDriverPayoutTotal(payoutTotal ? String(Math.round(payoutTotal)) : "");
+        return;
+      }
     }
 
     // 배차 기록에 청구운임이 없으면(배차 관리를 거치지 않고 오더 상태만 바로
@@ -660,6 +740,13 @@ function InvoicesPageInner() {
                         <MixableBadge />
                       </div>
                     )}
+                    {correctionInvoiceIds.has(i.id) && (
+                      <div style={{ marginTop: 3 }}>
+                        <span className="badge" style={{ fontSize: 11 }}>
+                          현장추가비 정정청구
+                        </span>
+                      </div>
+                    )}
                   </td>
                   <td style={{ whiteSpace: "nowrap" }}>
                     {i.companies?.name || i.orders?.guest_name || "-"}
@@ -679,6 +766,12 @@ function InvoicesPageInner() {
                         {i.customer_charge_total != null && (
                           <div style={{ fontSize: 11, color: "var(--text-muted)" }}>부가세 별도</div>
                         )}
+                        {extraChargeInfoByInvoiceId[i.id]?.charge > 0 && (
+                          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                            현장 추가비 +{extraChargeInfoByInvoiceId[i.id].count}건 (
+                            {won(extraChargeInfoByInvoiceId[i.id].charge)})
+                          </div>
+                        )}
                       </td>
                       <td>
                         <span className="num" style={{ whiteSpace: "nowrap" }}>
@@ -693,6 +786,11 @@ function InvoicesPageInner() {
                                 산재보험료 차감
                               </>
                             )}
+                          </div>
+                        )}
+                        {extraChargeInfoByInvoiceId[i.id]?.payout > 0 && (
+                          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                            현장 추가비 +{won(extraChargeInfoByInvoiceId[i.id].payout)}
                           </div>
                         )}
                       </td>
