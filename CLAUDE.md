@@ -17,7 +17,9 @@
 별도 신규 "정정청구" invoice를 자동 생성해 다음 묶음에 담기게 함(기존 확정
 묶음 금액은 절대 불변). (1-7) 화주 청구액/차주 지급액 금액 분리 채택(안 B).
 (1-8) 차주 지급 추가비엔 산재보험료 미적용. (1-10) 8종 운영, 차량 변경은
-재견적 절차로 별도 분리. (2-5) 화주포털 미노출, admin 전용 1차 시작.
+재견적 절차로 별도 분리. (2-5) 화주포털 미노출, admin 전용 1차 시작
+**(PR #65 리뷰 중 사용자가 재확정 — 아래 "2-5 재확정" 항목 참고, 최종
+결정은 화주포털에도 항목별 내역으로 노출함)**.
 **핵심 설계 원칙(3-1)**: `invoices.customer_charge_total`/`driver_payout_total`은
 정산 건 생성 시점 1회성 스냅샷이라는 기존 성질을 그대로 유지하고 **절대
 직접 수정하지 않음** — 대신 화면에 보여줄 때만 이 값 + 그 이후 등록된 활성
@@ -46,7 +48,28 @@ CLAUDE.md 원칙 47번 신규 참고): (1) `refresh_item_snapshot`(로드맵②-
 (목록/상세 드롭다운, 정산관리 수동등록) 전부 최초 스냅샷에 등록된 활성
 추가비를 포함하도록 반영. `npx tsc --noEmit`/`npm run build`(41페이지
 프리렌더 실패, 기존 베이스라인과 동일) 통과. DB는 사용자가 Supabase SQL
-Editor에서 직접 실행. 15차
+Editor에서 직접 실행. **PR #65 리뷰 중 2-5 재확정(화주포털 노출) 및
+addendum 구현** — 화주가 PR에서 "화주포털에서는 현장추가비 표시가 안
+되는것 같다"고 지적, 처음엔 결정사항 2-5(미노출)를 그대로 따른 의도된
+동작이라고 답했으나 사용자가 노출로 재확정하며 3가지를 함께 확정: 노출
+수준은 캡션이 아니라 항목별 내역(카테고리+금액), 정정청구 invoice도
+일반 invoice와 동일하게 노출(구분 배지만 추가), 취소된 항목은 미노출.
+**추가 제약**: `driver_payout_amount`(차주 지급액)는 화주포털에 절대
+노출 금지 — 프론트 코드에서 안 보여주는 수준이 아니라 DB 권한 자체를
+column-level `GRANT`로 제한(`authenticated` 롤에서 `dispatch_extra_charges`
+테이블의 기본 전체컬럼 SELECT 권한을 `REVOKE`하고, 노출 가능한 컬럼만
+다시 `GRANT`) — 프론트가 실수로 이 필드를 조회에 넣어도 Postgres가 권한
+오류로 쿼리 자체를 막아서 조용히 새는 경로가 원천 차단됨. 행 단위 접근도
+`customer_accounts.auth_user_id = auth.uid()` → `company_id` 일치 조건의
+RLS 정책으로 본인 회사 소속 건만 제한(기존 원칙 2번과 동일 패턴).
+`lib/portalInvoiceFields.ts`에 `PORTAL_DISPATCH_EXTRA_CHARGE_FIELDS`
+신규 상수(안전 컬럼만) + `PORTAL_INVOICE_FIELDS`에 `order_id` 추가(추가비
+조회 조인에 필요). `customer/invoices` 목록(데스크탑 표+모바일 카드
+둘 다, 별도 상세 페이지가 없는 화면이라 행 펼치기 방식으로 항목별 내역
+표시)에 admin과 동일한 "가장 최근 invoice에만 트레일링 추가비 표시"
+로직을 화주포털 안전 필드로 재구현. `npx tsc --noEmit`/`npm run build`
+재확인 통과. DB 마이그레이션(column GRANT/REVOKE + RLS 정책)은 사용자가
+Supabase SQL Editor에서 직접 실행. 15차
 세션: "월정산 묶음 후보 자격조건 단일 함수 통합"(로드맵 ②-B 후속, PR #64
 merge 후 리팩터링 세션) — 사용자가 "`customer_billing_batch_candidates` 뷰를
 `add_item_to_billing_batch`/`validate_billing_batch`/`confirm_billing_batch`
@@ -1702,6 +1725,33 @@ Supabase에 저장하면 `timestamptz` 컬럼이 이를 UTC로 오인식해 실�
   - `npx tsc --noEmit`/`npm run build`(41페이지 프리렌더 실패, 기존
     베이스라인과 동일) 통과. DB 마이그레이션은 사용자가 Supabase SQL
     Editor에서 직접 실행
+  - **PR #65 리뷰 중 2-5 재확정(화주포털 노출) 및 addendum**: 화주가 PR
+    코멘트로 화주포털에 현장 추가비가 안 보인다고 지적 — 결정사항 2-5를
+    그대로 따른 의도된 동작이라고 답했으나, 사용자가 이 자리에서 2-5를
+    "화주포털 노출함(항목별 내역 수준)"으로 재확정. 함께 확정된 3가지:
+    노출 수준은 캡션이 아니라 카테고리+금액 항목별 내역, 정정청구 invoice도
+    일반 invoice와 동일하게 노출(구분 배지만 추가), 취소(`cancelled`)
+    항목은 미노출(`active`만).
+    - **`driver_payout_amount`(차주 지급액) 화주포털 노출 금지 — DB
+      권한 자체를 제한**: 프론트 코드에서 안 보여주는 수준으로는 부족하다는
+      지시에 따라, `authenticated` 롤의 `dispatch_extra_charges` 기본
+      전체컬럼 SELECT 권한을 `REVOKE`하고 노출 가능한 컬럼만
+      column-level `GRANT`로 다시 부여 — 프론트가 실수로 이 필드를
+      조회에 넣어도 Postgres가 권한 오류로 쿼리 자체를 막음(조용히
+      누락되는 게 아니라 바로 드러남). 행 단위 접근은
+      `customer_accounts.auth_user_id = auth.uid()` → `company_id`
+      일치 조건의 RLS 정책으로 본인 회사 소속 건만 제한(원칙 2번과
+      동일 패턴)
+    - `lib/portalInvoiceFields.ts`에 `PORTAL_DISPATCH_EXTRA_CHARGE_FIELDS`
+      신규(안전 컬럼만), `PORTAL_INVOICE_FIELDS`에 `order_id` 추가(추가비
+      조인에 필요)
+    - `customer/invoices` 목록(별도 상세 페이지가 없는 화면이라 행
+      펼치기 방식으로 항목별 내역 표시, 데스크탑 표+모바일 카드 둘 다)에
+      admin과 동일한 "가장 최근 invoice에만 트레일링 추가비 표시" 로직을
+      화주포털 안전 필드로 재구현
+    - `npx tsc --noEmit`/`npm run build` 재확인 통과. DB 마이그레이션
+      (column GRANT/REVOKE + RLS 정책)은 사용자가 Supabase SQL Editor에서
+      직접 실행
 
 ---
 
