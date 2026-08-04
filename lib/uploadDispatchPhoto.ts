@@ -12,7 +12,8 @@ import {
 export async function uploadDispatchPhoto(
   dispatchId: string,
   category: DispatchPhotoCategory,
-  file: File
+  file: File,
+  claimId?: string | null
 ): Promise<{ error: string | null }> {
   if (file.size <= 0 || file.size > DISPATCH_PHOTO_MAX_SIZE_BYTES) {
     return { error: "file_too_large" };
@@ -27,6 +28,7 @@ export async function uploadDispatchPhoto(
     body: JSON.stringify({
       dispatch_id: dispatchId,
       category,
+      claim_id: category === "claim" ? claimId : undefined,
       mime_type: file.type,
       file_size_bytes: file.size,
     }),
@@ -45,6 +47,7 @@ export async function uploadDispatchPhoto(
     body: JSON.stringify({
       dispatch_id: dispatchId,
       category,
+      claim_id: category === "claim" ? claimId : undefined,
       storage_path: urlData.path,
       original_filename: file.name,
     }),
