@@ -68,9 +68,27 @@ list/signed-url 두 API 모두에 `PORTAL_VISIBLE_DISPATCH_PHOTO_CATEGORIES`
 `npx tsc --noEmit`/`npm run build`(41페이지 프리렌더 실패, 기존
 베이스라인과 동일) 통과. `claims` 테이블 마이그레이션과 `dispatch_photos`
 확장(`category` CHECK에 `'claim'` 추가, `claim_id` 컬럼+연결 제약)은
-사용자가 Supabase SQL Editor에서 직접 실행 예정(이 세션 종료 시점 기준
-아직 미실행 — 실행 전까지는 클레임 기능이 실제로 동작하지 않음, 코드는
-준비 완료 상태). 17차
+사용자가 Supabase SQL Editor에서 직접 실행 완료. **PR #67 실사용 리뷰
+라운드**: (1) 배차 상세 진입 시 즉시 크래시("Application error: a
+client-side exception has occurred") 신고 — "POD·인수증" 섹션이
+`DISPATCH_PHOTO_CATEGORIES` 전체(dropoff/pod/claim 3종)를 순회하는데
+사진 목록 state(`photos`)는 dropoff/pod 2종 키만 가지고 있어서
+`category==='claim'` 차례에 `photos['claim']`이 `undefined`가 되어
+`.length` 접근에서 런타임 에러가 난 것이 원인 — 이 섹션은 dropoff/pod만
+순회하도록 좁혀서 수정(`claim`은 별도 "클레임·사고" 섹션에서 이미 관리
+중이라 원래도 이 섹션이 다룰 대상이 아니었음, strict 모드가 아니라
+`tsc`가 이 타입 불일치를 못 잡아냈음 — 원칙 50번 신규, 아래 참고).
+(2) 화주포털 배차·운송조회 "사진보기"도 같은 원인의 동일한 크래시 —
+`components/DispatchPhotosPanel.tsx`도 `DISPATCH_PHOTO_CATEGORIES` 전체를
+순회하고 있어서 같은 패턴으로 수정(화주포털은 애초에 클레임 사진을 API가
+안 내려주므로 이 수정으로 완전히 해소됨). (3) "화주포털에 클레임 알림이
+없다"는 지적은 버그가 아니라 결정사항 3(화주포털 비노출)에 따른 의도된
+동작임을 설명 후 사용자 확인. (4) "클레임·사고"/"현장 추가비" 두 섹션
+모두 "자주 발생하는 일이 아닌데 배차 상세 레이아웃을 너무 크게 차지한다"는
+피드백으로 접이식으로 전환 — 기본 접힘 상태로 제목+건수 배지만 보이고
+"▼ 펼치기" 버튼을 눌러야 등록폼·목록이 나타남. 사용자가 Preview에서
+클레임 등록·상태변경·증빙사진 업로드까지 실사용 테스트 완료 후 merge됨
+(PR #67). 17차
 세션: "POD·인수증 도입(로드맵④)" — 운송 완료 후 하차지 사진·인수증(서명 등)을
 배차 단위로 여러 장 업로드·보관하는 기능(둘 다 선택사항, 카테고리는 이 2종만).
 최초 설계(v1)는 "admin 라우트가 로그인으로 보호되니 anon 키로 Storage에 직접
@@ -1017,6 +1035,28 @@ Supabase에 저장하면 `timestamptz` 컬럼이 이를 UTC로 오인식해 실�
     안 만듦) service_role 서버 API로만 접근, 클라이언트는 `storage_path`를
     직접 다루지 않고 항상 `photo_id`로만 열람용 signed URL을 요청함(4번
     참고, 임의 경로로 다른 배차 파일에 접근하는 것 방지)
+50. **카테고리·상태값처럼 "허용값 목록" 상수를 확장할 때는, 그 상수를
+    순회하며 컴포넌트별 state 객체를 인덱싱하는 모든 곳을 찾아서 그 state가
+    새로 추가된 값까지 키로 갖고 있는지 확인할 것 — 이 프로젝트는 strict
+    모드가 아니라서 `tsc`가 이 불일치를 잡아주지 못하고 런타임에서만
+    크래시로 드러난다.** 클레임·사고(로드맵⑤, 18차 세션 PR #67 리뷰)에서
+    실제로 겪은 사고 — `DISPATCH_PHOTO_CATEGORIES`를 `["dropoff","pod"]`
+    2종에서 `["dropoff","pod","claim"]` 3종으로 늘렸는데, 이 상수를
+    `.map()`으로 순회하며 사진을 카테고리별로 보여주는 화면 2곳
+    (`admin/dispatches/[id]/page.tsx`의 "POD·인수증" 섹션,
+    `components/DispatchPhotosPanel.tsx`)이 여전히 dropoff/pod 2종 키만
+    가진 `photos` state를 그대로 인덱싱하고 있어서, `category==='claim'`
+    차례에 `photos['claim']`이 `undefined`가 되고 그 `.length`를 읽으려다
+    "Application error: a client-side exception has occurred"로 배차
+    상세·화주포털 배차조회 양쪽 다 즉시 크래시났음(빌드는 두 번 다 정상
+    통과했었음 — 인덱스 키 타입이 상수보다 좁아도 에러를 안 내는 프로젝트
+    설정 때문에 `tsc`가 못 잡아냄). 이런 상수를 확장할 때는 (1) 그 상수를
+    `.map()`/`.forEach()`로 순회하는 모든 곳을 찾고, (2) 그중 새로 추가된
+    값을 다루면 안 되는 화면(예: 특정 카테고리는 별도 섹션에서 전용으로
+    관리)이 있다면 그 상수 전체가 아니라 실제로 다뤄야 할 값만 담은
+    로컬 배열(`["dropoff","pod"] as const`)로 순회 대상을 명시적으로
+    좁힐 것 — "상수 하나 늘렸을 뿐인데 그 상수를 참조하는 모든 곳이
+    자동으로 안전하게 확장될 것"이라고 가정하지 말 것
 
 ---
 
@@ -1845,7 +1885,19 @@ Supabase에 저장하면 `timestamptz` 컬럼이 이를 UTC로 오인식해 실�
   발견해 컴포넌트 최상단으로 옮겨 클레임 섹션과 공용으로 사용하도록 수정.
   `npx tsc --noEmit`/`npm run build`(41페이지 프리렌더 실패, 기존
   베이스라인과 동일) 통과. DB(`claims` 테이블 + `dispatch_photos` 확장)는
-  사용자가 Supabase에서 직접 실행 예정
+  사용자가 Supabase에서 직접 실행 완료. **PR #67 실사용 리뷰 라운드**:
+  (1) 배차 상세 진입 시 client-side exception 크래시 — "POD·인수증"
+  섹션이 `DISPATCH_PHOTO_CATEGORIES`(이번에 3종으로 늘어남) 전체를
+  순회하는데 `photos` state는 dropoff/pod 2종 키만 가지고 있어서
+  `claim` 차례에 `undefined.length`로 크래시(dropoff/pod만 순회하도록
+  수정, 원칙 50번 신규 참고). (2) 화주포털 배차·운송조회 "사진보기"도
+  `components/DispatchPhotosPanel.tsx`에 동일한 패턴의 버그가 있어서
+  같은 방식으로 수정. (3) "화주포털에 클레임 알림이 없다"는 지적은
+  결정사항 3(화주포털 비노출)에 따른 의도된 동작임을 설명. (4) "클레임·
+  사고"/"현장 추가비" 두 섹션 모두 "자주 발생하지 않는데 레이아웃을 너무
+  차지한다"는 피드백으로 접이식 전환(기본 접힘, 제목+건수 배지만 노출,
+  "▼ 펼치기" 버튼으로 열람). 사용자가 Preview에서 클레임 등록·상태변경·
+  증빙사진 업로드까지 실사용 테스트 완료 후 merge됨(PR #67)
 - **POD·인수증 도입(로드맵④, 17차 세션)**: 운송 완료 후 하차지 사진·인수증을
   배차 단위로 여러 장 업로드·보관하는 기능(둘 다 선택사항). 최초 anon 직접
   업로드 설계가 보안상 부적절함이 지적되어(anon 키는 브라우저 노출값이라
@@ -2014,8 +2066,7 @@ Supabase에 저장하면 `timestamptz` 컬럼이 이를 UTC로 오인식해 실�
 > 전용 묶음, 화주포털에 월정산 묶음 노출 등 ②-B 자체 확장은 여전히
 > 범위 밖. ③(현장 추가비)도 16차 세션에서 완료됨(아래 참고). ④(POD·인수증)도
 > 17차 세션에서 완료·merge됨(PR #66, 아래 참고). ⑤(클레임·사고)도 18차
-> 세션에서 완료됨(DB 마이그레이션은 사용자 실행 예정, 아래 참고). ⑥은
-> 여전히 미착수.
+> 세션에서 완료·merge됨(PR #67, 아래 참고). ⑥은 여전히 미착수.
 
 ---
 
