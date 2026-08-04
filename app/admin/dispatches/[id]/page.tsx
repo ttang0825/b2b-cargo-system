@@ -114,6 +114,9 @@ export default function DispatchDetailPage() {
   const [extraChargeError, setExtraChargeError] = useState<string | null>(null);
   const [cancellingExtraChargeId, setCancellingExtraChargeId] = useState<string | null>(null);
   const [cancelReasonInput, setCancelReasonInput] = useState("");
+  // 자주 발생하는 일이 아니라 배차 상세 레이아웃을 크게 차지하지 않도록
+  // 기본은 접힘 — 제목만 보이고 펼치기 버튼으로 열람(PR #67 리뷰 반영)
+  const [extraChargeSectionOpen, setExtraChargeSectionOpen] = useState(false);
 
   // 로드맵⑤ 클레임·사고 — 삭제 기능 없음(법적·분쟁 대응 근거자료 성격),
   // 상태를 "기각"으로 전환하는 것으로만 종결. 증빙사진은 로드맵④ 업로드
@@ -133,6 +136,9 @@ export default function DispatchDetailPage() {
   const [claimStatusSaving, setClaimStatusSaving] = useState<Record<string, boolean>>({});
   const [claimPhotosByClaimId, setClaimPhotosByClaimId] = useState<Record<string, any[]>>({});
   const [claimPhotoUploading, setClaimPhotoUploading] = useState<Record<string, boolean>>({});
+  // 자주 발생하는 일이 아니라 배차 상세 레이아웃을 크게 차지하지 않도록
+  // 기본은 접힘 — 제목만 보이고 펼치기 버튼으로 열람(PR #67 리뷰 반영)
+  const [claimsSectionOpen, setClaimsSectionOpen] = useState(false);
 
   // 로드맵④ POD·인수증 — dropoff/pod만 다룸('claim'은 claimPhotosByClaimId로 별도 관리)
   const [photos, setPhotos] = useState<Record<"dropoff" | "pod", any[]>>({
@@ -1646,10 +1652,34 @@ export default function DispatchDetailPage() {
           비노출(결정사항 3) — 증빙사진은 로드맵④ 업로드 인프라 재사용 */}
       {dispatch.dispatch_status !== "접수중" && (
         <div className="card" style={{ padding: 20, marginBottom: 20 }}>
-          <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
-            클레임·사고
-          </h3>
+          <button
+            type="button"
+            onClick={() => setClaimsSectionOpen((v) => !v)}
+            style={{
+              background: "none",
+              border: "none",
+              padding: 0,
+              margin: 0,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              width: "100%",
+            }}
+          >
+            <h3 style={{ fontSize: 14, margin: 0 }}>클레임·사고</h3>
+            {claims.length > 0 && (
+              <span className="badge" style={{ fontSize: 11 }}>
+                {claims.length}건
+              </span>
+            )}
+            <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--text-muted)" }}>
+              {claimsSectionOpen ? "▲ 접기" : "▼ 펼치기"}
+            </span>
+          </button>
 
+          {claimsSectionOpen && (
+            <div style={{ marginTop: 14 }}>
           {claimError && <div className="error-box">오류: {claimError}</div>}
 
           <div className="form-grid" style={{ padding: 0, marginBottom: 10 }}>
@@ -1920,6 +1950,8 @@ export default function DispatchDetailPage() {
               ))
             )}
           </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1929,10 +1961,34 @@ export default function DispatchDetailPage() {
           이상 노출)보다 좁게, 상차완료 이상부터만 노출 */}
       {["상차완료", "하차완료", "운송완료", "문제발생"].includes(dispatch.dispatch_status) && (
         <div className="card" style={{ padding: 20, marginBottom: 20 }}>
-          <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
-            현장 추가비
-          </h3>
+          <button
+            type="button"
+            onClick={() => setExtraChargeSectionOpen((v) => !v)}
+            style={{
+              background: "none",
+              border: "none",
+              padding: 0,
+              margin: 0,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              width: "100%",
+            }}
+          >
+            <h3 style={{ fontSize: 14, margin: 0 }}>현장 추가비</h3>
+            {extraCharges.filter((c) => c.status === "active").length > 0 && (
+              <span className="badge" style={{ fontSize: 11 }}>
+                {extraCharges.filter((c) => c.status === "active").length}건
+              </span>
+            )}
+            <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--text-muted)" }}>
+              {extraChargeSectionOpen ? "▲ 접기" : "▼ 펼치기"}
+            </span>
+          </button>
 
+          {extraChargeSectionOpen && (
+            <div style={{ marginTop: 14 }}>
           {extraChargeError && <div className="error-box">오류: {extraChargeError}</div>}
 
           <div className="form-grid" style={{ padding: 0, marginBottom: 10 }}>
@@ -2071,6 +2127,8 @@ export default function DispatchDetailPage() {
               </p>
             )}
           </div>
+            </div>
+          )}
         </div>
       )}
 
