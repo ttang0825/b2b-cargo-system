@@ -118,6 +118,7 @@ export default function DispatchDetailPage() {
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
   const [photoDeleteReasonInput, setPhotoDeleteReasonInput] = useState("");
+  const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null);
 
   const networkNameById: Record<string, string> = {};
   networks.forEach((n) => (networkNameById[n.id] = n.name));
@@ -1699,7 +1700,7 @@ export default function DispatchDetailPage() {
                         <img
                           src={photoPreviewUrls[p.id]}
                           alt={p.original_filename || ""}
-                          onClick={() => handleViewPhoto(p.id)}
+                          onClick={() => setViewingPhotoUrl(photoPreviewUrls[p.id])}
                           style={{
                             width: "100%",
                             height: 90,
@@ -1793,6 +1794,49 @@ export default function DispatchDetailPage() {
           <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
             업로드는 선택사항입니다. 파일당 최대 10MB, JPEG/PNG/WebP/HEIC/HEIF만 가능(카테고리당 최대 10장).
           </p>
+
+          {viewingPhotoUrl && (
+            <div
+              onClick={() => setViewingPhotoUrl(null)}
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0,0,0,0.85)",
+                zIndex: 1000,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 24,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setViewingPhotoUrl(null)}
+                aria-label="닫기"
+                style={{
+                  position: "absolute",
+                  top: 16,
+                  right: 16,
+                  width: 36,
+                  height: 36,
+                  borderRadius: "50%",
+                  border: "none",
+                  background: "rgba(255,255,255,0.15)",
+                  color: "#fff",
+                  fontSize: 18,
+                  cursor: "pointer",
+                }}
+              >
+                ✕
+              </button>
+              <img
+                src={viewingPhotoUrl}
+                alt=""
+                onClick={(e) => e.stopPropagation()}
+                style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 6 }}
+              />
+            </div>
+          )}
         </div>
       )}
 

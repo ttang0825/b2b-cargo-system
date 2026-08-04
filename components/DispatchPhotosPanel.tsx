@@ -16,6 +16,7 @@ export default function DispatchPhotosPanel({ dispatchId }: { dispatchId: string
   const [photos, setPhotos] = useState<Record<string, any[]>>({ dropoff: [], pod: [] });
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+  const [viewingUrl, setViewingUrl] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -119,7 +120,7 @@ export default function DispatchPhotosPanel({ dispatchId }: { dispatchId: string
               {photos[category].map((p) => (
                 <div
                   key={p.id}
-                  onClick={() => handleView(p.id)}
+                  onClick={() => (previewUrls[p.id] ? setViewingUrl(previewUrls[p.id]) : handleView(p.id))}
                   style={{
                     width: 88,
                     cursor: "pointer",
@@ -168,6 +169,49 @@ export default function DispatchPhotosPanel({ dispatchId }: { dispatchId: string
             </div>
           </div>
         )
+      )}
+
+      {viewingUrl && (
+        <div
+          onClick={() => setViewingUrl(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.85)",
+            zIndex: 1000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setViewingUrl(null)}
+            aria-label="닫기"
+            style={{
+              position: "absolute",
+              top: 16,
+              right: 16,
+              width: 36,
+              height: 36,
+              borderRadius: "50%",
+              border: "none",
+              background: "rgba(255,255,255,0.15)",
+              color: "#fff",
+              fontSize: 18,
+              cursor: "pointer",
+            }}
+          >
+            ✕
+          </button>
+          <img
+            src={viewingUrl}
+            alt=""
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 6 }}
+          />
+        </div>
       )}
     </div>
   );
