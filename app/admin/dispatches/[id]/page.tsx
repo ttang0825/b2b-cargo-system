@@ -342,7 +342,18 @@ export default function DispatchDetailPage() {
     }
     setDeletingPhotoId(null);
     setPhotoDeleteReasonInput("");
-    await loadPhotos();
+    // 삭제 후 전체 목록을 다시 불러오면 남은 사진들의 signed URL(썸네일)까지
+    // 전부 재발급받게 되어 체감이 느려짐 — 이미 갖고 있는 상태에서 삭제된
+    // 항목만 제거(나머지 캐시된 썸네일 URL은 그대로 재사용)
+    setPhotos((prev) => ({
+      dropoff: prev.dropoff.filter((p) => p.id !== photoId),
+      pod: prev.pod.filter((p) => p.id !== photoId),
+    }));
+    setPhotoPreviewUrls((prev) => {
+      const next = { ...prev };
+      delete next[photoId];
+      return next;
+    });
   }
 
   useEffect(() => {
