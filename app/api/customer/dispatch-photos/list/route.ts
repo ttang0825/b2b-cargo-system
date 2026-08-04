@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { DISPATCH_PHOTO_BUCKET, DISPATCH_PHOTO_PREVIEWABLE_MIME_TYPES } from "@/lib/dispatchPhotos";
 
 // 로드맵④ POD·인수증 — 화주포털 목록조회. 로그인 화주의 company_id와
 // dispatch→order.company_id가 일치할 때만 조회 허용, storage_path는 절대
 // 응답에 포함하지 않음(다운로드는 photo_id로 signed-url API를 따로 호출).
+//
+// 미리보기 가능한 형식의 썸네일 signed URL은 여기서 batch로 함께 발급해서
+// 응답에 실어보냄(사진마다 signed-url API를 따로 호출하던 것을 제거 —
+// PR #66 리뷰에서 화주포털 사진 로딩이 느리다는 피드백 반영).
 export const dynamic = "force-dynamic";
 
 function getAdminClient() {
@@ -57,10 +62,30 @@ export async function POST(req: Request) {
 
   const { data } = await admin
     .from("dispatch_photos")
-    .select("id,category,original_filename,mime_type,file_size_bytes,uploaded_at")
+    .select("id,category,storage_path,original_filename,mime_type,file_size_bytes,uploaded_at")
     .eq("dispatch_id", dispatch_id)
     .is("deleted_at", null)
     .order("uploaded_at", { ascending: false });
 
-  return NextResponse.json({ photos: data || [] });
+  const rows = data || [];
+  const previewablePaths = rows
+    .filter((r) => DISPATCH_PHOTO_PREVIEWABLE_MIME_TYPES.includes(r.mime_type))
+    .map((r) => r.storage_path);
+
+  const signedByPath: Record<string, string> = {};
+  if (previewablePaths.length > 0) {
+    const { data: signed } = await admin.storage
+      .from(DISPATCH_PHOTO_BUCKET)
+      .createSignedUrls(previewablePaths, 300);
+    (signed || []).forEach((s) => {
+      if (s.path && s.signedUrl && !s.error) signedByPath[s.path] = s.signedUrl;
+    });
+  }
+
+  const photos = rows.map(({ storage_path, ...rest }) => ({
+    ...rest,
+    preview_url: signedByPath[storage_path] || null,
+  }));
+
+  return NextResponse.json({ photos });
 }

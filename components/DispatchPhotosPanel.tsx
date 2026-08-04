@@ -2,11 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
-import {
-  DISPATCH_PHOTO_CATEGORIES,
-  DISPATCH_PHOTO_PREVIEWABLE_MIME_TYPES,
-  getDispatchPhotoCategoryLabel,
-} from "@/lib/dispatchPhotos";
+import { DISPATCH_PHOTO_CATEGORIES, getDispatchPhotoCategoryLabel } from "@/lib/dispatchPhotos";
 
 // 로드맵④ POD·인수증 — 화주포털 목록 펼침 방식(11차 세션 검색·정렬과 같은
 // 결의 UI). 배차·운송조회 목록에서 행을 펼치면 이 패널이 사진을 불러온다.
@@ -53,23 +49,13 @@ export default function DispatchPhotosPanel({ dispatchId }: { dispatchId: string
         dropoff: list.filter((p) => p.category === "dropoff"),
         pod: list.filter((p) => p.category === "pod"),
       });
-
-      const previewable = list.filter((p) => DISPATCH_PHOTO_PREVIEWABLE_MIME_TYPES.includes(p.mime_type));
+      // list API가 미리보기 가능한 형식의 썸네일 signed URL을 batch로 함께
+      // 내려줘서, 사진마다 signed-url을 따로 호출할 필요가 없음(PR #66
+      // 리뷰 — 화주포털 사진 로딩이 느리다는 피드백 반영)
       const urls: Record<string, string> = {};
-      await Promise.all(
-        previewable.map(async (p) => {
-          const r = await fetch("/api/customer/dispatch-photos/signed-url", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${session.access_token}`,
-            },
-            body: JSON.stringify({ photo_id: p.id }),
-          });
-          const d = await r.json();
-          if (r.ok && d.url) urls[p.id] = d.url;
-        })
-      );
+      list.forEach((p) => {
+        if (p.preview_url) urls[p.id] = p.preview_url;
+      });
       if (active) setPreviewUrls(urls);
       if (active) setLoading(false);
     }

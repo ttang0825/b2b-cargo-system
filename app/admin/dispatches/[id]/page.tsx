@@ -41,7 +41,6 @@ import {
 } from "@/lib/dispatchExtraCharges";
 import {
   DISPATCH_PHOTO_CATEGORIES,
-  DISPATCH_PHOTO_PREVIEWABLE_MIME_TYPES,
   DispatchPhotoCategory,
   getDispatchPhotoCategoryLabel,
   getDispatchPhotoReasonLabel,
@@ -281,20 +280,13 @@ export default function DispatchDetailPage() {
       dropoff: list.filter((p) => p.category === "dropoff"),
       pod: list.filter((p) => p.category === "pod"),
     });
-
-    const previewable = list.filter((p) => DISPATCH_PHOTO_PREVIEWABLE_MIME_TYPES.includes(p.mime_type));
+    // list API가 미리보기 가능한 형식(JPEG/PNG/WebP)의 썸네일 signed URL을
+    // batch로 함께 내려줘서, 사진마다 signed-url을 따로 호출할 필요가 없음
+    // (PR #66 리뷰 — 로딩이 느리다는 피드백 반영)
     const urls: Record<string, string> = {};
-    await Promise.all(
-      previewable.map(async (p) => {
-        const r = await fetch("/api/admin/dispatch-photos/signed-url", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ photo_id: p.id }),
-        });
-        const d = await r.json();
-        if (r.ok && d.url) urls[p.id] = d.url;
-      })
-    );
+    list.forEach((p) => {
+      if (p.preview_url) urls[p.id] = p.preview_url;
+    });
     setPhotoPreviewUrls(urls);
   }
 
@@ -303,12 +295,16 @@ export default function DispatchDetailPage() {
     setPhotoError(null);
     setPhotoUploading((u) => ({ ...u, [category]: true }));
     try {
-      for (const file of Array.from(fileList)) {
-        const { error } = await uploadDispatchPhoto(id, category, file);
-        if (error) {
-          setPhotoError(`${file.name}: ${getDispatchPhotoReasonLabel(error)}`);
-        }
-      }
+      // 여러 장을 한 번에 선택하면 파일마다 순서대로 기다리지 않고 동시에
+      // 업로드(각 파일의 upload-url 발급→Storage 업로드→finalize 3단계가
+      // 서로 독립적이라 병렬로 돌려도 안전함) — PR #66 리뷰에서 업로드
+      // 시간이 길게 느껴진다는 피드백 반영
+      const files = Array.from(fileList);
+      const results = await Promise.all(files.map((file) => uploadDispatchPhoto(id, category, file)));
+      const failed = results
+        .map((r, i) => (r.error ? `${files[i].name}: ${getDispatchPhotoReasonLabel(r.error)}` : null))
+        .filter((m): m is string => m !== null);
+      if (failed.length > 0) setPhotoError(failed.join(" / "));
       await loadPhotos();
     } finally {
       setPhotoUploading((u) => ({ ...u, [category]: false }));
