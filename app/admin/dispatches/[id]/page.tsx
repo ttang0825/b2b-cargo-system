@@ -40,7 +40,6 @@ import {
   getDispatchExtraChargeReasonLabel,
 } from "@/lib/dispatchExtraCharges";
 import {
-  DISPATCH_PHOTO_CATEGORIES,
   DispatchPhotoCategory,
   getDispatchPhotoCategoryLabel,
   getDispatchPhotoReasonLabel,
@@ -2084,7 +2083,11 @@ export default function DispatchDetailPage() {
           </h3>
           {photoError && <div className="error-box">오류: {photoError}</div>}
 
-          {DISPATCH_PHOTO_CATEGORIES.map((category) => (
+          {/* 이 섹션은 dropoff/pod만 다룸('claim'은 위 "클레임·사고" 섹션에서
+              별도 관리) — DISPATCH_PHOTO_CATEGORIES 전체를 순회하면 photos
+              state에 없는 'claim' 키에 접근해 런타임 에러가 남(PR #67 리뷰에서
+              발견된 회귀) */}
+          {(["dropoff", "pod"] as const).map((category) => (
             <div key={category} style={{ marginBottom: 18 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                 <strong style={{ fontSize: 13 }}>{getDispatchPhotoCategoryLabel(category)}</strong>
