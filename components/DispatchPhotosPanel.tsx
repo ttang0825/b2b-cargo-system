@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
-import { DISPATCH_PHOTO_CATEGORIES, getDispatchPhotoCategoryLabel } from "@/lib/dispatchPhotos";
+import { getDispatchPhotoCategoryLabel } from "@/lib/dispatchPhotos";
+
+// 화주포털에는 dropoff/pod만 노출(claim은 원천적으로 API가 안 내려줌,
+// PORTAL_VISIBLE_DISPATCH_PHOTO_CATEGORIES 참고) — photos state도 이 2종만
+// 키로 가지므로 반드시 이 목록으로만 순회할 것(전체 카테고리 상수를 쓰면
+// 없는 키에 접근해 크래시남, PR #67 리뷰에서 발견된 회귀와 동일한 패턴)
+const PORTAL_PHOTO_CATEGORIES = ["dropoff", "pod"] as const;
 
 // 로드맵④ POD·인수증 — 화주포털 목록 펼침 방식(11차 세션 검색·정렬과 같은
 // 결의 UI). 배차·운송조회 목록에서 행을 펼치면 이 패널이 사진을 불러온다.
@@ -96,7 +102,7 @@ export default function DispatchPhotosPanel({ dispatchId }: { dispatchId: string
 
   return (
     <div style={{ padding: "8px 0" }}>
-      {DISPATCH_PHOTO_CATEGORIES.map((category) =>
+      {PORTAL_PHOTO_CATEGORIES.map((category) =>
         photos[category].length === 0 ? null : (
           <div key={category} style={{ marginBottom: 10 }}>
             <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>

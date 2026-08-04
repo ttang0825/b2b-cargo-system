@@ -2,12 +2,19 @@
 // DB CHECK 제약조건·Storage 버킷 설정과 반드시 동일하게 유지할 것.
 export const DISPATCH_PHOTO_BUCKET = "dispatch-photos";
 
-export const DISPATCH_PHOTO_CATEGORIES = ["dropoff", "pod"] as const;
+// 로드맵⑤(클레임·사고)에서 'claim' 카테고리 추가 — dropoff/pod와 달리 배차상태
+// 게이트가 없고(원칙: "다른 규칙 적용"), claims.id와 1:1로 연결됨(claim_id 컬럼).
+// 화주포털에는 절대 노출 금지 — customer API는 이 카테고리를 명시적으로 제외함.
+export const DISPATCH_PHOTO_CATEGORIES = ["dropoff", "pod", "claim"] as const;
 export type DispatchPhotoCategory = (typeof DISPATCH_PHOTO_CATEGORIES)[number];
+
+// 화주포털에 노출해도 되는 카테고리만(허용목록 — claim 추가 시 실수로 새는 것 방지)
+export const PORTAL_VISIBLE_DISPATCH_PHOTO_CATEGORIES: string[] = ["dropoff", "pod"];
 
 export const DISPATCH_PHOTO_CATEGORY_LABELS: Record<DispatchPhotoCategory, string> = {
   dropoff: "하차지 사진",
   pod: "인수증",
+  claim: "클레임·사고 증빙",
 };
 
 export function getDispatchPhotoCategoryLabel(category: string | null | undefined): string {
@@ -71,6 +78,7 @@ export const DISPATCH_PHOTO_REASON_LABELS: Record<string, string> = {
   reason_required: "삭제 사유를 입력해주세요.",
   forbidden: "권한이 없습니다.",
   access_denied: "조회 권한이 없습니다.",
+  claim_not_found: "연결된 클레임 정보를 찾을 수 없습니다.",
 };
 
 export function getDispatchPhotoReasonLabel(reason: string | null | undefined): string {

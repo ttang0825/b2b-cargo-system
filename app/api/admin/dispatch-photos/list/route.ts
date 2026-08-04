@@ -47,7 +47,7 @@ export async function GET(req: Request) {
   const { data, error } = await admin
     .from("dispatch_photos")
     .select(
-      "id,category,storage_path,original_filename,mime_type,file_size_bytes,uploaded_at,uploaded_by_name_snapshot"
+      "id,category,claim_id,storage_path,original_filename,mime_type,file_size_bytes,uploaded_at,uploaded_by_name_snapshot"
     )
     .eq("dispatch_id", dispatchId)
     .is("deleted_at", null)

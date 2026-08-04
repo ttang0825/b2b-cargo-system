@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { DISPATCH_PHOTO_BUCKET } from "@/lib/dispatchPhotos";
+import { DISPATCH_PHOTO_BUCKET, PORTAL_VISIBLE_DISPATCH_PHOTO_CATEGORIES } from "@/lib/dispatchPhotos";
 
 // 로드맵④ POD·인수증 — 화주포털 열람용 signed URL 발급. photo_id만 입력받고,
 // storage_path는 서버가 조회해서만 사용. 회사 소유 확인 후에만 발급.
+// 로드맵⑤ 'claim' 카테고리는 화주포털에 절대 노출하지 않음(결정사항 3) —
+// list API가 애초에 photo_id를 안 내려주지만, 이 API 자체에서도 카테고리를
+// 한 번 더 걸러서 이중으로 막음(원칙 25번과 같은 이중체크 정신).
 export const dynamic = "force-dynamic";
 
 function getAdminClient() {
@@ -47,8 +50,9 @@ export async function POST(req: Request) {
 
   const { data: photo } = await admin
     .from("dispatch_photos")
-    .select("storage_path,dispatch_id,dispatches(orders(company_id))")
+    .select("storage_path,category,dispatch_id,dispatches(orders(company_id))")
     .eq("id", photo_id)
+    .in("category", PORTAL_VISIBLE_DISPATCH_PHOTO_CATEGORIES)
     .is("deleted_at", null)
     .maybeSingle();
   const orderCompanyId = (photo?.dispatches as any)?.orders?.company_id;

@@ -9,7 +9,7 @@ import {
   getDispatchStatusColor,
   DISPATCH_TO_ORDER_STATUS,
 } from "@/lib/dispatchStatusColors";
-import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
+import { getCurrentStaffId, getCurrentStaffRole, getCurrentStaffName } from "@/lib/currentStaff";
 import { formatPhoneNumber } from "@/lib/constants";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
 import ConflictWarning from "@/components/ConflictWarning";
@@ -40,13 +40,21 @@ import {
   getDispatchExtraChargeReasonLabel,
 } from "@/lib/dispatchExtraCharges";
 import {
-  DISPATCH_PHOTO_CATEGORIES,
   DispatchPhotoCategory,
   getDispatchPhotoCategoryLabel,
   getDispatchPhotoReasonLabel,
   isDispatchReadyForPhotoUpload,
 } from "@/lib/dispatchPhotos";
 import { uploadDispatchPhoto } from "@/lib/uploadDispatchPhoto";
+import {
+  CLAIM_TYPES,
+  CLAIM_STATUSES,
+  CLAIM_TERMINAL_STATUSES,
+  RESPONSIBLE_PARTIES,
+  getClaimTypeLabel,
+  getClaimStatusColor,
+} from "@/lib/claims";
+import { localInputToISOString } from "@/lib/localDateTime";
 
 function won(n: number | null) {
   if (n === null || n === undefined) return "-";
@@ -106,9 +114,34 @@ export default function DispatchDetailPage() {
   const [extraChargeError, setExtraChargeError] = useState<string | null>(null);
   const [cancellingExtraChargeId, setCancellingExtraChargeId] = useState<string | null>(null);
   const [cancelReasonInput, setCancelReasonInput] = useState("");
+  // 자주 발생하는 일이 아니라 배차 상세 레이아웃을 크게 차지하지 않도록
+  // 기본은 접힘 — 제목만 보이고 펼치기 버튼으로 열람(PR #67 리뷰 반영)
+  const [extraChargeSectionOpen, setExtraChargeSectionOpen] = useState(false);
 
-  // 로드맵④ POD·인수증
-  const [photos, setPhotos] = useState<Record<DispatchPhotoCategory, any[]>>({
+  // 로드맵⑤ 클레임·사고 — 삭제 기능 없음(법적·분쟁 대응 근거자료 성격),
+  // 상태를 "기각"으로 전환하는 것으로만 종결. 증빙사진은 로드맵④ 업로드
+  // 인프라를 그대로 재사용(category='claim', claim_id로 연결).
+  const [claims, setClaims] = useState<any[]>([]);
+  const [claimForm, setClaimForm] = useState({
+    claim_type: CLAIM_TYPES[0] as string,
+    description: "",
+    occurred_at: "",
+    responsible_party: "",
+    claim_amount: "",
+    compensation_amount: "",
+    memo: "",
+  });
+  const [claimSaving, setClaimSaving] = useState(false);
+  const [claimError, setClaimError] = useState<string | null>(null);
+  const [claimStatusSaving, setClaimStatusSaving] = useState<Record<string, boolean>>({});
+  const [claimPhotosByClaimId, setClaimPhotosByClaimId] = useState<Record<string, any[]>>({});
+  const [claimPhotoUploading, setClaimPhotoUploading] = useState<Record<string, boolean>>({});
+  // 자주 발생하는 일이 아니라 배차 상세 레이아웃을 크게 차지하지 않도록
+  // 기본은 접힘 — 제목만 보이고 펼치기 버튼으로 열람(PR #67 리뷰 반영)
+  const [claimsSectionOpen, setClaimsSectionOpen] = useState(false);
+
+  // 로드맵④ POD·인수증 — dropoff/pod만 다룸('claim'은 claimPhotosByClaimId로 별도 관리)
+  const [photos, setPhotos] = useState<Record<"dropoff" | "pod", any[]>>({
     dropoff: [],
     pod: [],
   });
@@ -253,6 +286,7 @@ export default function DispatchDetailPage() {
     );
 
     await loadExtraCharges();
+    await loadClaims();
     await loadPhotos();
 
     setLoading(false);
@@ -269,6 +303,17 @@ export default function DispatchDetailPage() {
     setExtraCharges(data || []);
   }
 
+  // 로드맵⑤ 클레임·사고 — 일반 업무 테이블 관례(anon 전체허용 RLS,
+  // admin 화면에서 직접 CRUD). 삭제 없이 상태만 바뀌므로 전부 그대로 보여줌.
+  async function loadClaims() {
+    const { data } = await supabase
+      .from("claims")
+      .select("*")
+      .eq("dispatch_id", id)
+      .order("created_at", { ascending: false });
+    setClaims(data || []);
+  }
+
   // 로드맵④ POD·인수증 — 목록조회 후, 미리보기 가능한 형식(JPEG/PNG/WebP)만
   // signed URL을 미리 받아와 썸네일로 표시(HEIC/HEIF는 파일카드로만 표시)
   async function loadPhotos() {
@@ -280,6 +325,15 @@ export default function DispatchDetailPage() {
       dropoff: list.filter((p) => p.category === "dropoff"),
       pod: list.filter((p) => p.category === "pod"),
     });
+    // 로드맵⑤ — 클레임 증빙 사진은 claim_id 기준으로 그룹핑(한 배차에 클레임이
+    // 여러 건일 수 있어서 각 클레임 카드 아래에 자기 사진만 보여줘야 함)
+    const claimGrouped: Record<string, any[]> = {};
+    list.forEach((p) => {
+      if (p.category === "claim" && p.claim_id) {
+        (claimGrouped[p.claim_id] ||= []).push(p);
+      }
+    });
+    setClaimPhotosByClaimId(claimGrouped);
     // list API가 미리보기 가능한 형식(JPEG/PNG/WebP)의 썸네일 signed URL을
     // batch로 함께 내려줘서, 사진마다 signed-url을 따로 호출할 필요가 없음
     // (PR #66 리뷰 — 로딩이 느리다는 피드백 반영)
@@ -346,11 +400,109 @@ export default function DispatchDetailPage() {
       dropoff: prev.dropoff.filter((p) => p.id !== photoId),
       pod: prev.pod.filter((p) => p.id !== photoId),
     }));
+    setClaimPhotosByClaimId((prev) => {
+      const next: Record<string, any[]> = {};
+      Object.keys(prev).forEach((claimId) => {
+        next[claimId] = prev[claimId].filter((p) => p.id !== photoId);
+      });
+      return next;
+    });
     setPhotoPreviewUrls((prev) => {
       const next = { ...prev };
       delete next[photoId];
       return next;
     });
+  }
+
+  // 로드맵⑤ 클레임·사고 — 등록/상태변경. 일반 업무 테이블 관례대로 anon
+  // 클라이언트에서 직접 CRUD(정산 금액을 직접 건드리지 않아 SECURITY DEFINER
+  // 함수까지는 과함, 원칙 2번과 동일한 패턴).
+  async function handleRegisterClaim() {
+    if (!claimForm.description.trim()) {
+      setClaimError("클레임 내용을 입력해주세요.");
+      return;
+    }
+    setClaimSaving(true);
+    setClaimError(null);
+    const staffId = await getCurrentStaffId();
+    const staffName = await getCurrentStaffName();
+    const { error } = await supabase.from("claims").insert({
+      dispatch_id: id,
+      claim_type: claimForm.claim_type,
+      description: claimForm.description.trim(),
+      occurred_at: claimForm.occurred_at ? localInputToISOString(claimForm.occurred_at) : null,
+      responsible_party: claimForm.responsible_party || null,
+      claim_amount: claimForm.claim_amount ? Number(claimForm.claim_amount) : null,
+      compensation_amount: claimForm.compensation_amount ? Number(claimForm.compensation_amount) : null,
+      memo: claimForm.memo || null,
+      created_by: staffId,
+      created_by_name_snapshot: staffName,
+    });
+    setClaimSaving(false);
+    if (error) {
+      setClaimError(error.message);
+      return;
+    }
+    setClaimForm({
+      claim_type: CLAIM_TYPES[0],
+      description: "",
+      occurred_at: "",
+      responsible_party: "",
+      claim_amount: "",
+      compensation_amount: "",
+      memo: "",
+    });
+    await loadClaims();
+  }
+
+  async function handleUpdateClaimStatus(claimId: string, newStatus: string) {
+    setClaimStatusSaving((s) => ({ ...s, [claimId]: true }));
+    const staffId = await getCurrentStaffId();
+    const staffName = await getCurrentStaffName();
+    const payload: Record<string, any> = {
+      status: newStatus,
+      updated_by: staffId,
+      updated_by_name_snapshot: staffName,
+    };
+    const claim = claims.find((c) => c.id === claimId);
+    if (CLAIM_TERMINAL_STATUSES.includes(newStatus)) {
+      // 처리완료/기각으로 종결되는 시점에만 resolved_at/resolved_by를 채움
+      // (이미 채워져 있으면 재확정 시에도 최초 종결 시점을 덮어쓰지 않음)
+      if (!claim?.resolved_at) {
+        payload.resolved_at = new Date().toISOString();
+        payload.resolved_by = staffId;
+      }
+    } else if (claim?.resolved_at) {
+      // 종결 상태에서 다시 되돌리면(재조사 등) resolved 정보 초기화
+      payload.resolved_at = null;
+      payload.resolved_by = null;
+    }
+    const { error } = await supabase.from("claims").update(payload).eq("id", claimId);
+    setClaimStatusSaving((s) => ({ ...s, [claimId]: false }));
+    if (error) {
+      setClaimError(error.message);
+      return;
+    }
+    await loadClaims();
+  }
+
+  async function handleUploadClaimPhotos(claimId: string, fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return;
+    setClaimError(null);
+    setClaimPhotoUploading((u) => ({ ...u, [claimId]: true }));
+    try {
+      const files = Array.from(fileList);
+      const results = await Promise.all(
+        files.map((file) => uploadDispatchPhoto(id, "claim", file, claimId))
+      );
+      const failed = results
+        .map((r, i) => (r.error ? `${files[i].name}: ${getDispatchPhotoReasonLabel(r.error)}` : null))
+        .filter((m): m is string => m !== null);
+      if (failed.length > 0) setClaimError(failed.join(" / "));
+      await loadPhotos();
+    } finally {
+      setClaimPhotoUploading((u) => ({ ...u, [claimId]: false }));
+    }
   }
 
   useEffect(() => {
@@ -1494,16 +1646,349 @@ export default function DispatchDetailPage() {
         )}
       </div>
 
+      {/* 로드맵⑤ 클레임·사고 — 사고는 상차 전(오배정 등)에도 발생할 수 있어
+          다른 두 섹션보다 넓게 배차확정 이후 전체 노출(1-5 조사 결과 확정안).
+          배상금은 기록만 하고 정산에 자동 반영하지 않음(결정사항 2), 화주포털
+          비노출(결정사항 3) — 증빙사진은 로드맵④ 업로드 인프라 재사용 */}
+      {dispatch.dispatch_status !== "접수중" && (
+        <div className="card" style={{ padding: 20, marginBottom: 20 }}>
+          <button
+            type="button"
+            onClick={() => setClaimsSectionOpen((v) => !v)}
+            style={{
+              background: "none",
+              border: "none",
+              padding: 0,
+              margin: 0,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              width: "100%",
+            }}
+          >
+            <h3 style={{ fontSize: 14, margin: 0 }}>클레임·사고</h3>
+            {claims.length > 0 && (
+              <span className="badge" style={{ fontSize: 11 }}>
+                {claims.length}건
+              </span>
+            )}
+            <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--text-muted)" }}>
+              {claimsSectionOpen ? "▲ 접기" : "▼ 펼치기"}
+            </span>
+          </button>
+
+          {claimsSectionOpen && (
+            <div style={{ marginTop: 14 }}>
+          {claimError && <div className="error-box">오류: {claimError}</div>}
+
+          <div className="form-grid" style={{ padding: 0, marginBottom: 10 }}>
+            <div className="field">
+              <label>유형</label>
+              <select
+                value={claimForm.claim_type}
+                onChange={(e) => setClaimForm({ ...claimForm, claim_type: e.target.value })}
+              >
+                {CLAIM_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {getClaimTypeLabel(t)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label>책임소재</label>
+              <select
+                value={claimForm.responsible_party}
+                onChange={(e) => setClaimForm({ ...claimForm, responsible_party: e.target.value })}
+              >
+                <option value="">미정</option>
+                {RESPONSIBLE_PARTIES.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label>발생일시(선택, 모르면 비워둠)</label>
+              <input
+                type="datetime-local"
+                value={claimForm.occurred_at}
+                onChange={(e) => setClaimForm({ ...claimForm, occurred_at: e.target.value })}
+              />
+            </div>
+            <div className="field" style={{ gridColumn: "1 / -1" }}>
+              <label>내용 *</label>
+              <textarea
+                rows={2}
+                value={claimForm.description}
+                onChange={(e) => setClaimForm({ ...claimForm, description: e.target.value })}
+              />
+            </div>
+            <div className="field">
+              <label>청구액(화주 등이 청구한 피해액, 원)</label>
+              <MoneyInput
+                value={claimForm.claim_amount}
+                onChange={(v) => setClaimForm({ ...claimForm, claim_amount: v })}
+              />
+            </div>
+            <div className="field">
+              <label>배상액(실제 합의·지급액, 원)</label>
+              <MoneyInput
+                value={claimForm.compensation_amount}
+                onChange={(v) => setClaimForm({ ...claimForm, compensation_amount: v })}
+              />
+              <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 4 }}>
+                정산 자동 반영 안 됨 — 필요 시 정산관리에서 별도 처리
+              </p>
+            </div>
+            <div className="field" style={{ gridColumn: "1 / -1" }}>
+              <label>메모</label>
+              <input
+                type="text"
+                value={claimForm.memo}
+                onChange={(e) => setClaimForm({ ...claimForm, memo: e.target.value })}
+              />
+            </div>
+          </div>
+          <button className="btn" onClick={handleRegisterClaim} disabled={claimSaving}>
+            {claimSaving ? "등록 중..." : "클레임 등록"}
+          </button>
+
+          <div style={{ marginTop: 16 }}>
+            {claims.length === 0 ? (
+              <p style={{ fontSize: 12.5, color: "var(--text-muted)" }}>등록된 클레임이 없습니다.</p>
+            ) : (
+              claims.map((c) => (
+                <div
+                  key={c.id}
+                  style={{
+                    padding: 14,
+                    marginBottom: 10,
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: 8,
+                      flexWrap: "wrap",
+                      gap: 8,
+                    }}
+                  >
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <span className="badge">{getClaimTypeLabel(c.claim_type)}</span>
+                      <span
+                        style={{
+                          display: "inline-block",
+                          padding: "3px 10px",
+                          borderRadius: 999,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          background: getClaimStatusColor(c.status).bg,
+                          color: getClaimStatusColor(c.status).text,
+                        }}
+                      >
+                        {c.status}
+                      </span>
+                    </div>
+                    <select
+                      value={c.status}
+                      disabled={!!claimStatusSaving[c.id]}
+                      onChange={(e) => handleUpdateClaimStatus(c.id, e.target.value)}
+                      style={{ fontSize: 12 }}
+                    >
+                      {CLAIM_STATUSES.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <p style={{ fontSize: 13, marginBottom: 6, whiteSpace: "pre-wrap" }}>{c.description}</p>
+                  <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 6 }}>
+                    {c.occurred_at && <>발생: {new Date(c.occurred_at).toLocaleString("ko-KR")} · </>}
+                    접수: {new Date(c.reported_at).toLocaleString("ko-KR")}
+                    {c.responsible_party && <> · 책임소재: {c.responsible_party}</>}
+                  </div>
+                  {(c.claim_amount != null || c.compensation_amount != null) && (
+                    <div style={{ fontSize: 12.5, marginBottom: 6 }}>
+                      {c.claim_amount != null && <>청구액 {won(c.claim_amount)} </>}
+                      {c.compensation_amount != null && <>· 배상액 {won(c.compensation_amount)}</>}
+                      <span style={{ color: "var(--text-muted)", marginLeft: 6 }}>(정산 자동 반영 안 됨)</span>
+                    </div>
+                  )}
+                  {c.memo && (
+                    <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8 }}>메모: {c.memo}</p>
+                  )}
+
+                  <div style={{ marginTop: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600 }}>증빙사진</span>
+                      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                        ({(claimPhotosByClaimId[c.id] || []).length}/10)
+                      </span>
+                      <label
+                        className="btn btn-ghost"
+                        style={{ fontSize: 11, padding: "3px 8px", cursor: "pointer" }}
+                      >
+                        {claimPhotoUploading[c.id] ? "업로드 중..." : "파일 선택"}
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                          multiple
+                          style={{ display: "none" }}
+                          disabled={!!claimPhotoUploading[c.id]}
+                          onChange={(e) => {
+                            handleUploadClaimPhotos(c.id, e.target.files);
+                            e.target.value = "";
+                          }}
+                        />
+                      </label>
+                    </div>
+                    {(claimPhotosByClaimId[c.id] || []).length > 0 && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                        {(claimPhotosByClaimId[c.id] || []).map((p) => (
+                          <div
+                            key={p.id}
+                            style={{
+                              width: 88,
+                              border: "1px solid var(--border)",
+                              borderRadius: 8,
+                              padding: 4,
+                              fontSize: 10.5,
+                            }}
+                          >
+                            {photoPreviewUrls[p.id] ? (
+                              <img
+                                src={photoPreviewUrls[p.id]}
+                                alt=""
+                                onClick={() => setViewingPhotoUrl(photoPreviewUrls[p.id])}
+                                style={{
+                                  width: "100%",
+                                  height: 66,
+                                  objectFit: "cover",
+                                  borderRadius: 4,
+                                  cursor: "pointer",
+                                }}
+                              />
+                            ) : (
+                              <div
+                                onClick={() => handleViewPhoto(p.id)}
+                                style={{
+                                  width: "100%",
+                                  height: 66,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  background: "var(--bg-subtle, #f4f5f7)",
+                                  borderRadius: 4,
+                                  cursor: "pointer",
+                                  fontSize: 20,
+                                }}
+                              >
+                                📄
+                              </div>
+                            )}
+                            {isAdmin &&
+                              (deletingPhotoId === p.id ? (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 4 }}>
+                                  <input
+                                    type="text"
+                                    value={photoDeleteReasonInput}
+                                    onChange={(e) => setPhotoDeleteReasonInput(e.target.value)}
+                                    placeholder="삭제 사유"
+                                    style={{ fontSize: 10, width: "100%" }}
+                                  />
+                                  <div style={{ display: "flex", gap: 4 }}>
+                                    <button
+                                      className="btn-danger"
+                                      style={{ fontSize: 10, padding: "2px 4px", flex: 1 }}
+                                      onClick={() => handleConfirmDeletePhoto(p.id)}
+                                    >
+                                      확인
+                                    </button>
+                                    <button
+                                      className="btn btn-ghost"
+                                      style={{ fontSize: 10, padding: "2px 4px", flex: 1 }}
+                                      onClick={() => {
+                                        setDeletingPhotoId(null);
+                                        setPhotoDeleteReasonInput("");
+                                      }}
+                                    >
+                                      취소
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button
+                                  className="btn btn-ghost"
+                                  style={{ fontSize: 10, padding: "2px 4px", width: "100%", marginTop: 4 }}
+                                  onClick={() => {
+                                    setDeletingPhotoId(p.id);
+                                    setPhotoDeleteReasonInput("");
+                                  }}
+                                >
+                                  삭제
+                                </button>
+                              ))}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
+                    {c.created_by_name_snapshot || "-"} · {String(c.created_at).slice(0, 10)}
+                    {c.resolved_at && <> · 종결: {String(c.resolved_at).slice(0, 10)}</>}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 로드맵③ 현장 추가비 — 운송 진행/완료 후 현장에서 추가로 발생하는
           비용(대기료·회차비 등). 1-4 조사 결과, 배차확정 직후(아직 상차 전)엔
           이 개념 자체가 발생할 수 없어 "차주 운임 상세 계산" 섹션(배차확정
           이상 노출)보다 좁게, 상차완료 이상부터만 노출 */}
       {["상차완료", "하차완료", "운송완료", "문제발생"].includes(dispatch.dispatch_status) && (
         <div className="card" style={{ padding: 20, marginBottom: 20 }}>
-          <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
-            현장 추가비
-          </h3>
+          <button
+            type="button"
+            onClick={() => setExtraChargeSectionOpen((v) => !v)}
+            style={{
+              background: "none",
+              border: "none",
+              padding: 0,
+              margin: 0,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              width: "100%",
+            }}
+          >
+            <h3 style={{ fontSize: 14, margin: 0 }}>현장 추가비</h3>
+            {extraCharges.filter((c) => c.status === "active").length > 0 && (
+              <span className="badge" style={{ fontSize: 11 }}>
+                {extraCharges.filter((c) => c.status === "active").length}건
+              </span>
+            )}
+            <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--text-muted)" }}>
+              {extraChargeSectionOpen ? "▲ 접기" : "▼ 펼치기"}
+            </span>
+          </button>
 
+          {extraChargeSectionOpen && (
+            <div style={{ marginTop: 14 }}>
           {extraChargeError && <div className="error-box">오류: {extraChargeError}</div>}
 
           <div className="form-grid" style={{ padding: 0, marginBottom: 10 }}>
@@ -1642,6 +2127,8 @@ export default function DispatchDetailPage() {
               </p>
             )}
           </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1654,7 +2141,11 @@ export default function DispatchDetailPage() {
           </h3>
           {photoError && <div className="error-box">오류: {photoError}</div>}
 
-          {DISPATCH_PHOTO_CATEGORIES.map((category) => (
+          {/* 이 섹션은 dropoff/pod만 다룸('claim'은 위 "클레임·사고" 섹션에서
+              별도 관리) — DISPATCH_PHOTO_CATEGORIES 전체를 순회하면 photos
+              state에 없는 'claim' 키에 접근해 런타임 에러가 남(PR #67 리뷰에서
+              발견된 회귀) */}
+          {(["dropoff", "pod"] as const).map((category) => (
             <div key={category} style={{ marginBottom: 18 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                 <strong style={{ fontSize: 13 }}>{getDispatchPhotoCategoryLabel(category)}</strong>
@@ -1790,49 +2281,6 @@ export default function DispatchDetailPage() {
           <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
             업로드는 선택사항입니다. 파일당 최대 10MB, JPEG/PNG/WebP/HEIC/HEIF만 가능(카테고리당 최대 10장).
           </p>
-
-          {viewingPhotoUrl && (
-            <div
-              onClick={() => setViewingPhotoUrl(null)}
-              style={{
-                position: "fixed",
-                inset: 0,
-                background: "rgba(0,0,0,0.85)",
-                zIndex: 1000,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: 24,
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => setViewingPhotoUrl(null)}
-                aria-label="닫기"
-                style={{
-                  position: "absolute",
-                  top: 16,
-                  right: 16,
-                  width: 36,
-                  height: 36,
-                  borderRadius: "50%",
-                  border: "none",
-                  background: "rgba(255,255,255,0.15)",
-                  color: "#fff",
-                  fontSize: 18,
-                  cursor: "pointer",
-                }}
-              >
-                ✕
-              </button>
-              <img
-                src={viewingPhotoUrl}
-                alt=""
-                onClick={(e) => e.stopPropagation()}
-                style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 6 }}
-              />
-            </div>
-          )}
         </div>
       )}
 
@@ -1918,6 +2366,51 @@ export default function DispatchDetailPage() {
         updatedBy={dispatch.updated_by}
         updatedAt={dispatch.updated_at}
       />
+
+      {/* POD·인수증/클레임 증빙 사진 공용 확대보기 모달 — 특정 섹션 안에 갇혀있지
+          않고 항상 마운트되어 있어야 어느 섹션에서 열든 닫기 버튼이 뜸 */}
+      {viewingPhotoUrl && (
+        <div
+          onClick={() => setViewingPhotoUrl(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.85)",
+            zIndex: 1000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setViewingPhotoUrl(null)}
+            aria-label="닫기"
+            style={{
+              position: "absolute",
+              top: 16,
+              right: 16,
+              width: 36,
+              height: 36,
+              borderRadius: "50%",
+              border: "none",
+              background: "rgba(255,255,255,0.15)",
+              color: "#fff",
+              fontSize: 18,
+              cursor: "pointer",
+            }}
+          >
+            ✕
+          </button>
+          <img
+            src={viewingPhotoUrl}
+            alt=""
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 6 }}
+          />
+        </div>
+      )}
     </main>
   );
 }
