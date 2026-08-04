@@ -8,6 +8,8 @@ import MixableBadge from "@/components/MixableBadge";
 import { getSettlementDisplayLabel, getPaymentConditionLabel } from "@/lib/settlementLabels";
 import { useListSearchSort, sortIndicator } from "@/lib/useListSearchSort";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
+import DispatchPhotosPanel from "@/components/DispatchPhotosPanel";
+import { isDispatchReadyForPhotoUpload } from "@/lib/dispatchPhotos";
 
 // admin 정산관리 목록과 동일한 줄바꿈 처리 — "/"가 있는 라벨만 "/" 뒤에서
 // 한 번 줄바꿈("선착불 / 수수료 월정산"이 3줄로 들쭉날쭉 갈라지는 것 방지).
@@ -53,6 +55,7 @@ export default function CustomerDispatchesPage() {
   const [dispatches, setDispatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<DatePreset>("all");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const periodFiltered = useMemo(() => {
     const { from } = getDateRange(period);
@@ -86,7 +89,7 @@ export default function CustomerDispatchesPage() {
       const { data } = await supabase
         .from("dispatches")
         .select(
-          "id,dispatch_status,created_at,orders(order_no,origin,destination,requested_pickup_at,item,loading_type,collection_method,billing_cycle,direct_collection_point)"
+          "id,dispatch_status,delivery_confirmed,created_at,orders(order_no,origin,destination,requested_pickup_at,item,loading_type,collection_method,billing_cycle,direct_collection_point)"
         )
         .order("created_at", { ascending: false })
         .limit(100);
@@ -176,10 +179,12 @@ export default function CustomerDispatchesPage() {
                     배차상태{sortIndicator(sortKey, "dispatch_status", sortDir)}
                   </th>
                   <th>정산방식</th>
+                  <th>사진</th>
                 </tr>
               </thead>
               <tbody>
                 {visibleDispatches.map((d) => (
+                  <>
                   <tr key={d.id}>
                     <td className="cell-nowrap">
                       <span className="num">{d.orders?.order_no || "-"}</span>
@@ -234,7 +239,29 @@ export default function CustomerDispatchesPage() {
                         />
                       </span>
                     </td>
+                    <td className="cell-nowrap">
+                      {isDispatchReadyForPhotoUpload(d.dispatch_status, d.delivery_confirmed) ? (
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          style={{ fontSize: 11.5, padding: "4px 8px" }}
+                          onClick={() => setExpandedId(expandedId === d.id ? null : d.id)}
+                        >
+                          {expandedId === d.id ? "닫기" : "사진 보기"}
+                        </button>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
                   </tr>
+                  {expandedId === d.id && (
+                    <tr>
+                      <td colSpan={7} style={{ background: "var(--bg-subtle, #f8f9fa)" }}>
+                        <DispatchPhotosPanel dispatchId={d.id} />
+                      </td>
+                    </tr>
+                  )}
+                  </>
                 ))}
               </tbody>
             </table>
@@ -295,6 +322,19 @@ export default function CustomerDispatchesPage() {
                       )}
                     </span>
                   </div>
+                  {isDispatchReadyForPhotoUpload(d.dispatch_status, d.delivery_confirmed) && (
+                    <div style={{ marginTop: 8 }}>
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        style={{ fontSize: 11.5, padding: "4px 8px" }}
+                        onClick={() => setExpandedId(expandedId === d.id ? null : d.id)}
+                      >
+                        {expandedId === d.id ? "사진 닫기" : "사진 보기"}
+                      </button>
+                      {expandedId === d.id && <DispatchPhotosPanel dispatchId={d.id} />}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

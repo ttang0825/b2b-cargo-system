@@ -4,7 +4,69 @@
 > 최종 버전입니다. 앞으로는 이 문서(또는 `CLAUDE.md`)를 참고해서 Claude Code가
 > 작업을 이어갑니다.
 
-**작성일: 2026-07-23** (최종 갱신: 2026-08-03, Claude Code 세션에서 직접 갱신 — 16차
+**작성일: 2026-07-23** (최종 갱신: 2026-08-04, Claude Code 세션에서 직접 갱신 — 17차
+세션: "POD·인수증 도입(로드맵④)" — 운송 완료 후 하차지 사진·인수증(서명 등)을
+배차 단위로 여러 장 업로드·보관하는 기능(둘 다 선택사항, 카테고리는 이 2종만).
+최초 설계(v1)는 "admin 라우트가 로그인으로 보호되니 anon 키로 Storage에 직접
+쓰는 것도 안전하다"고 판단했으나, anon 키는 브라우저 번들에 그대로 노출되는
+값이라 로그인 화면을 거치지 않고도 그 키만 알면 누구나 Storage API를 직접
+호출할 수 있다는 문제가 지적되어(일반 내부 업무 테이블 anon insert와 달리
+Storage anon insert는 실제 저장·대역폭 비용 발생+임의 파일 호스팅 악용
+위험이 있음) v2로 전면 재설계 후 그 설계로 구현(원칙 49번 신규 — 자세한
+내용은 원칙 49번 참고). 서버가 재직 직원 인증 후 Signed Upload URL을
+발급하면 클라이언트가 그 URL로 Storage에 파일 바이트를 직접 업로드(Vercel
+서버 경유 없음), 이후 finalize API가 Storage에 실제로 올라간 객체를
+재조회해서 크기·MIME을 검증하고 `dispatch_photos` 행을 생성하는 3단계
+흐름. 배차상태만으로는 하차가 실제로 끝났는지 보장이 안 돼서(`문제발생`은
+상차완료/하차완료 체크 흐름과 무관하게 상태 드롭다운으로 언제든 직접 선택
+가능) `dispatch_status`뿐 아니라 `dispatches.delivery_confirmed`도 함께
+확인하는 `isDispatchReadyForPhotoUpload()`(하차완료·운송완료, 또는
+하차확인된 문제발생만 허용)로 업로드 가능 시점을 판정 — 이 조건을 upload-url
+발급 직전과 finalize 직전 양쪽에서 매번 fresh 재조회로 검증함. `dispatch_photos`
+테이블은 anon/authenticated 접근 정책을 아예 만들지 않아(RLS는 켜두고 정책
+0개) 서버 API(service_role)를 거치지 않으면 어떤 클라이언트도 직접 접근할
+수 없고, 열람은 항상 `photo_id`만 받아 서버가 `storage_path`를 조회해서
+signed URL을 새로 발급(클라이언트가 storage_path 자체를 다루는 지점 없음).
+업로드는 재직 직원이면 role 무관 누구나 가능하지만 삭제(soft delete)는
+관리자만 사유 입력 후 가능(Storage 상의 실제 파일은 증빙자료라 즉시 물리
+삭제하지 않고 보존, `deleted_at`이 있으면 목록·신규 signed URL 발급 모두
+제외). `app/api/admin/dispatch-photos/*`(upload-url/finalize/list/
+signed-url/delete) 5개 + `app/api/customer/dispatch-photos/*`(list/
+signed-url) 2개 서버 API 신규, `lib/dispatchPhotos.ts`(카테고리·제한값·
+에러 라벨 유일 정의처)/`lib/uploadDispatchPhoto.ts`(3단계 업로드 클라이언트
+헬퍼) 신규. 배차 상세(`admin/dispatches/[id]/page.tsx`)에 "POD·인수증"
+섹션을 "현장 추가비" 섹션과 "진행 체크" 섹션 사이에 신규 추가(노출조건은
+현장 추가비의 상차완료 이상보다 좁게, 하차 이후로 한정), JPEG/PNG/WebP는
+썸네일 미리보기·HEIC/HEIF는 파일카드로 구분 표시. 화주포털은 사전조사에서
+확정된 "목록 펼침" 방식대로 배차·운송조회(`customer/dispatches`) 목록의
+각 행에 "사진 보기" 토글을 추가해 펼치면 `components/DispatchPhotosPanel.tsx`가
+같은 방식으로 사진을 보여줌(신규 상세페이지 없이 기존 목록 화면만 확장).
+`npx tsc --noEmit`/`npm run build`(41페이지 프리렌더 실패, 기존
+베이스라인과 동일) 통과. `dispatch_photos` 테이블 마이그레이션과
+`dispatch-photos` private Storage 버킷(10MB 제한 + 허용 MIME 5종) 설정은
+사용자가 Supabase SQL Editor에서 직접 실행 완료(PR #66), Vercel Preview에서
+실제 업로드·열람·삭제까지 실사용 확인 후 merge됨.
+`files`/`profiles` 테이블은 이번에도 코드 전체 재확인 결과 앱 코드 어디서도
+참조되지 않는 무관한 레거시 테이블로 재확인됨(손대지 않음).
+**PR #66 실사용 리뷰 라운드**: (1) 사진·인수증 삭제 시 체감 속도가 느리다는
+피드백 — 삭제 후 `loadPhotos()`로 전체 목록을 다시 불러오면서 남아있는
+사진들의 signed URL(썸네일)까지 매번 전부 재발급받고 있었음(delete 자체는
+빠른 단일 UPDATE인데, 그 뒤에 붙는 전체 재조회가 병목이었음) — 삭제된
+항목만 로컬 state에서 제거하고 나머지는 이미 불러온 상태를 그대로
+재사용하도록 수정. (2) 화주포털에서 사진 클릭 시 새 탭으로 열려서 명시적인
+닫기 버튼이 없다는 피드백 — 페이지 안 모달(우측 상단 ✕ 버튼 + 배경 클릭으로
+닫힘)로 교체, 이미 썸네일용으로 받아둔 signed URL을 그대로 재사용해서 별도
+API 호출도 없앰(admin 배차 상세에도 동일하게 적용). (3) "업로드·로딩이
+전반적으로 느리다"는 피드백 — 근본 원인은 목록 API가 `photo_id`만 반환하고
+프론트가 사진마다 signed-url API를 개별 호출(각 호출마다 인증 확인부터
+재조회까지 전부 다시 거침)하던 구조였음 — 목록 API 자체가 Storage의
+`createSignedUrls()`(여러 경로를 한 번의 호출로 묶어 발급)로 미리보기
+가능한 사진(JPEG/PNG/WebP)의 signed URL을 처음부터 함께 내려주도록
+변경(admin/화주포털 list API 둘 다), 사진이 몇 장이든 왕복 1회로 줄어듦.
+admin 다중 파일 업로드도 순차 처리(파일마다 업로드-URL 발급→업로드→확정을
+차례로 기다림)에서 병렬 처리로 변경(각 파일의 3단계가 서로 독립적이라 안전).
+파일 1장 자체의 전송 시간(크기·네트워크에 좌우)은 구조상 그대로 남음.
+16차
 세션: "현장 추가비 도입(로드맵③)" — 작업지시서(1-1~1-10 사전조사 → 사용자
 7개 결정사항 확정 → 구현) 흐름으로 진행. 운송 진행/완료 후 현장에서 추가로
 발생하는 비용(대기료/회차비/야간·주말·공휴일 할증/수작업 상하차/계단 운반/
@@ -868,6 +930,27 @@ Supabase에 저장하면 `timestamptz` 컬럼이 이를 UTC로 오인식해 실�
     `.limit(1)` + 배열 길이 확인으로 바꿀 것 — 앞으로 `invoices`를
     `order_id`로 조회하는 새 코드를 짤 때도 "이 오더에 정산 건이 2개
     이상일 수 있다"는 전제를 깔고 짤 것
+49. **대용량 private 파일은 서버 인증 후 Signed Upload URL을 발급하고,
+    파일 바이트는 클라이언트가 Storage로 직접 업로드한다. 메타데이터 확정과
+    signed download URL 발급은 반드시 서버 API(service_role)가 처리하며,
+    anon 키로 파일 스토리지에 직접 쓰거나 메타데이터 테이블에 직접 쓰는
+    방식은 (일반 내부 업무 테이블과 달리) 실제 비용·악용 위험이 있으므로
+    허용하지 않는다.** POD·인수증(로드맵④, 17차 세션)이 이 패턴의 첫 사례 —
+    당초 "admin 라우트가 로그인으로 보호되니 anon 키로 Storage에 직접
+    쓰는 것도 안전하다"고 설계했다가, anon 키 자체가 브라우저 번들에
+    노출되는 값이라 로그인 화면을 거치지 않고도 그 키만으로 Storage API를
+    직접 호출할 수 있다는 점이 뒤늦게 지적되어 전면 재설계함(일반 테이블
+    anon insert는 유출돼도 저장비용 문제가 없지만, Storage anon insert는
+    실제 저장·대역폭 비용이 발생하고 임의 파일 호스팅에 악용될 수 있어
+    위험 성격이 다름). 업로드는 upload-url API(재직 직원이면 role 무관
+    가능, 배차상태+파일크기+MIME+개수를 매 요청 fresh 재조회로 검증) →
+    클라이언트가 그 URL로 Storage에 직접 업로드 → finalize API(Storage에
+    실제로 올라간 객체의 크기·MIME을 재조회해서 요청값이 아니라 그 값을
+    진실로 사용, `dispatch_photos` 행 생성)의 3단계로 구현.
+    `dispatch_photos`는 anon/authenticated 전부 RLS로 막혀있고(정책 자체를
+    안 만듦) service_role 서버 API로만 접근, 클라이언트는 `storage_path`를
+    직접 다루지 않고 항상 `photo_id`로만 열람용 signed URL을 요청함(4번
+    참고, 임의 경로로 다른 배차 파일에 접근하는 것 방지)
 
 ---
 
@@ -1678,6 +1761,26 @@ Supabase에 저장하면 `timestamptz` 컬럼이 이를 UTC로 오인식해 실�
     확인. DB 함수 자체를 검증하는 자동화 테스트는 이 저장소에 없어서
     (`package.json`에 test 스크립트 없음), 위 조건 동치성은 코드 대조로
     직접 검증함. DB 변경은 사용자가 Supabase SQL Editor에서 직접 실행
+- **POD·인수증 도입(로드맵④, 17차 세션)**: 운송 완료 후 하차지 사진·인수증을
+  배차 단위로 여러 장 업로드·보관하는 기능(둘 다 선택사항). 최초 anon 직접
+  업로드 설계가 보안상 부적절함이 지적되어(anon 키는 브라우저 노출값이라
+  로그인 화면 없이도 Storage에 직접 쓸 수 있음) Signed Upload URL 방식으로
+  전면 재설계 후 구현(원칙 49번 신규, 자세한 내용은 상단 17차 세션 요약과
+  원칙 49번 참고). `app/api/admin/dispatch-photos/*`(upload-url/finalize/
+  list/signed-url/delete) + `app/api/customer/dispatch-photos/*`(list/
+  signed-url) 서버 API, `dispatch_photos` 테이블(anon/authenticated 접근
+  정책 없음, service_role 서버 API 전용), `dispatch-photos` private Storage
+  버킷 신규. 배차 상세에 "POD·인수증" 섹션(현장 추가비~진행 체크 사이,
+  하차완료 이상 + `delivery_confirmed` 확인된 문제발생만 노출), 화주포털은
+  배차·운송조회 목록 펼침 방식으로 열람. DB/버킷 설정은 사용자가 Supabase
+  SQL Editor에서 직접 실행 완료. **PR #66 실사용 리뷰 라운드**: 삭제 시
+  체감 속도가 느리던 문제(삭제 후 전체 목록+모든 썸네일 signed URL을 매번
+  재조회하던 것을 삭제된 항목만 로컬에서 제거하도록 수정), 화주포털 사진
+  확대 시 닫기 버튼이 없던 문제(새 탭 열기 → 페이지 내 모달+명시적 닫기
+  버튼으로 교체), 업로드·로딩이 느리던 문제(목록 API가 사진마다 개별
+  signed-url 호출을 유발하던 구조를 `createSignedUrls()` batch 발급으로
+  교체해서 왕복 1회로 축소, admin 다중 파일 업로드도 순차→병렬 처리로 변경)
+  전부 반영 후 merge됨(PR #66)
 - **현장 추가비 도입(로드맵③, 16차 세션)**: 운송 진행/완료 후 현장에서
   추가로 발생하는 비용(대기료·회차비·야간주말공휴일할증·수작업상하차·
   계단운반·경유지추가·주차료통행료·기타 8종)을 배차 단위로 등록·취소하는
@@ -1824,8 +1927,8 @@ Supabase에 저장하면 `timestamptz` 컬럼이 이를 UTC로 오인식해 실�
 > 세션에서 완료·merge됨(PR #63), ②-B(화주 월정산 묶음, `broker`+`monthly`
 > 대상)도 14차 세션에서 완료·merge됨(PR #64) — `driver_direct`+`monthly`
 > 전용 묶음, 화주포털에 월정산 묶음 노출 등 ②-B 자체 확장은 여전히
-> 범위 밖. ③(현장 추가비)도 16차 세션에서 완료됨(아래 참고). ④~⑥은
-> 여전히 미착수.
+> 범위 밖. ③(현장 추가비)도 16차 세션에서 완료됨(아래 참고). ④(POD·인수증)도
+> 17차 세션에서 완료·merge됨(PR #66, 아래 참고). ⑤~⑥은 여전히 미착수.
 
 ---
 

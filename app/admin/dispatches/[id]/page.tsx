@@ -39,6 +39,14 @@ import {
   getDispatchExtraChargeCategoryLabel,
   getDispatchExtraChargeReasonLabel,
 } from "@/lib/dispatchExtraCharges";
+import {
+  DISPATCH_PHOTO_CATEGORIES,
+  DispatchPhotoCategory,
+  getDispatchPhotoCategoryLabel,
+  getDispatchPhotoReasonLabel,
+  isDispatchReadyForPhotoUpload,
+} from "@/lib/dispatchPhotos";
+import { uploadDispatchPhoto } from "@/lib/uploadDispatchPhoto";
 
 function won(n: number | null) {
   if (n === null || n === undefined) return "-";
@@ -98,6 +106,18 @@ export default function DispatchDetailPage() {
   const [extraChargeError, setExtraChargeError] = useState<string | null>(null);
   const [cancellingExtraChargeId, setCancellingExtraChargeId] = useState<string | null>(null);
   const [cancelReasonInput, setCancelReasonInput] = useState("");
+
+  // 로드맵④ POD·인수증
+  const [photos, setPhotos] = useState<Record<DispatchPhotoCategory, any[]>>({
+    dropoff: [],
+    pod: [],
+  });
+  const [photoPreviewUrls, setPhotoPreviewUrls] = useState<Record<string, string>>({});
+  const [photoUploading, setPhotoUploading] = useState<Record<string, boolean>>({});
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
+  const [photoDeleteReasonInput, setPhotoDeleteReasonInput] = useState("");
+  const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null);
 
   const networkNameById: Record<string, string> = {};
   networks.forEach((n) => (networkNameById[n.id] = n.name));
@@ -233,6 +253,7 @@ export default function DispatchDetailPage() {
     );
 
     await loadExtraCharges();
+    await loadPhotos();
 
     setLoading(false);
   }
@@ -246,6 +267,90 @@ export default function DispatchDetailPage() {
       .eq("dispatch_id", id)
       .order("created_at", { ascending: false });
     setExtraCharges(data || []);
+  }
+
+  // 로드맵④ POD·인수증 — 목록조회 후, 미리보기 가능한 형식(JPEG/PNG/WebP)만
+  // signed URL을 미리 받아와 썸네일로 표시(HEIC/HEIF는 파일카드로만 표시)
+  async function loadPhotos() {
+    const res = await fetch(`/api/admin/dispatch-photos/list?dispatch_id=${id}`);
+    const data = await res.json();
+    if (!res.ok) return;
+    const list: any[] = data.photos || [];
+    setPhotos({
+      dropoff: list.filter((p) => p.category === "dropoff"),
+      pod: list.filter((p) => p.category === "pod"),
+    });
+    // list API가 미리보기 가능한 형식(JPEG/PNG/WebP)의 썸네일 signed URL을
+    // batch로 함께 내려줘서, 사진마다 signed-url을 따로 호출할 필요가 없음
+    // (PR #66 리뷰 — 로딩이 느리다는 피드백 반영)
+    const urls: Record<string, string> = {};
+    list.forEach((p) => {
+      if (p.preview_url) urls[p.id] = p.preview_url;
+    });
+    setPhotoPreviewUrls(urls);
+  }
+
+  async function handleUploadPhotos(category: DispatchPhotoCategory, fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return;
+    setPhotoError(null);
+    setPhotoUploading((u) => ({ ...u, [category]: true }));
+    try {
+      // 여러 장을 한 번에 선택하면 파일마다 순서대로 기다리지 않고 동시에
+      // 업로드(각 파일의 upload-url 발급→Storage 업로드→finalize 3단계가
+      // 서로 독립적이라 병렬로 돌려도 안전함) — PR #66 리뷰에서 업로드
+      // 시간이 길게 느껴진다는 피드백 반영
+      const files = Array.from(fileList);
+      const results = await Promise.all(files.map((file) => uploadDispatchPhoto(id, category, file)));
+      const failed = results
+        .map((r, i) => (r.error ? `${files[i].name}: ${getDispatchPhotoReasonLabel(r.error)}` : null))
+        .filter((m): m is string => m !== null);
+      if (failed.length > 0) setPhotoError(failed.join(" / "));
+      await loadPhotos();
+    } finally {
+      setPhotoUploading((u) => ({ ...u, [category]: false }));
+    }
+  }
+
+  async function handleViewPhoto(photoId: string) {
+    const res = await fetch("/api/admin/dispatch-photos/signed-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ photo_id: photoId }),
+    });
+    const data = await res.json();
+    if (res.ok && data.url) {
+      window.open(data.url, "_blank");
+    } else {
+      setPhotoError(getDispatchPhotoReasonLabel(data.error));
+    }
+  }
+
+  async function handleConfirmDeletePhoto(photoId: string) {
+    if (!photoDeleteReasonInput.trim()) return;
+    const res = await fetch("/api/admin/dispatch-photos/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ photo_id: photoId, reason: photoDeleteReasonInput }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setPhotoError(getDispatchPhotoReasonLabel(data.error));
+      return;
+    }
+    setDeletingPhotoId(null);
+    setPhotoDeleteReasonInput("");
+    // 삭제 후 전체 목록을 다시 불러오면 남은 사진들의 signed URL(썸네일)까지
+    // 전부 재발급받게 되어 체감이 느려짐 — 이미 갖고 있는 상태에서 삭제된
+    // 항목만 제거(나머지 캐시된 썸네일 URL은 그대로 재사용)
+    setPhotos((prev) => ({
+      dropoff: prev.dropoff.filter((p) => p.id !== photoId),
+      pod: prev.pod.filter((p) => p.id !== photoId),
+    }));
+    setPhotoPreviewUrls((prev) => {
+      const next = { ...prev };
+      delete next[photoId];
+      return next;
+    });
   }
 
   useEffect(() => {
@@ -1537,6 +1642,197 @@ export default function DispatchDetailPage() {
               </p>
             )}
           </div>
+        </div>
+      )}
+
+      {/* 로드맵④ POD·인수증 — 하차가 실제로 끝난 게 확인된 건만 노출
+          (isDispatchReadyForPhotoUpload: 하차완료·운송완료, 또는 하차확인된 문제발생) */}
+      {isDispatchReadyForPhotoUpload(dispatch.dispatch_status, dispatch.delivery_confirmed) && (
+        <div className="card" style={{ padding: 20, marginBottom: 20 }}>
+          <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
+            POD·인수증
+          </h3>
+          {photoError && <div className="error-box">오류: {photoError}</div>}
+
+          {DISPATCH_PHOTO_CATEGORIES.map((category) => (
+            <div key={category} style={{ marginBottom: 18 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                <strong style={{ fontSize: 13 }}>{getDispatchPhotoCategoryLabel(category)}</strong>
+                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                  ({photos[category].length}/10)
+                </span>
+                <label className="btn btn-ghost" style={{ fontSize: 12, padding: "4px 10px", cursor: "pointer" }}>
+                  {photoUploading[category] ? "업로드 중..." : "파일 선택"}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                    multiple
+                    style={{ display: "none" }}
+                    disabled={!!photoUploading[category]}
+                    onChange={(e) => {
+                      handleUploadPhotos(category, e.target.files);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+
+              {photos[category].length === 0 ? (
+                <p style={{ fontSize: 12.5, color: "var(--text-muted)" }}>등록된 사진이 없습니다.</p>
+              ) : (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                  {photos[category].map((p) => (
+                    <div
+                      key={p.id}
+                      style={{
+                        width: 120,
+                        border: "1px solid var(--border)",
+                        borderRadius: 8,
+                        padding: 6,
+                        fontSize: 11.5,
+                      }}
+                    >
+                      {photoPreviewUrls[p.id] ? (
+                        <img
+                          src={photoPreviewUrls[p.id]}
+                          alt={p.original_filename || ""}
+                          onClick={() => setViewingPhotoUrl(photoPreviewUrls[p.id])}
+                          style={{
+                            width: "100%",
+                            height: 90,
+                            objectFit: "cover",
+                            borderRadius: 4,
+                            cursor: "pointer",
+                            marginBottom: 4,
+                          }}
+                        />
+                      ) : (
+                        <div
+                          onClick={() => handleViewPhoto(p.id)}
+                          style={{
+                            width: "100%",
+                            height: 90,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            background: "var(--bg-subtle, #f4f5f7)",
+                            borderRadius: 4,
+                            cursor: "pointer",
+                            marginBottom: 4,
+                            fontSize: 24,
+                          }}
+                        >
+                          📄
+                        </div>
+                      )}
+                      <div
+                        style={{
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          marginBottom: 2,
+                        }}
+                        title={p.original_filename || ""}
+                      >
+                        {p.original_filename || "-"}
+                      </div>
+                      <div style={{ color: "var(--text-muted)", marginBottom: 4 }}>
+                        {String(p.uploaded_at).slice(0, 10)}
+                      </div>
+                      {isAdmin &&
+                        (deletingPhotoId === p.id ? (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                            <input
+                              type="text"
+                              value={photoDeleteReasonInput}
+                              onChange={(e) => setPhotoDeleteReasonInput(e.target.value)}
+                              placeholder="삭제 사유"
+                              style={{ fontSize: 11, width: "100%" }}
+                            />
+                            <div style={{ display: "flex", gap: 4 }}>
+                              <button
+                                className="btn-danger"
+                                style={{ fontSize: 11, padding: "3px 6px", flex: 1 }}
+                                onClick={() => handleConfirmDeletePhoto(p.id)}
+                              >
+                                확인
+                              </button>
+                              <button
+                                className="btn btn-ghost"
+                                style={{ fontSize: 11, padding: "3px 6px", flex: 1 }}
+                                onClick={() => {
+                                  setDeletingPhotoId(null);
+                                  setPhotoDeleteReasonInput("");
+                                }}
+                              >
+                                취소
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            className="btn btn-ghost"
+                            style={{ fontSize: 11, padding: "3px 6px", width: "100%" }}
+                            onClick={() => {
+                              setDeletingPhotoId(p.id);
+                              setPhotoDeleteReasonInput("");
+                            }}
+                          >
+                            삭제
+                          </button>
+                        ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+          <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+            업로드는 선택사항입니다. 파일당 최대 10MB, JPEG/PNG/WebP/HEIC/HEIF만 가능(카테고리당 최대 10장).
+          </p>
+
+          {viewingPhotoUrl && (
+            <div
+              onClick={() => setViewingPhotoUrl(null)}
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0,0,0,0.85)",
+                zIndex: 1000,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 24,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setViewingPhotoUrl(null)}
+                aria-label="닫기"
+                style={{
+                  position: "absolute",
+                  top: 16,
+                  right: 16,
+                  width: 36,
+                  height: 36,
+                  borderRadius: "50%",
+                  border: "none",
+                  background: "rgba(255,255,255,0.15)",
+                  color: "#fff",
+                  fontSize: 18,
+                  cursor: "pointer",
+                }}
+              >
+                ✕
+              </button>
+              <img
+                src={viewingPhotoUrl}
+                alt=""
+                onClick={(e) => e.stopPropagation()}
+                style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 6 }}
+              />
+            </div>
+          )}
         </div>
       )}
 
