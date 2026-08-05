@@ -75,9 +75,12 @@ export async function middleware(req: NextRequest) {
     return redirectToLogin("inactive");
   }
 
-  // 직원 계정 관리 · 지원접속 이력 화면은 관리자만 접근 가능
+  // 직원 계정 관리 · 지원접속 이력 · 운영 대시보드(로드맵⑥, 담당자별 영업성과 등
+  // 민감정보 포함) 화면은 관리자만 접근 가능
   if (
-    (pathname.startsWith("/admin/staff") || pathname.startsWith("/admin/support-logs")) &&
+    (pathname.startsWith("/admin/staff") ||
+      pathname.startsWith("/admin/support-logs") ||
+      pathname.startsWith("/admin/dashboard")) &&
     role !== "admin"
   ) {
     return NextResponse.redirect(new URL("/admin", req.url));

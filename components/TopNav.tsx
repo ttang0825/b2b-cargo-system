@@ -49,6 +49,7 @@ const NAV_GROUPS: NavGroup[] = [
 const ADMIN_ONLY_GROUP: NavGroup = {
   label: "시스템",
   items: [
+    { href: "/admin/dashboard", label: "운영 대시보드" },
     { href: "/admin/staff", label: "직원 계정 관리" },
     { href: "/admin/support-logs", label: "지원접속 이력" },
   ],
