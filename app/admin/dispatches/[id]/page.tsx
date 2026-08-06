@@ -1220,19 +1220,19 @@ export default function DispatchDetailPage() {
               <div style={{ display: "flex", gap: 8 }}>
                 <button
                   type="button"
-                  className={editForm.assignment_type === "internal" ? "btn" : "btn btn-ghost"}
-                  style={{ fontSize: 12.5, padding: "7px 12px" }}
-                  onClick={() => handleAssignmentTypeChange("internal")}
-                >
-                  내부차주
-                </button>
-                <button
-                  type="button"
                   className={editForm.assignment_type === "external" ? "btn" : "btn btn-ghost"}
                   style={{ fontSize: 12.5, padding: "7px 12px" }}
                   onClick={() => handleAssignmentTypeChange("external")}
                 >
                   외부정보망
+                </button>
+                <button
+                  type="button"
+                  className={editForm.assignment_type === "internal" ? "btn" : "btn btn-ghost"}
+                  style={{ fontSize: 12.5, padding: "7px 12px" }}
+                  onClick={() => handleAssignmentTypeChange("internal")}
+                >
+                  내부차주
                 </button>
               </div>
             </div>

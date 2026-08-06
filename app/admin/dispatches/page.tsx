@@ -108,7 +108,11 @@ function DispatchesPageInner() {
   const [customerCharge, setCustomerCharge] = useState("");
   const [driverPayout, setDriverPayout] = useState("");
   const [memo, setMemo] = useState("");
-  const [assignmentType, setAssignmentType] = useState<"internal" | "external">("internal");
+  // 초기 운영은 자체 차주풀 없이 외부정보망 이용이 대부분일 것으로 예상되어
+  // 기본 선택값을 외부정보망으로 둠(매번 수동 전환하는 클릭을 줄이기 위함) —
+  // DB 컬럼 기본값('internal')은 그대로 두고 화면 초기값만 변경(아래 insert에서
+  // 항상 이 값을 명시적으로 보내므로 DB 기본값에 의존하는 경로가 없어 안전함)
+  const [assignmentType, setAssignmentType] = useState<"internal" | "external">("external");
   const [selectedNetworkIds, setSelectedNetworkIds] = useState<string[]>([]);
   const [networks, setNetworks] = useState<NetworkLite[]>([]);
 
@@ -511,19 +515,19 @@ function DispatchesPageInner() {
               <div style={{ display: "flex", gap: 8 }}>
                 <button
                   type="button"
-                  className={assignmentType === "internal" ? "btn" : "btn btn-ghost"}
-                  style={{ fontSize: 12.5, padding: "7px 12px" }}
-                  onClick={() => setAssignmentType("internal")}
-                >
-                  내부차주
-                </button>
-                <button
-                  type="button"
                   className={assignmentType === "external" ? "btn" : "btn btn-ghost"}
                   style={{ fontSize: 12.5, padding: "7px 12px" }}
                   onClick={() => setAssignmentType("external")}
                 >
                   외부정보망
+                </button>
+                <button
+                  type="button"
+                  className={assignmentType === "internal" ? "btn" : "btn btn-ghost"}
+                  style={{ fontSize: 12.5, padding: "7px 12px" }}
+                  onClick={() => setAssignmentType("internal")}
+                >
+                  내부차주
                 </button>
               </div>
             </div>
