@@ -15,7 +15,7 @@
 PR #70에서 이미 `contact_email || null`/`item.contact_email || "미입력"`
 등으로 빈 값을 안전하게 처리해두고 있어 추가 수정이 필요 없었음. `npx tsc
 --noEmit`/`npm run build`(42페이지 프리렌더 실패, 기존 베이스라인과 동일)
-확인 완료. 21차
+확인 완료. DB 변경 없음. PR #71 merge됨. 21차
 세션: "화주포털 로그인 아이디 체계 변경" — 작업지시서(1-1~1-7 사전조사 → 사용자
 확인 → addendum으로 확정사항 반영 → 구현) 흐름으로 진행. 화주포털 로그인을
 이메일 기반에서 시스템 발급 고유 아이디(`we`+발급일(YYMMDD, KST 기준)+2자리
@@ -2074,7 +2074,8 @@ Supabase에 저장하면 `timestamptz` 컬럼이 이를 UTC로 오인식해 실�
   (`ApplicationDetailModal.tsx`)는 PR #70에서 이미 `contact_email || null`/
   `item.contact_email || "미입력"` 등으로 빈 값을 안전하게 처리해두고 있어
   추가 수정 불필요(재확인만 함). `npx tsc --noEmit`/`npm run build`(42페이지
-  프리렌더 실패, 기존 베이스라인과 동일) 확인. DB 변경 없음
+  프리렌더 실패, 기존 베이스라인과 동일) 확인. DB 변경 없음. PR #71
+  merge됨.
 - **화주포털 로그인 아이디 체계 변경(21차 세션)**: 화주포털 로그인을 이메일에서
   시스템 발급 고유 아이디(`we`+발급일(YYMMDD, KST)+2자리 순번)로 전환. 기존
   화주 포털 계정이 이미 전부 삭제된 상태(`customer_accounts` 0건, 라이브 SQL
