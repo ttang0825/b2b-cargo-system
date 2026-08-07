@@ -89,6 +89,13 @@ export default function ApplicationDetailModal({
   const [resultData, setResultData] = useState<ResultData | null>(null);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const [copiedLabel, setCopiedLabel] = useState<string | null>(null);
+
+  function handleCopy(text: string, label: string) {
+    navigator.clipboard.writeText(text);
+    setCopiedLabel(label);
+    setTimeout(() => setCopiedLabel(null), 1500);
+  }
 
   function openDecisionStep(type: "거절" | "보류") {
     setReason("");
@@ -470,8 +477,38 @@ export default function ApplicationDetailModal({
                 <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginBottom: 10 }}>
                   아래 정보를 화주에게 전달해주세요 (한 번만 표시됩니다)
                 </p>
-                <div>아이디: <span className="num">{resultData.login_id}</span></div>
-                <div>임시 비밀번호: <span className="num">{resultData.password}</span></div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                  <span>
+                    아이디:{" "}
+                    <span className="num" style={{ userSelect: "none", WebkitUserSelect: "none" }}>
+                      {resultData.login_id}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    style={{ padding: "2px 8px", borderRadius: 6, fontSize: 10.5, cursor: "pointer" }}
+                    onClick={() => handleCopy(resultData.login_id, "result-login-id")}
+                  >
+                    {copiedLabel === "result-login-id" ? "복사됨" : "복사"}
+                  </button>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span>
+                    임시 비밀번호:{" "}
+                    <span className="num" style={{ userSelect: "none", WebkitUserSelect: "none" }}>
+                      {resultData.password}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    style={{ padding: "2px 8px", borderRadius: 6, fontSize: 10.5, cursor: "pointer" }}
+                    onClick={() => handleCopy(resultData.password, "result-password")}
+                  >
+                    {copiedLabel === "result-password" ? "복사됨" : "복사"}
+                  </button>
+                </div>
                 {!resultData.contactEmail && (
                   <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 8 }}>
                     담당자 연락처 이메일이 없어 메일 발송은 건너뜁니다. 전화 등으로 직접 안내해주세요.
