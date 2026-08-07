@@ -28,8 +28,8 @@ export async function POST(req: Request) {
     notes,
   } = body;
 
-  if (!company_name?.trim() || !contact_name?.trim() || !contact_phone?.trim() || !contact_email?.trim()) {
-    return NextResponse.json({ error: "회사명, 담당자명, 담당자 연락처, 담당자 이메일은 필수입니다." }, { status: 400 });
+  if (!company_name?.trim() || !contact_name?.trim() || !contact_phone?.trim()) {
+    return NextResponse.json({ error: "회사명, 담당자명, 담당자 연락처는 필수입니다." }, { status: 400 });
   }
 
   const admin = createClient(url, serviceKey, {
@@ -37,15 +37,19 @@ export async function POST(req: Request) {
   });
 
   // 같은 업체의 기존 신청 이력을 이메일·사업자등록번호 기준으로 조회 (재신청 여부 판단용)
-  const email = contact_email.trim();
+  const email = contact_email?.trim() || null;
   const bizRegNo = business_reg_no?.trim() || null;
 
-  const { data: emailMatches, error: emailError } = await admin
-    .from("customer_applications")
-    .select("id,status,company_id")
-    .eq("contact_email", email);
-  if (emailError) {
-    return NextResponse.json({ error: emailError.message }, { status: 400 });
+  let emailMatches: { id: string; status: string; company_id: string | null }[] = [];
+  if (email) {
+    const { data, error: emailError } = await admin
+      .from("customer_applications")
+      .select("id,status,company_id")
+      .eq("contact_email", email);
+    if (emailError) {
+      return NextResponse.json({ error: emailError.message }, { status: 400 });
+    }
+    emailMatches = data || [];
   }
 
   let bizMatches: { id: string; status: string; company_id: string | null }[] = [];
