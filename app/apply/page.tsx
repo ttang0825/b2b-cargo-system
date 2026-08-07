@@ -237,11 +237,32 @@ export default function ApplyPage() {
                 <input
                   value={form.industry}
                   onChange={(e) => setField("industry", e.target.value)}
-                  placeholder="예: 제조업, 유통업"
+                  placeholder="예: 제조업, 유통업, 건설업, 식품업, 전자상거래, 물류업 등"
                 />
               </div>
               <div className="field">
-                <label>이용 차량 (선택)</label>
+                <label style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                  주 이용 차량 (선택)
+                  <span
+                    title={`주로 이용하시는 차량 톤수를 선택해주세요. 예: ${VEHICLE_TYPES.join(", ")}`}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: 14,
+                      height: 14,
+                      borderRadius: "50%",
+                      background: "var(--text-muted)",
+                      color: "var(--bg)",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      cursor: "help",
+                      flexShrink: 0,
+                    }}
+                  >
+                    !
+                  </span>
+                </label>
                 <select value={form.preferred_vehicle} onChange={(e) => setField("preferred_vehicle", e.target.value)}>
                   <option value="">선택 안 함</option>
                   {VEHICLE_TYPES.map((v) => (
