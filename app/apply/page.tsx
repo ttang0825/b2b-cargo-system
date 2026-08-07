@@ -49,10 +49,6 @@ export default function ApplyPage() {
       setError("회사명, 담당자명, 담당자 연락처는 필수입니다.");
       return;
     }
-    if (!form.contact_email.trim()) {
-      setError("담당자 이메일은 필수입니다. 승인 시 이 이메일로 화주포털 계정이 발급됩니다.");
-      return;
-    }
     if (!agreed) {
       setError("개인정보 수집·이용에 동의해주셔야 신청을 접수할 수 있습니다.");
       return;
@@ -194,9 +190,9 @@ export default function ApplyPage() {
                 />
               </div>
               <div className="field" style={{ gridColumn: "1 / -1" }}>
-                <label>담당자 이메일 *</label>
+                <label>담당자 이메일 (선택)</label>
                 <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 6px" }}>
-                  승인 시 이 이메일로 화주포털 로그인 계정이 발급됩니다. 정확히 입력해주세요.
+                  입력하시면 승인·처리 결과를 이메일로도 안내해드립니다.
                 </p>
                 <input type="email" value={form.contact_email} onChange={(e) => setField("contact_email", e.target.value)} />
               </div>
