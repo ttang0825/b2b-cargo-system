@@ -1,26 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
-
-function randomPassword(length = 10) {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
-  let pw = "";
-  for (let i = 0; i < length; i++) {
-    pw += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return pw;
-}
-
-function translateAuthError(message: string, email: string): string {
-  const lower = message.toLowerCase();
-  if (lower.includes("already been registered") || lower.includes("already registered")) {
-    return `이미 등록된 이메일입니다 (${email}). 화주 관리에서 같은 이메일의 기존 계정이 있는지 먼저 확인해주세요.`;
-  }
-  if (lower.includes("invalid") && lower.includes("email")) {
-    return "올바르지 않은 이메일 형식입니다.";
-  }
-  return message;
-}
+import { issuePortalAccount } from "@/lib/portalAccountCredentials";
 
 export async function POST(req: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -32,9 +13,9 @@ export async function POST(req: Request) {
     );
   }
 
-  const { application_id, portal_email, processed_by } = await req.json();
-  if (!application_id || !portal_email) {
-    return NextResponse.json({ error: "신청 정보와 포털 로그인 이메일이 필요합니다." }, { status: 400 });
+  const { application_id, processed_by } = await req.json();
+  if (!application_id) {
+    return NextResponse.json({ error: "신청 정보가 필요합니다." }, { status: 400 });
   }
 
   const admin = createClient(url, serviceKey, {
@@ -141,37 +122,23 @@ export async function POST(req: Request) {
     }
   }
 
-  // 3. 포털 계정 발급 (Auth 사용자 생성 + customer_accounts 연결)
-  const tempPassword = randomPassword();
-  const { data: userData, error: userError } = await admin.auth.admin.createUser({
-    email: portal_email,
-    password: tempPassword,
-    email_confirm: true,
+  // 3. 포털 계정 발급 (Auth 사용자 생성 + customer_accounts 연결) — 로그인 아이디는
+  // 자동 생성되므로 관리자가 이메일을 입력할 필요 없음. 신청서에 담당자 이메일이
+  // 있으면 그대로 "연락처 이메일"(로그인용 아님)로만 이어받음.
+  const { data: issued, error: issueError } = await issuePortalAccount(admin, {
+    company_id: company.id,
+    name: application.contact_name,
+    email: application.contact_email || null,
+    contact_mobile: application.contact_phone,
   });
 
-  if (userError || !userData?.user) {
+  if (!issued) {
     // 실패 시 방금 만든 화주 회사를 롤백(삭제) - 고아 데이터/중복 방지
     await admin.from("companies").delete().eq("id", company.id);
     return NextResponse.json(
-      { error: translateAuthError(userError?.message || "포털 계정 생성에 실패했습니다.", portal_email) },
+      { error: issueError || "포털 계정 생성에 실패했습니다." },
       { status: 400 }
     );
-  }
-
-  const { error: linkError } = await admin.from("customer_accounts").insert({
-    auth_user_id: userData.user.id,
-    company_id: company.id,
-    name: application.contact_name,
-    email: portal_email,
-    contact_mobile: application.contact_phone,
-    must_change_password: true,
-  });
-
-  if (linkError) {
-    // 여기서 실패해도 마찬가지로 전부 롤백
-    await admin.auth.admin.deleteUser(userData.user.id);
-    await admin.from("companies").delete().eq("id", company.id);
-    return NextResponse.json({ error: linkError.message }, { status: 400 });
   }
 
   // 4. 신청서 상태 갱신 (모든 단계가 성공했을 때만 도달)
@@ -185,5 +152,10 @@ export async function POST(req: Request) {
     })
     .eq("id", application_id);
 
-  return NextResponse.json({ email: portal_email, password: tempPassword, company_id: company.id });
+  return NextResponse.json({
+    login_id: issued.login_id,
+    password: issued.password,
+    email: issued.email,
+    company_id: company.id,
+  });
 }

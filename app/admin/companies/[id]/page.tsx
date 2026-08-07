@@ -208,7 +208,7 @@ export default function CompanyDetailPage() {
   const [newAccountEmail, setNewAccountEmail] = useState("");
   const [newAccountName, setNewAccountName] = useState("");
   const [issuingAccount, setIssuingAccount] = useState(false);
-  const [issuedCredentials, setIssuedCredentials] = useState<{ email: string; password: string } | null>(null);
+  const [issuedCredentials, setIssuedCredentials] = useState<{ login_id: string; password: string } | null>(null);
   const [portalError, setPortalError] = useState<string | null>(null);
   const [portalUrl, setPortalUrl] = useState("");
   const [copiedLabel, setCopiedLabel] = useState<string | null>(null);
@@ -285,7 +285,7 @@ export default function CompanyDetailPage() {
   async function loadPortalAccounts() {
     const { data } = await supabase
       .from("customer_accounts")
-      .select("id,auth_user_id,email,name,is_active,must_change_password,created_at")
+      .select("id,auth_user_id,login_id,email,name,is_active,must_change_password,created_at")
       .eq("company_id", id)
       .order("created_at", { ascending: false });
     setPortalAccounts(data || []);
@@ -293,10 +293,6 @@ export default function CompanyDetailPage() {
 
   async function handleIssueAccount(e: React.FormEvent) {
     e.preventDefault();
-    if (!newAccountEmail.trim()) {
-      setPortalError("이메일을 입력해주세요.");
-      return;
-    }
     setIssuingAccount(true);
     setPortalError(null);
     setIssuedCredentials(null);
@@ -306,7 +302,7 @@ export default function CompanyDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           company_id: id,
-          email: newAccountEmail.trim(),
+          email: newAccountEmail.trim() || null,
           name: newAccountName.trim(),
         }),
       });
@@ -315,7 +311,7 @@ export default function CompanyDetailPage() {
         setPortalError(data.error || "계정 발급에 실패했습니다.");
         return;
       }
-      setIssuedCredentials({ email: data.email, password: data.password });
+      setIssuedCredentials({ login_id: data.login_id, password: data.password });
       setNewAccountEmail("");
       setNewAccountName("");
       loadPortalAccounts();
@@ -381,9 +377,9 @@ export default function CompanyDetailPage() {
     }
   }
 
-  async function handleResetPassword(authUserId: string, email: string) {
+  async function handleResetPassword(authUserId: string, loginId: string) {
     const confirmed = window.confirm(
-      `"${email}" 계정의 비밀번호를 재설정하시겠습니까? 기존 비밀번호는 더 이상 쓸 수 없게 됩니다.`
+      `"${loginId}" 계정의 비밀번호를 재발급하시겠습니까? 기존 비밀번호는 더 이상 쓸 수 없게 됩니다.`
     );
     if (!confirmed) return;
     setPortalError(null);
@@ -395,13 +391,13 @@ export default function CompanyDetailPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setPortalError(data.error || "비밀번호 재설정에 실패했습니다.");
+        setPortalError(data.error || "비밀번호 재발급에 실패했습니다.");
         return;
       }
-      setIssuedCredentials({ email, password: data.password });
+      setIssuedCredentials({ login_id: loginId, password: data.password });
       loadPortalAccounts();
     } catch {
-      setPortalError("비밀번호 재설정 중 오류가 발생했습니다.");
+      setPortalError("비밀번호 재발급 중 오류가 발생했습니다.");
     }
   }
 
@@ -1330,7 +1326,7 @@ export default function CompanyDetailPage() {
               >
                 <div>
                   <div style={{ fontWeight: 600 }}>
-                    {acc.email}
+                    <span className="num">{acc.login_id || "(구 계정, 아이디 없음)"}</span>
                     {acc.name && (
                       <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>
                         {" "}
@@ -1338,6 +1334,11 @@ export default function CompanyDetailPage() {
                       </span>
                     )}
                   </div>
+                  {acc.email && (
+                    <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 2 }}>
+                      연락처 이메일: {acc.email}
+                    </div>
+                  )}
                   <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 2 }}>
                     {new Date(acc.created_at).toLocaleDateString("ko-KR")} 발급
                     {acc.must_change_password && " · 최초 비밀번호 미변경"}
@@ -1354,14 +1355,16 @@ export default function CompanyDetailPage() {
                   >
                     {acc.is_active ? "활성" : "비활성"}
                   </span>
-                  <button
-                    type="button"
-                    className="btn-ghost"
-                    style={{ padding: "4px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
-                    onClick={() => handleResetPassword(acc.auth_user_id, acc.email)}
-                  >
-                    비밀번호 재설정
-                  </button>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      style={{ padding: "4px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                      onClick={() => handleResetPassword(acc.auth_user_id, acc.login_id)}
+                    >
+                      비밀번호 재발급
+                    </button>
+                  )}
                   {isAdmin && acc.is_active && (
                     <button
                       type="button"
@@ -1421,14 +1424,14 @@ export default function CompanyDetailPage() {
               </button>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-              <span>이메일: <span className="num">{issuedCredentials.email}</span></span>
+              <span>아이디: <span className="num">{issuedCredentials.login_id}</span></span>
               <button
                 type="button"
                 className="btn-ghost"
                 style={{ padding: "2px 8px", borderRadius: 6, fontSize: 10.5, cursor: "pointer" }}
-                onClick={() => handleCopy(issuedCredentials.email, "issued-email")}
+                onClick={() => handleCopy(issuedCredentials.login_id, "issued-login-id")}
               >
-                {copiedLabel === "issued-email" ? "복사됨" : "복사"}
+                {copiedLabel === "issued-login-id" ? "복사됨" : "복사"}
               </button>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1455,7 +1458,7 @@ export default function CompanyDetailPage() {
             type="email"
             value={newAccountEmail}
             onChange={(e) => setNewAccountEmail(e.target.value)}
-            placeholder="담당자 이메일"
+            placeholder="연락처 이메일 (선택)"
             style={{ flex: "1 1 200px" }}
           />
           <input

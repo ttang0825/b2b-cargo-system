@@ -4,7 +4,61 @@
 > 최종 버전입니다. 앞으로는 이 문서(또는 `CLAUDE.md`)를 참고해서 Claude Code가
 > 작업을 이어갑니다.
 
-**작성일: 2026-07-23** (최종 갱신: 2026-08-06, Claude Code 세션에서 직접 갱신 — 20차
+**작성일: 2026-07-23** (최종 갱신: 2026-08-07, Claude Code 세션에서 직접 갱신 — 21차
+세션: "화주포털 로그인 아이디 체계 변경" — 작업지시서(1-1~1-7 사전조사 → 사용자
+확인 → addendum으로 확정사항 반영 → 구현) 흐름으로 진행. 화주포털 로그인을
+이메일 기반에서 시스템 발급 고유 아이디(`we`+발급일(YYMMDD, KST 기준)+2자리
+순번, 예: `we26080701`) 기반으로 전환. 기존 화주 포털 계정이 사용자 확인으로
+이미 전부 삭제(`customer_accounts` 0건, 라이브 SQL로 재확인)된 상태라 별도
+마이그레이션(기존 계정 이관) 없이 신규 발급분부터만 적용. 인증 시스템 자체는
+새로 만들지 않고 기존 Supabase Auth 그대로 유지 — 화면은 "아이디"를 받되
+내부적으로 `{아이디}@wecarry-portal.internal`(실제 존재하지 않는 합성 도메인)
+이메일로 Auth에 등록(`lib/portalAccountCredentials.ts`의 `syntheticLoginEmail()`).
+**사전조사에서 드러난 핵심 사실 — 이번 기능의 뼈대 상당 부분이 이미 구현돼
+있었음**: 화주 상세화면의 "비밀번호 재설정" 버튼(`reset-portal-password` API)이
+이미 존재했고, `must_change_password` 플래그를 재발급 시점에 다시 세우는
+로직까지 이미 있었음 — 이번 작업은 "신규 기능"이 아니라 **기존
+`reset-portal-password` 확장(admin 전용 권한 체크 추가 + 6자리 숫자 비번으로
+통일) + 신규 로그인 체계 도입**으로 봐야 함(다음에 헷갈리지 않도록 명시).
+다만 기존 버튼은 `isAdmin` 조건 없이 `staff`도 클릭 가능했고 서버 API에도 권한
+체크가 없었음 — 이번에 화면단(`isAdmin &&`)+서버단(`getCurrentStaff().role
+!== "admin"` 체크) 이중으로 막음(원칙 25번과 동일 패턴). 임시비밀번호는 최초
+"4자리 숫자"로 시작했으나 Supabase Auth 프로젝트 전역 최소 비밀번호 길이
+정책(직원 계정 로그인과 공유되는 설정이라 낮추면 영향범위가 넓음)과 충돌할
+위험이 있어 사용자가 "6자리 랜덤 숫자"로 확정(정책 자체는 건드리지 않음).
+`randomPassword()`가 `create-portal-account`/`approve-application`/
+`reset-portal-password` 3곳에 중복 구현돼 있던 것을 `lib/
+portalAccountCredentials.ts`의 `generateTempPassword()`/`issuePortalAccount()`/
+`reissueTempPassword()`로 통합(`staff_accounts`용 4번째 사본은 별개 도메인이라
+그대로 둠). 아이디 순번은 "먼저 조회해서 없으면 insert" 원칙대로
+`customer_accounts.login_id` UNIQUE 제약 + insert 시 23505(유니크 위반) 캐치 후
+재시도로 동시발급 충돌을 처리(원칙 그대로 재사용, 신규 원칙 추가 안 함).
+`/apply` 승인 모달(`ApplicationDetailModal.tsx`)의 "포털 계정 로그인용
+이메일" 수동입력 필드는 완전히 제거 — 신청서에 이미 담당자 이메일
+(`contact_email`)이 있어서 이걸 그대로 "연락처 이메일"(선택, 로그인과 무관)로
+넘겨받으면 되므로 관리자가 입력할 필요 자체가 없어짐(`approve-application`
+API도 `portal_email` 파라미터 완전히 제거). 연락처 이메일이 없는 신청 건은
+"메일 발송" 버튼 자체를 숨김(수신 대상이 없으므로). 화주 상세화면의 계정발급
+폼도 이메일을 "담당자 이메일"(필수)에서 "연락처 이메일 (선택)"로 전환, 계정
+목록 표시도 이메일 대신 아이디를 기본 표시로 변경. 로그인 화면
+(`app/customer/login/page.tsx`)은 입력 라벨 "이메일"→"아이디"
+(`type="text"`, `autoComplete="username"`), "아이디 저장" 체크박스 신규
+(체크 시 아이디만 `localStorage`에 저장 — 비밀번호는 어떤 방식으로도 저장
+안 함, 기존 저장/불러오기 패턴 자체가 프로젝트에 전혀 없어 신규로 만듦),
+"비밀번호를 잊으셨나요? 위캐리로 문의해주세요" 안내 문구 신규 추가. 이
+안내 문구와 랜딩페이지·`CustomerPortalShell.tsx`에 이미 하드코딩돼 있던
+"고객센터 1588-0000"을 이번에 `lib/contactInfo.ts`(`COMPANY_SUPPORT_PHONE`/
+`COMPANY_SUPPORT_HOURS`)로 공용 상수화해서 세 곳이 값 하나를 같이 참조하도록
+정리 — **1588-0000은 사용자가 확인한 자리표시자(placeholder)이며 실제
+대표번호가 아직 정해지지 않음**, 지금은 이 값을 그대로 쓰고 나중에 실제
+번호가 정해지면 이 상수 하나만 바꾸면 세 곳이 한 번에 갱신됨(실제 번호 교체는
+이번 범위 밖). 미실행 상태(RESEND_API_KEY 없음)인
+`send-portal-credentials-email`도 나중에 Resend 활성화 시 잘못된 안내가
+발송되는 걸 미리 막기 위해 안내 문구를 "이메일: {합성이메일}"에서 "아이디:
+{login_id}"로 선제 수정. `npx tsc --noEmit`/`npm run build` 확인 완료.
+DB 마이그레이션(`customer_accounts.login_id` UNIQUE NOT NULL 컬럼 추가,
+`email` NOT NULL 해제)은 사용자가 Supabase SQL Editor에서 직접 실행할 것 —
+잔존 행 0건을 이미 확인했으므로 백필 없이 바로 제약조건 적용 가능. 20차
 세션: "배차관리 배정방식 기본값을 외부정보망으로 변경" — 초기 운영은 자체
 차주풀 없이 외부정보망 이용이 대부분일 것으로 예상되어, 배차 등록/상세의
 "배정방식" 선택 버튼 순서를 외부정보망이 먼저 오도록 바꾸고, 배차 등록 폼의
@@ -1961,6 +2015,41 @@ Supabase에 저장하면 `timestamptz` 컬럼이 이를 UTC로 오인식해 실�
     확인. DB 함수 자체를 검증하는 자동화 테스트는 이 저장소에 없어서
     (`package.json`에 test 스크립트 없음), 위 조건 동치성은 코드 대조로
     직접 검증함. DB 변경은 사용자가 Supabase SQL Editor에서 직접 실행
+- **화주포털 로그인 아이디 체계 변경(21차 세션)**: 화주포털 로그인을 이메일에서
+  시스템 발급 고유 아이디(`we`+발급일(YYMMDD, KST)+2자리 순번)로 전환. 기존
+  화주 포털 계정이 이미 전부 삭제된 상태(`customer_accounts` 0건, 라이브 SQL
+  재확인)라 이관 없이 신규 발급분부터만 적용. 인증 시스템은 그대로 Supabase
+  Auth 유지, 화면은 "아이디"를 받되 내부적으로 `{아이디}@wecarry-portal.internal`
+  합성 이메일로 Auth에 등록(`lib/portalAccountCredentials.ts`). **사전조사에서
+  드러난 사실 — "비밀번호 재설정" 버튼(`reset-portal-password`)이 이미 있었음**:
+  이번 작업은 신규 기능이 아니라 그 기존 버튼/API를 admin 전용 권한 체크(원칙
+  25번 패턴, 화면단+서버단 이중)+6자리 숫자 임시비번으로 확장한 것. 임시비번은
+  최초 "4자리"로 논의됐으나 Supabase Auth 전역 최소길이 정책(직원 계정과 공유)과
+  충돌할 위험이 있어 "6자리 랜덤 숫자"로 확정(정책 자체는 안 건드림).
+  `randomPassword()` 중복 3곳(`create-portal-account`/`approve-application`/
+  `reset-portal-password`)을 `lib/portalAccountCredentials.ts`의
+  `generateTempPassword()`/`issuePortalAccount()`/`reissueTempPassword()`로
+  통합(`staff_accounts`용 4번째 사본은 별개 도메인이라 안 건드림). 아이디
+  순번은 "먼저 조회해서 없으면 insert" 원칙대로 `login_id` UNIQUE + insert
+  23505 캐치 후 재시도로 동시발급 충돌 처리. `/apply` 승인 모달의 "포털 계정
+  로그인용 이메일" 수동입력 필드는 완전히 제거(신청서의 `contact_email`을
+  "연락처 이메일"(선택)로 자동 승계, 관리자 입력 불필요 — 없으면 "메일 발송"
+  버튼 자체를 숨김). 화주 상세화면 계정발급 폼도 이메일을 "연락처 이메일
+  (선택)"로 전환, 계정 목록도 아이디를 기본 표시로 변경. 로그인 화면은
+  라벨 "이메일"→"아이디"(`type="text"`, `autoComplete="username"`), "아이디
+  저장" 체크박스 신규(아이디만 `localStorage` 저장, 비밀번호는 절대 저장
+  안 함 — 기존에 이런 패턴 자체가 없어 신규 구현), "비밀번호를 잊으셨나요?
+  위캐리로 문의해주세요" 안내 문구 신규. 이 안내 문구 + 랜딩페이지·
+  `CustomerPortalShell.tsx`에 이미 하드코딩돼 있던 "고객센터 1588-0000"을
+  `lib/contactInfo.ts`(`COMPANY_SUPPORT_PHONE`/`COMPANY_SUPPORT_HOURS`)로
+  공용 상수화(세 곳이 값 하나 참조) — **1588-0000은 자리표시자이며 실제
+  번호 미확정, 지금은 그대로 쓰고 나중에 이 상수만 바꾸면 세 곳 동시 갱신**.
+  미실행 상태(`RESEND_API_KEY` 없음)인 `send-portal-credentials-email`도
+  나중에 Resend 활성화 시 잘못된 문구가 나가지 않도록 "이메일: {합성이메일}"→
+  "아이디: {login_id}"로 선제 수정. `npx tsc --noEmit`/`npm run build` 확인
+  완료. DB 마이그레이션(`customer_accounts.login_id` UNIQUE NOT NULL 추가,
+  `email` NOT NULL 해제)은 사용자가 Supabase SQL Editor에서 직접 실행할 것 —
+  잔존 행 0건 확인됨(백필 불필요)
 - **운영 대시보드 도입(로드맵⑥, 19차 세션 — 로드맵 전체 완료)**: `/admin/dashboard`
   신규(관리자 전용, TopNav "시스템" 그룹). **DB 마이그레이션 없음** — 기존
   `invoices`/`orders`/`dispatches`/`dispatch_extra_charges`/`claims`/
