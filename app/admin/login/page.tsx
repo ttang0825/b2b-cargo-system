@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import PasswordInput from "@/components/PasswordInput";
 import { supabaseAdminAuth } from "@/lib/supabaseAdminAuthClient";
@@ -8,6 +8,8 @@ import { supabaseAdminAuth } from "@/lib/supabaseAdminAuthClient";
 const ERROR_MESSAGES: Record<string, string> = {
   inactive: "이 계정은 비활성화되어 있습니다. 관리자에게 문의해주세요.",
 };
+
+const SAVED_EMAIL_KEY = "wecarry_admin_saved_email";
 
 function LoginInner() {
   const router = useRouter();
@@ -17,16 +19,31 @@ function LoginInner() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberEmail, setRememberEmail] = useState(false);
   const [error, setError] = useState<string | null>(urlError ? ERROR_MESSAGES[urlError] || null : null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem(SAVED_EMAIL_KEY);
+    if (saved) {
+      setEmail(saved);
+      setRememberEmail(true);
+    }
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
     try {
+      const trimmedEmail = email.trim().toLowerCase();
+      if (rememberEmail) {
+        window.localStorage.setItem(SAVED_EMAIL_KEY, trimmedEmail);
+      } else {
+        window.localStorage.removeItem(SAVED_EMAIL_KEY);
+      }
       const { error: signInError } = await supabaseAdminAuth.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
+        email: trimmedEmail,
         password: password.trim(),
       });
       if (signInError) {
@@ -74,10 +91,28 @@ function LoginInner() {
             <label>이메일</label>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
           </div>
-          <div className="field" style={{ marginBottom: 16 }}>
+          <div className="field" style={{ marginBottom: 12 }}>
             <label>비밀번호</label>
             <PasswordInput value={password} onChange={setPassword} />
           </div>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              fontSize: 12.5,
+              color: "var(--text-muted)",
+              marginBottom: 16,
+              cursor: "pointer",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={rememberEmail}
+              onChange={(e) => setRememberEmail(e.target.checked)}
+            />
+            이메일 저장
+          </label>
           {error && <div className="error-box">{error}</div>}
           <button
             className="btn"
