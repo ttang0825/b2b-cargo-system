@@ -9,9 +9,9 @@ export async function POST(req: Request) {
     );
   }
 
-  const { email, companyName, contactName, password, portalUrl } = await req.json();
-  if (!email || !password) {
-    return NextResponse.json({ error: "이메일과 비밀번호 정보가 필요합니다." }, { status: 400 });
+  const { email, login_id, companyName, contactName, password, portalUrl } = await req.json();
+  if (!email || !login_id || !password) {
+    return NextResponse.json({ error: "이메일과 아이디·비밀번호 정보가 필요합니다." }, { status: 400 });
   }
 
   const html = `
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
       아래 정보로 화주포털에 접속하실 수 있습니다.</p>
       <div style="background:#fff9d6; border-radius:10px; padding:16px; margin:20px 0;">
         <div>포털 주소: <a href="${portalUrl}">${portalUrl}</a></div>
-        <div>이메일: <b>${email}</b></div>
+        <div>아이디: <b>${login_id}</b></div>
         <div>임시 비밀번호: <b>${password}</b></div>
       </div>
       <p style="font-size:13px; color:#666;">

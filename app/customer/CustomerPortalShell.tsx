@@ -11,6 +11,7 @@ import {
   getAcknowledgedRequestIds,
   acknowledgeRequestIds,
 } from "@/lib/portalNotifications";
+import { COMPANY_SUPPORT_PHONE, COMPANY_SUPPORT_HOURS } from "@/lib/contactInfo";
 
 const PUBLIC_PATHS = ["/customer/login", "/customer/support-verify"];
 
@@ -432,7 +433,7 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
               📞 고객센터
             </div>
             <a
-              href="tel:1588-0000"
+              href={`tel:${COMPANY_SUPPORT_PHONE}`}
               className="num"
               style={{
                 display: "block",
@@ -443,10 +444,10 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
                 marginBottom: 6,
               }}
             >
-              1588-0000
+              {COMPANY_SUPPORT_PHONE}
             </a>
             <div style={{ fontSize: 14, color: "var(--text)", fontWeight: 600 }}>
-              평일 09:00 ~ 18:00
+              {COMPANY_SUPPORT_HOURS}
               <span style={{ color: "var(--text-muted)", fontWeight: 500 }}> (주말·공휴일 휴무)</span>
             </div>
           </div>

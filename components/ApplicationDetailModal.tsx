@@ -58,7 +58,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 }
 
 type ResultData =
-  | { kind: "approve"; email: string; password: string }
+  | { kind: "approve"; login_id: string; password: string; contactEmail: string | null }
   | { kind: "decision"; type: "거절" | "보류"; email: string; companyName: string; contactName: string; reason: string };
 
 export default function ApplicationDetailModal({
@@ -86,11 +86,16 @@ export default function ApplicationDetailModal({
   const [reason, setReason] = useState("");
   const [customNote, setCustomNote] = useState("");
 
-  const [approveEmail, setApproveEmail] = useState(item.contact_email || "");
-
   const [resultData, setResultData] = useState<ResultData | null>(null);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const [copiedLabel, setCopiedLabel] = useState<string | null>(null);
+
+  function handleCopy(text: string, label: string) {
+    navigator.clipboard.writeText(text);
+    setCopiedLabel(label);
+    setTimeout(() => setCopiedLabel(null), 1500);
+  }
 
   function openDecisionStep(type: "거절" | "보류") {
     setReason("");
@@ -100,7 +105,6 @@ export default function ApplicationDetailModal({
   }
 
   function openApproveStep() {
-    setApproveEmail(item.contact_email || "");
     setLocalError(null);
     setStep("approve");
   }
@@ -151,11 +155,6 @@ export default function ApplicationDetailModal({
   }
 
   async function submitApprove() {
-    const email = approveEmail.trim();
-    if (!email) {
-      setLocalError("포털 계정 로그인용 이메일을 입력해주세요.");
-      return;
-    }
     if (!staffName) {
       setLocalError("로그인 정보를 확인할 수 없습니다. 다시 로그인해주세요.");
       return;
@@ -166,7 +165,7 @@ export default function ApplicationDetailModal({
       const res = await fetch("/api/admin/approve-application", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ application_id: item.id, portal_email: email, processed_by: staffName }),
+        body: JSON.stringify({ application_id: item.id, processed_by: staffName }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -175,7 +174,7 @@ export default function ApplicationDetailModal({
         return;
       }
       onChanged();
-      setResultData({ kind: "approve", email: data.email, password: data.password });
+      setResultData({ kind: "approve", login_id: data.login_id, password: data.password, contactEmail: data.email || null });
       setStep("result");
     } catch {
       setLocalError("승인 처리 중 오류가 발생했습니다.");
@@ -189,12 +188,14 @@ export default function ApplicationDetailModal({
     setLocalError(null);
     try {
       if (resultData.kind === "approve") {
+        if (!resultData.contactEmail) return; // 버튼 자체가 숨겨져 있어 보통 여기 도달하지 않음
         const portalUrl = `${window.location.origin}/customer/login`;
         const res = await fetch("/api/admin/send-portal-credentials-email", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            email: resultData.email,
+            email: resultData.contactEmail,
+            login_id: resultData.login_id,
             password: resultData.password,
             companyName: item.company_name,
             contactName: item.contact_name,
@@ -451,12 +452,8 @@ export default function ApplicationDetailModal({
           <>
             <h3 style={{ marginTop: 0, fontSize: 15 }}>"{item.company_name}" 승인 처리</h3>
             <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginBottom: 14, lineHeight: 1.6 }}>
-              화주 회사가 등록되고, 아래 이메일로 포털 계정이 즉시 발급됩니다.
+              화주 회사가 등록되고, 포털 계정 아이디·임시 비밀번호가 자동으로 발급됩니다.
             </p>
-            <div className="field" style={{ marginBottom: 12 }}>
-              <label>포털 계정 로그인용 이메일</label>
-              <input value={approveEmail} onChange={(e) => setApproveEmail(e.target.value)} />
-            </div>
             <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 18 }}>
               처리자: <strong>{staffName || "확인 중..."}</strong>
             </p>
@@ -480,8 +477,43 @@ export default function ApplicationDetailModal({
                 <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginBottom: 10 }}>
                   아래 정보를 화주에게 전달해주세요 (한 번만 표시됩니다)
                 </p>
-                <div>이메일: <span className="num">{resultData.email}</span></div>
-                <div>임시 비밀번호: <span className="num">{resultData.password}</span></div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                  <span>
+                    아이디:{" "}
+                    <span className="num" style={{ userSelect: "none", WebkitUserSelect: "none" }}>
+                      {resultData.login_id}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    style={{ padding: "2px 8px", borderRadius: 6, fontSize: 10.5, cursor: "pointer" }}
+                    onClick={() => handleCopy(resultData.login_id, "result-login-id")}
+                  >
+                    {copiedLabel === "result-login-id" ? "복사됨" : "복사"}
+                  </button>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span>
+                    임시 비밀번호:{" "}
+                    <span className="num" style={{ userSelect: "none", WebkitUserSelect: "none" }}>
+                      {resultData.password}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    style={{ padding: "2px 8px", borderRadius: 6, fontSize: 10.5, cursor: "pointer" }}
+                    onClick={() => handleCopy(resultData.password, "result-password")}
+                  >
+                    {copiedLabel === "result-password" ? "복사됨" : "복사"}
+                  </button>
+                </div>
+                {!resultData.contactEmail && (
+                  <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 8 }}>
+                    담당자 연락처 이메일이 없어 메일 발송은 건너뜁니다. 전화 등으로 직접 안내해주세요.
+                  </p>
+                )}
               </>
             ) : (
               <>
@@ -493,9 +525,11 @@ export default function ApplicationDetailModal({
             )}
             {localError && <div className="error-box" style={{ margin: "12px 0" }}>{localError}</div>}
             <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-              <button className="btn" onClick={handleSendResultEmail} disabled={sendingEmail || emailSent}>
-                {emailSent ? "발송 완료 ✓" : sendingEmail ? "발송 중..." : "메일 발송"}
-              </button>
+              {(resultData.kind !== "approve" || resultData.contactEmail) && (
+                <button className="btn" onClick={handleSendResultEmail} disabled={sendingEmail || emailSent}>
+                  {emailSent ? "발송 완료 ✓" : sendingEmail ? "발송 중..." : "메일 발송"}
+                </button>
+              )}
               <button className="btn btn-ghost" onClick={onClose}>
                 닫기
               </button>

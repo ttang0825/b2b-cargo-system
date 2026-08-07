@@ -1,14 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-
-function randomPassword(length = 10) {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
-  let pw = "";
-  for (let i = 0; i < length; i++) {
-    pw += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return pw;
-}
+import { issuePortalAccount } from "@/lib/portalAccountCredentials";
 
 export async function POST(req: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -21,46 +13,24 @@ export async function POST(req: Request) {
     );
   }
 
-  const { company_id, email, name } = await req.json();
-  if (!company_id || !email) {
-    return NextResponse.json(
-      { error: "회사와 이메일은 필수입니다." },
-      { status: 400 }
-    );
+  const { company_id, contact_mobile, name } = await req.json();
+  if (!company_id) {
+    return NextResponse.json({ error: "회사 정보가 필요합니다." }, { status: 400 });
   }
 
   const admin = createClient(url, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  const tempPassword = randomPassword();
-
-  const { data: userData, error: userError } = await admin.auth.admin.createUser({
-    email,
-    password: tempPassword,
-    email_confirm: true,
-  });
-
-  if (userError || !userData?.user) {
-    return NextResponse.json(
-      { error: userError?.message || "계정 생성에 실패했습니다. (이미 등록된 이메일일 수 있습니다)" },
-      { status: 400 }
-    );
-  }
-
-  const { error: linkError } = await admin.from("customer_accounts").insert({
-    auth_user_id: userData.user.id,
+  const { data, error } = await issuePortalAccount(admin, {
     company_id,
     name: name || null,
-    email,
-    must_change_password: true,
+    contact_mobile: contact_mobile || null,
   });
 
-  if (linkError) {
-    // 연결 저장에 실패하면 방금 만든 인증 계정도 같이 롤백
-    await admin.auth.admin.deleteUser(userData.user.id);
-    return NextResponse.json({ error: linkError.message }, { status: 400 });
+  if (!data) {
+    return NextResponse.json({ error: error || "계정 발급에 실패했습니다." }, { status: 400 });
   }
 
-  return NextResponse.json({ email, password: tempPassword });
+  return NextResponse.json({ login_id: data.login_id, password: data.password, email: data.email });
 }

@@ -1,16 +1,14 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-
-function randomPassword(length = 10) {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
-  let pw = "";
-  for (let i = 0; i < length; i++) {
-    pw += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return pw;
-}
+import { getCurrentStaff } from "@/lib/getCurrentStaff";
+import { reissueTempPassword } from "@/lib/portalAccountCredentials";
 
 export async function POST(req: Request) {
+  const staff = await getCurrentStaff();
+  if (!staff || staff.role !== "admin") {
+    return NextResponse.json({ error: "비밀번호 재발급은 관리자만 할 수 있습니다." }, { status: 403 });
+  }
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceKey) {
@@ -29,7 +27,7 @@ export async function POST(req: Request) {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  const tempPassword = randomPassword();
+  const tempPassword = reissueTempPassword();
 
   const { error: updateError } = await admin.auth.admin.updateUserById(auth_user_id, {
     password: tempPassword,
@@ -38,6 +36,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: updateError.message }, { status: 400 });
   }
 
+  // 아이디(login_id)는 그대로 두고 비밀번호만 재발급 — 다음 로그인 시 다시 변경 강제
   await admin
     .from("customer_accounts")
     .update({ must_change_password: true })
