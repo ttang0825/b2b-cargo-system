@@ -205,7 +205,7 @@ export default function CompanyDetailPage() {
   });
 
   const [portalAccounts, setPortalAccounts] = useState<any[]>([]);
-  const [newAccountEmail, setNewAccountEmail] = useState("");
+  const [newAccountPhone, setNewAccountPhone] = useState("");
   const [newAccountName, setNewAccountName] = useState("");
   const [issuingAccount, setIssuingAccount] = useState(false);
   const [issuedCredentials, setIssuedCredentials] = useState<{ login_id: string; password: string } | null>(null);
@@ -285,7 +285,7 @@ export default function CompanyDetailPage() {
   async function loadPortalAccounts() {
     const { data } = await supabase
       .from("customer_accounts")
-      .select("id,auth_user_id,login_id,email,name,is_active,must_change_password,created_at")
+      .select("id,auth_user_id,login_id,email,name,contact_mobile,is_active,must_change_password,created_at")
       .eq("company_id", id)
       .order("created_at", { ascending: false });
     setPortalAccounts(data || []);
@@ -302,7 +302,7 @@ export default function CompanyDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           company_id: id,
-          email: newAccountEmail.trim() || null,
+          contact_mobile: newAccountPhone.trim() || null,
           name: newAccountName.trim(),
         }),
       });
@@ -312,7 +312,7 @@ export default function CompanyDetailPage() {
         return;
       }
       setIssuedCredentials({ login_id: data.login_id, password: data.password });
-      setNewAccountEmail("");
+      setNewAccountPhone("");
       setNewAccountName("");
       loadPortalAccounts();
     } catch {
@@ -1334,10 +1334,16 @@ export default function CompanyDetailPage() {
                       </span>
                     )}
                   </div>
-                  {acc.email && (
+                  {acc.contact_mobile ? (
                     <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 2 }}>
-                      연락처 이메일: {acc.email}
+                      담당자 전화번호: {acc.contact_mobile}
                     </div>
+                  ) : (
+                    acc.email && (
+                      <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 2 }}>
+                        연락처 이메일: {acc.email}
+                      </div>
+                    )
                   )}
                   <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 2 }}>
                     {new Date(acc.created_at).toLocaleDateString("ko-KR")} 발급
@@ -1455,10 +1461,10 @@ export default function CompanyDetailPage() {
 
         <form onSubmit={handleIssueAccount} onKeyDown={handleFormKeyDown} style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <input
-            type="email"
-            value={newAccountEmail}
-            onChange={(e) => setNewAccountEmail(e.target.value)}
-            placeholder="연락처 이메일 (선택)"
+            type="tel"
+            value={newAccountPhone}
+            onChange={(e) => setNewAccountPhone(formatPhoneNumber(e.target.value))}
+            placeholder="담당자 전화번호 (선택)"
             style={{ flex: "1 1 200px" }}
           />
           <input

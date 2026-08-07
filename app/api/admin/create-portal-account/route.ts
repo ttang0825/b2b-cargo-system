@@ -13,7 +13,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { company_id, email, name } = await req.json();
+  const { company_id, contact_mobile, name } = await req.json();
   if (!company_id) {
     return NextResponse.json({ error: "회사 정보가 필요합니다." }, { status: 400 });
   }
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
   const { data, error } = await issuePortalAccount(admin, {
     company_id,
     name: name || null,
-    email: email || null,
+    contact_mobile: contact_mobile || null,
   });
 
   if (!data) {
