@@ -121,7 +121,9 @@ export default function CustomerLoginPage() {
           </button>
         </form>
         <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 18, marginBottom: 0, textAlign: "center" }}>
-          비밀번호를 잊으셨나요? 위캐리로 문의해주세요 (
+          비밀번호를 잊으셨나요?
+          <br />
+          위캐리로 문의해주세요 (
           <a href={`tel:${COMPANY_SUPPORT_PHONE}`} style={{ color: "var(--text-muted)" }}>
             {COMPANY_SUPPORT_PHONE}
           </a>
