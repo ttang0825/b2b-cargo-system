@@ -13,6 +13,7 @@ export default function ApplyPage() {
   const [errorReason, setErrorReason] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [agreed, setAgreed] = useState(false);
+  const [showVehicleHint, setShowVehicleHint] = useState(false);
 
   const [form, setForm] = useState({
     company_name: "",
@@ -237,30 +238,60 @@ export default function ApplyPage() {
                 <input
                   value={form.industry}
                   onChange={(e) => setField("industry", e.target.value)}
-                  placeholder="예: 제조업, 유통업, 건설업, 식품업, 전자상거래, 물류업 등"
+                  placeholder="예: 제조업, 유통업 등"
                 />
+                <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 4 }}>
+                  예시: 제조업, 유통업, 건설업, 식품업, 전자상거래, 물류업 등
+                </div>
               </div>
               <div className="field">
                 <label style={{ display: "flex", alignItems: "center", gap: 5 }}>
                   주 이용 차량 (선택)
                   <span
-                    title={`주로 이용하시는 차량 톤수를 선택해주세요. 예: ${VEHICLE_TYPES.join(", ")}`}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      width: 14,
-                      height: 14,
-                      borderRadius: "50%",
-                      background: "var(--text-muted)",
-                      color: "var(--bg)",
-                      fontSize: 10,
-                      fontWeight: 700,
-                      cursor: "help",
-                      flexShrink: 0,
-                    }}
+                    style={{ position: "relative", display: "inline-flex" }}
+                    onMouseEnter={() => setShowVehicleHint(true)}
+                    onMouseLeave={() => setShowVehicleHint(false)}
                   >
-                    !
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: 14,
+                        height: 14,
+                        borderRadius: "50%",
+                        background: "var(--text-muted)",
+                        color: "var(--bg)",
+                        fontSize: 10,
+                        fontWeight: 700,
+                        cursor: "help",
+                        flexShrink: 0,
+                      }}
+                    >
+                      !
+                    </span>
+                    {showVehicleHint && (
+                      <span
+                        style={{
+                          position: "absolute",
+                          bottom: "calc(100% + 6px)",
+                          left: 0,
+                          zIndex: 10,
+                          background: "var(--text)",
+                          color: "var(--bg)",
+                          fontSize: 11.5,
+                          fontWeight: 400,
+                          lineHeight: 1.5,
+                          padding: "6px 10px",
+                          borderRadius: 6,
+                          width: 220,
+                          whiteSpace: "normal",
+                          boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+                        }}
+                      >
+                        주로 이용하시는 차량 톤수를 선택해주세요. 예: {VEHICLE_TYPES.join(", ")}
+                      </span>
+                    )}
                   </span>
                 </label>
                 <select value={form.preferred_vehicle} onChange={(e) => setField("preferred_vehicle", e.target.value)}>
