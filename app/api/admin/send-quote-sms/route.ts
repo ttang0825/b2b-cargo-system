@@ -25,9 +25,12 @@ export async function POST(req: Request) {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  const { quote_id } = await req.json();
+  const { quote_id, mode } = await req.json();
   if (!quote_id) {
     return NextResponse.json({ error: "quote_id가 필요합니다." }, { status: 400 });
+  }
+  if (mode !== "preview" && mode !== "send") {
+    return NextResponse.json({ error: "mode는 preview 또는 send여야 합니다." }, { status: 400 });
   }
 
   const { data: quote, error: quoteError } = await admin
@@ -40,6 +43,19 @@ export async function POST(req: Request) {
   }
 
   const phone: string | null = (quote as any).companies?.contact_mobile || quote.guest_phone || null;
+  const message = quoteSummaryMessage({
+    vehicleType: quote.vehicle_type,
+    finalAmount: quote.final_amount,
+    pickupAt: quote.requested_pickup_at,
+  });
+
+  // 실제 발송 전에 admin이 문구·수신번호를 눈으로 한번 더 확인하도록, client가
+  // 먼저 이 미리보기를 요청한 뒤 확인을 받고 나서만 mode:"send"로 다시 호출함
+  // (PR #73 리뷰 반영) — 문구·수신번호 계산은 이 한 곳에서만 하고 preview/send가
+  // 그대로 공유해서, 미리 보여준 내용과 실제 발송 내용이 어긋날 일이 없음.
+  if (mode === "preview") {
+    return NextResponse.json({ message, phone });
+  }
 
   await sendSmsWithLog({
     relatedType: "quote",
@@ -47,11 +63,7 @@ export async function POST(req: Request) {
     templateType: "quote_summary",
     recipientType: "customer",
     recipientPhone: phone,
-    message: quoteSummaryMessage({
-      vehicleType: quote.vehicle_type,
-      finalAmount: quote.final_amount,
-      pickupAt: quote.requested_pickup_at,
-    }),
+    message,
     sentBy: staff.id,
   });
 

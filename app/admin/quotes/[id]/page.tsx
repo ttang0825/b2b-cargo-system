@@ -303,10 +303,33 @@ export default function QuoteDetailPage() {
     setSendingQuoteSms(true);
     setQuoteSmsError(null);
     try {
+      // 1) 먼저 미리보기만 요청 — 실제 발송 전에 문구·수신번호를 admin이 눈으로
+      // 확인하게 함(PR #73 리뷰 반영)
+      const previewRes = await fetch("/api/admin/send-quote-sms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quote_id: quote.id, mode: "preview" }),
+      });
+      const preview = await previewRes.json();
+      if (!previewRes.ok) {
+        setQuoteSmsError(preview.error || "문자 미리보기를 불러오지 못했습니다.");
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `아래 내용으로 문자를 발송하시겠습니까?\n\n수신번호: ${preview.phone || "번호 없음(발송 불가)"}\n\n${preview.message}`
+      );
+      if (!confirmed) return;
+      if (!preview.phone) {
+        setQuoteSmsError("수신자 전화번호가 없어 발송할 수 없습니다.");
+        return;
+      }
+
+      // 2) 확인 후에만 실제 발송
       const res = await fetch("/api/admin/send-quote-sms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quote_id: quote.id }),
+        body: JSON.stringify({ quote_id: quote.id, mode: "send" }),
       });
       const data = await res.json();
       if (!res.ok) {
