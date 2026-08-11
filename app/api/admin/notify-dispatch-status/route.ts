@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
-import { sendSmsWithLog } from "@/lib/sendSms";
 import {
   dispatchConfirmedMessage,
   pickupCompletedMessage,
@@ -11,10 +10,10 @@ import {
 // 배차확정/상차완료/하차완료는 client가 anon 키로 dispatches를 직접 update하는
 // 4곳(배차 상세의 확정 버튼·상태 드롭다운·체크박스, 배차 목록의 상태 드롭다운)에서
 // 일어나서 SMS(비밀키 필요)를 그 자리에 바로 못 끼워넣는다(사전조사 1-3 결과).
-// 대신 그 update가 성공한 직후 client가 이 API를 fire-and-forget으로 한 번 더
-// 호출하고, 이 API가 dispatch를 다시 조회해서(client 값을 믿지 않고) 수신자와
-// 문구를 정해 발송한다. 실패해도 배차확정 등 메인 액션에는 전혀 영향 없음
-// (client가 응답을 기다리지 않으므로).
+// 대신 그 update가 성공한 직후 client가 이 API를 호출해서 수신자·문구
+// 미리보기만 받고(**여기선 발송하지 않음**), components/SmsConfirmModal.tsx로
+// 확인·수정 후 "발송"을 눌러야만 /api/admin/send-sms가 실제로 호출됨
+// (PR #73 리뷰 반영 — 모든 SMS를 발송 직전에 확인·수정할 수 있게 해달라는 요청).
 export async function POST(req: Request) {
   const staff = await getCurrentStaff();
   if (!staff) {
@@ -56,7 +55,7 @@ export async function POST(req: Request) {
       (dispatch as any).assignment_type === "internal"
         ? (dispatch as any).drivers?.phone || null
         : (dispatch as any).external_driver_phone || null;
-    await sendSmsWithLog({
+    return NextResponse.json({
       relatedType: "dispatch",
       relatedId: dispatch_id,
       templateType: "dispatch_confirmed",
@@ -69,7 +68,6 @@ export async function POST(req: Request) {
         pickupAt: order?.requested_pickup_at || null,
       }),
     });
-    return NextResponse.json({ ok: true });
   }
 
   // 상차완료/하차완료는 화주(고객) 대상 — 회사 연결 건은 담당자 휴대폰
@@ -79,7 +77,7 @@ export async function POST(req: Request) {
     order?.companies?.contact_mobile || order?.individual_customers?.phone || order?.guest_phone || null;
 
   if (event === "pickup_completed") {
-    await sendSmsWithLog({
+    return NextResponse.json({
       relatedType: "dispatch",
       relatedId: dispatch_id,
       templateType: "pickup_completed",
@@ -87,15 +85,13 @@ export async function POST(req: Request) {
       recipientPhone: customerPhone,
       message: pickupCompletedMessage({ orderNo: order?.order_no || null, origin: order?.origin || null }),
     });
-  } else {
-    await sendSmsWithLog({
-      relatedType: "dispatch",
-      relatedId: dispatch_id,
-      templateType: "delivery_completed",
-      recipientType: "customer",
-      recipientPhone: customerPhone,
-      message: deliveryCompletedMessage({ orderNo: order?.order_no || null, destination: order?.destination || null }),
-    });
   }
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({
+    relatedType: "dispatch",
+    relatedId: dispatch_id,
+    templateType: "delivery_completed",
+    recipientType: "customer",
+    recipientPhone: customerPhone,
+    message: deliveryCompletedMessage({ orderNo: order?.order_no || null, destination: order?.destination || null }),
+  });
 }

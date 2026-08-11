@@ -15,7 +15,8 @@ import MoneyInput from "@/components/MoneyInput";
 import MixableBadge from "@/components/MixableBadge";
 import { shortAddress } from "@/lib/shortAddress";
 import { calcInclusiveAmount } from "@/lib/vat";
-import { notifyDispatchStatusSms } from "@/lib/notifyDispatchSms";
+import { fetchDispatchSmsPreview } from "@/lib/notifyDispatchSms";
+import SmsConfirmModal, { SmsPreview } from "@/components/SmsConfirmModal";
 
 type OrderLite = {
   id: string;
@@ -89,6 +90,7 @@ function DispatchesPageInner() {
   const searchParams = useSearchParams();
   const fromOrderId = searchParams.get("from_order");
   const [dispatches, setDispatches] = useState<DispatchRow[]>([]);
+  const [smsPreview, setSmsPreview] = useState<SmsPreview | null>(null);
   const [availableOrders, setAvailableOrders] = useState<OrderLite[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -358,7 +360,8 @@ function DispatchesPageInner() {
     }
 
     if (status !== prevStatus) {
-      notifyDispatchStatusSms(dispatchId, status);
+      const smsPreviewResult = await fetchDispatchSmsPreview(dispatchId, status);
+      if (smsPreviewResult) setSmsPreview(smsPreviewResult);
     }
   }
 
@@ -855,6 +858,14 @@ function DispatchesPageInner() {
           </table>
         )}
       </div>
+
+      {smsPreview && (
+        <SmsConfirmModal
+          preview={smsPreview}
+          onSent={() => setSmsPreview(null)}
+          onSkip={() => setSmsPreview(null)}
+        />
+      )}
     </main>
   );
 }

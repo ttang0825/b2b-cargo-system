@@ -20,6 +20,7 @@ import { localInputToISOString, toLocalDateTimeInput } from "@/lib/localDateTime
 import MoneyInput from "@/components/MoneyInput";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
 import SmsLogPanel from "@/components/SmsLogPanel";
+import SmsConfirmModal, { SmsPreview } from "@/components/SmsConfirmModal";
 import ConflictWarning from "@/components/ConflictWarning";
 import CollectionMethodInput, { CollectionMethodValue } from "@/components/CollectionMethodInput";
 import { getSettlementDisplayLabel, getPaymentConditionLabel, mapToLegacySettlementType } from "@/lib/settlementLabels";
@@ -131,6 +132,7 @@ export default function QuoteDetailPage() {
   const [sendingQuoteSms, setSendingQuoteSms] = useState(false);
   const [quoteSmsSent, setQuoteSmsSent] = useState(false);
   const [quoteSmsError, setQuoteSmsError] = useState<string | null>(null);
+  const [smsPreview, setSmsPreview] = useState<SmsPreview | null>(null);
 
   const [editForm, setEditForm] = useState({
     collection_method: "broker" as CollectionMethodValue["collection_method"],
@@ -303,42 +305,21 @@ export default function QuoteDetailPage() {
     setSendingQuoteSms(true);
     setQuoteSmsError(null);
     try {
-      // 1) 먼저 미리보기만 요청 — 실제 발송 전에 문구·수신번호를 admin이 눈으로
-      // 확인하게 함(PR #73 리뷰 반영)
+      // 미리보기만 요청 — 실제 발송은 SmsConfirmModal에서 확인·수정 후
+      // /api/admin/send-sms로만 일어남(PR #73 리뷰 반영)
       const previewRes = await fetch("/api/admin/send-quote-sms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quote_id: quote.id, mode: "preview" }),
+        body: JSON.stringify({ quote_id: quote.id }),
       });
       const preview = await previewRes.json();
       if (!previewRes.ok) {
         setQuoteSmsError(preview.error || "문자 미리보기를 불러오지 못했습니다.");
         return;
       }
-
-      const confirmed = window.confirm(
-        `아래 내용으로 문자를 발송하시겠습니까?\n\n수신번호: ${preview.phone || "번호 없음(발송 불가)"}\n\n${preview.message}`
-      );
-      if (!confirmed) return;
-      if (!preview.phone) {
-        setQuoteSmsError("수신자 전화번호가 없어 발송할 수 없습니다.");
-        return;
-      }
-
-      // 2) 확인 후에만 실제 발송
-      const res = await fetch("/api/admin/send-quote-sms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quote_id: quote.id, mode: "send" }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setQuoteSmsError(data.error || "문자 발송에 실패했습니다.");
-        return;
-      }
-      setQuoteSmsSent(true);
+      setSmsPreview(preview);
     } catch {
-      setQuoteSmsError("문자 발송 중 오류가 발생했습니다.");
+      setQuoteSmsError("문자 미리보기를 불러오지 못했습니다.");
     } finally {
       setSendingQuoteSms(false);
     }
@@ -1199,6 +1180,17 @@ export default function QuoteDetailPage() {
       </div>
 
       <SmsLogPanel relatedType="quote" relatedId={quote.id} />
+
+      {smsPreview && (
+        <SmsConfirmModal
+          preview={smsPreview}
+          onSent={() => {
+            setSmsPreview(null);
+            setQuoteSmsSent(true);
+          }}
+          onSkip={() => setSmsPreview(null)}
+        />
+      )}
 
       <ProcessedByFooter
         createdBy={quote.created_by}

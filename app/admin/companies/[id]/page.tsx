@@ -21,6 +21,7 @@ import ProcessedByFooter from "@/components/ProcessedByFooter";
 import ConflictWarning from "@/components/ConflictWarning";
 import { optimisticUpdate } from "@/lib/optimisticUpdate";
 import SmsLogPanel from "@/components/SmsLogPanel";
+import SmsConfirmModal, { SmsPreview } from "@/components/SmsConfirmModal";
 
 type CompanyDetail = { [key: string]: any };
 
@@ -210,6 +211,7 @@ export default function CompanyDetailPage() {
   const [newAccountName, setNewAccountName] = useState("");
   const [issuingAccount, setIssuingAccount] = useState(false);
   const [issuedCredentials, setIssuedCredentials] = useState<{ login_id: string; password: string } | null>(null);
+  const [smsPreview, setSmsPreview] = useState<SmsPreview | null>(null);
   const [portalError, setPortalError] = useState<string | null>(null);
   const [portalUrl, setPortalUrl] = useState("");
   const [copiedLabel, setCopiedLabel] = useState<string | null>(null);
@@ -313,6 +315,7 @@ export default function CompanyDetailPage() {
         return;
       }
       setIssuedCredentials({ login_id: data.login_id, password: data.password });
+      if (data.smsPreview) setSmsPreview(data.smsPreview);
       setNewAccountPhone("");
       setNewAccountName("");
       loadPortalAccounts();
@@ -396,6 +399,7 @@ export default function CompanyDetailPage() {
         return;
       }
       setIssuedCredentials({ login_id: loginId, password: data.password });
+      if (data.smsPreview) setSmsPreview(data.smsPreview);
       loadPortalAccounts();
     } catch {
       setPortalError("비밀번호 재발급 중 오류가 발생했습니다.");
@@ -1504,6 +1508,14 @@ export default function CompanyDetailPage() {
         updatedBy={company.updated_by}
         updatedAt={company.updated_at}
       />
+
+      {smsPreview && (
+        <SmsConfirmModal
+          preview={smsPreview}
+          onSent={() => setSmsPreview(null)}
+          onSkip={() => setSmsPreview(null)}
+        />
+      )}
     </main>
   );
 }

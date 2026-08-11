@@ -55,8 +55,9 @@ import {
   getClaimStatusColor,
 } from "@/lib/claims";
 import { localInputToISOString } from "@/lib/localDateTime";
-import { notifyDispatchStatusSms } from "@/lib/notifyDispatchSms";
+import { fetchDispatchSmsPreview } from "@/lib/notifyDispatchSms";
 import SmsLogPanel from "@/components/SmsLogPanel";
+import SmsConfirmModal, { SmsPreview } from "@/components/SmsConfirmModal";
 
 function won(n: number | null) {
   if (n === null || n === undefined) return "-";
@@ -77,6 +78,7 @@ export default function DispatchDetailPage() {
   const id = params?.id as string;
 
   const [dispatch, setDispatch] = useState<any>(null);
+  const [smsPreview, setSmsPreview] = useState<SmsPreview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -579,7 +581,8 @@ export default function DispatchDetailPage() {
         .update({ status: DISPATCH_TO_ORDER_STATUS["배차확정"] })
         .eq("id", dispatch.orders.id);
     }
-    notifyDispatchStatusSms(id, "배차확정");
+    const smsPreviewResult = await fetchDispatchSmsPreview(id, "배차확정");
+    if (smsPreviewResult) setSmsPreview(smsPreviewResult);
     setConfirming(false);
     load();
   }
@@ -622,7 +625,8 @@ export default function DispatchDetailPage() {
     }
 
     if (status !== prevStatus) {
-      notifyDispatchStatusSms(id, status);
+      const smsPreviewResult = await fetchDispatchSmsPreview(id, status);
+      if (smsPreviewResult) setSmsPreview(smsPreviewResult);
     }
 
     // updated_at을 DB 기준으로 다시 받아와야 함 — 부분 병합만 하고 넘어가면
@@ -927,7 +931,8 @@ export default function DispatchDetailPage() {
     }
 
     if (nextStatus !== prevStatus) {
-      notifyDispatchStatusSms(id, nextStatus);
+      const smsPreviewResult = await fetchDispatchSmsPreview(id, nextStatus);
+      if (smsPreviewResult) setSmsPreview(smsPreviewResult);
     }
 
     // updated_at을 DB 기준으로 다시 받아와야 함 — 부분 병합만 하고 넘어가면
@@ -2372,6 +2377,14 @@ export default function DispatchDetailPage() {
       </button>
 
       <SmsLogPanel relatedType="dispatch" relatedId={id} />
+
+      {smsPreview && (
+        <SmsConfirmModal
+          preview={smsPreview}
+          onSent={() => setSmsPreview(null)}
+          onSkip={() => setSmsPreview(null)}
+        />
+      )}
 
       <ProcessedByFooter
         createdBy={dispatch.created_by}
