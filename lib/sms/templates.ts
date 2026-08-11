@@ -1,5 +1,6 @@
 import { shortAddress } from "@/lib/shortAddress";
 import { COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
+import { SMS_BYTE_LIMIT, byteLength } from "@/lib/sms/byteLength";
 
 // SMS 문구 유일 정의처. 전부 "[WeCarry]" 문두 표기(발신번호가 개인 010번호라
 // 스팸으로 오인되지 않도록) + 실제 발신번호 대신 대표 문의번호(COMPANY_SUPPORT_PHONE,
@@ -107,13 +108,6 @@ export function portalPasswordReissuedMessage(params: { loginId: string; passwor
 // 넘칠 수 있어서, 실제 byte를 계산해 최대한 SMS 안에 들어오도록 함. 그래도
 // 차량형태·금액만으로 이미 90byte에 근접한 극단적인 경우엔 품목이 통째로
 // 빠질 수 있음(빈도 낮음, 허용된 트레이드오프).
-const SMS_BYTE_LIMIT = 90;
-
-function byteLength(text: string): number {
-  let bytes = 0;
-  for (const ch of text) bytes += ch.charCodeAt(0) > 0x7f ? 2 : 1;
-  return bytes;
-}
 
 function truncateToBytes(text: string, maxBytes: number): string {
   let result = "";

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { SMS_BYTE_LIMIT, byteLength } from "@/lib/sms/byteLength";
 
 export interface SmsPreview {
   relatedType: "dispatch" | "application" | "portal_account" | "quote";
@@ -105,6 +106,17 @@ export default function SmsConfirmModal({
             rows={5}
             style={{ width: "100%", resize: "vertical", fontFamily: "inherit" }}
           />
+          <div
+            style={{
+              fontSize: 11,
+              marginTop: 4,
+              textAlign: "right",
+              color: byteLength(message) > SMS_BYTE_LIMIT ? "var(--danger)" : "var(--text-muted)",
+            }}
+          >
+            {byteLength(message)} / {SMS_BYTE_LIMIT}byte
+            {byteLength(message) > SMS_BYTE_LIMIT ? " (SMS 상한 초과 — LMS로 발송됩니다)" : " (SMS)"}
+          </div>
         </div>
 
         {error && <div className="error-box" style={{ marginBottom: 10 }}>{error}</div>}

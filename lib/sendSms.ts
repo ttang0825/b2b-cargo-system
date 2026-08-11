@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { solapiProvider } from "@/lib/sms/solapiProvider";
 import type { SmsProvider } from "@/lib/sms/provider";
+import { SMS_BYTE_LIMIT, byteLength } from "@/lib/sms/byteLength";
 
 // Provider 구현체는 여기 한 곳에서만 선택됨 — 나중에 벤더를 바꾸면 이 한 줄만 교체
 const provider: SmsProvider = solapiProvider;
@@ -42,13 +43,9 @@ function digitsOnly(phone: string): string {
 
 // 90byte(한글 45자) 초과 시 자동 LMS 전환 — 솔라피 발송 응답 자체엔 최종 타입이
 // 안 내려와서(공식 코드표 확인 제약, lib/sms/solapiProvider.ts 주석 참고) 여기서
-// 미리 계산해 저장함. EUC-KR 기준 한글 1자=2byte, 영숫자/기호=1byte로 근사.
+// 미리 계산해 저장함.
 function computeMessageType(text: string): "SMS" | "LMS" {
-  let bytes = 0;
-  for (const ch of text) {
-    bytes += ch.charCodeAt(0) > 0x7f ? 2 : 1;
-  }
-  return bytes > 90 ? "LMS" : "SMS";
+  return byteLength(text) > SMS_BYTE_LIMIT ? "LMS" : "SMS";
 }
 
 // Provider 호출 + sms_logs 기록을 한 번에 처리하는 공용 발송 유틸.
