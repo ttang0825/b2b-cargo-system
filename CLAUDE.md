@@ -72,7 +72,31 @@ npm 의존성 `solapi`(6.0.1) 설치. `npx tsc --noEmit`/`npm run build`
 (42페이지 프리렌더 실패, 기존 베이스라인과 동일, 신규 실패 없음) 확인
 완료. DB 마이그레이션(`sms_logs` 테이블)과 환경변수(`SOLAPI_API_KEY`/
 `SOLAPI_API_SECRET`/`SOLAPI_SENDER_PHONE`)는 사용자가 각각 Supabase SQL
-Editor·Vercel에서 직접 등록할 것. 22차
+Editor·Vercel에서 직접 등록할 것. **PR #73 실사용 리뷰 라운드로 자동발송
+설계 자체가 크게 바뀜** — (1) 견적 문자 문구가 143byte라 SMS 상한(90byte)을
+넘어 항상 LMS로 나가던 문제를 발견해, 안내문구 등 불필요한 글자를 빼고
+품목명은 나머지(차량·금액·상차일·문의처)를 다 채우고 남는 byte만 정확히
+계산해서 붙이는 방식(`lib/sms/templates.ts`의 `truncateToBytes()`)으로
+압축 — 대부분 SMS로 나가되 차량형태·금액이 유난히 긴 극단적인 경우만
+LMS로 남는 트레이드오프로 확정. (2) **"자동발송 7종(배차확정·상차완료·
+하차완료·승인·거절·계정발급·비밀번호 재발급)도 발송 직전에 문구·수신번호를
+확인하고 수정할 수 있어야 한다"는 요청으로, 애초에 이번 세션에서 설계했던
+"성공하면 곧바로 발송"(원칙 53번) 방식을 다시 "버튼을 누른 그 자리에서
+확인·수정 팝업을 띄우고 '발송'을 눌러야만 실제로 나감" 방식으로 전면
+교체함** — 다만 원칙 53번 자체(자동 update 지점에 서버 비밀키가 필요한
+부가기능을 붙일 땐 client가 서버 API를 한번 더 호출하는 패턴)는 그대로
+유효하고, 이번엔 그 서버 API가 곧바로 발송하는 대신 미리보기(문구·수신번호)만
+반환하도록 바뀐 것뿐임. `components/SmsConfirmModal.tsx`(문구 textarea+
+수신번호 input을 고칠 수 있는 공용 모달) + `app/api/admin/send-sms/route.ts`
+(모달에서 "발송"을 눌렀을 때만 호출되는 공용 발송 엔드포인트) 신규 —
+`notify-dispatch-status`/`approve-application`/`applications`(거절)/
+`create-portal-account`/`reset-portal-password`/`send-quote-sms` 6개
+라우트 전부 `sendSmsWithLog()` 직접 호출을 없애고 미리보기(`smsPreview`)만
+응답에 담아 client에 돌려주도록 수정, 배차 상세 3곳+배차 목록 1곳+
+화주등록신청 모달+화주 상세 페이지+견적 상세 페이지 전부 이 응답을 받아
+모달을 띄우도록 반영. "건너뛰기"를 누르면 SMS 없이 넘어가지만 배차확정
+등 원래 액션은 이미 완료된 뒤라 영향 없음. `npx tsc --noEmit`/`npm run
+build` 재확인 통과. 22차
 세션: "화주등록신청(/apply) 폼 연락처 필수조건 변경" — 21차 세션에서 미결정으로
 남았던 `/apply` 폼의 "담당자 이메일 *" 필수조건을 선택 입력으로 전환(담당자
 전화번호는 그대로 필수 유지). 서버 API(`app/api/apply-submit/route.ts`)도
@@ -2183,7 +2207,19 @@ Supabase에 저장하면 `timestamptz` 컬럼이 이를 UTC로 오인식해 실�
   `npx tsc --noEmit`/`npm run build`(42페이지 프리렌더 실패, 기존
   베이스라인과 동일) 확인 완료. DB 마이그레이션(`sms_logs`)과 환경변수
   (`SOLAPI_API_KEY`/`SOLAPI_API_SECRET`/`SOLAPI_SENDER_PHONE`)는 사용자가
-  직접 등록할 것
+  직접 등록할 것. **PR #73 리뷰 라운드로 자동발송 7종도 발송 직전 확인·수정
+  가능하도록 재설계** — 위 문단의 "DB update 성공 직후 client가
+  fire-and-forget으로 호출"하던 방식을, 그 서버 API가 곧바로 발송하는 대신
+  문구·수신번호 미리보기(`smsPreview`)만 돌려주고 `components/
+  SmsConfirmModal.tsx`(문구·수신번호를 고칠 수 있는 공용 모달)로 확인·수정한
+  뒤 "발송"을 눌러야만 `app/api/admin/send-sms/route.ts`(신규, 공용 발송
+  엔드포인트)가 실제로 호출되는 방식으로 교체함(원칙 53번의 "client가 서버
+  API를 한번 더 호출" 패턴 자체는 그대로 유효, 그 API의 역할만 "발송"에서
+  "미리보기"로 바뀐 것). 견적 문자도 143byte로 항상 LMS로 나가던 문제가
+  발견돼, 안내문구를 빼고 품목명을 나머지가 차지한 뒤 남는 byte만큼만 정확히
+  잘라 붙이는 방식(`lib/sms/templates.ts`의 `truncateToBytes()`)으로
+  압축(대부분 SMS로 나가되 극단적인 조합만 LMS로 남는 트레이드오프,
+  사용자 확정)
 - **화주등록신청(/apply) 폼 연락처 필수조건 변경(22차 세션)**: 21차 세션에서
   미결정으로 남았던 `/apply` 폼의 "담당자 이메일 *" 필수조건을 선택 입력으로
   전환(담당자 전화번호는 그대로 필수 유지). 화면단 유효성 검사(`app/apply/
