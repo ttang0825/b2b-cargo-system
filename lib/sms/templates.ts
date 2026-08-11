@@ -99,26 +99,55 @@ export function portalPasswordReissuedMessage(params: { loginId: string; passwor
   ].join("\n");
 }
 
+// 90byte(SMS 단문 상한, EUC-KR 기준 한글 1자=2byte) 안에 최대한 들어가도록
+// 압축한 포맷(PR #73 리뷰 반영 — 사용자가 "최대한 압축" 방식으로 확정). 안내문구·
+// "문의:" 콜론 등 없어도 되는 글자를 빼고, 품목명(자유 입력이라 길이가 들쭉날쭉함)만
+// 나머지(차량형태·금액·상차일·문의처)를 다 채운 뒤 남는 byte만큼만 byte 단위로
+// 정확히 잘라 붙임 — 고정 글자수로 자르면 남는 여유를 못 쓰거나 반대로 여전히
+// 넘칠 수 있어서, 실제 byte를 계산해 최대한 SMS 안에 들어오도록 함. 그래도
+// 차량형태·금액만으로 이미 90byte에 근접한 극단적인 경우엔 품목이 통째로
+// 빠질 수 있음(빈도 낮음, 허용된 트레이드오프).
+const SMS_BYTE_LIMIT = 90;
+
+function byteLength(text: string): number {
+  let bytes = 0;
+  for (const ch of text) bytes += ch.charCodeAt(0) > 0x7f ? 2 : 1;
+  return bytes;
+}
+
+function truncateToBytes(text: string, maxBytes: number): string {
+  let result = "";
+  let bytes = 0;
+  for (const ch of text) {
+    const chBytes = ch.charCodeAt(0) > 0x7f ? 2 : 1;
+    if (bytes + chBytes > maxBytes) break;
+    result += ch;
+    bytes += chBytes;
+  }
+  return result.trimEnd();
+}
+
 export function quoteSummaryMessage(params: {
   item: string | null;
   vehicleType: string | null;
   finalAmount: number | null;
   pickupAt: string | null;
 }): string {
-  return [
-    "[WeCarry] 견적 안내",
-    [
-      params.item || null,
-      params.vehicleType || "차량 미정",
-      // 최종 견적금액은 항상 공급가액(부가세 별도) 기준으로 저장됨(견적 상세 표시와 동일)
-      params.finalAmount != null
-        ? `운임 ${Math.round(params.finalAmount).toLocaleString("ko-KR")}원(부가세 별도)`
-        : null,
-      `상차 ${shortDateTime(params.pickupAt)}`,
-    ]
-      .filter(Boolean)
-      .join(" / "),
-    "상세 견적서는 화주포털에서 확인해주세요.",
-    `문의: ${COMPANY_SUPPORT_PHONE}`,
-  ].join("\n");
+  const fixedPart = [
+    params.vehicleType || "차량 미정",
+    // 최종 견적금액은 항상 공급가액(부가세 별도) 기준으로 저장됨(견적 상세 표시와 동일)
+    params.finalAmount != null
+      ? `${Math.round(params.finalAmount).toLocaleString("ko-KR")}원(부가세별도)`
+      : null,
+    `상차${shortDateTime(params.pickupAt)}`,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const withoutItem = `[WeCarry]견적안내\n${fixedPart}\n문의 ${COMPANY_SUPPORT_PHONE}`;
+  const itemBudget = SMS_BYTE_LIMIT - byteLength(withoutItem) - (params.item ? 1 : 0); // 품목-나머지 사이 공백 1자
+  const itemPart = params.item && itemBudget > 0 ? truncateToBytes(params.item, itemBudget) : null;
+
+  const line = [itemPart, fixedPart].filter(Boolean).join(" ");
+  return `[WeCarry]견적안내\n${line}\n문의 ${COMPANY_SUPPORT_PHONE}`;
 }
