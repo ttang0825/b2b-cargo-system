@@ -35,7 +35,7 @@ export async function POST(req: Request) {
 
   const { data: quote, error: quoteError } = await admin
     .from("quotes")
-    .select("id,vehicle_type,final_amount,requested_pickup_at,guest_phone,company_id,companies(contact_mobile)")
+    .select("id,item,vehicle_type,final_amount,requested_pickup_at,guest_phone,company_id,companies(contact_mobile)")
     .eq("id", quote_id)
     .single();
   if (quoteError || !quote) {
@@ -44,6 +44,7 @@ export async function POST(req: Request) {
 
   const phone: string | null = (quote as any).companies?.contact_mobile || quote.guest_phone || null;
   const message = quoteSummaryMessage({
+    item: quote.item,
     vehicleType: quote.vehicle_type,
     finalAmount: quote.final_amount,
     pickupAt: quote.requested_pickup_at,

@@ -100,6 +100,7 @@ export function portalPasswordReissuedMessage(params: { loginId: string; passwor
 }
 
 export function quoteSummaryMessage(params: {
+  item: string | null;
   vehicleType: string | null;
   finalAmount: number | null;
   pickupAt: string | null;
@@ -107,8 +108,12 @@ export function quoteSummaryMessage(params: {
   return [
     "[WeCarry] 견적 안내",
     [
+      params.item || null,
       params.vehicleType || "차량 미정",
-      params.finalAmount != null ? `운임 ${Math.round(params.finalAmount).toLocaleString("ko-KR")}원` : null,
+      // 최종 견적금액은 항상 공급가액(부가세 별도) 기준으로 저장됨(견적 상세 표시와 동일)
+      params.finalAmount != null
+        ? `운임 ${Math.round(params.finalAmount).toLocaleString("ko-KR")}원(부가세 별도)`
+        : null,
       `상차 ${shortDateTime(params.pickupAt)}`,
     ]
       .filter(Boolean)
