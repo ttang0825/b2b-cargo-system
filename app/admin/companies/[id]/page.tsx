@@ -20,6 +20,7 @@ import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
 import ConflictWarning from "@/components/ConflictWarning";
 import { optimisticUpdate } from "@/lib/optimisticUpdate";
+import SmsLogPanel from "@/components/SmsLogPanel";
 
 type CompanyDetail = { [key: string]: any };
 
@@ -1478,6 +1479,10 @@ export default function CompanyDetailPage() {
           </button>
         </form>
       </div>
+
+      {portalAccounts.length > 0 && (
+        <SmsLogPanel relatedType="portal_account" relatedIds={portalAccounts.map((a) => a.id)} />
+      )}
 
       {/* 향후 연동 예정 영역 */}
       <div

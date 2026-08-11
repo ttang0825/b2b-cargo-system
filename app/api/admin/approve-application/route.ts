@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
 import { issuePortalAccount } from "@/lib/portalAccountCredentials";
+import { sendSmsWithLog } from "@/lib/sendSms";
+import { applicationApprovedWithAccountMessage } from "@/lib/sms/templates";
+import { getPortalLoginUrl } from "@/lib/siteUrl";
 
 export async function POST(req: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -151,6 +154,23 @@ export async function POST(req: Request) {
       updated_by: staff?.id || null,
     })
     .eq("id", application_id);
+
+  // 5. 승인 안내 SMS(자동발송) — 승인과 동시에 포털계정도 발급되므로 "승인"과
+  // "계정발급" 문구를 따로 두 통 보내지 않고 하나로 합침(사전조사 1-6 결정사항).
+  // 실패해도 승인 처리 자체(위 1~4단계)는 이미 끝난 뒤라 영향 없음.
+  await sendSmsWithLog({
+    relatedType: "application",
+    relatedId: application_id,
+    templateType: "application_approved",
+    recipientType: "applicant",
+    recipientPhone: application.contact_phone || null,
+    message: applicationApprovedWithAccountMessage({
+      companyName: application.company_name,
+      loginId: issued.login_id,
+      password: issued.password,
+      portalUrl: getPortalLoginUrl(),
+    }),
+  });
 
   return NextResponse.json({
     login_id: issued.login_id,

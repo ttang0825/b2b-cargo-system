@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
+import { sendSmsWithLog } from "@/lib/sendSms";
+import { applicationRejectedMessage } from "@/lib/sms/templates";
 
 // Next.js가 GET 응답(및 그 안에서 호출되는 fetch)을 캐시해버리면, 방금 처리한 결과가
 // 재조회 시 예전 값으로 보이는 문제가 있을 수 있어 매 요청마다 실제 DB를 다시 조회하도록 강제
@@ -86,7 +88,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "id와 status가 필요합니다." }, { status: 400 });
   }
   const staff = await getCurrentStaff();
-  const { error } = await admin
+  const { data: updated, error } = await admin
     .from("customer_applications")
     .update({
       status,
@@ -94,9 +96,28 @@ export async function POST(req: Request) {
       processed_by: processed_by || null,
       updated_by: staff?.id || null,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .select("company_name,contact_phone")
+    .single();
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
+
+  // 거절 안내 SMS(자동발송) — 보류는 사전조사 1-6에서 확인한 대로 이번 범위에
+  // 포함하지 않음(승인/거절만). 실패해도 이미 상태변경은 끝난 뒤라 영향 없음.
+  if (status === "거절" && updated) {
+    await sendSmsWithLog({
+      relatedType: "application",
+      relatedId: id,
+      templateType: "application_rejected",
+      recipientType: "applicant",
+      recipientPhone: updated.contact_phone || null,
+      message: applicationRejectedMessage({
+        companyName: updated.company_name,
+        reason: staff_note || null,
+      }),
+    });
+  }
+
   return NextResponse.json({ ok: true });
 }

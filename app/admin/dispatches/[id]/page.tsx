@@ -55,6 +55,8 @@ import {
   getClaimStatusColor,
 } from "@/lib/claims";
 import { localInputToISOString } from "@/lib/localDateTime";
+import { notifyDispatchStatusSms } from "@/lib/notifyDispatchSms";
+import SmsLogPanel from "@/components/SmsLogPanel";
 
 function won(n: number | null) {
   if (n === null || n === undefined) return "-";
@@ -577,6 +579,7 @@ export default function DispatchDetailPage() {
         .update({ status: DISPATCH_TO_ORDER_STATUS["배차확정"] })
         .eq("id", dispatch.orders.id);
     }
+    notifyDispatchStatusSms(id, "배차확정");
     setConfirming(false);
     load();
   }
@@ -616,6 +619,10 @@ export default function DispatchDetailPage() {
     // "운송완료"로 새로 바뀌면 정산이 없을 경우 자동 등록
     if (status === "운송완료" && prevStatus !== "운송완료" && dispatch?.orders?.id) {
       await autoCreateInvoiceIfNeeded(dispatch.orders.id);
+    }
+
+    if (status !== prevStatus) {
+      notifyDispatchStatusSms(id, status);
     }
 
     // updated_at을 DB 기준으로 다시 받아와야 함 — 부분 병합만 하고 넘어가면
@@ -917,6 +924,10 @@ export default function DispatchDetailPage() {
         .from("orders")
         .update({ status: DISPATCH_TO_ORDER_STATUS[nextStatus] })
         .eq("id", dispatch.orders.id);
+    }
+
+    if (nextStatus !== prevStatus) {
+      notifyDispatchStatusSms(id, nextStatus);
     }
 
     // updated_at을 DB 기준으로 다시 받아와야 함 — 부분 병합만 하고 넘어가면
@@ -2359,6 +2370,8 @@ export default function DispatchDetailPage() {
       <button className="btn" onClick={() => handleSave()} disabled={saving}>
         {saving ? "저장 중..." : "변경사항 저장"}
       </button>
+
+      <SmsLogPanel relatedType="dispatch" relatedId={id} />
 
       <ProcessedByFooter
         createdBy={dispatch.created_by}

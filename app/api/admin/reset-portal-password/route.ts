@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
 import { reissueTempPassword } from "@/lib/portalAccountCredentials";
+import { sendSmsWithLog } from "@/lib/sendSms";
+import { portalPasswordReissuedMessage } from "@/lib/sms/templates";
+import { getPortalLoginUrl } from "@/lib/siteUrl";
 
 export async function POST(req: Request) {
   const staff = await getCurrentStaff();
@@ -37,10 +40,28 @@ export async function POST(req: Request) {
   }
 
   // 아이디(login_id)는 그대로 두고 비밀번호만 재발급 — 다음 로그인 시 다시 변경 강제
-  await admin
+  const { data: account } = await admin
     .from("customer_accounts")
     .update({ must_change_password: true })
-    .eq("auth_user_id", auth_user_id);
+    .eq("auth_user_id", auth_user_id)
+    .select("id,login_id,contact_mobile")
+    .single();
+
+  // 재발급 안내 SMS(자동발송) — 실패해도 비밀번호 재발급 자체는 이미 끝난 뒤라 영향 없음
+  if (account) {
+    await sendSmsWithLog({
+      relatedType: "portal_account",
+      relatedId: account.id,
+      templateType: "portal_password_reissued",
+      recipientType: "customer",
+      recipientPhone: account.contact_mobile || null,
+      message: portalPasswordReissuedMessage({
+        loginId: account.login_id,
+        password: tempPassword,
+        portalUrl: getPortalLoginUrl(),
+      }),
+    });
+  }
 
   return NextResponse.json({ password: tempPassword });
 }

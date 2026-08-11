@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
+import SmsLogPanel from "@/components/SmsLogPanel";
 import { getCurrentStaffRole, getCurrentStaffName } from "@/lib/currentStaff";
 
 export const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
@@ -355,6 +356,10 @@ export default function ApplicationDetailModal({
                   </div>
                 ))}
               </>
+            )}
+
+            {item.status !== "검토중" && (
+              <SmsLogPanel relatedType="application" relatedId={item.id} />
             )}
 
             <ProcessedByFooter

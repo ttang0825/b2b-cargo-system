@@ -15,6 +15,7 @@ import MoneyInput from "@/components/MoneyInput";
 import MixableBadge from "@/components/MixableBadge";
 import { shortAddress } from "@/lib/shortAddress";
 import { calcInclusiveAmount } from "@/lib/vat";
+import { notifyDispatchStatusSms } from "@/lib/notifyDispatchSms";
 
 type OrderLite = {
   id: string;
@@ -354,6 +355,10 @@ function DispatchesPageInner() {
     // "운송완료"로 새로 바뀌면 정산이 없을 경우 자동 등록
     if (status === "운송완료" && prevStatus !== "운송완료" && target) {
       await autoCreateInvoiceIfNeeded(target);
+    }
+
+    if (status !== prevStatus) {
+      notifyDispatchStatusSms(dispatchId, status);
     }
   }
 
