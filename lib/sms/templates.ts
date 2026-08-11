@@ -15,17 +15,29 @@ function shortDateTime(value: string | null | undefined): string {
   ).padStart(2, "0")}`;
 }
 
+// 차주(배차확정 안내 수신자)가 실제 운행에 필요한 정보 위주로 구성(PR #73 리뷰
+// 반영 — 오더번호 대신 상하차지 상세정보·주의사항·인사말 요청). **주의**: 이
+// 시스템은 오더 1건에 화주(고객) 연락처가 하나만 있고, 상차지/하차지별로
+// 별도의 담당자·연락처를 저장하는 구조가 아님 — 그래서 화주명·연락처는
+// 상차지/하차지에 중복 표기하지 않고 한 번만 안내함(두 지점의 담당자가
+// 실제로 다른 경우가 있다면 별도 데이터 구조 추가가 필요 — 이번 범위 밖).
 export function dispatchConfirmedMessage(params: {
-  orderNo: string | null;
   origin: string | null;
   destination: string | null;
   pickupAt: string | null;
+  companyName: string | null;
+  companyPhone: string | null;
+  specialNotes: string | null;
 }): string {
   return [
     "[WeCarry] 배차확정 안내",
-    params.orderNo ? `오더 ${params.orderNo}` : null,
-    `상차: ${shortAddress(params.origin)} ${shortDateTime(params.pickupAt)}`,
-    `하차: ${shortAddress(params.destination)}`,
+    `상차지: ${params.origin || "주소 미정"}`,
+    params.pickupAt ? `상차일시: ${shortDateTime(params.pickupAt)}` : null,
+    `하차지: ${params.destination || "주소 미정"}`,
+    params.companyName ? `화주: ${params.companyName}` : null,
+    params.companyPhone ? `연락처: ${params.companyPhone}` : null,
+    params.specialNotes ? `요청사항: ${params.specialNotes}` : null,
+    "건강 조심하시고 안전운전하세요.",
     `문의: ${COMPANY_SUPPORT_PHONE}`,
   ]
     .filter(Boolean)

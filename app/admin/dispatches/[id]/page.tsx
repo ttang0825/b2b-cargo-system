@@ -2376,6 +2376,48 @@ export default function DispatchDetailPage() {
         {saving ? "저장 중..." : "변경사항 저장"}
       </button>
 
+      {dispatch.dispatch_status !== "접수중" && (
+        <div className="card" style={{ padding: 20, marginBottom: 20 }}>
+          <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 6 }}>문자 발송</h3>
+          <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginBottom: 12 }}>
+            상태 변경 시 자동으로 뜨는 발송 확인창을 "건너뛰기"했거나 다시 보내야 할 때
+            여기서 수동으로 다시 보낼 수 있습니다.
+          </p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              className="btn-ghost"
+              style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12.5, cursor: "pointer" }}
+              onClick={async () => {
+                const preview = await fetchDispatchSmsPreview(id, "배차확정");
+                if (preview) setSmsPreview(preview);
+              }}
+            >
+              배차확정 안내 발송
+            </button>
+            <button
+              className="btn-ghost"
+              style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12.5, cursor: "pointer" }}
+              onClick={async () => {
+                const preview = await fetchDispatchSmsPreview(id, "상차완료");
+                if (preview) setSmsPreview(preview);
+              }}
+            >
+              상차완료 안내 발송
+            </button>
+            <button
+              className="btn-ghost"
+              style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12.5, cursor: "pointer" }}
+              onClick={async () => {
+                const preview = await fetchDispatchSmsPreview(id, "하차완료");
+                if (preview) setSmsPreview(preview);
+              }}
+            >
+              하차완료 안내 발송
+            </button>
+          </div>
+        </div>
+      )}
+
       <SmsLogPanel relatedType="dispatch" relatedId={id} />
 
       {smsPreview && (

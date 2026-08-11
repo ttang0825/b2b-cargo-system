@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getSmsTemplateLabel, getSmsStatusLabel, SMS_STATUS_COLORS } from "@/lib/smsLogLabels";
+import { getSmsTemplateLabel, getSmsStatusLabel, getSmsStatusHint, SMS_STATUS_COLORS } from "@/lib/smsLogLabels";
 
 type SmsLog = {
   id: string;
@@ -164,7 +164,8 @@ export default function SmsLogPanel({
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <span
                         className="badge"
-                        style={{ background: color.bg, color: color.text }}
+                        style={{ background: color.bg, color: color.text, cursor: "help" }}
+                        title={getSmsStatusHint(log.status)}
                       >
                         {getSmsStatusLabel(log.status)}
                       </span>
