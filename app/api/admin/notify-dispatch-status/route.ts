@@ -40,7 +40,7 @@ export async function POST(req: Request) {
   const { data: dispatch, error: dispatchError } = await admin
     .from("dispatches")
     .select(
-      "id,assignment_type,driver_id,external_driver_phone,order_id,drivers(phone),orders(order_no,origin,destination,requested_pickup_at,special_notes,company_id,guest_phone,individual_customer_id,companies(contact_mobile),individual_customers(phone))"
+      "id,assignment_type,driver_id,external_driver_phone,order_id,drivers(phone),orders(origin,destination,requested_pickup_at,special_notes,company_id,guest_phone,individual_customer_id,companies(contact_mobile),individual_customers(phone))"
     )
     .eq("id", dispatch_id)
     .single();
@@ -82,7 +82,7 @@ export async function POST(req: Request) {
       templateType: "pickup_completed",
       recipientType: "customer",
       recipientPhone: companyPhone,
-      message: pickupCompletedMessage({ orderNo: order?.order_no || null, origin: order?.origin || null }),
+      message: pickupCompletedMessage({ origin: order?.origin || null }),
     });
   }
   return NextResponse.json({
@@ -91,6 +91,6 @@ export async function POST(req: Request) {
     templateType: "delivery_completed",
     recipientType: "customer",
     recipientPhone: companyPhone,
-    message: deliveryCompletedMessage({ orderNo: order?.order_no || null, destination: order?.destination || null }),
+    message: deliveryCompletedMessage({ destination: order?.destination || null }),
   });
 }

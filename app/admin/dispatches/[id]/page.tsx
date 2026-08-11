@@ -624,7 +624,10 @@ export default function DispatchDetailPage() {
       await autoCreateInvoiceIfNeeded(dispatch.orders.id);
     }
 
-    if (status !== prevStatus) {
+    // 상차완료/하차완료는 상태를 바꿀 때마다 팝업이 자동으로 뜨면 번거롭다는
+    // 피드백(PR #73)으로 자동 팝업을 배차확정에만 한정 — 상차완료/하차완료는
+    // 아래 "문자 발송" 섹션의 수동 버튼으로만 보냄
+    if (status !== prevStatus && status === "배차확정") {
       const smsPreviewResult = await fetchDispatchSmsPreview(id, status);
       if (smsPreviewResult) setSmsPreview(smsPreviewResult);
     }
@@ -930,10 +933,9 @@ export default function DispatchDetailPage() {
         .eq("id", dispatch.orders.id);
     }
 
-    if (nextStatus !== prevStatus) {
-      const smsPreviewResult = await fetchDispatchSmsPreview(id, nextStatus);
-      if (smsPreviewResult) setSmsPreview(smsPreviewResult);
-    }
+    // 체크박스로 바뀌는 상태는 항상 상차완료/하차완료뿐이라(배차확정은 별도
+    // 확정 절차로만 가능) 여기서는 자동 팝업을 띄우지 않음 — "문자 발송" 섹션의
+    // 수동 버튼으로만 보냄(PR #73 리뷰 반영)
 
     // updated_at을 DB 기준으로 다시 받아와야 함 — 부분 병합만 하고 넘어가면
     // 로컬 updated_at이 옛날 값 그대로 남아서, 바로 이어서 "변경사항 저장"을

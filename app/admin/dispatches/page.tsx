@@ -359,7 +359,10 @@ function DispatchesPageInner() {
       await autoCreateInvoiceIfNeeded(target);
     }
 
-    if (status !== prevStatus) {
+    // 상차완료/하차완료는 상태를 바꿀 때마다 팝업이 자동으로 뜨면 번거롭다는
+    // 피드백(PR #73)으로 자동 팝업을 배차확정에만 한정 — 상차완료/하차완료는
+    // 배차 상세의 "문자 발송" 섹션 수동 버튼으로만 보냄
+    if (status !== prevStatus && status === "배차확정") {
       const smsPreviewResult = await fetchDispatchSmsPreview(dispatchId, status);
       if (smsPreviewResult) setSmsPreview(smsPreviewResult);
     }

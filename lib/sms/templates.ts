@@ -41,19 +41,19 @@ export function dispatchConfirmedMessage(params: {
     .join("\n");
 }
 
-export function pickupCompletedMessage(params: { orderNo: string | null; origin: string | null }): string {
+export function pickupCompletedMessage(params: { origin: string | null }): string {
   return [
     "[WeCarry] 상차완료 안내",
-    `오더 ${params.orderNo || ""} ${shortAddress(params.origin)}에서 상차가 완료되었습니다.`.trim(),
+    `${shortAddress(params.origin)}에서 상차가 완료되었습니다.`,
     "진행상황은 화주포털에서 확인하실 수 있습니다.",
     `문의: ${COMPANY_SUPPORT_PHONE}`,
   ].join("\n");
 }
 
-export function deliveryCompletedMessage(params: { orderNo: string | null; destination: string | null }): string {
+export function deliveryCompletedMessage(params: { destination: string | null }): string {
   return [
     "[WeCarry] 운송완료 안내",
-    `오더 ${params.orderNo || ""} ${shortAddress(params.destination)}에 하차 완료되었습니다.`.trim(),
+    `${shortAddress(params.destination)}에 하차 완료되었습니다.`,
     "이용해주셔서 감사합니다.",
     `문의: ${COMPANY_SUPPORT_PHONE}`,
   ].join("\n");
