@@ -40,7 +40,7 @@ export async function POST(req: Request) {
   const { data: dispatch, error: dispatchError } = await admin
     .from("dispatches")
     .select(
-      "id,assignment_type,driver_id,external_driver_phone,order_id,drivers(phone),orders(order_no,origin,destination,requested_pickup_at,special_notes,company_id,guest_name,guest_phone,individual_customer_id,companies(name,contact_mobile),individual_customers(name,phone))"
+      "id,assignment_type,driver_id,external_driver_phone,order_id,drivers(phone),orders(order_no,origin,destination,requested_pickup_at,special_notes,company_id,guest_phone,individual_customer_id,companies(contact_mobile),individual_customers(phone))"
     )
     .eq("id", dispatch_id)
     .single();
@@ -49,8 +49,8 @@ export async function POST(req: Request) {
   }
 
   const order = (dispatch as any).orders as any;
-  // 화주명·연락처는 회사(companies) → 개인고객(individual_customers) → 게스트(guest_*) 순으로 폴백
-  const companyName: string | null = order?.companies?.name || order?.individual_customers?.name || order?.guest_name || null;
+  // 화주(고객) 연락처 — 상차완료/하차완료 안내(화주 대상) 수신번호로 씀.
+  // 배차확정 안내(차주 대상)에는 넣지 않음(아래 dispatchConfirmedMessage 주석 참고).
   const companyPhone: string | null =
     order?.companies?.contact_mobile || order?.individual_customers?.phone || order?.guest_phone || null;
 
@@ -69,8 +69,6 @@ export async function POST(req: Request) {
         origin: order?.origin || null,
         destination: order?.destination || null,
         pickupAt: order?.requested_pickup_at || null,
-        companyName,
-        companyPhone,
         specialNotes: order?.special_notes || null,
       }),
     });

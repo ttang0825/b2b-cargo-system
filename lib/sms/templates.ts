@@ -16,17 +16,16 @@ function shortDateTime(value: string | null | undefined): string {
 }
 
 // 차주(배차확정 안내 수신자)가 실제 운행에 필요한 정보 위주로 구성(PR #73 리뷰
-// 반영 — 오더번호 대신 상하차지 상세정보·주의사항·인사말 요청). **주의**: 이
-// 시스템은 오더 1건에 화주(고객) 연락처가 하나만 있고, 상차지/하차지별로
-// 별도의 담당자·연락처를 저장하는 구조가 아님 — 그래서 화주명·연락처는
-// 상차지/하차지에 중복 표기하지 않고 한 번만 안내함(두 지점의 담당자가
-// 실제로 다른 경우가 있다면 별도 데이터 구조 추가가 필요 — 이번 범위 밖).
+// 반영 — 오더번호 대신 상하차지 상세정보·주의사항·인사말 요청). **주의**: 화주명·
+// 연락처는 의도적으로 뺌 — 오더 1건에 화주(고객) 연락처가 하나뿐인데 실제로는
+// 상차지·하차지 담당자가 서로 다른 경우가 많다는 피드백(PR #73)에 따라, 정확하지
+// 않은 연락처를 잘못 안내하느니 아예 빼는 쪽으로 결정. 상차지/하차지별 상호·
+// 담당자명·연락처를 별도로 저장하는 기능은 오더/견적/화주포털 발주요청 전체에
+// 걸친 별도 작업으로 분리됨(이번 PR 범위 밖).
 export function dispatchConfirmedMessage(params: {
   origin: string | null;
   destination: string | null;
   pickupAt: string | null;
-  companyName: string | null;
-  companyPhone: string | null;
   specialNotes: string | null;
 }): string {
   return [
@@ -34,8 +33,6 @@ export function dispatchConfirmedMessage(params: {
     `상차지: ${params.origin || "주소 미정"}`,
     params.pickupAt ? `상차일시: ${shortDateTime(params.pickupAt)}` : null,
     `하차지: ${params.destination || "주소 미정"}`,
-    params.companyName ? `화주: ${params.companyName}` : null,
-    params.companyPhone ? `연락처: ${params.companyPhone}` : null,
     params.specialNotes ? `요청사항: ${params.specialNotes}` : null,
     "건강 조심하시고 안전운전하세요.",
     `문의: ${COMPANY_SUPPORT_PHONE}`,
