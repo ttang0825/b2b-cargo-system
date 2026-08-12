@@ -1,5 +1,6 @@
 export const metadata = {
-  title: "견적 문의 | WeCarry 운송",
+  title: "견적 문의 | 위캐리 운송",
+  description: "상차지, 하차지, 품목만 알려주시면 차량과 운임을 확인해 연락드립니다.",
 };
 
 export default function QuoteLayout({ children }: { children: React.ReactNode }) {

@@ -1,9 +1,14 @@
 import "./globals.css";
 import TopNav from "@/components/TopNav";
 
+// 루트 metadata는 랜딩(/)의 값이자, 하위에서 따로 지정하지 않은 페이지의 기본값이기도 함.
+// 기존 description("화주 CRM · 견적 · 배차 · 정산 통합 관리")은 내부 시스템 설명이라
+// /quote·/apply 같은 공개 페이지가 이걸 그대로 상속받고 있었음 — 공개용 문구로 교체함.
+// title.template은 일부러 쓰지 않음(쓰면 하위 title에 브랜드명이 이중으로 붙음).
 export const metadata = {
-  title: "WeCarry 운송 통합 운영 시스템",
-  description: "화주 CRM · 견적 · 배차 · 정산 통합 관리",
+  title: "위캐리 운송 | B2B 화물 배차·운송 주선",
+  description:
+    "정기 납품, 긴급 출고, 창고 이동. 1톤부터 5톤까지 화물 배차를 연결합니다. 화물자동차 운송주선사업 정식 허가업체.",
 };
 
 export default function RootLayout({
