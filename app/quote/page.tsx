@@ -148,7 +148,7 @@ export default function PublicQuotePage() {
   }
 
   return (
-    <div className="portal-theme">
+    <div className="portal-theme public-form">
       <header style={{ borderBottom: "1px solid var(--border)", background: "var(--surface)" }}>
         <div
           className="container"

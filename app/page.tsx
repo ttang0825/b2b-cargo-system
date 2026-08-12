@@ -1,9 +1,9 @@
 import Link from "next/link";
+import LandingHeader from "@/components/LandingHeader";
 import { COMPANY_SUPPORT_PHONE, COMPANY_SUPPORT_HOURS } from "@/lib/contactInfo";
 
-export const metadata = {
-  title: "WeCarry 운송 | 화물 배차 파트너",
-};
+// 랜딩(/)의 title·description은 app/layout.tsx(루트 metadata)에서 관리함 —
+// 여기서 다시 title을 export하면 루트 값을 덮어써서 두 곳을 같이 고쳐야 하므로 두지 않음
 
 const TARGETS = [
   { title: "중소 제조업체", desc: "부품·원자재·완제품 납품, 공장 간 이동" },
@@ -31,40 +31,7 @@ const STEPS = [
 export default function LandingPage() {
   return (
     <div className="portal-theme">
-      <header
-        style={{
-          borderBottom: "1px solid var(--border)",
-          background: "var(--surface)",
-        }}
-      >
-        <div
-          className="container"
-          style={{
-            padding: "18px 24px",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <span className="brand" style={{ fontSize: 17 }}>
-            WeCarry 운송
-          </span>
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <Link href="/status" className="guide-link">
-              문의·신청 현황
-            </Link>
-            <Link href="/customer/login" className="guide-link">
-              화주 로그인
-            </Link>
-            <Link href="/apply" className="guide-link">
-              화주 등록 신청
-            </Link>
-            <Link href="/quote" className="btn" style={{ padding: "9px 16px", fontSize: 13 }}>
-              견적 문의
-            </Link>
-          </div>
-        </div>
-      </header>
+      <LandingHeader />
 
       {/* Hero */}
       <section style={{ background: "#1a1a1a", padding: "72px 24px 64px" }}>
