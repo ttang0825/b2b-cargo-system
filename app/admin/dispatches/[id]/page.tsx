@@ -55,6 +55,9 @@ import {
   getClaimStatusColor,
 } from "@/lib/claims";
 import { localInputToISOString } from "@/lib/localDateTime";
+import { fetchDispatchSmsPreview } from "@/lib/notifyDispatchSms";
+import SmsLogPanel from "@/components/SmsLogPanel";
+import SmsConfirmModal, { SmsPreview } from "@/components/SmsConfirmModal";
 
 function won(n: number | null) {
   if (n === null || n === undefined) return "-";
@@ -75,6 +78,7 @@ export default function DispatchDetailPage() {
   const id = params?.id as string;
 
   const [dispatch, setDispatch] = useState<any>(null);
+  const [smsPreview, setSmsPreview] = useState<SmsPreview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -577,6 +581,8 @@ export default function DispatchDetailPage() {
         .update({ status: DISPATCH_TO_ORDER_STATUS["배차확정"] })
         .eq("id", dispatch.orders.id);
     }
+    const smsPreviewResult = await fetchDispatchSmsPreview(id, "배차확정");
+    if (smsPreviewResult) setSmsPreview(smsPreviewResult);
     setConfirming(false);
     load();
   }
@@ -616,6 +622,14 @@ export default function DispatchDetailPage() {
     // "운송완료"로 새로 바뀌면 정산이 없을 경우 자동 등록
     if (status === "운송완료" && prevStatus !== "운송완료" && dispatch?.orders?.id) {
       await autoCreateInvoiceIfNeeded(dispatch.orders.id);
+    }
+
+    // 상차완료/하차완료는 상태를 바꿀 때마다 팝업이 자동으로 뜨면 번거롭다는
+    // 피드백(PR #73)으로 자동 팝업을 배차확정에만 한정 — 상차완료/하차완료는
+    // 아래 "문자 발송" 섹션의 수동 버튼으로만 보냄
+    if (status !== prevStatus && status === "배차확정") {
+      const smsPreviewResult = await fetchDispatchSmsPreview(id, status);
+      if (smsPreviewResult) setSmsPreview(smsPreviewResult);
     }
 
     // updated_at을 DB 기준으로 다시 받아와야 함 — 부분 병합만 하고 넘어가면
@@ -918,6 +932,10 @@ export default function DispatchDetailPage() {
         .update({ status: DISPATCH_TO_ORDER_STATUS[nextStatus] })
         .eq("id", dispatch.orders.id);
     }
+
+    // 체크박스로 바뀌는 상태는 항상 상차완료/하차완료뿐이라(배차확정은 별도
+    // 확정 절차로만 가능) 여기서는 자동 팝업을 띄우지 않음 — "문자 발송" 섹션의
+    // 수동 버튼으로만 보냄(PR #73 리뷰 반영)
 
     // updated_at을 DB 기준으로 다시 받아와야 함 — 부분 병합만 하고 넘어가면
     // 로컬 updated_at이 옛날 값 그대로 남아서, 바로 이어서 "변경사항 저장"을
@@ -2359,6 +2377,58 @@ export default function DispatchDetailPage() {
       <button className="btn" onClick={() => handleSave()} disabled={saving}>
         {saving ? "저장 중..." : "변경사항 저장"}
       </button>
+
+      {dispatch.dispatch_status !== "접수중" && (
+        <div className="card" style={{ padding: 20, marginBottom: 20 }}>
+          <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 6 }}>문자 발송</h3>
+          <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginBottom: 12 }}>
+            상태 변경 시 자동으로 뜨는 발송 확인창을 "건너뛰기"했거나 다시 보내야 할 때
+            여기서 수동으로 다시 보낼 수 있습니다.
+          </p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              className="btn-ghost"
+              style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12.5, cursor: "pointer" }}
+              onClick={async () => {
+                const preview = await fetchDispatchSmsPreview(id, "배차확정");
+                if (preview) setSmsPreview(preview);
+              }}
+            >
+              배차확정 안내 발송
+            </button>
+            <button
+              className="btn-ghost"
+              style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12.5, cursor: "pointer" }}
+              onClick={async () => {
+                const preview = await fetchDispatchSmsPreview(id, "상차완료");
+                if (preview) setSmsPreview(preview);
+              }}
+            >
+              상차완료 안내 발송
+            </button>
+            <button
+              className="btn-ghost"
+              style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12.5, cursor: "pointer" }}
+              onClick={async () => {
+                const preview = await fetchDispatchSmsPreview(id, "하차완료");
+                if (preview) setSmsPreview(preview);
+              }}
+            >
+              하차완료 안내 발송
+            </button>
+          </div>
+        </div>
+      )}
+
+      <SmsLogPanel relatedType="dispatch" relatedId={id} />
+
+      {smsPreview && (
+        <SmsConfirmModal
+          preview={smsPreview}
+          onSent={() => setSmsPreview(null)}
+          onSkip={() => setSmsPreview(null)}
+        />
+      )}
 
       <ProcessedByFooter
         createdBy={dispatch.created_by}

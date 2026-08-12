@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
 import { reissueTempPassword } from "@/lib/portalAccountCredentials";
+import { portalPasswordReissuedMessage } from "@/lib/sms/templates";
+import { getPortalLoginUrl } from "@/lib/siteUrl";
 
 export async function POST(req: Request) {
   const staff = await getCurrentStaff();
@@ -37,10 +39,30 @@ export async function POST(req: Request) {
   }
 
   // 아이디(login_id)는 그대로 두고 비밀번호만 재발급 — 다음 로그인 시 다시 변경 강제
-  await admin
+  const { data: account } = await admin
     .from("customer_accounts")
     .update({ must_change_password: true })
-    .eq("auth_user_id", auth_user_id);
+    .eq("auth_user_id", auth_user_id)
+    .select("id,login_id,contact_mobile")
+    .single();
 
-  return NextResponse.json({ password: tempPassword });
+  // 재발급 안내 SMS 미리보기(발송은 안 함) — 실제 발송은 client가
+  // SmsConfirmModal로 확인·수정 후 /api/admin/send-sms를 호출해야만 일어남
+  // (PR #73 리뷰 반영).
+  const smsPreview = account
+    ? {
+        relatedType: "portal_account" as const,
+        relatedId: account.id,
+        templateType: "portal_password_reissued" as const,
+        recipientType: "customer" as const,
+        recipientPhone: account.contact_mobile || null,
+        message: portalPasswordReissuedMessage({
+          loginId: account.login_id,
+          password: tempPassword,
+          portalUrl: getPortalLoginUrl(),
+        }),
+      }
+    : null;
+
+  return NextResponse.json({ password: tempPassword, smsPreview });
 }

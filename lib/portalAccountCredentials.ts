@@ -52,6 +52,7 @@ export interface IssuePortalAccountParams {
 }
 
 export interface IssuedPortalAccount {
+  account_id: string;
   login_id: string;
   password: string;
   auth_user_id: string;
@@ -80,26 +81,36 @@ export async function issuePortalAccount(
       return { data: null, error: userError?.message || "포털 계정 생성에 실패했습니다." };
     }
 
-    const { error: linkError } = await admin.from("customer_accounts").insert({
-      auth_user_id: userData.user.id,
-      company_id: params.company_id,
-      login_id: loginId,
-      name: params.name || null,
-      email: params.email || null,
-      contact_mobile: params.contact_mobile || null,
-      must_change_password: true,
-    });
+    const { data: accountRow, error: linkError } = await admin
+      .from("customer_accounts")
+      .insert({
+        auth_user_id: userData.user.id,
+        company_id: params.company_id,
+        login_id: loginId,
+        name: params.name || null,
+        email: params.email || null,
+        contact_mobile: params.contact_mobile || null,
+        must_change_password: true,
+      })
+      .select("id")
+      .single();
 
-    if (!linkError) {
+    if (!linkError && accountRow) {
       return {
-        data: { login_id: loginId, password, auth_user_id: userData.user.id, email: params.email || null },
+        data: {
+          account_id: accountRow.id,
+          login_id: loginId,
+          password,
+          auth_user_id: userData.user.id,
+          email: params.email || null,
+        },
         error: null,
       };
     }
 
     // 방금 만든 Auth 계정은 실패 시 항상 롤백
     await admin.auth.admin.deleteUser(userData.user.id);
-    if ((linkError as { code?: string }).code !== "23505") {
+    if (linkError && (linkError as { code?: string }).code !== "23505") {
       return { data: null, error: linkError.message };
     }
     // 23505(login_id 유니크 위반)면 다음 순번으로 재시도

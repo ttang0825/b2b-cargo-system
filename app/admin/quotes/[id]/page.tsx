@@ -19,6 +19,8 @@ import DateTimePicker from "@/components/DateTimePicker";
 import { localInputToISOString, toLocalDateTimeInput } from "@/lib/localDateTime";
 import MoneyInput from "@/components/MoneyInput";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
+import SmsLogPanel from "@/components/SmsLogPanel";
+import SmsConfirmModal, { SmsPreview } from "@/components/SmsConfirmModal";
 import ConflictWarning from "@/components/ConflictWarning";
 import CollectionMethodInput, { CollectionMethodValue } from "@/components/CollectionMethodInput";
 import { getSettlementDisplayLabel, getPaymentConditionLabel, mapToLegacySettlementType } from "@/lib/settlementLabels";
@@ -127,6 +129,10 @@ export default function QuoteDetailPage() {
   const [conflict, setConflict] = useState(false);
   const [standardMixedDiscountPercent, setStandardMixedDiscountPercent] = useState(0);
   const [hasOrder, setHasOrder] = useState(false);
+  const [sendingQuoteSms, setSendingQuoteSms] = useState(false);
+  const [quoteSmsSent, setQuoteSmsSent] = useState(false);
+  const [quoteSmsError, setQuoteSmsError] = useState<string | null>(null);
+  const [smsPreview, setSmsPreview] = useState<SmsPreview | null>(null);
 
   const [editForm, setEditForm] = useState({
     collection_method: "broker" as CollectionMethodValue["collection_method"],
@@ -291,6 +297,31 @@ export default function QuoteDetailPage() {
             .eq("id", quote.company_id);
         }
       }
+    }
+  }
+
+  async function handleSendQuoteSms() {
+    if (!quote) return;
+    setSendingQuoteSms(true);
+    setQuoteSmsError(null);
+    try {
+      // 미리보기만 요청 — 실제 발송은 SmsConfirmModal에서 확인·수정 후
+      // /api/admin/send-sms로만 일어남(PR #73 리뷰 반영)
+      const previewRes = await fetch("/api/admin/send-quote-sms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quote_id: quote.id }),
+      });
+      const preview = await previewRes.json();
+      if (!previewRes.ok) {
+        setQuoteSmsError(preview.error || "문자 미리보기를 불러오지 못했습니다.");
+        return;
+      }
+      setSmsPreview(preview);
+    } catch {
+      setQuoteSmsError("문자 미리보기를 불러오지 못했습니다.");
+    } finally {
+      setSendingQuoteSms(false);
     }
   }
 
@@ -1131,13 +1162,35 @@ export default function QuoteDetailPage() {
           화주에게 전달할 정식 견적서를 새 탭에서 열어 인쇄하거나 PDF로 저장할 수
           있습니다. (화주포털을 통한 공유 기능은 추후 추가될 예정입니다.)
         </p>
-        <button
-          className="btn"
-          onClick={() => window.open(`/admin/quotes/${quote.id}/print`, "_blank")}
-        >
-          견적서 출력 (PDF)
-        </button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <button
+            className="btn"
+            onClick={() => window.open(`/admin/quotes/${quote.id}/print`, "_blank")}
+          >
+            견적서 출력 (PDF)
+          </button>
+          <button className="btn btn-ghost" onClick={handleSendQuoteSms} disabled={sendingQuoteSms}>
+            {sendingQuoteSms ? "발송 중..." : quoteSmsSent ? "문자 발송 완료 ✓" : "문자로 요약 발송"}
+          </button>
+        </div>
+        <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 8 }}>
+          차량/운임/상차일만 요약해서 문자로 보냅니다(상세 견적서는 화주포털 안내).
+        </p>
+        {quoteSmsError && <div className="error-box" style={{ marginTop: 8 }}>{quoteSmsError}</div>}
       </div>
+
+      <SmsLogPanel relatedType="quote" relatedId={quote.id} />
+
+      {smsPreview && (
+        <SmsConfirmModal
+          preview={smsPreview}
+          onSent={() => {
+            setSmsPreview(null);
+            setQuoteSmsSent(true);
+          }}
+          onSkip={() => setSmsPreview(null)}
+        />
+      )}
 
       <ProcessedByFooter
         createdBy={quote.created_by}

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
+import SmsLogPanel from "@/components/SmsLogPanel";
+import SmsConfirmModal, { SmsPreview } from "@/components/SmsConfirmModal";
 import { getCurrentStaffRole, getCurrentStaffName } from "@/lib/currentStaff";
 
 export const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
@@ -74,6 +76,7 @@ export default function ApplicationDetailModal({
 }) {
   const [step, setStep] = useState<"view" | "reject" | "hold" | "approve" | "result">("view");
   const [submitting, setSubmitting] = useState(false);
+  const [smsPreview, setSmsPreview] = useState<SmsPreview | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [staffName, setStaffName] = useState<string | null>(null);
@@ -128,12 +131,13 @@ export default function ApplicationDetailModal({
           processed_by: staffName,
         }),
       });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
         setLocalError(data.error || "처리에 실패했습니다.");
         setSubmitting(false);
         return;
       }
+      if (data.smsPreview) setSmsPreview(data.smsPreview);
       onChanged();
       if (item.contact_email) {
         setResultData({
@@ -173,6 +177,7 @@ export default function ApplicationDetailModal({
         setSubmitting(false);
         return;
       }
+      if (data.smsPreview) setSmsPreview(data.smsPreview);
       onChanged();
       setResultData({ kind: "approve", login_id: data.login_id, password: data.password, contactEmail: data.email || null });
       setStep("result");
@@ -271,6 +276,7 @@ export default function ApplicationDetailModal({
     .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
   return (
+    <>
     <div
       style={{
         position: "fixed",
@@ -355,6 +361,10 @@ export default function ApplicationDetailModal({
                   </div>
                 ))}
               </>
+            )}
+
+            {item.status !== "검토중" && (
+              <SmsLogPanel relatedType="application" relatedId={item.id} />
             )}
 
             <ProcessedByFooter
@@ -538,5 +548,13 @@ export default function ApplicationDetailModal({
         )}
       </div>
     </div>
+    {smsPreview && (
+      <SmsConfirmModal
+        preview={smsPreview}
+        onSent={() => setSmsPreview(null)}
+        onSkip={() => setSmsPreview(null)}
+      />
+    )}
+    </>
   );
 }

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
 import { issuePortalAccount } from "@/lib/portalAccountCredentials";
+import { applicationApprovedWithAccountMessage } from "@/lib/sms/templates";
+import { getPortalLoginUrl } from "@/lib/siteUrl";
 
 export async function POST(req: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -152,10 +154,29 @@ export async function POST(req: Request) {
     })
     .eq("id", application_id);
 
+  // 5. 승인 안내 SMS 미리보기(발송은 안 함) — 승인과 동시에 포털계정도 발급되므로
+  // "승인"과 "계정발급" 문구를 따로 두 통 보내지 않고 하나로 합침(사전조사 1-6
+  // 결정사항). 실제 발송은 client가 이 미리보기를 SmsConfirmModal로 보여주고
+  // 확인·수정한 뒤 /api/admin/send-sms를 호출해야만 일어남(PR #73 리뷰 반영).
+  const smsPreview = {
+    relatedType: "application" as const,
+    relatedId: application_id,
+    templateType: "application_approved" as const,
+    recipientType: "applicant" as const,
+    recipientPhone: application.contact_phone || null,
+    message: applicationApprovedWithAccountMessage({
+      companyName: application.company_name,
+      loginId: issued.login_id,
+      password: issued.password,
+      portalUrl: getPortalLoginUrl(),
+    }),
+  };
+
   return NextResponse.json({
     login_id: issued.login_id,
     password: issued.password,
     email: issued.email,
     company_id: company.id,
+    smsPreview,
   });
 }

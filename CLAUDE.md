@@ -4,7 +4,99 @@
 > 최종 버전입니다. 앞으로는 이 문서(또는 `CLAUDE.md`)를 참고해서 Claude Code가
 > 작업을 이어갑니다.
 
-**작성일: 2026-07-23** (최종 갱신: 2026-08-07, Claude Code 세션에서 직접 갱신 — 22차
+**작성일: 2026-07-23** (최종 갱신: 2026-08-07, Claude Code 세션에서 직접 갱신 — 23차
+세션: "SMS 발신 연동(솔라피)" — 작업지시서(1-1~1-6 사전조사 → 사용자 확인 →
+2번 설계 → 3번 구현) 흐름으로 진행, 벤더(솔라피)는 사용자가 사전에 가입·API
+키 발급·발신번호 등록까지 완료해둔 상태였음. 발신 전용(카카오 알림톡·양방향
+MO는 범위 밖)으로 화주/차주에게 배차확정·상차완료·하차완료·화주등록
+승인/거절·포털계정 발급/비밀번호 재발급·견적안내 8종 이벤트에 SMS를 보냄.
+**사전조사에서 드러난 핵심 발견 — 트리거 지점 상당수가 서버 API가 아니라
+클라이언트가 anon 키로 직접 DB를 update하는 방식이었음**: 배차확정/상차완료/
+하차완료는 실제로 서버 API 라우트 자체가 없고, `app/admin/dispatches/[id]/
+page.tsx`의 확정버튼(`handleConfirm`)·상태드롭다운(`handleStatusChange`)·
+체크박스(`handleProgressCheck`) 3곳과 `app/admin/dispatches/page.tsx`
+목록의 상태드롭다운까지 총 4곳이 각자 `dispatches`를 직접 update하고
+있었음(SMS는 API Key/Secret이 필요해 반드시 서버에서만 호출 가능하므로
+그 자리에 바로 못 끼워넣음). 4곳을 전부 서버 API로 옮기는 대규모
+리팩터링 대신, **DB update 성공 직후 client가 새 서버 API
+(`/api/admin/notify-dispatch-status`)를 fire-and-forget으로 한 번 더
+호출**하고 그 API가 dispatch를 다시 조회해서(client 값을 안 믿고)
+수신자·문구를 정해 발송하는 방식을 채택(CLAUDE.md 원칙 53번 신규,
+아래 참고). 승인/거절/포털계정 발급/비밀번호 재발급은 반대로 전부 이미
+서버 API(service role)였어서 각 라우트 끝에 발송 호출 한 줄만 추가하면
+됐음. **승인 시 포털계정도 같은 요청 안에서 동시에 발급되므로, "승인"과
+"계정발급" 안내를 두 통으로 나누지 않고 하나로 합침**(`applicationApprovedWithAccountMessage`)
+— "계정발급" 단독 템플릿은 화주 상세화면에서 신청서 승인과 무관하게
+별도로 계정을 발급할 때만 씀. 견적안내는 사전조사 결과 `quotes.status`가
+내부 영업퍼널 단계(상담중→견적제출→수주 등)라 상태변경마다 자동으로
+문자를 보내면 의도치 않게 반복 발송될 위험이 있어, 자동트리거 대신
+견적 상세의 "견적서 출력(PDF)" 버튼 옆에 "문자로 요약 발송" **수동
+버튼**으로 구현(다른 7종은 전부 자동발송). Provider 추상화
+(`lib/sms/provider.ts` 인터페이스 + `lib/sms/solapiProvider.ts` 구현체,
+원칙 49번과 같은 "업무 코드는 추상화 계층만 호출" 정신)로 나중에 벤더를
+바꿔도 구현체 파일 하나만 교체하면 되게 함. 솔라피 공식 Node SDK
+(`solapi`, npm)는 Next.js 공식 예제(`examples/nextjs`)까지 제공하는
+성숙한 SDK라 REST 직접호출·HMAC 서명 직접구현 없이 그대로 채택(SDK
+소스를 직접 클론해서 `send()`/`getMessages()` 실제 응답 형태를 확인 —
+`getMessages()`의 `messageList`는 `send()`와 달리 배열이 아니라
+messageId를 key로 하는 Record라는 세부사항까지 코드로 검증). **발송결과
+최종 확인(Webhook/폴링)은 사전조사 결과 이번 1차 범위에서 제외**(SDK
+자체엔 Webhook 기능이 없고, Vercel Cron도 이 프로젝트에 없던 신규
+인프라라 "무한 재시도·큐잉 시스템을 임의로 만들지 말 것" 원칙에 안
+맞다고 판단) — 대신 관리자가 원할 때만 누르는 **"상태 새로고침" 수동
+버튼**을 `sms_logs` 이력 화면에 추가해 `getMessages({messageId})`로
+그 순간 최신 상태를 가져오게 함(사용자가 이 방식으로 확정). 솔라피
+statusCode 해석은 이 세션의 네트워크 제약으로 공식 코드표
+(docs.solapi.com)를 끝내 확인하지 못해, 검색으로 확인된 구간만 보수적으로
+매핑(2000=정상발송, 3000~4000 사이=발송실패, 그 외는 결과 미확정으로
+유지) — 원본 statusCode/statusMessage는 항상 `sms_logs`에 같이 저장해
+매핑이 부정확해도 관리자가 원본을 보고 판단할 수 있게 함
+(`lib/sms/solapiProvider.ts` 주석 참고, 나중에 코드표 확인되면 이 함수만
+고치면 됨). `sms_logs` 테이블은 개인 전화번호를 담고 있어
+`support_access_logs`와 동일하게 anon/authenticated 조회 정책을 아예
+안 두고 서버 API(`/api/admin/sms-logs` 등)로만 접근하도록 함. 전화번호
+없는 수신 대상은 조용히 건너뛰지 않고 `status='skipped'`로 로그를
+남김(사용자 확인 완료 — 나중에 "왜 이 화주는 문자를 못 받았지"를
+관리자가 확인할 수 있어야 하므로). 포털 접속 URL은 화면 코드처럼
+`window.location.origin`을 못 쓰는 서버 전용 자동발송이라, Vercel이
+서버리스 함수에 자동 주입하는 `VERCEL_PROJECT_PRODUCTION_URL`/
+`VERCEL_URL`로 대체하는 `lib/siteUrl.ts` 신규 작성. 문자 문구는 전부
+"[WeCarry]" 문두 표기 + 발신번호(개인 010) 대신 대표 문의번호를 안내(현재
+`lib/contactInfo.ts`의 `COMPANY_SUPPORT_PHONE`, "1588-0000" 자리표시자 —
+**사용자가 나중에 실제 번호로 교체할 예정이라고 확인**, 상수 하나만
+바꾸면 전체 반영됨). `issuePortalAccount()`가 반환하던 `IssuedPortalAccount`에
+`account_id`(customer_accounts 행 자체의 id)를 신규로 추가함 —
+기존엔 `auth_user_id`만 반환해서 `sms_logs.related_id`로 쓸 계정 행
+식별자가 없었음(사전조사 때는 못 봤던 부수 발견, 구현 중 확인됨). 신규
+npm 의존성 `solapi`(6.0.1) 설치. `npx tsc --noEmit`/`npm run build`
+(42페이지 프리렌더 실패, 기존 베이스라인과 동일, 신규 실패 없음) 확인
+완료. DB 마이그레이션(`sms_logs` 테이블)과 환경변수(`SOLAPI_API_KEY`/
+`SOLAPI_API_SECRET`/`SOLAPI_SENDER_PHONE`)는 사용자가 각각 Supabase SQL
+Editor·Vercel에서 직접 등록할 것. **PR #73 실사용 리뷰 라운드로 자동발송
+설계 자체가 크게 바뀜** — (1) 견적 문자 문구가 143byte라 SMS 상한(90byte)을
+넘어 항상 LMS로 나가던 문제를 발견해, 안내문구 등 불필요한 글자를 빼고
+품목명은 나머지(차량·금액·상차일·문의처)를 다 채우고 남는 byte만 정확히
+계산해서 붙이는 방식(`lib/sms/templates.ts`의 `truncateToBytes()`)으로
+압축 — 대부분 SMS로 나가되 차량형태·금액이 유난히 긴 극단적인 경우만
+LMS로 남는 트레이드오프로 확정. (2) **"자동발송 7종(배차확정·상차완료·
+하차완료·승인·거절·계정발급·비밀번호 재발급)도 발송 직전에 문구·수신번호를
+확인하고 수정할 수 있어야 한다"는 요청으로, 애초에 이번 세션에서 설계했던
+"성공하면 곧바로 발송"(원칙 53번) 방식을 다시 "버튼을 누른 그 자리에서
+확인·수정 팝업을 띄우고 '발송'을 눌러야만 실제로 나감" 방식으로 전면
+교체함** — 다만 원칙 53번 자체(자동 update 지점에 서버 비밀키가 필요한
+부가기능을 붙일 땐 client가 서버 API를 한번 더 호출하는 패턴)는 그대로
+유효하고, 이번엔 그 서버 API가 곧바로 발송하는 대신 미리보기(문구·수신번호)만
+반환하도록 바뀐 것뿐임. `components/SmsConfirmModal.tsx`(문구 textarea+
+수신번호 input을 고칠 수 있는 공용 모달) + `app/api/admin/send-sms/route.ts`
+(모달에서 "발송"을 눌렀을 때만 호출되는 공용 발송 엔드포인트) 신규 —
+`notify-dispatch-status`/`approve-application`/`applications`(거절)/
+`create-portal-account`/`reset-portal-password`/`send-quote-sms` 6개
+라우트 전부 `sendSmsWithLog()` 직접 호출을 없애고 미리보기(`smsPreview`)만
+응답에 담아 client에 돌려주도록 수정, 배차 상세 3곳+배차 목록 1곳+
+화주등록신청 모달+화주 상세 페이지+견적 상세 페이지 전부 이 응답을 받아
+모달을 띄우도록 반영. "건너뛰기"를 누르면 SMS 없이 넘어가지만 배차확정
+등 원래 액션은 이미 완료된 뒤라 영향 없음. `npx tsc --noEmit`/`npm run
+build` 재확인 통과. 22차
 세션: "화주등록신청(/apply) 폼 연락처 필수조건 변경" — 21차 세션에서 미결정으로
 남았던 `/apply` 폼의 "담당자 이메일 *" 필수조건을 선택 입력으로 전환(담당자
 전화번호는 그대로 필수 유지). 서버 API(`app/api/apply-submit/route.ts`)도
@@ -1251,6 +1343,27 @@ Supabase에 저장하면 `timestamptz` 컬럼이 이를 UTC로 오인식해 실�
     패턴의 첫 명시적 사례(그 전에도 원칙25번 정신 자체는 지켜지고 있었지만,
     "미들웨어와 API가 서로 다른 두 개의 방어선"이라는 사실 자체를 이번에
     처음 문서화함)
+53. **클라이언트가 anon 키로 직접 테이블을 update하는 기존 화면(상태
+    드롭다운·체크박스 등)에, 서버 비밀키가 필요한 부가기능(SMS 발송 등)을
+    나중에 추가해야 할 때는, 그 update가 일어나는 모든 지점을 서버 API로
+    옮기는 대규모 리팩터링을 하지 말 것.** 대신 DB update가 성공한 직후
+    client가 "그 결과를 다시 조회해서 처리하는" 가벼운 서버 API를
+    fire-and-forget(await 없이 호출, 응답을 기다리거나 실패를 처리하지
+    않음 — 실패해도 원래 액션엔 전혀 영향 없어야 함)으로 추가 호출하는
+    방식을 쓸 것. SMS 발신 연동(23차 세션, 배차확정/상차완료/하차완료)이
+    이 패턴의 첫 사례 — `dispatch_status`를 바꾸는 지점이 실제로는 배차
+    상세의 확정버튼·상태드롭다운·체크박스, 배차 목록의 상태드롭다운까지
+    4곳에 흩어져 있었는데(사전조사로 처음 확인됨), 이 4곳을 전부 서버
+    API로 옮기는 대신 각 지점 끝에 `lib/notifyDispatchSms.ts`의
+    `notifyDispatchStatusSms()` 한 줄만 추가 — 이 함수가 부르는
+    `/api/admin/notify-dispatch-status`가 dispatch를 다시 조회해서
+    (client 값을 안 믿고) 수신자·문구를 정하고 발송함. "이 필드가 바뀌는
+    지점이 한 곳뿐일 것"이라고 가정하지 말고, 실제로 몇 곳에서 그 필드를
+    바꾸는지 먼저 grep으로 전부 찾아본 뒤 이 패턴을 적용할 것 — 실제로도
+    이 프로젝트는 같은 상태값을 여러 화면(목록+상세)이 각자 update하는
+    구조가 흔해서(원칙 46·48번 등에서도 비슷한 다중 진입점 이슈가 있었음),
+    "자동 트리거를 건다"고 하면 먼저 그 트리거 대상 필드를 바꾸는 코드가
+    정말 한 곳뿐인지부터 확인하는 습관이 필요함
 
 ---
 
@@ -2061,6 +2174,52 @@ Supabase에 저장하면 `timestamptz` 컬럼이 이를 UTC로 오인식해 실�
     확인. DB 함수 자체를 검증하는 자동화 테스트는 이 저장소에 없어서
     (`package.json`에 test 스크립트 없음), 위 조건 동치성은 코드 대조로
     직접 검증함. DB 변경은 사용자가 Supabase SQL Editor에서 직접 실행
+- **SMS 발신 연동(솔라피, 23차 세션)**: 발신 전용(카카오 알림톡·양방향 MO는
+  범위 밖)으로 배차확정·상차완료·하차완료·화주등록 승인/거절·포털계정
+  발급/비밀번호 재발급·견적안내 8종 이벤트에 자동으로(견적안내만 수동
+  버튼) SMS를 보냄. `sms_logs` 테이블(신규, 폴리모픽 `related_type`/
+  `related_id`, `status`에 `sent`/`delivered`/`failed`/`skipped` 4단계 —
+  전화번호 없는 대상은 조용히 건너뛰지 않고 `skipped`로 기록),
+  `lib/sms/provider.ts`(Provider 인터페이스)+`lib/sms/solapiProvider.ts`
+  (솔라피 구현체, `solapi` npm SDK 사용), `lib/sendSms.ts`(발송+로그 기록
+  공용 유틸, 절대 예외를 밖으로 안 던짐), `lib/sms/templates.ts`(문구
+  유일 정의처) 신규. **사전조사에서 배차확정/상차완료/하차완료가 서버
+  API 없이 클라이언트 4곳(배차 상세 확정버튼·상태드롭다운·체크박스,
+  배차 목록 상태드롭다운)에서 각자 anon 키로 `dispatches`를 직접
+  update하고 있음을 발견** — 4곳을 서버 API로 옮기는 대신, DB update
+  성공 직후 client가 신규 서버 API(`/api/admin/notify-dispatch-status`)를
+  fire-and-forget으로 호출하는 방식으로 최소 침습적으로 연동(원칙 53번
+  신규). 승인/거절/포털계정 발급/재발급은 이미 서버 API였어서 각 라우트
+  끝에 발송 호출만 추가. `/apply` 승인은 포털계정도 같은 요청에서 함께
+  발급되므로 "승인"+"계정발급" 안내를 한 통으로 합침(단독 계정발급은
+  별도 템플릿). 견적안내는 `quotes.status`가 내부 영업퍼널 단계라 상태
+  변경마다 자동발송하면 의도치 않게 반복될 위험이 있어 견적 상세의
+  "견적서 출력(PDF)" 버튼 옆 수동 "문자로 요약 발송" 버튼으로 구현(다른
+  7종과 다른 유일한 수동 트리거). 발송결과 최종 확인(Webhook/폴링)은
+  1차 범위에서 제외하고, 대신 관리자가 원할 때만 누르는 "상태 새로고침"
+  버튼을 `components/SmsLogPanel.tsx`(배차 상세/신청서 상세/화주 상세/
+  견적 상세 4곳에 임베드, 접이식 — 원칙 유사 패턴)에 추가. 실패 건은
+  "재발송" 버튼(같은 문구·수신자로 재시도, 새 로그 행 추가). 솔라피
+  statusCode 해석은 공식 코드표를 확인 못해 검색으로 확인된 구간만
+  보수적으로 매핑(원본 코드는 항상 같이 저장). `issuePortalAccount()`가
+  반환하는 `IssuedPortalAccount`에 `account_id` 신규 추가(부수 발견 —
+  기존엔 `sms_logs.related_id`로 쓸 계정 행 식별자 자체가 없었음).
+  `npx tsc --noEmit`/`npm run build`(42페이지 프리렌더 실패, 기존
+  베이스라인과 동일) 확인 완료. DB 마이그레이션(`sms_logs`)과 환경변수
+  (`SOLAPI_API_KEY`/`SOLAPI_API_SECRET`/`SOLAPI_SENDER_PHONE`)는 사용자가
+  직접 등록할 것. **PR #73 리뷰 라운드로 자동발송 7종도 발송 직전 확인·수정
+  가능하도록 재설계** — 위 문단의 "DB update 성공 직후 client가
+  fire-and-forget으로 호출"하던 방식을, 그 서버 API가 곧바로 발송하는 대신
+  문구·수신번호 미리보기(`smsPreview`)만 돌려주고 `components/
+  SmsConfirmModal.tsx`(문구·수신번호를 고칠 수 있는 공용 모달)로 확인·수정한
+  뒤 "발송"을 눌러야만 `app/api/admin/send-sms/route.ts`(신규, 공용 발송
+  엔드포인트)가 실제로 호출되는 방식으로 교체함(원칙 53번의 "client가 서버
+  API를 한번 더 호출" 패턴 자체는 그대로 유효, 그 API의 역할만 "발송"에서
+  "미리보기"로 바뀐 것). 견적 문자도 143byte로 항상 LMS로 나가던 문제가
+  발견돼, 안내문구를 빼고 품목명을 나머지가 차지한 뒤 남는 byte만큼만 정확히
+  잘라 붙이는 방식(`lib/sms/templates.ts`의 `truncateToBytes()`)으로
+  압축(대부분 SMS로 나가되 극단적인 조합만 LMS로 남는 트레이드오프,
+  사용자 확정)
 - **화주등록신청(/apply) 폼 연락처 필수조건 변경(22차 세션)**: 21차 세션에서
   미결정으로 남았던 `/apply` 폼의 "담당자 이메일 *" 필수조건을 선택 입력으로
   전환(담당자 전화번호는 그대로 필수 유지). 화면단 유효성 검사(`app/apply/
