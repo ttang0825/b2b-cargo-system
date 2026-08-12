@@ -15,6 +15,9 @@ import {
   DEFAULT_MIXED_LOADING_DISCOUNT_SETTINGS,
 } from "@/lib/mixedLoadingDiscountSettings";
 import AddressSearch from "@/components/AddressSearch";
+import PickupDropoffContactFields, {
+  EMPTY_PICKUP_DROPOFF_CONTACT,
+} from "@/components/PickupDropoffContactFields";
 import DateTimePicker from "@/components/DateTimePicker";
 import { localInputToISOString, toLocalDateTimeInput } from "@/lib/localDateTime";
 import MoneyInput from "@/components/MoneyInput";
@@ -53,6 +56,12 @@ type QuoteDetail = {
   destination: string | null;
   destination_sido: string | null;
   destination_sigungu: string | null;
+  origin_company_name: string | null;
+  origin_contact_name: string | null;
+  origin_contact_phone: string | null;
+  destination_company_name: string | null;
+  destination_contact_name: string | null;
+  destination_contact_phone: string | null;
   distance_km: number | null;
   vehicle_type: string | null;
   item: string | null;
@@ -146,6 +155,7 @@ export default function QuoteDetailPage() {
     destinationDetail: "",
     destinationSido: "",
     destinationSigungu: "",
+    ...EMPTY_PICKUP_DROPOFF_CONTACT,
     distance_km: "",
     vehicle_type: "1톤",
     item: "",
@@ -219,6 +229,12 @@ export default function QuoteDetailPage() {
       destinationDetail: "",
       destinationSido: data.destination_sido || "",
       destinationSigungu: data.destination_sigungu || "",
+      origin_company_name: data.origin_company_name || "",
+      origin_contact_name: data.origin_contact_name || "",
+      origin_contact_phone: data.origin_contact_phone || "",
+      destination_company_name: data.destination_company_name || "",
+      destination_contact_name: data.destination_contact_name || "",
+      destination_contact_phone: data.destination_contact_phone || "",
       distance_km: data.distance_km ? String(data.distance_km) : "",
       vehicle_type: data.vehicle_type || "1톤",
       item: data.item || "",
@@ -359,6 +375,15 @@ export default function QuoteDetailPage() {
       }
     }
 
+    if (!editForm.origin_contact_phone.trim()) {
+      setSaveError("상차지 담당자 연락처를 입력해주세요.");
+      return;
+    }
+    if (!editForm.destination_contact_phone.trim()) {
+      setSaveError("하차지 담당자 연락처를 입력해주세요.");
+      return;
+    }
+
     setSaving(true);
 
     const fullOrigin = [editForm.origin, editForm.originDetail].filter((v) => v.trim()).join(" ");
@@ -373,6 +398,12 @@ export default function QuoteDetailPage() {
       destination: fullDestination || null,
       destination_sido: editForm.destinationSido || null,
       destination_sigungu: editForm.destinationSigungu || null,
+      origin_company_name: editForm.origin_company_name.trim() || null,
+      origin_contact_name: editForm.origin_contact_name.trim() || null,
+      origin_contact_phone: editForm.origin_contact_phone.trim() || null,
+      destination_company_name: editForm.destination_company_name.trim() || null,
+      destination_contact_name: editForm.destination_contact_name.trim() || null,
+      destination_contact_phone: editForm.destination_contact_phone.trim() || null,
       distance_km: Number(editForm.distance_km) || null,
       vehicle_type: editForm.vehicle_type,
       item: editForm.item || null,
@@ -642,6 +673,36 @@ export default function QuoteDetailPage() {
               )}
             </div>
 
+            {(quote.origin_contact_phone || quote.destination_contact_phone) && (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 10,
+                  marginTop: 16,
+                  paddingTop: 16,
+                  borderTop: "1px solid var(--border)",
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>상차지 담당자</div>
+                  <div style={{ fontSize: 13.5 }}>
+                    {[quote.origin_company_name, quote.origin_contact_name, quote.origin_contact_phone]
+                      .filter(Boolean)
+                      .join(" · ") || "-"}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>하차지 담당자</div>
+                  <div style={{ fontSize: 13.5 }}>
+                    {[quote.destination_company_name, quote.destination_contact_name, quote.destination_contact_phone]
+                      .filter(Boolean)
+                      .join(" · ") || "-"}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {(formatDateTime(quote.requested_pickup_at) || formatDateTime(quote.requested_dropoff_at)) && (
               <div
                 style={{
@@ -697,6 +758,10 @@ export default function QuoteDetailPage() {
                 setEditForm({ ...editForm, destination: addr, destinationSido: sido, destinationSigungu: sigungu })
               }
               onDetailChange={(v) => setEditForm({ ...editForm, destinationDetail: v })}
+            />
+            <PickupDropoffContactFields
+              value={editForm}
+              onChange={(patch) => setEditForm((prev) => ({ ...prev, ...patch }))}
             />
             <div className="field">
               <label>거리(km)</label>

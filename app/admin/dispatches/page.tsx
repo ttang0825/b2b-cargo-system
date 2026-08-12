@@ -17,12 +17,21 @@ import { shortAddress } from "@/lib/shortAddress";
 import { calcInclusiveAmount } from "@/lib/vat";
 import { fetchDispatchSmsPreview } from "@/lib/notifyDispatchSms";
 import SmsConfirmModal, { SmsPreview } from "@/components/SmsConfirmModal";
+import PickupDropoffContactFields, {
+  EMPTY_PICKUP_DROPOFF_CONTACT,
+} from "@/components/PickupDropoffContactFields";
 
 type OrderLite = {
   id: string;
   order_no: string | null;
   origin: string | null;
   destination: string | null;
+  origin_company_name: string | null;
+  origin_contact_name: string | null;
+  origin_contact_phone: string | null;
+  destination_company_name: string | null;
+  destination_contact_name: string | null;
+  destination_contact_phone: string | null;
   vehicle_type: string | null;
   settlement_type: string | null;
   collection_method: string | null;
@@ -111,6 +120,7 @@ function DispatchesPageInner() {
   const [customerCharge, setCustomerCharge] = useState("");
   const [driverPayout, setDriverPayout] = useState("");
   const [memo, setMemo] = useState("");
+  const [contactFields, setContactFields] = useState(EMPTY_PICKUP_DROPOFF_CONTACT);
   // 초기 운영은 자체 차주풀 없이 외부정보망 이용이 대부분일 것으로 예상되어
   // 기본 선택값을 외부정보망으로 둠(매번 수동 전환하는 클릭을 줄이기 위함) —
   // DB 컬럼 기본값('internal')은 그대로 두고 화면 초기값만 변경(아래 insert에서
@@ -148,7 +158,7 @@ function DispatchesPageInner() {
     const { data } = await supabase
       .from("orders")
       .select(
-        "id,order_no,origin,destination,vehicle_type,settlement_type,collection_method,billing_cycle,direct_collection_point,quote_id,companies(name),guest_name"
+        "id,order_no,origin,destination,origin_company_name,origin_contact_name,origin_contact_phone,destination_company_name,destination_contact_name,destination_contact_phone,vehicle_type,settlement_type,collection_method,billing_cycle,direct_collection_point,quote_id,companies(name),guest_name"
       )
       .in("status", ["접수", "배차중"])
       .order("created_at", { ascending: false });
@@ -212,6 +222,14 @@ function DispatchesPageInner() {
     setSelectedDriver(null);
     setRecommendedDrivers([]);
     const order = availableOrders.find((o) => o.id === orderId);
+    setContactFields({
+      origin_company_name: order?.origin_company_name || "",
+      origin_contact_name: order?.origin_contact_name || "",
+      origin_contact_phone: order?.origin_contact_phone || "",
+      destination_company_name: order?.destination_company_name || "",
+      destination_contact_name: order?.destination_contact_name || "",
+      destination_contact_phone: order?.destination_contact_phone || "",
+    });
     if (order?.quote_id) {
       const { data: q } = await supabase
         .from("quotes")
@@ -262,6 +280,14 @@ function DispatchesPageInner() {
       setError("배차할 운송오더를 선택해주세요.");
       return;
     }
+    if (!contactFields.origin_contact_phone.trim()) {
+      setError("상차지 담당자 연락처를 입력해주세요.");
+      return;
+    }
+    if (!contactFields.destination_contact_phone.trim()) {
+      setError("하차지 담당자 연락처를 입력해주세요.");
+      return;
+    }
 
     setSaving(true);
     const vehicleId = null; // vehicles 테이블은 driver_id로 조회 가능하므로 필요 시 추후 연결
@@ -284,6 +310,12 @@ function DispatchesPageInner() {
       total_freight_amount: customerCharge ? Number(customerCharge) : null,
       customer_charge: customerCharge ? Number(customerCharge) : null,
       driver_payout: driverPayout ? Number(driverPayout) : null,
+      origin_company_name: contactFields.origin_company_name.trim() || null,
+      origin_contact_name: contactFields.origin_contact_name.trim() || null,
+      origin_contact_phone: contactFields.origin_contact_phone.trim() || null,
+      destination_company_name: contactFields.destination_company_name.trim() || null,
+      destination_contact_name: contactFields.destination_contact_name.trim() || null,
+      destination_contact_phone: contactFields.destination_contact_phone.trim() || null,
       memo: memo || null,
       created_by: await getCurrentStaffId(),
     });
@@ -308,6 +340,7 @@ function DispatchesPageInner() {
     setCustomerCharge("");
     setDriverPayout("");
     setMemo("");
+    setContactFields(EMPTY_PICKUP_DROPOFF_CONTACT);
     setAssignmentType("internal");
     setSelectedNetworkIds([]);
     loadDispatches(period);
@@ -661,6 +694,10 @@ function DispatchesPageInner() {
             )}
 
             <div className="form-grid" style={{ padding: 0 }}>
+              <PickupDropoffContactFields
+                value={contactFields}
+                onChange={(patch) => setContactFields((prev) => ({ ...prev, ...patch }))}
+              />
               <div className="field">
                 <label>화주 청구운임(원)</label>
                 <MoneyInput value={customerCharge} onChange={setCustomerCharge} />

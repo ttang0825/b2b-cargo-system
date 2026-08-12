@@ -58,6 +58,9 @@ import { localInputToISOString } from "@/lib/localDateTime";
 import { fetchDispatchSmsPreview } from "@/lib/notifyDispatchSms";
 import SmsLogPanel from "@/components/SmsLogPanel";
 import SmsConfirmModal, { SmsPreview } from "@/components/SmsConfirmModal";
+import PickupDropoffContactFields, {
+  EMPTY_PICKUP_DROPOFF_CONTACT,
+} from "@/components/PickupDropoffContactFields";
 
 function won(n: number | null) {
   if (n === null || n === undefined) return "-";
@@ -208,6 +211,7 @@ export default function DispatchDetailPage() {
     driver_direct_collection_amount: "",
     brokerage_fee: "",
     brokerage_fee_payer: "" as string,
+    ...EMPTY_PICKUP_DROPOFF_CONTACT,
   });
   const [settlementValue, setSettlementValue] = useState<CollectionMethodValue>({
     collection_method: "broker",
@@ -247,6 +251,12 @@ export default function DispatchDetailPage() {
         data.driver_direct_collection_amount != null ? String(data.driver_direct_collection_amount) : "",
       brokerage_fee: data.brokerage_fee != null ? String(data.brokerage_fee) : "",
       brokerage_fee_payer: data.brokerage_fee_payer || "",
+      origin_company_name: data.origin_company_name || "",
+      origin_contact_name: data.origin_contact_name || "",
+      origin_contact_phone: data.origin_contact_phone || "",
+      destination_company_name: data.destination_company_name || "",
+      destination_contact_name: data.destination_contact_name || "",
+      destination_contact_phone: data.destination_contact_phone || "",
     });
     setSettlementValue({
       collection_method: (data.collection_method as any) || "broker",
@@ -944,8 +954,16 @@ export default function DispatchDetailPage() {
   }
 
   async function handleSave(force = false) {
-    setSaving(true);
     setError(null);
+    if (!editForm.origin_contact_phone.trim()) {
+      setError("상차지 담당자 연락처를 입력해주세요.");
+      return;
+    }
+    if (!editForm.destination_contact_phone.trim()) {
+      setError("하차지 담당자 연락처를 입력해주세요.");
+      return;
+    }
+    setSaving(true);
     setConflict(false);
     if (editForm.brokerage_fee && Number(editForm.brokerage_fee) < 0) {
       setSaving(false);
@@ -974,6 +992,12 @@ export default function DispatchDetailPage() {
       issue_occurred: editForm.issue_occurred,
       issue_notes: editForm.issue_notes || null,
       memo: editForm.memo || null,
+      origin_company_name: editForm.origin_company_name.trim() || null,
+      origin_contact_name: editForm.origin_contact_name.trim() || null,
+      origin_contact_phone: editForm.origin_contact_phone.trim() || null,
+      destination_company_name: editForm.destination_company_name.trim() || null,
+      destination_contact_name: editForm.destination_contact_name.trim() || null,
+      destination_contact_phone: editForm.destination_contact_phone.trim() || null,
       assignment_type: editForm.assignment_type,
       driver_id: editForm.assignment_type === "internal" ? editForm.driver_id : null,
       requested_network_ids: editForm.requested_network_ids,
@@ -1451,6 +1475,23 @@ export default function DispatchDetailPage() {
             </div>
           </div>
         )}
+      </div>
+
+      <div className="card" style={{ padding: 20, marginBottom: 20 }}>
+        <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 6 }}>
+          상차지·하차지 담당자
+        </h3>
+        <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 0, marginBottom: 14 }}>
+          운송오더 등록 시 입력한 정보가 자동으로 채워지며, 이 배차에서만 별도로 수정할 수
+          있습니다(오더 정보는 바뀌지 않음). 맨 아래 &quot;변경사항 저장&quot; 버튼으로
+          저장됩니다.
+        </p>
+        <div className="form-grid" style={{ padding: 0 }}>
+          <PickupDropoffContactFields
+            value={editForm}
+            onChange={(patch) => setEditForm((prev) => ({ ...prev, ...patch }))}
+          />
+        </div>
       </div>
 
       <div className="card" style={{ padding: 20, marginBottom: 20 }}>

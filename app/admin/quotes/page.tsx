@@ -16,6 +16,9 @@ import DateTimePicker from "@/components/DateTimePicker";
 import AddressSearch from "@/components/AddressSearch";
 import MoneyInput from "@/components/MoneyInput";
 import CollectionMethodInput, { CollectionMethodValue } from "@/components/CollectionMethodInput";
+import PickupDropoffContactFields, {
+  EMPTY_PICKUP_DROPOFF_CONTACT,
+} from "@/components/PickupDropoffContactFields";
 import { getLatestMixedLoadingDiscountSettings } from "@/lib/mixedLoadingDiscountSettings";
 import { localInputToISOString, toLocalDateTimeInput } from "@/lib/localDateTime";
 import { applyMixedDiscount } from "@/lib/settlementCalc";
@@ -168,6 +171,7 @@ function QuotesPageInner() {
     destinationDetail: "",
     destinationSido: "",
     destinationSigungu: "",
+    ...EMPTY_PICKUP_DROPOFF_CONTACT,
     distance_km: "",
     vehicle_type: "1톤",
     collection_method: "broker" as CollectionMethodValue["collection_method"],
@@ -244,7 +248,7 @@ function QuotesPageInner() {
       const { data: reqData } = await supabase
         .from("portal_order_requests")
         .select(
-          "id,company_id,origin,origin_sido,origin_sigungu,destination,destination_sido,destination_sigungu,vehicle_type,body_type,item,load_condition,unload_condition,item_condition,transport_time,urgency,trip_type,waiting_minutes,waypoint_count,requested_pickup_at,requested_dropoff_at,notes,companies(id,name,phone,address,status)"
+          "id,company_id,origin,origin_sido,origin_sigungu,destination,destination_sido,destination_sigungu,origin_company_name,origin_contact_name,origin_contact_phone,destination_company_name,destination_contact_name,destination_contact_phone,vehicle_type,body_type,item,load_condition,unload_condition,item_condition,transport_time,urgency,trip_type,waiting_minutes,waypoint_count,requested_pickup_at,requested_dropoff_at,notes,companies(id,name,phone,address,status)"
         )
         .eq("id", fromRequestId)
         .single();
@@ -262,6 +266,12 @@ function QuotesPageInner() {
         destination: reqData.destination || "",
         destinationSido: reqData.destination_sido || "",
         destinationSigungu: reqData.destination_sigungu || "",
+        origin_company_name: reqData.origin_company_name || "",
+        origin_contact_name: reqData.origin_contact_name || "",
+        origin_contact_phone: reqData.origin_contact_phone || "",
+        destination_company_name: reqData.destination_company_name || "",
+        destination_contact_name: reqData.destination_contact_name || "",
+        destination_contact_phone: reqData.destination_contact_phone || "",
         vehicle_type: reqData.vehicle_type || prev.vehicle_type,
         차량형태: reqData.body_type || prev.차량형태,
         상차조건: reqData.load_condition || prev.상차조건,
@@ -621,6 +631,14 @@ function QuotesPageInner() {
       setError("도착지를 입력해주세요.");
       return;
     }
+    if (!form.origin_contact_phone.trim()) {
+      setError("상차지 담당자 연락처를 입력해주세요.");
+      return;
+    }
+    if (!form.destination_contact_phone.trim()) {
+      setError("하차지 담당자 연락처를 입력해주세요.");
+      return;
+    }
     if (!form.distance_km || Number(form.distance_km) <= 0) {
       setError("거리(km)를 입력해주세요.");
       return;
@@ -677,6 +695,12 @@ function QuotesPageInner() {
         destination: fullDestination || null,
         destination_sido: form.destinationSido || null,
         destination_sigungu: form.destinationSigungu || null,
+        origin_company_name: form.origin_company_name.trim() || null,
+        origin_contact_name: form.origin_contact_name.trim() || null,
+        origin_contact_phone: form.origin_contact_phone.trim() || null,
+        destination_company_name: form.destination_company_name.trim() || null,
+        destination_contact_name: form.destination_contact_name.trim() || null,
+        destination_contact_phone: form.destination_contact_phone.trim() || null,
         distance_km: Number(form.distance_km) || null,
         vehicle_type: form.vehicle_type,
         collection_method: form.collection_method,
@@ -815,6 +839,7 @@ function QuotesPageInner() {
       destinationDetail: "",
       destinationSido: "",
       destinationSigungu: "",
+      ...EMPTY_PICKUP_DROPOFF_CONTACT,
       distance_km: "",
       collection_method: "broker",
       billing_cycle: "per_order",
@@ -1144,6 +1169,11 @@ function QuotesPageInner() {
                   </div>
                 )}
               </AddressSearch>
+
+              <PickupDropoffContactFields
+                value={form}
+                onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
+              />
 
               {customerMode === "company" && selectedCompany && (
                 <div

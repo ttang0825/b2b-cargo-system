@@ -8,6 +8,9 @@ import { ORDER_STATUS_OPTIONS, getOrderStatusColor } from "@/lib/orderStatusColo
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import DateTimePicker from "@/components/DateTimePicker";
 import AddressSearch from "@/components/AddressSearch";
+import PickupDropoffContactFields, {
+  EMPTY_PICKUP_DROPOFF_CONTACT,
+} from "@/components/PickupDropoffContactFields";
 import SettlementFieldsChangeModal from "@/components/SettlementFieldsChangeModal";
 import CollectionMethodInput, { CollectionMethodValue } from "@/components/CollectionMethodInput";
 import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
@@ -31,6 +34,12 @@ type OrderDetail = {
   order_no: string | null;
   origin: string | null;
   destination: string | null;
+  origin_company_name: string | null;
+  origin_contact_name: string | null;
+  origin_contact_phone: string | null;
+  destination_company_name: string | null;
+  destination_contact_name: string | null;
+  destination_contact_phone: string | null;
   vehicle_type: string | null;
   item: string | null;
   status: string;
@@ -119,6 +128,7 @@ export default function OrderDetailPage() {
     destinationDetail: "",
     destinationSido: "",
     destinationSigungu: "",
+    ...EMPTY_PICKUP_DROPOFF_CONTACT,
     vehicle_type: "",
     loading_type: "exclusive" as "exclusive" | "mixable",
     mixed_shipper_consent: false,
@@ -157,6 +167,12 @@ export default function OrderDetailPage() {
       destinationDetail: "",
       destinationSido: data.destination_sido || "",
       destinationSigungu: data.destination_sigungu || "",
+      origin_company_name: data.origin_company_name || "",
+      origin_contact_name: data.origin_contact_name || "",
+      origin_contact_phone: data.origin_contact_phone || "",
+      destination_company_name: data.destination_company_name || "",
+      destination_contact_name: data.destination_contact_name || "",
+      destination_contact_phone: data.destination_contact_phone || "",
       vehicle_type: data.vehicle_type || "",
       loading_type: (data.loading_type as "exclusive" | "mixable") || "exclusive",
       mixed_shipper_consent: data.mixed_shipper_consent || false,
@@ -189,8 +205,16 @@ export default function OrderDetailPage() {
   }, [id]);
 
   async function handleSave(force = false) {
-    setSaving(true);
     setError(null);
+    if (!editForm.origin_contact_phone.trim()) {
+      setError("상차지 담당자 연락처를 입력해주세요.");
+      return;
+    }
+    if (!editForm.destination_contact_phone.trim()) {
+      setError("하차지 담당자 연락처를 입력해주세요.");
+      return;
+    }
+    setSaving(true);
     setConflict(false);
     const fullOrigin = [editForm.origin, editForm.originDetail].filter((v) => v.trim()).join(" ");
     const fullDestination = [editForm.destination, editForm.destinationDetail].filter((v) => v.trim()).join(" ");
@@ -202,6 +226,12 @@ export default function OrderDetailPage() {
       destination: fullDestination || null,
       destination_sido: editForm.destinationSido || null,
       destination_sigungu: editForm.destinationSigungu || null,
+      origin_company_name: editForm.origin_company_name.trim() || null,
+      origin_contact_name: editForm.origin_contact_name.trim() || null,
+      origin_contact_phone: editForm.origin_contact_phone.trim() || null,
+      destination_company_name: editForm.destination_company_name.trim() || null,
+      destination_contact_name: editForm.destination_contact_name.trim() || null,
+      destination_contact_phone: editForm.destination_contact_phone.trim() || null,
       vehicle_type: editForm.vehicle_type || null,
       loading_type: editForm.loading_type,
       mixed_shipper_consent: editForm.loading_type === "mixable" ? editForm.mixed_shipper_consent : false,
@@ -585,6 +615,10 @@ export default function OrderDetailPage() {
               }
               onDetailChange={(v) => setEditForm({ ...editForm, destinationDetail: v })}
             />
+            <PickupDropoffContactFields
+              value={editForm}
+              onChange={(patch) => setEditForm((prev) => ({ ...prev, ...patch }))}
+            />
             <div className="field">
               <label>차량</label>
               <input
@@ -842,6 +876,18 @@ export default function OrderDetailPage() {
             </div>
             <Field label="출발지" value={order.origin} />
             <Field label="도착지" value={order.destination} />
+            <Field
+              label="상차지 담당자"
+              value={[order.origin_company_name, order.origin_contact_name, order.origin_contact_phone]
+                .filter(Boolean)
+                .join(" · ")}
+            />
+            <Field
+              label="하차지 담당자"
+              value={[order.destination_company_name, order.destination_contact_name, order.destination_contact_phone]
+                .filter(Boolean)
+                .join(" · ")}
+            />
             <Field label="차량" value={order.vehicle_type} />
             <Field
               label="상차 예정일시"
