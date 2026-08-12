@@ -49,6 +49,9 @@ export default function LandingHeader() {
           gap: 12,
         }}
       >
+        {/* 시각 브랜딩은 영문 "WeCarry 운송"으로 유지(검색·메타 title은 한글 "위캐리 운송"
+            으로 따로 감 — 의도된 이원화, 사용자 확인 완료). 나중에 로고가 개발되면
+            이 <span>을 로고 이미지로 교체할 것 */}
         <Link href="/" style={{ textDecoration: "none", color: "inherit" }}>
           <span className="brand" style={{ fontSize: 17 }}>
             WeCarry 운송

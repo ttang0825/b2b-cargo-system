@@ -29,8 +29,12 @@ false, follow: false}` metadata 추가(핵심 방어선) + `app/robots.ts` 신�
 description이 "화주 CRM · 견적 · 배차 · 정산 통합 관리"(내부 시스템 설명)였고
 `/quote`·`/apply`·`/status`가 자체 description 없이 이걸 그대로 상속받고 있었음 —
 루트를 공개용 문구로 교체하고 3개 공개 페이지에 각각 전용 description 지정.
-브랜드 표기를 지시서 표대로 "위캐리 운송"(한글)으로 넣었는데 화면상 헤더는 여전히
-"WeCarry 운송"이라 **표기가 갈린 상태**(의도된 것인지 다음 세션에서 확인 필요).
+**브랜드 표기는 의도적으로 이원화된 상태 — 사용자 확인 완료**: 검색·메타(title/
+description)는 지시서 표대로 한글 "위캐리 운송", 화면에 보이는 시각 브랜딩(랜딩 헤더·
+본문 등)은 영문 "WeCarry 운송"을 유지함. **나중에 로고가 개발되면 시각 브랜딩 쪽을
+로고 이미지로 대체할 예정**이므로, 그때 헤더의 `<span className="brand">WeCarry 운송`
+(`components/LandingHeader.tsx`)을 로고로 교체하면 됨(메타 title은 검색용이라 그대로
+한글 유지). 표기가 갈려 보인다고 임의로 한쪽에 맞추지 말 것.
 루트에 `title.template`은 일부러 두지 않음(두면 하위 title에 브랜드명이 이중으로
 붙음 — 지시서가 경고한 항목, 현재 이중 중복 없음을 렌더링으로 확인). 랜딩(`/`)의
 title은 `app/page.tsx`의 개별 metadata export를 없애고 루트 layout 한 곳에서만
