@@ -47,7 +47,7 @@ export default function ApplyStatusPage() {
   }
 
   return (
-    <div className="portal-theme">
+    <div className="portal-theme public-form">
       <header style={{ borderBottom: "1px solid var(--border)", background: "var(--surface)" }}>
         <div className="container" style={{ padding: "18px 24px" }}>
           <Link href="/" className="brand" style={{ fontSize: 17, textDecoration: "none" }}>

@@ -56,7 +56,7 @@ export default function StatusPage() {
   const hasNothing = searched && quotes.length === 0 && applications.length === 0;
 
   return (
-    <div className="portal-theme">
+    <div className="portal-theme public-form">
       <header style={{ borderBottom: "1px solid var(--border)", background: "var(--surface)" }}>
         <div className="container" style={{ padding: "18px 24px" }}>
           <Link href="/" className="brand" style={{ fontSize: 17, textDecoration: "none" }}>

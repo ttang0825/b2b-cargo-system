@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import PasswordInput from "@/components/PasswordInput";
 import { syntheticLoginEmail } from "@/lib/portalAccountCredentials";
@@ -51,7 +52,11 @@ export default function CustomerLoginPage() {
   }
 
   return (
+    // public-form: 로그인 화면은 비회원도 도달하는 공개 진입점이라 입력창을 16px로
+    // 올려 iOS 자동확대를 막음(PR #75 리뷰 — "화면이 커지고 밀린다"). 로그인 이후의
+    // 화주포털 내부 화면은 포털 전체 톤과 함께 별도로 다룰 항목이라 건드리지 않음
     <main
+      className="public-form"
       style={{
         minHeight: "100vh",
         display: "flex",
@@ -128,6 +133,27 @@ export default function CustomerLoginPage() {
             {COMPANY_SUPPORT_PHONE}
           </a>
           )
+        </p>
+        {/* 이 화면은 헤더가 없어서 들어오면 홈으로 돌아갈 방법이 전혀 없었음
+            (PR #75 리뷰 — 모바일에서 브라우저 뒤로가기가 안 보이면 갇힘).
+            다른 공개 화면(/status 등)의 헤더 브랜드 링크와 같은 역할 */}
+        <p style={{ marginTop: 20, marginBottom: 0, textAlign: "center" }}>
+          <Link
+            href="/"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              // 터치 영역 확보(랜딩 헤더 드롭다운과 동일 기준)
+              minHeight: 44,
+              padding: "0 12px",
+              fontSize: 13,
+              fontWeight: 600,
+              color: "var(--text-muted)",
+              textDecoration: "none",
+            }}
+          >
+            ← 홈으로
+          </Link>
         </p>
       </div>
     </main>
