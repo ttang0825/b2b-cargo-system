@@ -6,6 +6,9 @@ import { VEHICLE_TYPES } from "@/lib/constants";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import DateTimePicker from "@/components/DateTimePicker";
 import AddressSearch from "@/components/AddressSearch";
+import PickupDropoffContactFields, {
+  EMPTY_PICKUP_DROPOFF_CONTACT,
+} from "@/components/PickupDropoffContactFields";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import { localInputToISOString } from "@/lib/localDateTime";
 import { useListSearchSort, sortIndicator } from "@/lib/useListSearchSort";
@@ -97,6 +100,7 @@ export default function PortalRequestPage() {
     destinationDetail: "",
     destinationSido: "",
     destinationSigungu: "",
+    ...EMPTY_PICKUP_DROPOFF_CONTACT,
     vehicle_type: VEHICLE_TYPES[0],
     차량형태: "",
     상차조건: LOADING_METHOD_OPTIONS[0] as string,
@@ -220,6 +224,14 @@ export default function PortalRequestPage() {
       setError("출발지와 도착지를 입력해주세요.");
       return;
     }
+    if (!form.origin_contact_phone.trim()) {
+      setError("상차지 담당자 연락처를 입력해주세요.");
+      return;
+    }
+    if (!form.destination_contact_phone.trim()) {
+      setError("하차지 담당자 연락처를 입력해주세요.");
+      return;
+    }
     if (!companyId) {
       setError("계정 정보를 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.");
       return;
@@ -248,6 +260,12 @@ export default function PortalRequestPage() {
       destination: fullDestination,
       destination_sido: form.destinationSido || null,
       destination_sigungu: form.destinationSigungu || null,
+      origin_company_name: form.origin_company_name.trim() || null,
+      origin_contact_name: form.origin_contact_name.trim() || null,
+      origin_contact_phone: form.origin_contact_phone.trim() || null,
+      destination_company_name: form.destination_company_name.trim() || null,
+      destination_contact_name: form.destination_contact_name.trim() || null,
+      destination_contact_phone: form.destination_contact_phone.trim() || null,
       vehicle_type: form.vehicle_type,
       body_type: form.차량형태 || null,
       load_condition: form.상차조건 || null,
@@ -302,6 +320,9 @@ export default function PortalRequestPage() {
       destinationDetail: "",
       destinationSido: "",
       destinationSigungu: "",
+      destination_company_name: "",
+      destination_contact_name: "",
+      destination_contact_phone: "",
       item: "",
       requested_pickup_at: "",
       requested_dropoff_at: "",
@@ -446,6 +467,10 @@ export default function PortalRequestPage() {
           </AddressSearch>
 
           <div className="form-grid" style={{ padding: 0 }}>
+            <PickupDropoffContactFields
+              value={form}
+              onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
+            />
             <div className="field">
               <label>희망 톤수</label>
               <select value={form.vehicle_type} onChange={(e) => setField("vehicle_type", e.target.value)}>

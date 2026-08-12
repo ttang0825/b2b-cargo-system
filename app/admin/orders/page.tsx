@@ -13,6 +13,9 @@ import { getOrCreateIndividualCustomer, findIndividualCustomerByPhone } from "@/
 import DateTimePicker from "@/components/DateTimePicker";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import AddressSearch from "@/components/AddressSearch";
+import PickupDropoffContactFields, {
+  EMPTY_PICKUP_DROPOFF_CONTACT,
+} from "@/components/PickupDropoffContactFields";
 import { localInputToISOString, toLocalDateTimeInput } from "@/lib/localDateTime";
 import MixableBadge from "@/components/MixableBadge";
 import { shortAddress } from "@/lib/shortAddress";
@@ -86,6 +89,7 @@ function OrdersPageInner() {
     destinationDetail: "",
     destinationSido: "",
     destinationSigungu: "",
+    ...EMPTY_PICKUP_DROPOFF_CONTACT,
     vehicle_type: "",
     collection_method: "broker" as CollectionMethodValue["collection_method"],
     billing_cycle: "per_order" as CollectionMethodValue["billing_cycle"],
@@ -152,7 +156,7 @@ function OrdersPageInner() {
       const { data: q } = await supabase
         .from("quotes")
         .select(
-          "id,company_id,guest_name,guest_phone,origin,origin_sido,origin_sigungu,destination,destination_sido,destination_sigungu,vehicle_type,settlement_type,collection_method,billing_cycle,direct_collection_point,loading_type,mixed_shipper_consent,mixed_discount_type,mixed_discount_amount,mixed_discount_percent,mixed_note,item,selected_options,notes,requested_pickup_at,requested_dropoff_at,companies(id,name,phone)"
+          "id,company_id,guest_name,guest_phone,origin,origin_sido,origin_sigungu,destination,destination_sido,destination_sigungu,origin_company_name,origin_contact_name,origin_contact_phone,destination_company_name,destination_contact_name,destination_contact_phone,vehicle_type,settlement_type,collection_method,billing_cycle,direct_collection_point,loading_type,mixed_shipper_consent,mixed_discount_type,mixed_discount_amount,mixed_discount_percent,mixed_note,item,selected_options,notes,requested_pickup_at,requested_dropoff_at,companies(id,name,phone)"
         )
         .eq("id", fromQuoteId)
         .single();
@@ -169,6 +173,12 @@ function OrdersPageInner() {
         destination: q.destination || "",
         destinationSido: q.destination_sido || "",
         destinationSigungu: q.destination_sigungu || "",
+        origin_company_name: q.origin_company_name || "",
+        origin_contact_name: q.origin_contact_name || "",
+        origin_contact_phone: q.origin_contact_phone || "",
+        destination_company_name: q.destination_company_name || "",
+        destination_contact_name: q.destination_contact_name || "",
+        destination_contact_phone: q.destination_contact_phone || "",
         vehicle_type: q.vehicle_type || "",
         collection_method: (q.collection_method as CollectionMethodValue["collection_method"]) || "broker",
         billing_cycle: (q.billing_cycle as CollectionMethodValue["billing_cycle"]) || "per_order",
@@ -261,6 +271,14 @@ function OrdersPageInner() {
       setError("출발지와 도착지를 입력해주세요.");
       return;
     }
+    if (!form.origin_contact_phone.trim()) {
+      setError("상차지 담당자 연락처를 입력해주세요.");
+      return;
+    }
+    if (!form.destination_contact_phone.trim()) {
+      setError("하차지 담당자 연락처를 입력해주세요.");
+      return;
+    }
     if (form.requested_pickup_at && form.requested_delivery_at) {
       const diffMs =
         new Date(form.requested_delivery_at).getTime() - new Date(form.requested_pickup_at).getTime();
@@ -307,6 +325,12 @@ function OrdersPageInner() {
       destination: fullDestination,
       destination_sido: form.destinationSido || null,
       destination_sigungu: form.destinationSigungu || null,
+      origin_company_name: form.origin_company_name.trim() || null,
+      origin_contact_name: form.origin_contact_name.trim() || null,
+      origin_contact_phone: form.origin_contact_phone.trim() || null,
+      destination_company_name: form.destination_company_name.trim() || null,
+      destination_contact_name: form.destination_contact_name.trim() || null,
+      destination_contact_phone: form.destination_contact_phone.trim() || null,
       vehicle_type: form.vehicle_type || null,
       collection_method: form.collection_method,
       billing_cycle: form.billing_cycle,
@@ -356,6 +380,7 @@ function OrdersPageInner() {
       destinationDetail: "",
       destinationSido: "",
       destinationSigungu: "",
+      ...EMPTY_PICKUP_DROPOFF_CONTACT,
       vehicle_type: "",
       collection_method: "broker",
       billing_cycle: "per_order",
@@ -571,6 +596,10 @@ function OrdersPageInner() {
                   }))
                 }
                 onDetailChange={(v) => setForm((prev) => ({ ...prev, destinationDetail: v }))}
+              />
+              <PickupDropoffContactFields
+                value={form}
+                onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
               />
               <div className="field">
                 <label>차량</label>
