@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import BrandLogo from "@/components/BrandLogo";
 
 // 랜딩(/) 전용 헤더. 원칙 11번대로 랜딩은 TopNav가 숨겨지고 자체 헤더를 쓰므로,
 // TopNav.tsx의 `.nav-mobile-toggle`/`.nav-desktop-group` 클래스를 그대로 가져다 쓰지
@@ -49,13 +50,25 @@ export default function LandingHeader() {
           gap: 12,
         }}
       >
-        {/* 시각 브랜딩은 영문 "WeCarry 운송"으로 유지(검색·메타 title은 한글 "위캐리 운송"
-            으로 따로 감 — 의도된 이원화, 사용자 확인 완료). 나중에 로고가 개발되면
-            이 <span>을 로고 이미지로 교체할 것 */}
-        <Link href="/" style={{ textDecoration: "none", color: "inherit" }}>
-          <span className="brand" style={{ fontSize: 17 }}>
-            WeCarry 운송
-          </span>
+        {/* 시각 브랜딩은 로고(영문+한글 조합 워드마크)가 담당함. 로고 안에 "위캐리 운송"이
+            이미 들어 있으므로 "운송" 텍스트를 따로 붙이지 말 것.
+            검색·메타 title/description은 한글 "위캐리 운송"으로 따로 가는 의도된 이원화이며
+            이번 로고 적용으로 바뀌지 않음.
+            텍스트를 이미지로 바꿔서 스크린리더가 읽을 내용이 사라지므로, 로고 SVG는
+            aria-hidden으로 두고 이 링크가 aria-label로 이름을 제공함 */}
+        <Link
+          href="/"
+          aria-label="위캐리 운송 홈"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            // 터치 영역 44px 확보(26차에서 확보한 기준 유지)
+            minHeight: 44,
+            textDecoration: "none",
+            color: "inherit",
+          }}
+        >
+          <BrandLogo className="landing-brand-logo" />
         </Link>
 
         <div style={{ display: "flex", gap: 10, alignItems: "center", minWidth: 0 }}>
