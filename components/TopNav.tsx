@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import BrandLogo from "@/components/BrandLogo";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
@@ -146,10 +147,15 @@ function TopNavInner() {
   const [staffName, setStaffName] = useState<string | null>(null);
   const navGroupRef = useRef<HTMLDivElement>(null);
 
+  // ⚠️ **새 공개 경로(admin도 customer도 아닌 최상위 경로)를 추가하면 여기에도 반드시
+  // 추가할 것**(원칙 11번). 빠뜨리면 관리자 메뉴가 그 공개 페이지 위에 그대로 얹혀서
+  // 나타난다 — 28차에 `/about`·`/vehicles`를 만들면서 실제로 또 겪었음.
   const isPublicPath =
     pathname === "/admin/login" ||
     pathname?.startsWith("/customer") ||
     pathname === "/" ||
+    pathname?.startsWith("/about") ||
+    pathname?.startsWith("/vehicles") ||
     pathname?.startsWith("/quote") ||
     pathname?.startsWith("/apply") ||
     pathname?.startsWith("/status");
@@ -273,8 +279,11 @@ function TopNavInner() {
   return (
     <div className="top-nav">
       <div className="top-nav-inner" style={{ flexWrap: "wrap", gap: 16 }}>
-        <Link href="/admin" className="brand-link">
-          <div className="brand">WeCarry 운송 통합 운영 시스템</div>
+        {/* 브랜드 표기를 로고로 교체(PR #77 리뷰). 로고 SVG는 aria-hidden이라 링크가
+            aria-label로 이름을 제공함. "내부 관리자 (admin)"는 관리자 화면과 고객 화면을
+            구분해주는 정보라 그대로 둠 */}
+        <Link href="/admin" className="brand-link" aria-label="위캐리 운송 내부관리 홈">
+          <BrandLogo className="topnav-brand-logo" />
           <div className="brand-sub">내부 관리자 (admin)</div>
         </Link>
 

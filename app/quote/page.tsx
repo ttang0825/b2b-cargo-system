@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import BrandLogo from "@/components/BrandLogo";
 import { supabase } from "@/lib/supabaseClient";
 import { VEHICLE_TYPES, formatPhoneNumber } from "@/lib/constants";
 import { LOADING_METHODS } from "@/lib/loadingMethods";
@@ -135,11 +136,11 @@ export default function PublicQuotePage() {
               계속 거래하실 계획이신가요?
             </div>
             <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginBottom: 14, lineHeight: 1.6 }}>
-              정식 화주로 등록하시면 화주포털에서 견적·배차·정산 현황을 직접 확인하실 수
+              등록하시면 운송관리 화면에서 견적·배차·정산 현황을 직접 확인하실 수
               있습니다.
             </p>
             <Link href="/apply" className="btn-ghost" style={{ padding: "10px 18px", borderRadius: 10, display: "inline-flex" }}>
-              화주 등록 신청하기 →
+              고객 등록 신청하기 →
             </Link>
           </div>
         </main>
@@ -154,8 +155,21 @@ export default function PublicQuotePage() {
           className="container"
           style={{ padding: "18px 24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}
         >
-          <Link href="/" className="brand" style={{ fontSize: 17, textDecoration: "none" }}>
-            WeCarry 운송
+          {/* 홈으로 가는 브랜드 링크는 랜딩 헤더와 같은 로고를 씀(PR #77 리뷰 — 화면마다
+              로고/텍스트가 갈려 통일성이 없다는 지적). 로고 SVG는 aria-hidden이라 링크가
+              aria-label로 이름을 제공해야 함 */}
+          <Link
+            href="/"
+            aria-label="위캐리 운송 홈"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              minHeight: 44,
+              textDecoration: "none",
+              color: "inherit",
+            }}
+          >
+            <BrandLogo className="landing-brand-logo" />
           </Link>
           <Link
             href="/status"
@@ -333,7 +347,7 @@ export default function PublicQuotePage() {
         <p style={{ textAlign: "center", fontSize: 12.5, color: "var(--text-muted)", margin: "20px 0 60px" }}>
           이미 거래 중이신가요?{" "}
           <Link href="/customer/login" style={{ color: "var(--accent)", textDecoration: "underline" }}>
-            화주포털 로그인
+            로그인
           </Link>
         </p>
       </main>

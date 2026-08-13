@@ -6,7 +6,7 @@ import TopNav from "@/components/TopNav";
 // /quote·/apply 같은 공개 페이지가 이걸 그대로 상속받고 있었음 — 공개용 문구로 교체함.
 // title.template은 일부러 쓰지 않음(쓰면 하위 title에 브랜드명이 이중으로 붙음).
 export const metadata = {
-  title: "위캐리 운송 | B2B 화물 배차·운송 주선",
+  title: "위캐리 운송 | 화물 배차·운송 주선",
   description:
     "정기 납품, 긴급 출고, 창고 이동. 1톤부터 5톤까지 화물 배차를 연결합니다. 화물자동차 운송주선사업 정식 허가업체.",
 };

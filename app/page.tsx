@@ -22,10 +22,26 @@ const VALUES = [
   { q: "다음 거래가 더 편한가?", a: "출발지·도착지·물품·차량·상하차 조건을 저장해드립니다." },
 ];
 
+// 이용 절차 3단계. 별도 페이지를 만들지 않고 기존 "이렇게 진행됩니다" 섹션을 이 내용으로
+// 정비함(섹션을 새로 늘리지 않기 위해 — 기존 3단계와 역할이 겹쳤음)
 const STEPS = [
-  { n: "1", title: "견적 문의", desc: "출발지, 도착지, 물품, 희망 시간만 남겨주세요." },
-  { n: "2", title: "차량·운임 확인", desc: "가능 차량과 운임을 빠르게 안내드립니다." },
-  { n: "3", title: "배차·운송 진행", desc: "배차 확정 정보와 함께 안전하게 운송해드립니다." },
+  {
+    n: "1",
+    title: "문의·견적",
+    desc: "상차지·하차지·품목만 알려주시면 차량과 운임을 확인해 연락드립니다.",
+  },
+  {
+    n: "2",
+    title: "배차 확정",
+    desc: "차량 종류와 운임 내역이 담긴 견적서를 보내드립니다.",
+    sub: "배차 확정 시 차량·기사 정보를 안내드립니다.",
+  },
+  {
+    n: "3",
+    title: "운송·정산",
+    desc: "운송 완료 후 인수증과 정산 내역이 남습니다.",
+    sub: "세금계산서 발행, 건별 정산 및 월정산 가능",
+  },
 ];
 
 export default function LandingPage() {
@@ -37,7 +53,7 @@ export default function LandingPage() {
       <section style={{ background: "#1a1a1a", padding: "72px 24px 64px" }}>
         <div className="container" style={{ padding: 0, textAlign: "center" }}>
           <div style={{ color: "#FFD833", fontWeight: 700, fontSize: 13.5, marginBottom: 14 }}>
-            중소기업을 위한 B2B 화물 배차 파트너
+            중소기업과 개인 고객을 위한 화물 배차 파트너
           </div>
           <h1
             style={{
@@ -81,7 +97,7 @@ export default function LandingPage() {
                 textDecoration: "none",
               }}
             >
-              화주 등록 신청 →
+              고객 등록 신청 →
             </Link>
           </div>
         </div>
@@ -93,13 +109,15 @@ export default function LandingPage() {
           이런 업체에 필요합니다
         </h2>
         <p style={{ textAlign: "center", color: "var(--text-muted)", fontSize: 14, marginBottom: 32 }}>
-          납품·출고·창고 이동에 1톤~5톤 화물차가 필요한 업체라면 어디든 환영합니다.
+          납품·출고·창고 이동에 1톤~5톤 화물차가 필요하면 어디든 환영합니다.
+          <br />한 건도, 정기 운송도 가능합니다.
         </p>
         <div className="home-grid">
           {TARGETS.map((t) => (
+            // 카드마다 똑같이 붙던 "B2B" 태그는 제거함 — 고객 접점에서 B2B 표현을 쓰지 않기로
+            // 했고(용어정리 가이드 2-3), 6개 카드가 전부 같은 값이라 정보량도 없었음
             <div key={t.title} className="card" style={{ padding: 22 }}>
-              <div className="home-card-tag">B2B</div>
-              <h3 className="home-card-title" style={{ marginTop: 10 }}>{t.title}</h3>
+              <h3 className="home-card-title">{t.title}</h3>
               <p className="home-card-desc">{t.desc}</p>
             </div>
           ))}
@@ -156,7 +174,12 @@ export default function LandingPage() {
                 {s.n}
               </div>
               <h3 style={{ fontSize: 15, fontWeight: 800, margin: "0 0 6px" }}>{s.title}</h3>
-              <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>{s.desc}</p>
+              <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0, lineHeight: 1.6 }}>{s.desc}</p>
+              {s.sub && (
+                <p style={{ fontSize: 12.5, color: "var(--text-muted)", margin: "6px 0 0", lineHeight: 1.6 }}>
+                  → {s.sub}
+                </p>
+              )}
             </div>
           ))}
         </div>
@@ -166,7 +189,7 @@ export default function LandingPage() {
       <section className="container" style={{ padding: "0 24px 56px" }}>
         <div className="card" style={{ padding: 28, background: "var(--accent-soft)", border: "none", maxWidth: 720, margin: "0 auto" }}>
           <div style={{ fontSize: 12.5, fontWeight: 800, color: "var(--accent)", marginBottom: 10 }}>
-            신규 화주 첫 거래 혜택
+            신규 고객 첫 거래 혜택
           </div>
           <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13.5, lineHeight: 1.9, color: "var(--text)" }}>
             <li>자주 나가는 구간 무료 비교 견적</li>
@@ -211,7 +234,7 @@ export default function LandingPage() {
               <span style={{ color: "var(--text-muted)", fontWeight: 500 }}> (주말·공휴일 휴무)</span>
             </div>
           </div>
-          <div style={{ fontSize: 13, color: "var(--text-muted)" }}>WeCarry 운송 통합 운영 시스템</div>
+          <div style={{ fontSize: 13, color: "var(--text-muted)" }}>위캐리 운송</div>
         </div>
       </footer>
     </div>

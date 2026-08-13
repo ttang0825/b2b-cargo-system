@@ -10,9 +10,9 @@ export default function robots(): MetadataRoute.Robots {
   return {
     rules: {
       userAgent: "*",
-      // /terms, /privacy는 아직 없음(3차 작업지시서에서 생성 예정) — 미리 넣어둬도
-      // 없는 동안엔 404일 뿐이라 무해함
-      allow: ["/", "/quote", "/apply", "/terms", "/privacy"],
+      // /terms, /privacy는 아직 없음(5차에서 생성 예정) — 미리 넣어둬도 없는 동안엔
+      // 404일 뿐이라 무해함. 이메일무단수집거부 경로도 5차에서 확정 후 추가할 것
+      allow: ["/", "/about", "/vehicles", "/quote", "/apply", "/terms", "/privacy"],
       disallow: ["/admin", "/customer", "/status"],
     },
   };

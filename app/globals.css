@@ -64,6 +64,11 @@ a {
 .brand-link:hover .brand {
   color: var(--accent);
 }
+/* 관리자 상단바는 브랜드가 텍스트에서 로고로 바뀌었으므로(PR #77 리뷰) 위 규칙이 더는
+   걸리지 않음 — 로고는 fill="currentColor"라 부모 color만 바꿔주면 동일한 hover 반응이 남음 */
+.brand-link:hover .topnav-brand-logo {
+  color: var(--accent);
+}
 .brand {
   font-family: var(--font-display);
   font-weight: 800;
@@ -517,6 +522,61 @@ tbody tr:hover {
   font-size: 16px;
 }
 
+/* 관리자 상단바 로고 — 아래 .brand-sub("내부 관리자 (admin)")와 함께 놓이므로
+   랜딩 헤더보다 조금 작게. width는 고정하지 않음(종횡비 6.5:1 유지) */
+.topnav-brand-logo {
+  height: 22px;
+  width: auto;
+  display: block;
+  margin-bottom: 3px;
+}
+
+/* 운송관리(화주포털) 좌상단 홈 버튼 — 보조문구를 없앤 대신 이 표기를 키워서
+   홈으로 가는 버튼임이 분명히 보이게 함(PR #77 리뷰) */
+.portal-brand-home {
+  font-size: 19px;
+}
+
+/* 회사소개(/about)·차량 안내(/vehicles) 공용 — 두 페이지 모두 랜딩과 같은
+   .portal-theme 안에서 카드 단위로 구성된다 */
+.about-section-title {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 800;
+  margin: 0 0 16px;
+  letter-spacing: -0.02em;
+}
+/* 라벨-값 2열. 모바일(≤560px)에서는 1열로 접혀 값이 눌리지 않게 함 */
+.about-info-row {
+  display: grid;
+  grid-template-columns: 128px 1fr;
+  gap: 12px;
+  align-items: baseline;
+}
+.about-info-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.about-info-value {
+  font-size: 14px;
+  line-height: 1.6;
+  /* 주소처럼 긴 값이 카드를 뚫고 나가지 않도록 */
+  overflow-wrap: anywhere;
+}
+.about-greeting-p {
+  font-size: 14.5px;
+  line-height: 1.85;
+  margin: 0 0 14px;
+}
+.about-greeting-p:last-child {
+  margin-bottom: 0;
+}
+/* 표가 좁은 화면에서 페이지 자체를 가로로 늘리지 않고 자기 안에서만 스크롤되게 함 */
+.table-scroll {
+  overflow-x: auto;
+}
+
 /* 랜딩 헤더 워드마크 — 종횡비 6.50:1이라 높이만 지정하고 폭은 자동으로 둔다
    (width를 고정하면 로고가 찌그러짐). 데스크탑 28px -> 폭 182px.
    ⚠️ 이 종횡비 때문에 로고가 가로로 길어서 모바일 헤더 여유가 좁음 —
@@ -652,6 +712,14 @@ tbody tr:hover {
   }
   .calendar-cell {
     height: 44px;
+  }
+}
+
+@media (max-width: 560px) {
+  /* 라벨-값 2열로는 값이 눌려서 주소 같은 긴 텍스트가 세로로 길어짐 — 1열로 전환 */
+  .about-info-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
   }
 }
 

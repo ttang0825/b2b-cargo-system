@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import BrandLogo from "@/components/BrandLogo";
 import { formatPhoneNumber } from "@/lib/constants";
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
@@ -50,8 +51,21 @@ export default function ApplyStatusPage() {
     <div className="portal-theme public-form">
       <header style={{ borderBottom: "1px solid var(--border)", background: "var(--surface)" }}>
         <div className="container" style={{ padding: "18px 24px" }}>
-          <Link href="/" className="brand" style={{ fontSize: 17, textDecoration: "none" }}>
-            WeCarry 운송
+          {/* 홈으로 가는 브랜드 링크는 랜딩 헤더와 같은 로고를 씀(PR #77 리뷰 — 화면마다
+              로고/텍스트가 갈려 통일성이 없다는 지적). 로고 SVG는 aria-hidden이라 링크가
+              aria-label로 이름을 제공해야 함 */}
+          <Link
+            href="/"
+            aria-label="위캐리 운송 홈"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              minHeight: 44,
+              textDecoration: "none",
+              color: "inherit",
+            }}
+          >
+            <BrandLogo className="landing-brand-logo" />
           </Link>
         </div>
       </header>
@@ -109,7 +123,7 @@ export default function ApplyStatusPage() {
                   </div>
                   {r.status === "승인됨" && (
                     <p style={{ fontSize: 13, marginTop: 10 }}>
-                      승인되었습니다! 입력하신 이메일로 화주포털 접속 정보를 안내드렸습니다. 못 받으셨다면
+                      승인되었습니다! 입력하신 이메일로 운송관리 화면 접속 정보를 안내드렸습니다. 못 받으셨다면
                       고객센터로 문의해주세요.
                     </p>
                   )}

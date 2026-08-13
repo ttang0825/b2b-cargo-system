@@ -3,7 +3,13 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 // 로그인 페이지 자체는 항상 통과시켜야 무한 리다이렉트가 발생하지 않습니다.
-const PUBLIC_PATHS = ["/admin/login"];
+//
+// `/admin/icon.svg`는 Next.js App Router 파일 컨벤션(app/admin/icon.svg)이 만들어내는
+// **파비콘 파일**이라 로그인과 무관하게 항상 내려가야 합니다. matcher가 `/admin/:path*`라
+// 이 파일까지 걸려서, 빼지 않으면 브라우저가 파비콘을 요청할 때 로그인 페이지 HTML이
+// 대신 내려와 관리자 탭 아이콘이 아예 표시되지 않습니다(28차 PR #77 리뷰에서 실제로 겪음).
+// 인증 정보가 담긴 파일이 아니라 단순 이미지이므로 공개해도 문제 없습니다.
+const PUBLIC_PATHS = ["/admin/login", "/admin/icon.svg"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

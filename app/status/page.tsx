@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import BrandLogo from "@/components/BrandLogo";
 import { formatPhoneNumber } from "@/lib/constants";
 
 const QUOTE_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
@@ -59,8 +60,21 @@ export default function StatusPage() {
     <div className="portal-theme public-form">
       <header style={{ borderBottom: "1px solid var(--border)", background: "var(--surface)" }}>
         <div className="container" style={{ padding: "18px 24px" }}>
-          <Link href="/" className="brand" style={{ fontSize: 17, textDecoration: "none" }}>
-            WeCarry 운송
+          {/* 홈으로 가는 브랜드 링크는 랜딩 헤더와 같은 로고를 씀(PR #77 리뷰 — 화면마다
+              로고/텍스트가 갈려 통일성이 없다는 지적). 로고 SVG는 aria-hidden이라 링크가
+              aria-label로 이름을 제공해야 함 */}
+          <Link
+            href="/"
+            aria-label="위캐리 운송 홈"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              minHeight: 44,
+              textDecoration: "none",
+              color: "inherit",
+            }}
+          >
+            <BrandLogo className="landing-brand-logo" />
           </Link>
         </div>
       </header>
@@ -70,7 +84,7 @@ export default function StatusPage() {
           <div>
             <h1 className="page-title">문의·신청 현황 조회</h1>
             <p className="page-desc">
-              견적문의 또는 화주 등록신청 시 입력하신 연락처로 진행 상황을 한 번에 확인하실 수
+              견적문의 또는 고객 등록신청 시 입력하신 연락처로 진행 상황을 한 번에 확인하실 수
               있습니다.
             </p>
           </div>
@@ -102,7 +116,7 @@ export default function StatusPage() {
 
             {applications.length > 0 && (
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>화주 등록 신청</div>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>고객 등록 신청</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {applications.map((r) => (
                     <div key={r.id} className="card" style={{ padding: 18 }}>
@@ -184,7 +198,7 @@ export default function StatusPage() {
           </Link>
           {"  ·  "}
           <Link href="/apply" style={{ color: "var(--accent)", textDecoration: "underline" }}>
-            화주 등록 신청
+            고객 등록 신청
           </Link>
         </p>
       </main>
