@@ -2856,9 +2856,15 @@ Supabase에 저장하면 `timestamptz` 컬럼이 이를 UTC로 오인식해 실�
      `COMPANY_SUPPORT_PHONE`(1588-0000, 랜딩·`/about`·포털·SMS 문구 8종)과
      `COMPANY_INFO.phone`(02-0000-0000, 견적서 PDF의 발행업체 TEL)은 고객센터 번호와
      전자상거래법 표시사항의 사업자 전화번호로 역할이 달라 실제로 다른 번호를 쓰는 경우가
-     많음. 합치면 나중에 분리할 때 견적서까지 건드려야 함. 대신 **빌드 경고를
-     `COMPANY_INFO.phone`까지 확장**해서 두 자리표시자 중 하나만 바꾸고 공개되는 사고를
-     막을 것(사용자 확인 대기).
+     많음. 합치면 나중에 분리할 때 견적서까지 건드려야 함. **사용자 확인 후 통합하지 않고
+     빌드 경고만 `COMPANY_INFO.phone`까지 확장하는 것으로 확정·구현 완료** — 두 자리표시자
+     중 하나만 바꾸고 나머지를 잊는 사고를 막기 위함. `lib/companyInfo.ts`에
+     `COMPANY_INFO_PHONE_IS_PLACEHOLDER` 플래그를 두고 `next.config.mjs`가 읽는 방식
+     (26차 `COMPANY_SUPPORT_PHONE`과 동일 패턴). **next.config.mjs의 경고 로직을
+     `PLACEHOLDER_CHECKS` 배열로 일반화해뒀으므로, 앞으로 자리표시자가 더 생기면 소스
+     파일에 플래그를 두고 그 배열에 한 줄만 추가하면 됨.** 지금은 빌드 시 경고가 2건
+     뜨고, 한쪽을 실제 값으로 바꾸면 나머지 1건만 남는 것을 실행으로 확인함 —
+     **경고가 계속 뜨면 아직 안 바꾼 번호가 남아 있다는 뜻.**
 - **6차(그 다음): 동의 절차 구현. 착수 전 3가지를 사용자와 먼저 확정할 것** — (a) 동의문구
   버전 저장 방식(단일 `agreed_policy_ver` vs 항목별 분리 — 5차에서 만들 `lib/legalInfo.ts`의
   `PRIVACY_POLICY_VERSION`/`TERMS_VERSION`을 여기서 재사용할 예정), (b) **마케팅 동의 귀속 단위
