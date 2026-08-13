@@ -7,15 +7,31 @@ import BrandLogo from "@/components/BrandLogo";
 // 랜딩(/) 전용 헤더. 원칙 11번대로 랜딩은 TopNav가 숨겨지고 자체 헤더를 쓰므로,
 // TopNav.tsx의 `.nav-mobile-toggle`/`.nav-desktop-group` 클래스를 그대로 가져다 쓰지
 // 않고 랜딩 전용 클래스(`.landing-*`)로 새로 구현함 — 시각적 패턴과 "바깥 클릭 시
-// 닫힘"(원칙 20번) 동작만 참고. 링크 4개가 flexWrap 없이 한 줄에 붙어있어 360px에서
+// 닫힘"(원칙 20번) 동작만 참고. 링크가 flexWrap 없이 한 줄에 붙어있어 360px에서
 // 81px 가로 오버플로우가 실제로 발생하던 문제를 해소하는 것이 이 컴포넌트의 목적.
-// "견적 문의"(주 CTA)는 모바일에서도 접지 않고 항상 노출하고, 나머지 3개만 햄버거
+// "견적 문의"(주 CTA)는 모바일에서도 접지 않고 항상 노출하고, 나머지는 햄버거
 // 드롭다운으로 접는다.
-const MOBILE_LINKS = [
+//
+// **모바일 헤더에 눈에 보이는 항목을 더 넣지 말 것** — 로고 종횡비가 6.5:1이라
+// 360px에서 CTA 우측 끝까지 쓰고 남는 폭이 24px뿐임(27차 실측). 신규 메뉴는 전부
+// 드롭다운으로 들어가야 함.
+//
+// 라벨은 고객 접점 용어를 따름(용어정리 가이드 2-1·2-2): "화주 로그인"→"로그인",
+// "화주 등록 신청"→"고객 등록". 관리자 화면(app/admin/**)의 "화주"는 그대로 유지.
+type NavLink = { href: string; label: string };
+
+// 드롭다운(모바일) 항목 — 지시서 2-3의 순서를 그대로 따름
+const MOBILE_LINKS: NavLink[] = [
+  { href: "/about", label: "회사소개" },
+  { href: "/vehicles", label: "차량·요금 안내" },
   { href: "/status", label: "문의·신청 현황" },
-  { href: "/customer/login", label: "화주 로그인" },
-  { href: "/apply", label: "화주 등록 신청" },
+  { href: "/apply", label: "고객 등록" },
+  { href: "/customer/login", label: "로그인" },
 ];
+
+// 데스크탑에 그대로 노출하는 링크. "고객 등록"은 헤더가 복잡해지는 것을 막기 위해
+// 빼고 랜딩 본문 Hero의 "고객 등록 신청" CTA로 유도함(지시서 2-2).
+const DESKTOP_LINKS: NavLink[] = MOBILE_LINKS.filter((l) => l.href !== "/apply");
 
 export default function LandingHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -72,9 +88,9 @@ export default function LandingHeader() {
         </Link>
 
         <div style={{ display: "flex", gap: 10, alignItems: "center", minWidth: 0 }}>
-          {/* 데스크탑: 링크 3개를 그대로 노출 (760px 이하에서는 CSS로 숨김) */}
+          {/* 데스크탑: 링크를 그대로 노출 (760px 이하에서는 CSS로 숨김) */}
           <div className="landing-nav-desktop" style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            {MOBILE_LINKS.map((link) => (
+            {DESKTOP_LINKS.map((link) => (
               <Link key={link.href} href={link.href} className="guide-link">
                 {link.label}
               </Link>

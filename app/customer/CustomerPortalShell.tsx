@@ -293,8 +293,8 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
       <div className="top-nav">
         <div className="top-nav-inner" style={{ flexWrap: "wrap", gap: 16 }}>
           <Link href="/customer" className="brand-link">
-            <div className="brand">{companyName || "화주"} 포털</div>
-            <div className="brand-sub">WeCarry 운송 통합 운영 시스템 · 홈으로</div>
+            <div className="brand">{companyName ? `${companyName} 운송관리` : "위캐리 운송관리"}</div>
+            <div className="brand-sub">위캐리 운송 · 홈으로</div>
           </Link>
           <div
             ref={navGroupRef}
@@ -452,7 +452,7 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
             </div>
           </div>
           <div style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 500 }}>
-            WeCarry 운송 통합 운영 시스템 · 화주 포털
+            위캐리 운송관리
           </div>
         </div>
       </footer>

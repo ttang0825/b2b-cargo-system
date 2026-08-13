@@ -172,7 +172,7 @@ export default function PortalStatsPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">월별 운송 통계</h1>
-          <p className="page-desc">화주 입금이 확인된 정산 건만 실적으로 집계합니다.</p>
+          <p className="page-desc">입금이 확인된 정산 건만 실적으로 집계합니다.</p>
         </div>
       </div>
 

@@ -109,7 +109,7 @@ export default function ApplyStatusPage() {
                   </div>
                   {r.status === "승인됨" && (
                     <p style={{ fontSize: 13, marginTop: 10 }}>
-                      승인되었습니다! 입력하신 이메일로 화주포털 접속 정보를 안내드렸습니다. 못 받으셨다면
+                      승인되었습니다! 입력하신 이메일로 운송관리 화면 접속 정보를 안내드렸습니다. 못 받으셨다면
                       고객센터로 문의해주세요.
                     </p>
                   )}

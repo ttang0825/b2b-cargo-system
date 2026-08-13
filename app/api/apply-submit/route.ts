@@ -69,7 +69,7 @@ export async function POST(req: Request) {
   // 이미 승인되어 화주로 등록된 업체는 재신청 대신 화주포털 로그인으로 안내
   if (existing.some((r) => r.company_id)) {
     return NextResponse.json(
-      { error: "이미 등록된 화주입니다. 화주포털로 로그인해주세요.", reason: "approved" },
+      { error: "이미 등록된 고객입니다. 로그인해주세요.", reason: "approved" },
       { status: 409 }
     );
   }

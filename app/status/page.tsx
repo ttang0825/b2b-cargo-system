@@ -70,7 +70,7 @@ export default function StatusPage() {
           <div>
             <h1 className="page-title">문의·신청 현황 조회</h1>
             <p className="page-desc">
-              견적문의 또는 화주 등록신청 시 입력하신 연락처로 진행 상황을 한 번에 확인하실 수
+              견적문의 또는 고객 등록신청 시 입력하신 연락처로 진행 상황을 한 번에 확인하실 수
               있습니다.
             </p>
           </div>
@@ -102,7 +102,7 @@ export default function StatusPage() {
 
             {applications.length > 0 && (
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>화주 등록 신청</div>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>고객 등록 신청</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {applications.map((r) => (
                     <div key={r.id} className="card" style={{ padding: 18 }}>
@@ -184,7 +184,7 @@ export default function StatusPage() {
           </Link>
           {"  ·  "}
           <Link href="/apply" style={{ color: "var(--accent)", textDecoration: "underline" }}>
-            화주 등록 신청
+            고객 등록 신청
           </Link>
         </p>
       </main>

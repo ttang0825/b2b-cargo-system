@@ -94,7 +94,7 @@ export default function ApplyPage() {
             <div style={{ fontSize: 40, marginBottom: 16 }}>✅</div>
             <h1 style={{ fontSize: 19, fontWeight: 800, marginBottom: 10 }}>신청이 접수되었습니다</h1>
             <p style={{ fontSize: 13.5, color: "var(--text-muted)", marginBottom: 20, lineHeight: 1.6 }}>
-              담당자 검토 후 승인되면, 입력하신 이메일로 화주포털 접속 정보를 안내드립니다.
+              담당자 검토 후 승인되면, 입력하신 이메일로 운송관리 화면 접속 정보를 안내드립니다.
               필요 시 확인 전화를 드릴 수 있습니다.
             </p>
             <div
@@ -154,9 +154,9 @@ export default function ApplyPage() {
       <main className="container" style={{ maxWidth: 640, paddingTop: 40 }}>
         <div className="page-header">
           <div>
-            <h1 className="page-title">화주 등록 신청</h1>
+            <h1 className="page-title">고객 등록 신청</h1>
             <p className="page-desc">
-              정식 화주로 등록하시면 화주포털에서 견적·배차·정산 현황을 직접 확인하실 수
+              등록하시면 운송관리 화면에서 견적·배차·정산 현황을 직접 확인하실 수
               있습니다. 검토 후 계정을 발급해드립니다.
             </p>
           </div>
@@ -332,7 +332,7 @@ export default function ApplyPage() {
                 style={{ margin: "2px 0 0", width: "auto", flexShrink: 0 }}
               />
               <span>
-                [필수] 입력하신 정보는 화주 등록 심사 목적으로만 이용되며, 승인 여부와 무관하게
+                [필수] 입력하신 정보는 고객 등록 심사 목적으로만 이용되며, 승인 여부와 무관하게
                 안전하게 관리됩니다. 개인정보 수집·이용에 동의합니다.
               </span>
             </label>
@@ -344,7 +344,7 @@ export default function ApplyPage() {
                   <>
                     {" "}
                     <Link href="/customer/login" style={{ color: "inherit", textDecoration: "underline", fontWeight: 700 }}>
-                      화주포털 로그인하기
+                      로그인하기
                     </Link>
                   </>
                 )}

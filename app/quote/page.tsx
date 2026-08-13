@@ -135,11 +135,11 @@ export default function PublicQuotePage() {
               계속 거래하실 계획이신가요?
             </div>
             <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginBottom: 14, lineHeight: 1.6 }}>
-              정식 화주로 등록하시면 화주포털에서 견적·배차·정산 현황을 직접 확인하실 수
+              등록하시면 운송관리 화면에서 견적·배차·정산 현황을 직접 확인하실 수
               있습니다.
             </p>
             <Link href="/apply" className="btn-ghost" style={{ padding: "10px 18px", borderRadius: 10, display: "inline-flex" }}>
-              화주 등록 신청하기 →
+              고객 등록 신청하기 →
             </Link>
           </div>
         </main>
@@ -333,7 +333,7 @@ export default function PublicQuotePage() {
         <p style={{ textAlign: "center", fontSize: 12.5, color: "var(--text-muted)", margin: "20px 0 60px" }}>
           이미 거래 중이신가요?{" "}
           <Link href="/customer/login" style={{ color: "var(--accent)", textDecoration: "underline" }}>
-            화주포털 로그인
+            로그인
           </Link>
         </p>
       </main>

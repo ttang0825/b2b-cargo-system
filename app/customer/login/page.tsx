@@ -77,7 +77,7 @@ export default function CustomerLoginPage() {
             letterSpacing: "-0.02em",
           }}
         >
-          화주 포털
+          위캐리 운송관리
         </h1>
         <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 0, marginBottom: 24 }}>
           견적, 배차, 정산 현황을 확인하세요.

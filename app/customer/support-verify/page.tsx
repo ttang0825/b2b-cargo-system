@@ -50,7 +50,7 @@ function SupportVerifyInner() {
           <>
             <p style={{ fontSize: 13.5, color: "var(--danger)" }}>{error}</p>
             <Link href="/customer/login" style={{ fontSize: 13 }}>
-              화주포털 로그인으로 이동
+              로그인으로 이동
             </Link>
           </>
         ) : (
