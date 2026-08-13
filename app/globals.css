@@ -9,6 +9,10 @@
   --accent-soft: #e8f3ff;
   --danger: #f04452;
   --danger-soft: #ffeeee;
+  /* 브랜드 옐로(파비콘 배경색). **아직 어디에도 적용하지 않음** — 이 색을 사이트 전반
+     액센트로 쓸지는 미결정이라 변수만 등록해둠(나중에 쓰기 쉽게). 버튼·링크·헤더 등
+     기존 UI 색상을 이 값으로 바꾸려면 먼저 확인받을 것 */
+  --brand-yellow: #ffd833;
   --radius: 14px;
   --radius-lg: 20px;
   --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
@@ -513,6 +517,16 @@ tbody tr:hover {
   font-size: 16px;
 }
 
+/* 랜딩 헤더 워드마크 — 종횡비 6.50:1이라 높이만 지정하고 폭은 자동으로 둔다
+   (width를 고정하면 로고가 찌그러짐). 데스크탑 28px -> 폭 182px.
+   ⚠️ 이 종횡비 때문에 로고가 가로로 길어서 모바일 헤더 여유가 좁음 —
+   헤더에 요소를 추가할 때는 360px 가로 스크롤을 반드시 재확인할 것 */
+.landing-brand-logo {
+  height: 28px;
+  width: auto;
+  display: block;
+}
+
 /* 랜딩(/) 전용 헤더 — TopNav의 .nav-* 클래스와 완전히 분리(원칙 11번).
    데스크탑에서는 링크 3개를 그대로 보여주고 햄버거는 숨김 */
 .landing-nav-mobile {
@@ -589,6 +603,13 @@ tbody tr:hover {
     font-size: 18px;
     cursor: pointer;
     flex-shrink: 0;
+  }
+
+  /* 로고가 가로로 길어(6.5:1) 모바일에서는 24px로 낮춤 — 폭 156px.
+     20px 이하로 내려가면 로고 안의 한글 "위캐리 운송" 판독이 어려워지므로
+     더 줄여야 할 상황이면 임의로 줄이지 말고 보고할 것 */
+  .landing-brand-logo {
+    height: 24px;
   }
 
   /* 랜딩 헤더: 링크 3개는 햄버거 드롭다운으로 접고, "견적 문의" CTA만 그대로 노출.
