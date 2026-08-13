@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import BrandLogo from "@/components/BrandLogo";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
@@ -278,8 +279,11 @@ function TopNavInner() {
   return (
     <div className="top-nav">
       <div className="top-nav-inner" style={{ flexWrap: "wrap", gap: 16 }}>
-        <Link href="/admin" className="brand-link">
-          <div className="brand">WeCarry 운송 통합 운영 시스템</div>
+        {/* 브랜드 표기를 로고로 교체(PR #77 리뷰). 로고 SVG는 aria-hidden이라 링크가
+            aria-label로 이름을 제공함. "내부 관리자 (admin)"는 관리자 화면과 고객 화면을
+            구분해주는 정보라 그대로 둠 */}
+        <Link href="/admin" className="brand-link" aria-label="위캐리 운송 내부관리 홈">
+          <BrandLogo className="topnav-brand-logo" />
           <div className="brand-sub">내부 관리자 (admin)</div>
         </Link>
 

@@ -293,8 +293,12 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
       <div className="top-nav">
         <div className="top-nav-inner" style={{ flexWrap: "wrap", gap: 16 }}>
           <Link href="/customer" className="brand-link">
-            <div className="brand">{companyName ? `${companyName} 운송관리` : "위캐리 운송관리"}</div>
-            <div className="brand-sub">위캐리 운송 · 홈으로</div>
+            {/* 아래에 있던 작은 회색 "위캐리 운송 · 홈으로" 보조문구는 제거함(PR #77 리뷰 —
+                애매하고 헷갈린다는 지적). 대신 이 브랜드 표기 자체를 키워서 홈 버튼임이
+                분명하게 보이도록 함(.portal-brand-home) */}
+            <div className="brand portal-brand-home">
+              {companyName ? `${companyName} 운송관리` : "위캐리 운송관리"}
+            </div>
           </Link>
           <div
             ref={navGroupRef}

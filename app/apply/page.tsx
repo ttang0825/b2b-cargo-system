@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import BrandLogo from "@/components/BrandLogo";
 import { formatPhoneNumber, formatBizRegNo, REGIONS, VEHICLE_TYPES } from "@/lib/constants";
 import MultiSelectTags from "@/components/MultiSelectTags";
 import AddressSearch from "@/components/AddressSearch";
@@ -131,8 +132,21 @@ export default function ApplyPage() {
           className="container"
           style={{ padding: "18px 24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}
         >
-          <Link href="/" className="brand" style={{ fontSize: 17, textDecoration: "none" }}>
-            WeCarry 운송
+          {/* 홈으로 가는 브랜드 링크는 랜딩 헤더와 같은 로고를 씀(PR #77 리뷰 — 화면마다
+              로고/텍스트가 갈려 통일성이 없다는 지적). 로고 SVG는 aria-hidden이라 링크가
+              aria-label로 이름을 제공해야 함 */}
+          <Link
+            href="/"
+            aria-label="위캐리 운송 홈"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              minHeight: 44,
+              textDecoration: "none",
+              color: "inherit",
+            }}
+          >
+            <BrandLogo className="landing-brand-logo" />
           </Link>
           <Link
             href="/status"
