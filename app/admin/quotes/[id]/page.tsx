@@ -9,6 +9,7 @@ import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import { calcInclusiveAmount } from "@/lib/vat";
+import { downloadQuoteExcel } from "@/lib/quoteExcel";
 import { optimisticUpdate } from "@/lib/optimisticUpdate";
 import {
   getLatestMixedLoadingDiscountSettings,
@@ -140,6 +141,7 @@ export default function QuoteDetailPage() {
   const [hasOrder, setHasOrder] = useState(false);
   const [sendingQuoteSms, setSendingQuoteSms] = useState(false);
   const [quoteSmsSent, setQuoteSmsSent] = useState(false);
+  const [excelBusy, setExcelBusy] = useState(false);
   const [quoteSmsError, setQuoteSmsError] = useState<string | null>(null);
   const [smsPreview, setSmsPreview] = useState<SmsPreview | null>(null);
 
@@ -313,6 +315,19 @@ export default function QuoteDetailPage() {
             .eq("id", quote.company_id);
         }
       }
+    }
+  }
+
+  async function handleQuoteExcel() {
+    if (!quote) return;
+    setExcelBusy(true);
+    try {
+      await downloadQuoteExcel(supabase, quote.id);
+    } catch (e: any) {
+      // 액션 실패는 페이지 전체를 덮지 않고 알림으로만(원칙 33번)
+      alert(e?.message || "견적서 엑셀을 만들지 못했습니다.");
+    } finally {
+      setExcelBusy(false);
     }
   }
 
@@ -1233,6 +1248,11 @@ export default function QuoteDetailPage() {
             onClick={() => window.open(`/admin/quotes/${quote.id}/print`, "_blank")}
           >
             견적서 출력 (PDF)
+          </button>
+          {/* 화주가 "엑셀로 보내달라"고 요청하는 경우가 있어 관리자 쪽에도 같이 둠.
+              운송관리 화면과 동일한 함수를 쓰므로 두 곳에서 받은 파일 내용이 같음 */}
+          <button className="btn btn-ghost" disabled={excelBusy} onClick={handleQuoteExcel}>
+            {excelBusy ? "생성 중..." : "견적서 출력 (Excel)"}
           </button>
           <button className="btn btn-ghost" onClick={handleSendQuoteSms} disabled={sendingQuoteSms}>
             {sendingQuoteSms ? "발송 중..." : quoteSmsSent ? "문자 발송 완료 ✓" : "문자로 요약 발송"}

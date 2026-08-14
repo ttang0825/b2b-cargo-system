@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import BrandLogo from "@/components/BrandLogo";
+import { useScrolled } from "@/lib/useScrolled";
 
 // 랜딩(/) 전용 헤더. 원칙 11번대로 랜딩은 TopNav가 숨겨지고 자체 헤더를 쓰므로,
 // TopNav.tsx의 `.nav-mobile-toggle`/`.nav-desktop-group` 클래스를 그대로 가져다 쓰지
@@ -36,6 +37,7 @@ const DESKTOP_LINKS: NavLink[] = MOBILE_LINKS.filter((l) => l.href !== "/apply")
 export default function LandingHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const scrolled = useScrolled();
 
   // 메뉴 바깥의 빈 곳을 클릭하면 닫힘(TopNav·CustomerPortalShell과 동일한 동작, 원칙 20번)
   useEffect(() => {
@@ -49,13 +51,20 @@ export default function LandingHeader() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [menuOpen]);
 
+  // 헤더가 스티키가 되면서 드롭다운도 화면에 계속 따라다니게 됐다 — 열어둔 채 스크롤하면
+  // 본문을 가리므로 스크롤이 시작되면 닫는다(지시서 1-3)
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handleScroll() {
+      setMenuOpen(false);
+    }
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [menuOpen]);
+
   return (
-    <header
-      style={{
-        borderBottom: "1px solid var(--border)",
-        background: "var(--surface)",
-      }}
-    >
+    // 스티키 동작·배경·그림자는 `.public-header`가 담당(PublicPageHeader와 공유)
+    <header className={scrolled ? "public-header public-header-scrolled" : "public-header"}>
       <div
         className="container"
         style={{

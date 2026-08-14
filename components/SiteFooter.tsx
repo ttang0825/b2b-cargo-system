@@ -1,5 +1,6 @@
 import Link from "next/link";
 import ObfuscatedEmail from "@/components/ObfuscatedEmail";
+import LegalLinks from "@/components/LegalLinks";
 import { COMPANY_SUPPORT_PHONE, COMPANY_SUPPORT_HOURS } from "@/lib/contactInfo";
 import {
   COMPANY_ADDRESS,
@@ -28,15 +29,15 @@ import {
 // **브랜드 옐로(#8a6d00 계열)는 고객센터 번호에만 사용** — 사이트 전반 적용은 아직
 // 미결정이라 다른 요소로 번지지 않게 할 것.
 
-// 푸터 링크. `/about`·`/vehicles`는 4차에서 신설된 페이지라 4-1 시안(그 전에 작성됨)에는
-// 없었으나 지시서 지침대로 함께 노출한다.
-// `emphasis: false`인 항목은 시각적 위계를 한 단계 낮춘다(시안 스타일 지침).
-const FOOTER_LINKS: { href: string; label: string; emphasis: boolean }[] = [
-  { href: "/about", label: "회사소개", emphasis: true },
-  { href: "/vehicles", label: "차량·요금 안내", emphasis: true },
-  { href: "/terms", label: "이용약관", emphasis: true },
-  { href: "/privacy", label: "개인정보처리방침", emphasis: true },
-  { href: "/email-policy", label: "이메일무단수집거부", emphasis: false },
+// 일반 페이지 링크. `/about`·`/vehicles`는 4차에서 신설된 페이지라 4-1 시안(그 전에
+// 작성됨)에는 없었으나 지시서 지침대로 함께 노출한다.
+//
+// ⚠️ 법적 문서 3종(이용약관·개인정보처리방침·이메일무단수집거부)은 여기가 아니라
+// `components/LegalLinks.tsx`가 담당한다 — 그쪽은 클릭 시 모달로 열어야 해서
+// 클라이언트 컴포넌트여야 하기 때문(이 푸터는 서버 컴포넌트로 두는 편이 가볍다).
+const FOOTER_LINKS: { href: string; label: string }[] = [
+  { href: "/about", label: "회사소개" },
+  { href: "/vehicles", label: "차량·요금 안내" },
 ];
 
 // 사업자 표시사항. [라벨, 값] 쌍으로 두고 한 줄씩 렌더링한다.
@@ -88,14 +89,12 @@ export default function SiteFooter() {
         {/* 링크 */}
         <nav className="site-footer-links">
           {FOOTER_LINKS.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={link.emphasis ? "site-footer-link" : "site-footer-link site-footer-link-sub"}
-            >
+            <Link key={link.href} href={link.href} className="site-footer-link">
               {link.label}
             </Link>
           ))}
+          {/* 법적 문서 3종 — 클릭하면 모달로 열리고, URL은 그대로 살아 있음 */}
+          <LegalLinks />
         </nav>
 
         <div className="site-footer-copy">© 2026 {COMPANY_LEGAL_NAME}. All rights reserved.</div>
