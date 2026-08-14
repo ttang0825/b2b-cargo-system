@@ -6,6 +6,7 @@ import MixableBadge from "@/components/MixableBadge";
 import { useListSearchSort } from "@/lib/useListSearchSort";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import { calcInclusiveAmount } from "@/lib/vat";
+import { downloadQuoteExcel } from "@/lib/quoteExcel";
 
 function won(n: number | null) {
   if (!n) return "-";
@@ -54,6 +55,21 @@ export default function CustomerQuotesPage() {
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
   const [period, setPeriod] = useState<DatePreset>("all");
+  // 엑셀 생성 중인 견적 id(버튼 중복 클릭 방지)
+  const [excelBusyId, setExcelBusyId] = useState<string | null>(null);
+  const [excelError, setExcelError] = useState<string | null>(null);
+
+  async function handleExcel(quoteId: string) {
+    setExcelBusyId(quoteId);
+    setExcelError(null);
+    try {
+      await downloadQuoteExcel(supabase, quoteId);
+    } catch (e: any) {
+      setExcelError(e?.message || "견적서 엑셀을 만들지 못했습니다.");
+    } finally {
+      setExcelBusyId(null);
+    }
+  }
 
   const periodFiltered = useMemo(() => {
     const { from } = getDateRange(period);
@@ -157,6 +173,13 @@ export default function CustomerQuotesPage() {
             <option value="final_amount:desc">금액 높은순</option>
             <option value="final_amount:asc">금액 낮은순</option>
           </select>
+        </div>
+      )}
+
+      {/* 엑셀 생성 실패는 화면 전체를 덮지 않고 인라인 배너로만 알린다(원칙 33번) */}
+      {excelError && (
+        <div className="error-box" style={{ marginBottom: 14 }}>
+          {excelError}
         </div>
       )}
 
@@ -324,16 +347,32 @@ export default function CustomerQuotesPage() {
                           <> (부가세 포함 {wonVatIncluded(q.final_amount)})</>
                         )}
                       </p>
-                      <button
-                        className="btn"
-                        style={{ padding: "8px 16px", borderRadius: 8, fontSize: 12.5 }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          window.open(`/customer/quotes/${q.id}/print`, "_blank");
-                        }}
-                      >
-                        견적서 출력 (PDF)
-                      </button>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <button
+                          className="btn"
+                          style={{ padding: "8px 16px", borderRadius: 8, fontSize: 12.5 }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(`/customer/quotes/${q.id}/print`, "_blank");
+                          }}
+                        >
+                          견적서 출력 (PDF)
+                        </button>
+                        {/* 엑셀은 새 탭 없이 그 자리에서 파일이 내려받아진다.
+                            조회는 로그인 세션(supabaseCustomer)으로 하므로 RLS가 본인 회사
+                            견적만 내려줌 — 다른 회사 견적 id를 넣어도 조회 자체가 실패함 */}
+                        <button
+                          className="btn btn-ghost"
+                          style={{ padding: "8px 16px", borderRadius: 8, fontSize: 12.5 }}
+                          disabled={excelBusyId === q.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleExcel(q.id);
+                          }}
+                        >
+                          {excelBusyId === q.id ? "생성 중..." : "견적서 출력 (Excel)"}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}

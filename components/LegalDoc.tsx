@@ -22,7 +22,8 @@ function renderInline(text: string) {
 export type LegalListItem = string | { text: string; sub: string[] };
 
 export type LegalBlock =
-  | { type: "p"; text: string }
+  /** indent를 주면 한 단 들여쓴다(법령 인용의 "각 호"처럼 상위 항에 딸린 줄) */
+  | { type: "p"; text: string; indent?: boolean }
   /** 항 — 번호가 붙는 목록 */
   | { type: "ol"; items: LegalListItem[] }
   /** 호 — 항이 하나뿐이라 번호 없이 나열하는 경우 */
@@ -52,7 +53,7 @@ function Blocks({ blocks }: { blocks: LegalBlock[] }) {
         switch (block.type) {
           case "p":
             return (
-              <p key={i} className="legal-p">
+              <p key={i} className={block.indent ? "legal-p legal-p-indent" : "legal-p"}>
                 {renderInline(block.text)}
               </p>
             );
@@ -127,6 +128,45 @@ function Blocks({ blocks }: { blocks: LegalBlock[] }) {
   );
 }
 
+/**
+ * 조문 본문(도입부 + 장/조 카드)만 그리는 부분.
+ *
+ * 페이지(`LegalDoc`)와 모달(`components/LegalModal.tsx`)이 **똑같은 조문을 서로 다른
+ * 껍데기 안에** 보여줘야 해서 분리해 둔 것이다. 한쪽에만 손대면 두 화면의 내용이
+ * 어긋나므로 **본문 표현을 바꿀 때는 반드시 여기만 고칠 것.**
+ *
+ * (분리 전에는 `LegalDoc` 안에 인라인으로 있었고, 출력 결과는 그때와 동일하다.)
+ */
+export function LegalDocBody({
+  intro,
+  sections,
+}: {
+  intro?: LegalBlock[];
+  sections: LegalSection[];
+}) {
+  return (
+    <>
+      {intro && (
+        <section className="card legal-card">
+          <Blocks blocks={intro} />
+        </section>
+      )}
+
+      {sections.map((section, i) => (
+        <section key={i} className="card legal-card">
+          {section.chapter && <h2 className="legal-chapter">{section.chapter}</h2>}
+          {section.articles.map((article, j) => (
+            <article key={j} className="legal-article">
+              <h3 className="legal-heading">{article.heading}</h3>
+              <Blocks blocks={article.blocks} />
+            </article>
+          ))}
+        </section>
+      ))}
+    </>
+  );
+}
+
 export default function LegalDoc({
   title,
   intro,
@@ -152,23 +192,7 @@ export default function LegalDoc({
           </div>
         </div>
 
-        {intro && (
-          <section className="card legal-card">
-            <Blocks blocks={intro} />
-          </section>
-        )}
-
-        {sections.map((section, i) => (
-          <section key={i} className="card legal-card">
-            {section.chapter && <h2 className="legal-chapter">{section.chapter}</h2>}
-            {section.articles.map((article, j) => (
-              <article key={j} className="legal-article">
-                <h3 className="legal-heading">{article.heading}</h3>
-                <Blocks blocks={article.blocks} />
-              </article>
-            ))}
-          </section>
-        ))}
+        <LegalDocBody intro={intro} sections={sections} />
       </main>
 
       <SiteFooter />

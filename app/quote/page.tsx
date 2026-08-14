@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import BrandLogo from "@/components/BrandLogo";
+import PublicPageHeader from "@/components/PublicPageHeader";
 import { supabase } from "@/lib/supabaseClient";
 import { VEHICLE_TYPES, formatPhoneNumber } from "@/lib/constants";
 import { LOADING_METHODS } from "@/lib/loadingMethods";
@@ -150,43 +150,7 @@ export default function PublicQuotePage() {
 
   return (
     <div className="portal-theme public-form">
-      <header style={{ borderBottom: "1px solid var(--border)", background: "var(--surface)" }}>
-        <div
-          className="container"
-          style={{ padding: "18px 24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}
-        >
-          {/* 홈으로 가는 브랜드 링크는 랜딩 헤더와 같은 로고를 씀(PR #77 리뷰 — 화면마다
-              로고/텍스트가 갈려 통일성이 없다는 지적). 로고 SVG는 aria-hidden이라 링크가
-              aria-label로 이름을 제공해야 함 */}
-          <Link
-            href="/"
-            aria-label="위캐리 운송 홈"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              minHeight: 44,
-              textDecoration: "none",
-              color: "inherit",
-            }}
-          >
-            <BrandLogo className="landing-brand-logo" />
-          </Link>
-          <Link
-            href="/status"
-            style={{
-              fontSize: 13,
-              fontWeight: 700,
-              color: "var(--accent)",
-              padding: "8px 14px",
-              borderRadius: 8,
-              background: "var(--accent-soft)",
-              textDecoration: "none",
-            }}
-          >
-            문의·신청 현황 조회
-          </Link>
-        </div>
-      </header>
+      <PublicPageHeader showStatusLink />
 
       <main className="container" style={{ maxWidth: 640, paddingTop: 40 }}>
         <div className="page-header">
