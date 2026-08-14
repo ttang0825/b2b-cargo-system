@@ -1,6 +1,6 @@
 import Link from "next/link";
 import LandingHeader from "@/components/LandingHeader";
-import { COMPANY_SUPPORT_PHONE, COMPANY_SUPPORT_HOURS } from "@/lib/contactInfo";
+import SiteFooter from "@/components/SiteFooter";
 
 // 랜딩(/)의 title·description은 app/layout.tsx(루트 metadata)에서 관리함 —
 // 여기서 다시 title을 export하면 루트 값을 덮어써서 두 곳을 같이 고쳐야 하므로 두지 않음
@@ -212,31 +212,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <footer style={{ borderTop: "1px solid var(--border)", background: "var(--surface)" }}>
-        <div
-          className="container"
-          style={{
-            padding: "32px 24px",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: 20,
-          }}
-        >
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>📞 고객센터</div>
-            <a href={`tel:${COMPANY_SUPPORT_PHONE}`} className="num" style={{ display: "block", fontSize: 24, fontWeight: 800, color: "#8a6d00", textDecoration: "none", marginBottom: 6 }}>
-              {COMPANY_SUPPORT_PHONE}
-            </a>
-            <div style={{ fontSize: 14, color: "var(--text)", fontWeight: 600 }}>
-              {COMPANY_SUPPORT_HOURS}
-              <span style={{ color: "var(--text-muted)", fontWeight: 500 }}> (주말·공휴일 휴무)</span>
-            </div>
-          </div>
-          <div style={{ fontSize: 13, color: "var(--text-muted)" }}>위캐리 운송</div>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

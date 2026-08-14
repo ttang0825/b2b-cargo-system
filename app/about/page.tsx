@@ -1,5 +1,6 @@
 import Link from "next/link";
 import LandingHeader from "@/components/LandingHeader";
+import SiteFooter from "@/components/SiteFooter";
 import { COMPANY_SUPPORT_PHONE, COMPANY_SUPPORT_HOURS } from "@/lib/contactInfo";
 import {
   COMPANY_ADDRESS,
@@ -137,6 +138,8 @@ export default function AboutPage() {
           </Link>
         </div>
       </main>
+
+      <SiteFooter />
     </div>
   );
 }

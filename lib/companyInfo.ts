@@ -41,6 +41,16 @@ export const COMPANY_CEO = COMPANY_INFO.ceo;
 // ⚠️ "에이스골드타워"가 맞음("골트타워" 아님)
 export const COMPANY_ADDRESS = COMPANY_INFO.address;
 
+// 대표 이메일. 개인정보 보호책임자·열람청구 접수처이자 푸터 표시사항.
+//
+// ⚠️ 위 `COMPANY_INFO.email`(견적서 PDF용, 현재 빈 값)과는 별개다 — 견적서에 이메일을
+// 넣을지는 아직 정해지지 않았고, 그쪽을 채우면 발행되는 견적서 모양이 바뀌므로 건드리지 않음.
+//
+// **푸터에서는 반드시 `components/ObfuscatedEmail.tsx`로 감싸서 표시할 것**(스크래핑 방지).
+// 반대로 **약관·개인정보처리방침 본문 안에서는 평문 그대로** 써야 한다 — 법정 고지사항이라
+// 난독화하면 고지 효력에 문제가 생길 수 있음.
+export const COMPANY_CONTACT_EMAIL = "director@designegg.tv";
+
 // 보유 자격
 export const COMPANY_FREIGHT_BROKER_LICENSE = "제180254호"; // 화물자동차 운송주선사업 허가
 export const COMPANY_ECOMMERCE_LICENSE = "제2021-서울금천-2681호"; // 통신판매업 신고

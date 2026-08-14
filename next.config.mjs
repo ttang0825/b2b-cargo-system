@@ -27,6 +27,18 @@ const PLACEHOLDER_CHECKS = [
     label: "COMPANY_INFO.phone",
     note: "견적서 PDF 상단 발행업체 TEL로 출력됨(고객에게 전달되는 문서)",
   },
+  {
+    file: "lib/legalInfo.ts",
+    flag: "LEGAL_EFFECTIVE_DATE_IS_PLACEHOLDER",
+    label: "LEGAL_EFFECTIVE_DATE",
+    note: "이용약관 부칙·개인정보처리방침 시행일·이메일무단수집거부 게시일 총 5곳에 표시됨",
+  },
+  {
+    file: "lib/legalInfo.ts",
+    flag: "VERCEL_PRIVACY_CONTACT_IS_PLACEHOLDER",
+    label: "VERCEL_PRIVACY_CONTACT",
+    note: '개인정보처리방침 제6조(국외 이전)의 "이전받는 자의 연락처" — 현재 "확인 중"으로 표시됨',
+  },
 ];
 
 function warnAboutPlaceholders() {

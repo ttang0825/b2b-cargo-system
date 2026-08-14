@@ -1,5 +1,6 @@
 import Link from "next/link";
 import LandingHeader from "@/components/LandingHeader";
+import SiteFooter from "@/components/SiteFooter";
 
 // 차량·요금 안내. 실무 문의 1순위인 "어떤 차가 얼마나 싣고 얼마인가"에 답하는 페이지.
 //
@@ -143,6 +144,8 @@ export default function VehiclesPage() {
           </Link>
         </div>
       </main>
+
+      <SiteFooter />
     </div>
   );
 }

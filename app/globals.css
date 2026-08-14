@@ -624,6 +624,199 @@ tbody tr:hover {
   background: var(--bg);
 }
 
+/* ── 공개 화면 공용 푸터(components/SiteFooter.tsx) ──────────────────────────
+   전자상거래법 제10조 표시사항을 담는 곳이라 정보량이 많다. 4-1 시안대로 세로 1단
+   구성이며, 그래서 모바일에서도 별도 전환 없이 그대로 1단으로 내려온다.
+   ⚠️ 고객센터 번호의 #8a6d00 외에는 브랜드 옐로 계열을 쓰지 말 것(적용 범위 미결정) */
+.site-footer {
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.site-footer-inner {
+  padding: 36px 24px 40px;
+}
+.site-footer-contact-label {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.site-footer-phone {
+  display: inline-block;
+  font-size: 24px;
+  font-weight: 800;
+  color: #8a6d00;
+  text-decoration: none;
+  margin-bottom: 6px;
+  /* 터치 영역 확보 */
+  padding: 2px 0;
+}
+.site-footer-hours {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.site-footer-hours-sub {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.site-footer-email {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+  /* 긴 주소가 좁은 화면을 뚫고 나가지 않도록 */
+  overflow-wrap: anywhere;
+}
+.site-footer-divider {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 22px 0 18px;
+}
+.site-footer-brand-note {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.7;
+  margin: 0 0 14px;
+}
+.site-footer-biz {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  line-height: 1.7;
+}
+.site-footer-biz-row {
+  /* 라벨과 값이 한 덩어리로 읽히되, 좁은 화면에서는 값이 다음 줄로 자연스럽게 넘어감 */
+  overflow-wrap: anywhere;
+}
+.site-footer-biz-label {
+  margin-right: 6px;
+}
+.site-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  margin: 20px 0 16px;
+}
+.site-footer-link {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  text-decoration: none;
+  /* 터치 영역 최소 44px 확보 */
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+.site-footer-link:hover {
+  text-decoration: underline;
+}
+/* 이메일무단수집거부는 시각적 위계를 한 단계 낮춤(시안 스타일 지침) */
+.site-footer-link-sub {
+  font-weight: 500;
+  color: var(--text-muted);
+}
+.site-footer-copy {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+/* ── 법적 문서(이용약관·개인정보처리방침·이메일무단수집거부) ──────────────────
+   조문이 길어서 한 줄이 너무 길어지면 읽기 어려우므로 본문 폭을 제한한다 */
+.legal-main {
+  max-width: 820px;
+}
+.legal-card {
+  padding: 28px;
+  margin-bottom: 20px;
+}
+.legal-chapter {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0 0 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.legal-article + .legal-article {
+  margin-top: 26px;
+}
+.legal-heading {
+  font-size: 15px;
+  font-weight: 800;
+  margin: 0 0 10px;
+}
+.legal-h3 {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--text-muted);
+  margin: 18px 0 8px;
+}
+.legal-p {
+  font-size: 14px;
+  line-height: 1.85;
+  margin: 0 0 10px;
+}
+.legal-p:last-child {
+  margin-bottom: 0;
+}
+/* 법령 인용의 각 호처럼 한 단 들여쓰는 줄 */
+.legal-p-indent {
+  padding-left: 18px;
+}
+.legal-ol,
+.legal-ul {
+  font-size: 14px;
+  line-height: 1.85;
+  margin: 0 0 10px;
+  padding-left: 22px;
+}
+.legal-ol > li,
+.legal-ul > li {
+  margin-bottom: 6px;
+}
+/* 항 안에 들어가는 각 호 — 번호가 겹치지 않도록 점 목록으로 구분 */
+.legal-ul-nested {
+  margin: 8px 0 0;
+  font-size: 13.5px;
+}
+.legal-note {
+  font-size: 13.5px;
+  line-height: 1.8;
+  color: var(--text-muted);
+  margin: 14px 0 10px;
+  padding: 14px 16px;
+  border-left: 3px solid var(--border);
+  background: var(--bg);
+  border-radius: 0 8px 8px 0;
+}
+.legal-table-wrap {
+  margin: 12px 0 14px;
+}
+.legal-table {
+  font-size: 13px;
+  /* 좁은 화면에서 표가 눌려 글자가 세로로 쌓이지 않도록 최소 폭을 주고,
+     넘치면 .table-scroll이 표 안에서만 가로 스크롤되게 함(페이지는 안 밀림) */
+  min-width: 520px;
+}
+.legal-table th,
+.legal-table td {
+  line-height: 1.7;
+  vertical-align: top;
+  padding: 10px 12px;
+}
+/* 조문 표는 클릭 대상이 아니라서 행 hover 강조(기본 파란 배경)를 끈다 */
+.legal-table tbody tr:hover {
+  background: transparent;
+}
+/* 표 머리글은 기본이 nowrap이라 열이 4개인 표(제4조 제3자 제공)에서 폭을 크게 잡아먹음 */
+.legal-table thead th {
+  white-space: normal;
+}
+
 /* 캘린더 칸 - 모바일에서 크기 축소 */
 .calendar-cell {
   height: 56px;

@@ -158,7 +158,10 @@ function TopNavInner() {
     pathname?.startsWith("/vehicles") ||
     pathname?.startsWith("/quote") ||
     pathname?.startsWith("/apply") ||
-    pathname?.startsWith("/status");
+    pathname?.startsWith("/status") ||
+    pathname?.startsWith("/terms") ||
+    pathname?.startsWith("/privacy") ||
+    pathname?.startsWith("/email-policy");
 
   useEffect(() => {
     if (isPublicPath) return;
