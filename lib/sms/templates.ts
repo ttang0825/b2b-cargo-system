@@ -3,8 +3,18 @@ import { COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
 import { SMS_BYTE_LIMIT, byteLength } from "@/lib/sms/byteLength";
 
 // SMS 문구 유일 정의처. 전부 "[WeCarry]" 문두 표기(발신번호가 개인 010번호라
-// 스팸으로 오인되지 않도록) + 실제 발신번호 대신 대표 문의번호(COMPANY_SUPPORT_PHONE,
-// 현재 1588-0000 자리표시자 — 나중에 실제 번호로 바뀌면 이 상수만 갱신하면 전체 반영됨).
+// 스팸으로 오인되지 않도록) + 실제 발신번호 대신 대표 문의번호(COMPANY_SUPPORT_PHONE)를
+// 안내 — 번호가 바뀌면 그 상수 하나만 갱신하면 8종 전체에 반영됨.
+//
+// ⚠️ **용어 기준(33차)**: 이 문구들은 고객·차주에게 그대로 발송되므로 고객 접점 용어를
+// 쓴다 — "화주"가 아니라 **"고객"**, "화주포털"이 아니라 **"운송관리"**. 반면 코드
+// 주석은 내부 문서라 정확성 우선으로 "화주" 표현을 그대로 둔다(혼동 방지).
+// **"차주"는 고객 접점에서도 그대로 쓴다** — 바꾸지 말 것.
+//
+// ⚠️ **문구를 고치면 byte가 달라진다.** SMS 단문 상한은 90byte(EUC-KR 기준 한글 2byte)이고
+// 넘으면 LMS로 전환되어 요금이 오른다. 8종 중 **`quoteSummaryMessage`만 90byte 안에
+// 들어가도록 압축된 유일한 템플릿**이고, 나머지 7종은 주소·계정정보·URL을 담아야 해서
+// 설계상 LMS다(줄여서 맞출 수 있는 종류가 아님). 33차 실측값은 CLAUDE.md 참고.
 
 function shortDateTime(value: string | null | undefined): string {
   if (!value) return "일정 미정";
@@ -45,7 +55,7 @@ export function pickupCompletedMessage(params: { origin: string | null }): strin
   return [
     "[WeCarry] 상차완료 안내",
     `${shortAddress(params.origin)}에서 상차가 완료되었습니다.`,
-    "진행상황은 화주포털에서 확인하실 수 있습니다.",
+    "진행상황은 운송관리에서 확인하실 수 있습니다.",
     `문의: ${COMPANY_SUPPORT_PHONE}`,
   ].join("\n");
 }
@@ -68,10 +78,10 @@ export function applicationApprovedWithAccountMessage(params: {
   portalUrl: string;
 }): string {
   return [
-    "[WeCarry] 화주등록 승인 및 계정발급 안내",
-    `${params.companyName || "귀사"}의 화주등록 신청이 승인되었습니다.`,
+    "[WeCarry] 고객등록 승인 및 계정발급 안내",
+    `${params.companyName || "귀사"}의 고객등록 신청이 승인되었습니다.`,
     `아이디: ${params.loginId} / 임시비밀번호: ${params.password}`,
-    `포털: ${params.portalUrl}`,
+    `운송관리: ${params.portalUrl}`,
     "최초 로그인 시 비밀번호를 변경해주세요.",
     `문의: ${COMPANY_SUPPORT_PHONE}`,
   ].join("\n");
@@ -79,8 +89,8 @@ export function applicationApprovedWithAccountMessage(params: {
 
 export function applicationRejectedMessage(params: { companyName: string | null; reason: string | null }): string {
   return [
-    "[WeCarry] 화주등록 신청 결과 안내",
-    `${params.companyName || "귀사"}의 화주등록 신청이 반려되었습니다.`,
+    "[WeCarry] 고객등록 신청 결과 안내",
+    `${params.companyName || "귀사"}의 고객등록 신청이 반려되었습니다.`,
     params.reason ? `사유: ${params.reason}` : null,
     `문의: ${COMPANY_SUPPORT_PHONE}`,
   ]
@@ -88,12 +98,13 @@ export function applicationRejectedMessage(params: { companyName: string | null;
     .join("\n");
 }
 
-// 화주 상세화면에서 단독으로(신청서 승인과 무관하게) 포털 계정을 발급할 때
+// 화주 상세화면에서 단독으로(신청서 승인과 무관하게) 포털 계정을 발급할 때.
+// (함수·변수명의 portal, 주석의 "화주"는 내부 용어라 그대로 두고 발송 문구만 고객 접점 용어를 씀)
 export function portalAccountIssuedMessage(params: { loginId: string; password: string; portalUrl: string }): string {
   return [
-    "[WeCarry] 화주포털 계정발급 안내",
+    "[WeCarry] 운송관리 계정발급 안내",
     `아이디: ${params.loginId} / 임시비밀번호: ${params.password}`,
-    `포털: ${params.portalUrl}`,
+    `운송관리: ${params.portalUrl}`,
     "최초 로그인 시 비밀번호를 변경해주세요.",
     `문의: ${COMPANY_SUPPORT_PHONE}`,
   ].join("\n");
@@ -101,9 +112,9 @@ export function portalAccountIssuedMessage(params: { loginId: string; password: 
 
 export function portalPasswordReissuedMessage(params: { loginId: string; password: string; portalUrl: string }): string {
   return [
-    "[WeCarry] 화주포털 비밀번호 재발급 안내",
+    "[WeCarry] 운송관리 비밀번호 재발급 안내",
     `아이디: ${params.loginId} / 새 임시비밀번호: ${params.password}`,
-    `포털: ${params.portalUrl}`,
+    `운송관리: ${params.portalUrl}`,
     "로그인 시 비밀번호를 다시 설정해주세요.",
     `문의: ${COMPANY_SUPPORT_PHONE}`,
   ].join("\n");
