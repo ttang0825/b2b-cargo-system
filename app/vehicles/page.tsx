@@ -30,9 +30,12 @@ const START_PRICES: { name: string; price: string }[] = [
 ];
 
 const PRICING_NOTES = [
+  // ⚠️ 아래 3줄은 표시가격 분쟁을 막는 필수 문구다. 지우지 말 것.
   "표시 금액은 10km 이내 기준 최소 운임이며, 부가가치세는 별도입니다.",
   "실제 운임은 운송 거리, 차량 종류, 상·하차 조건, 운송 시간대, 화물 특성에 따라 달라집니다.",
   "정확한 금액은 견적 시 안내해 드립니다.",
+  // 상한을 닫지 않되 약속도 하지 않는 표현. "25톤"·"전 차종"으로 바꾸지 말 것(32차 확정)
+  "5톤 이상 대형 차량도 문의 주시면 확인해 안내드립니다.",
 ];
 
 // `lib/constants.ts`의 BODY_TYPES는 11종(냉장탑·냉동탑·크레인·렉카·트레일러·사다리차 포함)이지만
@@ -123,6 +126,12 @@ export default function VehiclesPage() {
         {/* 차량 형태 */}
         <section className="card" style={{ padding: 28, marginBottom: 20 }}>
           <h2 className="about-section-title">차량 형태</h2>
+          {/* 차량 범위 표현 기준(32차): "다마스·라보부터 1톤~5톤 이상까지".
+              ⚠️ "25톤"·"전 차종"은 쓰지 말 것 — 배차망으로 대형이 가능하긴 하나
+              아직 수월하지 않아 약속하지 않기로 함 */}
+          <p style={{ fontSize: 13.5, color: "var(--text-muted)", lineHeight: 1.7, margin: "0 0 14px" }}>
+            다마스·라보부터 1톤~5톤 이상까지 다양한 차량에 배차가 가능합니다.
+          </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
             {BODY_TYPES_SHOWN.map((t) => (
               <span key={t} className="badge">

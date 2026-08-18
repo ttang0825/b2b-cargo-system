@@ -624,6 +624,55 @@ tbody tr:hover {
   background: var(--bg);
 }
 
+/* ── 랜딩 히어로 신뢰 배지 ───────────────────────────────────────────────────
+   다크 히어로 위에 **박스 없이 텍스트만** 올린다(박스로 감싸면 무거워져서 CTA가 죽음).
+   체크 표시에만 브랜드 옐로를 쓰고 본문은 밝은 회색. */
+.hero-trust {
+  list-style: none;
+  margin: 0 0 28px;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 20px;
+}
+.hero-trust li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #e8e8e8;
+  line-height: 1.5;
+}
+.hero-trust-check {
+  color: #ffd833;
+  font-weight: 800;
+}
+/* 히어로 보조 링크("고객 등록 신청") — 버튼 2개보다 한 단계 낮은 위계 */
+.hero-secondary-link {
+  display: inline-flex;
+  align-items: center;
+  /* 터치 영역 44px 확보 */
+  min-height: 44px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #c9c9c9;
+  text-decoration: none;
+}
+.hero-secondary-link:hover {
+  color: #ffd833;
+}
+
+@media (max-width: 560px) {
+  /* 좁은 화면에서 세 줄이 뒤엉키지 않게 세로로 쌓고 왼쪽 정렬 */
+  .hero-trust {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    text-align: left;
+  }
+}
+
 /* ── 공개 화면 공용 헤더(스티키) ─────────────────────────────────────────────
    `components/LandingHeader.tsx`(랜딩·회사소개·차량안내·법적 문서)와
    `components/PublicPageHeader.tsx`(견적문의·고객등록·현황조회)가 **이 클래스를 공유**한다.

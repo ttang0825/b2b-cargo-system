@@ -1,17 +1,34 @@
 import Link from "next/link";
 import LandingHeader from "@/components/LandingHeader";
 import SiteFooter from "@/components/SiteFooter";
+import { COMPANY_SUPPORT_PHONE, COMPANY_SUPPORT_HOURS } from "@/lib/contactInfo";
+import { COMPANY_FREIGHT_BROKER_LICENSE } from "@/lib/companyInfo";
 
 // 랜딩(/)의 title·description은 app/layout.tsx(루트 metadata)에서 관리함 —
 // 여기서 다시 title을 export하면 루트 값을 덮어써서 두 곳을 같이 고쳐야 하므로 두지 않음
+//
+// ⚠️ **쓰지 않기로 한 표현**(32차 확정): "예비 배차처", "계약 없이", "기존 거래처를 바꾸",
+// "1톤~5톤"처럼 상한을 못박는 표현, "25톤"·"전 차종"처럼 대형을 약속하는 표현, "이사",
+// "B2B", 고객 접점의 "화주". 포지셔닝이 "보조 배차처"에서 "정식 물류 파트너"로 바뀌었다.
 
-const TARGETS = [
-  { title: "중소 제조업체", desc: "부품·원자재·완제품 납품, 공장 간 이동" },
-  { title: "도매·유통·자재 업체", desc: "거래처 납품, 창고 이동, 긴급 출고" },
-  { title: "패키징공장·포장재 업체", desc: "박스·포장재·완충재 반복 납품" },
-  { title: "가구·인테리어 업체", desc: "고객 현장 납품, 자재 운송" },
-  { title: "행사·전시·렌탈 업체", desc: "행사 전후 반입·철수, 장비 운송" },
-  { title: "택배 불가 온라인 셀러", desc: "대형상품·대량 출고·창고 이동" },
+// 히어로 하단 신뢰 배지. 누적 실적이 없는 신생사가 내세울 수 있는 검증 가능한 지표들.
+// ⚠️ 보험은 "가입" 사실까지만 — 담보 한도·범위를 여기에 추가하지 말 것
+const TRUST_POINTS = [
+  `화물자동차 운송주선사업 정식 허가업체 ${COMPANY_FREIGHT_BROKER_LICENSE}`,
+  "세금계산서 발행 · 건별 정산 및 월정산 가능",
+  "적재물배상책임보험 가입",
+];
+
+// "어떤 업체인가"가 아니라 "어떤 운송인가"로 제시한다.
+// 업종을 나열하면 목록에 없는 업체가 "나는 대상이 아니다"라고 읽기 때문(32차 확정).
+// 업종 정보 자체는 영업 DB와 내부 문서에 그대로 유지되며 랜딩에서만 뺐다.
+const TRANSPORT_TYPES = [
+  { title: "정기 납품", desc: "같은 구간을 주기적으로 오가는 운송" },
+  { title: "긴급 출고", desc: "당일·익일 처리가 필요한 건" },
+  { title: "창고·거점 이동", desc: "재고 이전, 센터 간 이동" },
+  { title: "현장 납품", desc: "시공·설치 현장으로 직접 배송" },
+  { title: "행사 반입·철수", desc: "전시·행사 장비의 왕복 운송" },
+  { title: "대형 상품 배송", desc: "택배로 보내기 어려운 부피·중량 화물" },
 ];
 
 const VALUES = [
@@ -53,7 +70,7 @@ export default function LandingPage() {
       <section style={{ background: "#1a1a1a", padding: "72px 24px 64px" }}>
         <div className="container" style={{ padding: 0, textAlign: "center" }}>
           <div style={{ color: "#FFD833", fontWeight: 700, fontSize: 13.5, marginBottom: 14 }}>
-            중소기업과 개인 고객을 위한 화물 배차 파트너
+            화물자동차 운송주선사업 정식 허가업체
           </div>
           <h1
             style={{
@@ -66,25 +83,42 @@ export default function LandingPage() {
               letterSpacing: "-0.02em",
             }}
           >
-            정기 납품, 긴급 출고, 창고 이동
+            출발부터 도착까지,
             <br />
-            1톤부터 5톤까지 빠르게 연결합니다
+            화물운송을 확실하게 관리합니다
           </h1>
-          <p style={{ color: "#c9c9c9", fontSize: 15.5, marginBottom: 32, lineHeight: 1.6 }}>
-            기존 거래처를 바꾸실 필요 없습니다. 급한 건이나 차량이 안 잡힐 때,
+          <p style={{ color: "#c9c9c9", fontSize: 15.5, marginBottom: 24, lineHeight: 1.6 }}>
+            상·하차지와 품목만 알려주시면 차량과 운임을 확인해 연락드립니다.
             <br />
-            예비 배차처로 편하게 이용해보세요.
+            견적서부터 월정산까지, 운송 내역이 기록으로 남습니다.
           </p>
+
+          {/* 신뢰 배지 — 누적 실적이 없는 신생사가 내세울 수 있는 검증 가능한 지표.
+              ⚠️ 보험은 "가입" 사실까지만 적을 것(담보 한도·범위나 "모든 화물이 보상된다"는
+              취지의 표현을 추가하지 말 것 — 사용자가 담보 범위를 별도로 확인 중). */}
+          <ul className="hero-trust">
+            {TRUST_POINTS.map((t) => (
+              <li key={t}>
+                <span className="hero-trust-check" aria-hidden="true">
+                  ✓
+                </span>
+                {t}
+              </li>
+            ))}
+          </ul>
+
+          {/* 견적 → 전화 순서. 두 버튼은 동등 비중이고, "고객 등록 신청"은 보조 링크 */}
           <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
             <Link
               href="/quote"
               className="btn"
               style={{ padding: "15px 32px", fontSize: 15.5, display: "inline-flex" }}
             >
-              무료 견적 받기 →
+              무료 견적 문의 →
             </Link>
-            <Link
-              href="/apply"
+            {/* 모바일에서 탭하면 바로 발신되도록 tel: 링크. 번호는 상수 참조(하드코딩 금지) */}
+            <a
+              href={`tel:${COMPANY_SUPPORT_PHONE}`}
               style={{
                 padding: "15px 32px",
                 fontSize: 15.5,
@@ -97,23 +131,28 @@ export default function LandingPage() {
                 textDecoration: "none",
               }}
             >
+              전화 문의 {COMPANY_SUPPORT_PHONE}
+            </a>
+          </div>
+
+          <div style={{ marginTop: 18 }}>
+            <Link href="/apply" className="hero-secondary-link">
               고객 등록 신청 →
             </Link>
           </div>
         </div>
       </section>
 
-      {/* 타겟 업종 */}
+      {/* 운송 유형 */}
       <section className="container" style={{ padding: "56px 24px" }}>
         <h2 style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 800, textAlign: "center", marginBottom: 8 }}>
-          이런 업체에 필요합니다
+          이런 운송을 맡고 있습니다
         </h2>
         <p style={{ textAlign: "center", color: "var(--text-muted)", fontSize: 14, marginBottom: 32 }}>
-          납품·출고·창고 이동에 1톤~5톤 화물차가 필요하면 어디든 환영합니다.
-          <br />한 건도, 정기 운송도 가능합니다.
+          업종과 규모에 관계없이 문의해 주세요.
         </p>
         <div className="home-grid">
-          {TARGETS.map((t) => (
+          {TRANSPORT_TYPES.map((t) => (
             // 카드마다 똑같이 붙던 "B2B" 태그는 제거함 — 고객 접점에서 B2B 표현을 쓰지 않기로
             // 했고(용어정리 가이드 2-3), 6개 카드가 전부 같은 값이라 정보량도 없었음
             <div key={t.title} className="card" style={{ padding: 22 }}>
@@ -122,13 +161,17 @@ export default function LandingPage() {
             </div>
           ))}
         </div>
+        {/* 목록이 "취급 범위 한정"으로 읽히지 않도록 하는 문구 — 지우지 말 것 */}
+        <p style={{ textAlign: "center", color: "var(--text-muted)", fontSize: 13.5, marginTop: 20, marginBottom: 0 }}>
+          목록에 없는 운송도 문의해 주세요. 가능 여부를 확인해 안내드립니다.
+        </p>
       </section>
 
       {/* 핵심가치 */}
       <section style={{ background: "var(--surface)", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}>
         <div className="container" style={{ padding: "56px 24px" }}>
           <h2 style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 800, textAlign: "center", marginBottom: 32 }}>
-            왜 예비 배차처로 저희를 선택할까요
+            위캐리를 선택하는 이유
           </h2>
           <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 640, margin: "0 auto" }}>
             {VALUES.map((v) => (
@@ -193,7 +236,9 @@ export default function LandingPage() {
           </div>
           <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13.5, lineHeight: 1.9, color: "var(--text)" }}>
             <li>자주 나가는 구간 무료 비교 견적</li>
-            <li>첫 운송 10% 지원 (최대 3만원)</li>
+            {/* ⚠️ 금액·비율을 쓰지 않는다 — 한시 프로모션이라 적용 조건·기간이 미확정이고,
+                조건 없이 금액만 게시하면 표시광고 문제가 된다. 조건이 확정되면 그때 함께 표기할 것 */}
+            <li>첫 운송 운임 지원</li>
             <li>반복 주소·물품 조건 저장</li>
             <li>운송 내역서 및 세금계산서 처리 지원</li>
           </ul>
@@ -203,12 +248,36 @@ export default function LandingPage() {
       {/* CTA */}
       <section style={{ background: "#1a1a1a", padding: "48px 24px", textAlign: "center" }}>
         <div className="container" style={{ padding: 0 }}>
-          <h2 style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 800, color: "#fff", marginBottom: 16 }}>
+          <h2 style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 800, color: "#fff", marginBottom: 12 }}>
             지금 바로 견적을 받아보세요
           </h2>
-          <Link href="/quote" className="btn" style={{ padding: "14px 30px", fontSize: 15 }}>
-            무료 견적 문의하기 →
-          </Link>
+          <p style={{ color: "#c9c9c9", fontSize: 14.5, lineHeight: 1.7, marginTop: 0, marginBottom: 24 }}>
+            상·하차지와 품목만 알려주시면 확인해 연락드립니다.
+            <br />
+            고객센터 {COMPANY_SUPPORT_PHONE} · {COMPANY_SUPPORT_HOURS}
+          </p>
+          {/* 버튼 순서는 히어로와 동일하게 견적 → 전화 */}
+          <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+            <Link href="/quote" className="btn" style={{ padding: "14px 30px", fontSize: 15 }}>
+              무료 견적 문의 →
+            </Link>
+            <a
+              href={`tel:${COMPANY_SUPPORT_PHONE}`}
+              style={{
+                padding: "14px 30px",
+                fontSize: 15,
+                display: "inline-flex",
+                alignItems: "center",
+                borderRadius: 12,
+                border: "1.5px solid #FFD833",
+                color: "#FFD833",
+                fontWeight: 700,
+                textDecoration: "none",
+              }}
+            >
+              전화 문의 {COMPANY_SUPPORT_PHONE}
+            </a>
+          </div>
         </div>
       </section>
 
