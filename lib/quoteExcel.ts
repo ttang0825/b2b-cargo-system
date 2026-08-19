@@ -30,6 +30,8 @@ export type QuoteExcelData = {
     requested_dropoff_at: string | null;
     selected_options: Record<string, any> | null;
     companies: { name: string | null } | null;
+    // 게스트(비회원) 견적용 이름. PDF 견적서 수신란과 같은 폴백 순서로 쓴다
+    guest_name: string | null;
   };
   items: { item_name: string | null; amount: number | null }[];
 };
@@ -49,7 +51,7 @@ export async function fetchQuoteForExcel(
   const { data: quote, error } = await client
     .from("quotes")
     .select(
-      "id,quote_no,origin,destination,distance_km,vehicle_type,item,base_fare,discount_amount,final_amount,created_at,notes,requested_pickup_at,requested_dropoff_at,selected_options,companies(name)"
+      "id,quote_no,origin,destination,distance_km,vehicle_type,item,base_fare,discount_amount,final_amount,created_at,notes,requested_pickup_at,requested_dropoff_at,selected_options,guest_name,companies(name)"
     )
     .eq("id", quoteId)
     .single();
@@ -87,7 +89,14 @@ export function buildQuoteDocRows({ quote, items }: QuoteExcelData): DocRow[] {
   rows.push({ kind: "text", label: "견적번호", value: quote.quote_no || "-" });
   if (created) rows.push({ kind: "date", label: "견적일", value: created });
   if (validUntil) rows.push({ kind: "date", label: "유효기간", value: validUntil });
-  rows.push({ kind: "text", label: "고객사", value: quote.companies?.name || "-" });
+  // 라벨·값 모두 PDF 견적서의 "수신 / {이름} 귀하"와 일치시킨다.
+  // ⚠️ 게스트(비회원) 견적은 `companies`가 없고 `guest_name`에만 이름이 있다 —
+  // 이걸 빼면 엑셀 수신란만 "-"로 나가고 PDF와 어긋난다.
+  rows.push({
+    kind: "text",
+    label: "수신",
+    value: `${quote.companies?.name || quote.guest_name || "고객"} 귀하`,
+  });
 
   rows.push({ kind: "blank" });
   rows.push({ kind: "section", text: "운송 정보" });
