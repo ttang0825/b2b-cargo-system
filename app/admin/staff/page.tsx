@@ -27,6 +27,7 @@ export default function AdminStaffPage() {
   const [inviteName, setInviteName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "staff">("staff");
+  const [inviteSenderPhone, setInviteSenderPhone] = useState("");
   const [inviting, setInviting] = useState(false);
   const [issuedCredentials, setIssuedCredentials] = useState<{ email: string; password: string } | null>(null);
 
@@ -72,7 +73,13 @@ export default function AdminStaffPage() {
       const res = await fetch("/api/admin/staff", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "invite", name: inviteName, email: inviteEmail, role: inviteRole }),
+        body: JSON.stringify({
+          action: "invite",
+          name: inviteName,
+          email: inviteEmail,
+          role: inviteRole,
+          sms_sender_phone: inviteSenderPhone,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -83,6 +90,7 @@ export default function AdminStaffPage() {
       setIssuedCredentials({ email: data.email, password: data.password });
       setInviteName("");
       setInviteEmail("");
+      setInviteSenderPhone("");
       setInviteRole("staff");
       loadItems();
     } catch {
@@ -226,7 +234,23 @@ export default function AdminStaffPage() {
                 <option value="admin">관리자</option>
               </select>
             </div>
+            <div className="field">
+              <label>SMS 발신번호 (선택)</label>
+              <input
+                type="text"
+                value={inviteSenderPhone}
+                onChange={(e) => setInviteSenderPhone(formatPhoneNumber(e.target.value))}
+                placeholder="010-0000-0000"
+                autoComplete="off"
+              />
+            </div>
           </div>
+          {/* ⚠️ 솔라피 사전등록 없이는 이 번호로 발송되지 않는다 — 발급 화면에도 안내할 것 */}
+          <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 8, marginBottom: 0, lineHeight: 1.7 }}>
+            발신번호는 나중에 &quot;수정&quot;에서도 넣을 수 있습니다. 이 번호로 문자가 발송되려면
+            솔라피에 발신번호로 사전 등록되어 있어야 하며, 등록되지 않은 번호는 대표 발신번호로
+            대체 발송됩니다.
+          </p>
           <button className="btn" type="submit" disabled={inviting} style={{ marginTop: 10 }}>
             {inviting ? "생성 중..." : "계정 발급"}
           </button>
