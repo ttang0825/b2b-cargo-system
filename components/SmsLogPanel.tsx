@@ -13,7 +13,26 @@ type SmsLog = {
   error_message: string | null;
   sent_at: string;
   result_checked_at: string | null;
+  /** 실제로 나간 문자 내용 — 발송 직전 모달에서 수정했다면 수정된 문구가 남는다 */
+  message_content: string | null;
+  /** 실제로 사용된 발신번호(숫자만). 35차 이전 로그에는 없음 */
+  sender_phone: string | null;
+  /** 보낸 담당자 이름 — API가 sent_by(uuid)를 이름으로 바꿔서 내려줌 */
+  sent_by_name: string | null;
 };
+
+/** 저장은 숫자만 하므로 표시할 때만 하이픈을 붙인다 */
+function formatPhone(value: string | null): string | null {
+  if (!value) return null;
+  const d = value.replace(/\D/g, "");
+  if (d.length === 11) return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`;
+  if (d.length === 10) {
+    return d.startsWith("02")
+      ? `${d.slice(0, 2)}-${d.slice(2, 6)}-${d.slice(6)}`
+      : `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`;
+  }
+  return value;
+}
 
 function formatDateTime(value: string) {
   const d = new Date(value);
@@ -157,9 +176,15 @@ export default function SmsLogPanel({
                         )}
                       </div>
                       <div style={{ color: "var(--text-muted)", marginTop: 2 }}>
-                        {formatDateTime(log.sent_at)} · {log.recipient_phone || "번호 없음"}
-                        {log.error_message && ` · ${log.error_message}`}
+                        {formatDateTime(log.sent_at)} · 받는 사람 {log.recipient_phone || "번호 없음"}
                       </div>
+                      <div style={{ color: "var(--text-muted)", marginTop: 2 }}>
+                        보낸 번호 {formatPhone(log.sender_phone) || "기록 없음"}
+                        {log.sent_by_name ? ` · 보낸 사람 ${log.sent_by_name}` : ""}
+                      </div>
+                      {log.error_message && (
+                        <div style={{ color: "var(--text-muted)", marginTop: 2 }}>{log.error_message}</div>
+                      )}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <span
@@ -192,6 +217,36 @@ export default function SmsLogPanel({
                         </button>
                       )}
                     </div>
+
+                    {/* 실제로 나간 문자 내용. 목록이 길어지지 않게 기본은 접어둔다 */}
+                    {log.message_content && (
+                      <details style={{ flexBasis: "100%" }}>
+                        <summary
+                          style={{
+                            cursor: "pointer",
+                            fontSize: 12,
+                            color: "var(--text-muted)",
+                            userSelect: "none",
+                          }}
+                        >
+                          문자 내용 보기
+                        </summary>
+                        <div
+                          style={{
+                            marginTop: 6,
+                            padding: "10px 12px",
+                            borderRadius: 8,
+                            background: "var(--bg-subtle, #f7f8f9)",
+                            whiteSpace: "pre-wrap",
+                            wordBreak: "break-word",
+                            fontSize: 12.5,
+                            lineHeight: 1.7,
+                          }}
+                        >
+                          {log.message_content}
+                        </div>
+                      </details>
+                    )}
                   </div>
                 );
               })}
