@@ -78,20 +78,91 @@ export async function GET(req: Request) {
     nameById[s.id] = s.name;
   });
 
+  // ── 받는 사람 이름·업체 ────────────────────────────────────────────────
+  // sms_logs에는 **번호만** 남는다(발송 시점 스냅샷). 번호만 보면 누구인지 알 수 없어서
+  // related_type/related_id로 원본 레코드를 찾아 이름을 붙여준다(PR #85 리뷰 요청).
+  // ⚠️ 이 이름은 **지금 시점의 원본 값**이라 발송 당시와 다를 수 있고(업체명 변경 등),
+  // 원본이 삭제됐으면 비어 있다 — 그래서 로그에 이름을 따로 저장하지는 않았다.
+  //    저장하려면 컬럼 추가(=DB 변경)가 필요하고, 이 화면은 "지금 누구에게 갔는지"를
+  //    확인하는 용도라 조회 시점에 붙이는 편이 맞다고 판단했다.
+  // 종류별로 한 번씩만 조회한다(최대 4회).
+  const idsOf = (type: string) =>
+    Array.from(
+      new Set(rows.filter((r: any) => r.related_type === type && r.related_id).map((r: any) => r.related_id))
+    );
+
+  // 배차는 **같은 배차 건이라도 받는 사람이 갈린다** — 배차확정은 차주에게,
+  // 상차·하차완료는 고객에게 나가므로 recipient_type을 보고 골라야 한다.
+  const dispatchNames: Record<string, { driver: string | null; customer: string | null }> = {};
+  const dispatchIds = idsOf("dispatch");
+  if (dispatchIds.length > 0) {
+    const { data: dispatches } = await admin
+      .from("dispatches")
+      .select(
+        "id,assignment_type,external_driver_name,drivers(name),orders(guest_name,companies(name),individual_customers(name))"
+      )
+      .in("id", dispatchIds);
+    (dispatches || []).forEach((d: any) => {
+      const order = d.orders;
+      dispatchNames[d.id] = {
+        // 외부정보망 배정 건은 drivers 테이블에 행이 없고 자유텍스트로만 존재함
+        driver: (d.assignment_type === "internal" ? d.drivers?.name : d.external_driver_name) || null,
+        customer:
+          order?.companies?.name || order?.individual_customers?.name || order?.guest_name || null,
+      };
+    });
+  }
+
+  const quoteNames: Record<string, string | null> = {};
+  const quoteIds = idsOf("quote");
+  if (quoteIds.length > 0) {
+    const { data: quotes } = await admin
+      .from("quotes")
+      .select("id,guest_name,companies(name)")
+      .in("id", quoteIds);
+    (quotes || []).forEach((q: any) => {
+      quoteNames[q.id] = q.companies?.name || q.guest_name || null;
+    });
+  }
+
+  const applicationNames: Record<string, string | null> = {};
+  const applicationIds = idsOf("application");
+  if (applicationIds.length > 0) {
+    const { data: applications } = await admin
+      .from("customer_applications")
+      .select("id,company_name,contact_name")
+      .in("id", applicationIds);
+    (applications || []).forEach((a: any) => {
+      applicationNames[a.id] = a.company_name || a.contact_name || null;
+    });
+  }
+
   // 포털계정 이력은 related_id가 customer_accounts.id라 화주 상세로 바로 못 간다 —
   // 소속 회사를 찾아서 링크를 만들어준다(그 화면에 계정 목록과 이력이 함께 있음).
-  const accountIds = Array.from(
-    new Set(rows.filter((r: any) => r.related_type === "portal_account").map((r: any) => r.related_id))
-  );
+  const accountIds = idsOf("portal_account");
   const companyIdByAccount: Record<string, string> = {};
+  const accountNames: Record<string, string | null> = {};
   if (accountIds.length > 0) {
     const { data: accounts } = await admin
       .from("customer_accounts")
-      .select("id,company_id")
+      .select("id,company_id,name,companies(name)")
       .in("id", accountIds);
     (accounts || []).forEach((a: any) => {
       if (a.company_id) companyIdByAccount[a.id] = a.company_id;
+      accountNames[a.id] = a.companies?.name || a.name || null;
     });
+  }
+
+  function recipientNameFor(row: any): string | null {
+    if (row.related_type === "dispatch") {
+      const found = dispatchNames[row.related_id];
+      if (!found) return null;
+      return row.recipient_type === "driver" ? found.driver : found.customer;
+    }
+    if (row.related_type === "quote") return quoteNames[row.related_id] || null;
+    if (row.related_type === "application") return applicationNames[row.related_id] || null;
+    if (row.related_type === "portal_account") return accountNames[row.related_id] || null;
+    return null;
   }
 
   function linkFor(row: any): { href: string; label: string } | null {
@@ -109,6 +180,7 @@ export async function GET(req: Request) {
     data: rows.map((r: any) => ({
       ...r,
       sent_by_name: r.sent_by ? nameById[r.sent_by] || null : null,
+      recipient_name: recipientNameFor(r),
       link: linkFor(r),
     })),
     // 상한에 걸렸는지 알려주려고 전체 건수도 같이 내려줌

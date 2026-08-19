@@ -10,6 +10,7 @@ import {
   getSmsTemplateLabel,
   getSmsStatusLabel,
   getSmsStatusHint,
+  getSmsRecipientTypeLabel,
 } from "@/lib/smsLogLabels";
 
 // 문자 발송 이력 통합조회(관리자 전용).
@@ -26,6 +27,8 @@ type SmsLog = {
   template_type: string;
   recipient_phone: string | null;
   recipient_type: string;
+  /** 원본 레코드에서 조회 시점에 붙여준 이름·업체(원본이 지워졌으면 비어 있음) */
+  recipient_name: string | null;
   message_type: string | null;
   message_content: string | null;
   sender_phone: string | null;
@@ -71,6 +74,8 @@ function clampStyle(lines: number): React.CSSProperties {
 function formatPhone(value: string | null): string | null {
   if (!value) return null;
   const d = value.replace(/\D/g, "");
+  // 대표번호(1661-2403)처럼 국번 없는 8자리도 하이픈을 넣어준다
+  if (d.length === 8) return `${d.slice(0, 4)}-${d.slice(4)}`;
   if (d.length === 11) return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`;
   if (d.length === 10) {
     return d.startsWith("02")
@@ -209,6 +214,24 @@ export default function AdminSmsLogsPage() {
     );
   }
 
+  // 받는 사람 — 번호만 있으면 누구에게 간 문자인지 알 수 없어서 이름·업체를 위에 얹는다.
+  // 같은 배차 건이라도 배차확정은 차주, 상차·하차완료는 고객에게 나가므로 종류도 함께 표시.
+  function RecipientCell({ log }: { log: SmsLog }) {
+    return (
+      <>
+        <div style={{ lineHeight: 1.45, ...clampStyle(2) }} title={log.recipient_name || undefined}>
+          {log.recipient_name || <span style={{ color: "var(--text-muted)" }}>이름 확인 불가</span>}
+        </div>
+        <div
+          className="num"
+          style={{ fontSize: 11.5, color: "var(--text-muted)", whiteSpace: "nowrap" }}
+        >
+          {getSmsRecipientTypeLabel(log.recipient_type)} · {formatPhone(log.recipient_phone) || "번호 없음"}
+        </div>
+      </>
+    );
+  }
+
   function ActionButtons({ log }: { log: SmsLog }) {
     if (log.status === "sent") {
       return (
@@ -339,7 +362,7 @@ export default function AdminSmsLogsPage() {
                     <th style={{ width: 88 }}>발송시각</th>
                     <th style={{ width: 124 }}>종류</th>
                     <th style={{ width: 96 }}>상태</th>
-                    <th style={{ width: 116 }}>받는 사람</th>
+                    <th style={{ width: 140 }}>받는 사람</th>
                     <th style={{ width: 116 }}>보낸 번호/사람</th>
                     <th>내용</th>
                     <th style={{ width: 76 }}></th>
@@ -392,8 +415,8 @@ export default function AdminSmsLogsPage() {
                             </div>
                           )}
                         </td>
-                        <td className="cell-nowrap" style={{ verticalAlign: "top" }}>
-                          <span className="num">{log.recipient_phone || "번호 없음"}</span>
+                        <td style={{ verticalAlign: "top", wordBreak: "keep-all" }}>
+                          <RecipientCell log={log} />
                         </td>
                         <td className="cell-nowrap" style={{ verticalAlign: "top" }}>
                           <div className="num">{formatPhone(log.sender_phone) || "기록 없음"}</div>
@@ -436,7 +459,14 @@ export default function AdminSmsLogsPage() {
                     </div>
                     <div className="mobile-row-line">
                       <span className="mobile-row-label">받는 사람</span>
-                      <span className="num">{log.recipient_phone || "번호 없음"}</span>
+                      <span style={{ textAlign: "right" }}>
+                        {log.recipient_name || "이름 확인 불가"}
+                        <br />
+                        <span className="num" style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
+                          {getSmsRecipientTypeLabel(log.recipient_type)} ·{" "}
+                          {formatPhone(log.recipient_phone) || "번호 없음"}
+                        </span>
+                      </span>
                     </div>
                     <div className="mobile-row-line">
                       <span className="mobile-row-label">보낸 번호</span>
@@ -534,8 +564,13 @@ export default function AdminSmsLogsPage() {
                 {formatDateTime(detailLog.sent_at)}
               </dd>
               <dt style={{ color: "var(--text-muted)" }}>받는 사람</dt>
-              <dd style={{ margin: 0 }} className="num">
-                {detailLog.recipient_phone || "번호 없음"}
+              <dd style={{ margin: 0 }}>
+                {detailLog.recipient_name || "이름 확인 불가"}{" "}
+                <span style={{ color: "var(--text-muted)" }}>
+                  ({getSmsRecipientTypeLabel(detailLog.recipient_type)})
+                </span>
+                <br />
+                <span className="num">{formatPhone(detailLog.recipient_phone) || "번호 없음"}</span>
               </dd>
               <dt style={{ color: "var(--text-muted)" }}>보낸 번호</dt>
               <dd style={{ margin: 0 }} className="num">
