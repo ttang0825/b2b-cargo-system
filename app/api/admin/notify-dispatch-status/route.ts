@@ -6,6 +6,7 @@ import {
   pickupCompletedMessage,
   deliveryCompletedMessage,
 } from "@/lib/sms/templates";
+import { resolveSmsSender, contactPhoneForBody } from "@/lib/smsSenderPhone";
 
 // 배차확정/상차완료/하차완료는 client가 anon 키로 dispatches를 직접 update하는
 // 4곳(배차 상세의 확정 버튼·상태 드롭다운·체크박스, 배차 목록의 상태 드롭다운)에서
@@ -54,6 +55,15 @@ export async function POST(req: Request) {
   const companyPhone: string | null =
     order?.companies?.contact_mobile || order?.individual_customers?.phone || order?.guest_phone || null;
 
+  // 발신번호·본문 안내번호는 반드시 서버에서 세션으로 결정한다(클라이언트 입력값 신뢰 금지)
+  const sender = await resolveSmsSender();
+  const senderFields = {
+    senderDisplay: sender.display,
+    senderStaffName: sender.staffName,
+    senderIsStaffPhone: sender.isStaffPhone,
+  };
+  const contact = { contactPhone: contactPhoneForBody(sender), staffName: sender.staffName };
+
   if (event === "dispatch_confirmed") {
     const phone =
       (dispatch as any).assignment_type === "internal"
@@ -70,7 +80,9 @@ export async function POST(req: Request) {
         destination: order?.destination || null,
         pickupAt: order?.requested_pickup_at || null,
         specialNotes: order?.special_notes || null,
+        ...contact,
       }),
+      ...senderFields,
     });
   }
 
@@ -82,7 +94,8 @@ export async function POST(req: Request) {
       templateType: "pickup_completed",
       recipientType: "customer",
       recipientPhone: companyPhone,
-      message: pickupCompletedMessage({ origin: order?.origin || null }),
+      message: pickupCompletedMessage({ origin: order?.origin || null, ...contact }),
+      ...senderFields,
     });
   }
   return NextResponse.json({
@@ -91,6 +104,7 @@ export async function POST(req: Request) {
     templateType: "delivery_completed",
     recipientType: "customer",
     recipientPhone: companyPhone,
-    message: deliveryCompletedMessage({ destination: order?.destination || null }),
+    message: deliveryCompletedMessage({ destination: order?.destination || null, ...contact }),
+    ...senderFields,
   });
 }

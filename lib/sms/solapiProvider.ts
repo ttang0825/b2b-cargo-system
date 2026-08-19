@@ -31,7 +31,7 @@ function interpretStatusCode(statusCode: string | null | undefined): SmsOutcome 
 }
 
 export const solapiProvider: SmsProvider = {
-  async sendSms({ to, from, text }: SendSmsParams): Promise<SendSmsResult> {
+  async sendSms({ to, from, text, subject }: SendSmsParams): Promise<SendSmsResult> {
     const service = getMessageService();
     if (!service) {
       return {
@@ -41,7 +41,11 @@ export const solapiProvider: SmsProvider = {
       };
     }
     try {
-      const res = await service.send({ to, from, text }, { showMessageList: true });
+      // subject를 주면 솔라피가 LMS로 처리한다(단문에는 제목이 없어 무시됨)
+      const res = await service.send(
+        subject ? { to, from, text, subject } : { to, from, text },
+        { showMessageList: true }
+      );
       const sentItem = res.messageList?.[0];
       if (!sentItem) {
         const failed = res.failedMessageList?.[0];

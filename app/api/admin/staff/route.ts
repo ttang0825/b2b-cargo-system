@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
+import { isValidSenderPhone } from "@/lib/smsSenderPhone";
 
 export const dynamic = "force-dynamic";
 
@@ -122,9 +123,22 @@ export async function POST(req: Request) {
   }
 
   if (action === "update_profile") {
-    const { id, name, email } = body;
+    const { id, name, email, sms_sender_phone } = body;
     if (!id || !name?.trim() || !email?.trim()) {
       return NextResponse.json({ error: "이름과 이메일을 입력해주세요." }, { status: 400 });
+    }
+
+    // SMS 발신번호 — 저장은 숫자만(솔라피 API가 하이픈 없는 형식을 씀).
+    // 빈 값은 "미등록"으로 허용하며, 그 경우 대표 발신번호로 발송된다.
+    // ⚠️ 이 값을 수정할 수 있는 건 관리자뿐이다(이 라우트 상단에서 이미 role 확인).
+    // 직원이 스스로 바꾸게 두면 솔라피에 등록되지 않은 번호가 들어가 발송이 깨진다.
+    const rawPhone = typeof sms_sender_phone === "string" ? sms_sender_phone : "";
+    const senderDigits = rawPhone.replace(/\D/g, "");
+    if (senderDigits && !isValidSenderPhone(senderDigits)) {
+      return NextResponse.json(
+        { error: "발신번호는 숫자 10~11자리로 입력해주세요." },
+        { status: 400 }
+      );
     }
 
     const { data: current } = await admin
@@ -151,7 +165,11 @@ export async function POST(req: Request) {
 
     const { error } = await admin
       .from("staff_accounts")
-      .update({ name: name.trim(), email: email.trim() })
+      .update({
+        name: name.trim(),
+        email: email.trim(),
+        sms_sender_phone: senderDigits || null,
+      })
       .eq("id", id);
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     return NextResponse.json({ ok: true });

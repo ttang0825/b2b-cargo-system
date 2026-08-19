@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { getCurrentStaffId, refreshCurrentStaffCache } from "@/lib/currentStaff";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
+import { formatPhoneNumber } from "@/lib/constants";
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   active: { bg: "#e6f7ec", text: "#1b9c57" },
@@ -32,6 +33,7 @@ export default function AdminStaffPage() {
   const [editItem, setEditItem] = useState<any | null>(null);
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
+  const [editSenderPhone, setEditSenderPhone] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -93,6 +95,8 @@ export default function AdminStaffPage() {
     setEditItem(item);
     setEditName(item.name);
     setEditEmail(item.email);
+    // DB에는 숫자만 저장되어 있으므로 화면에서만 하이픈을 붙여 보여준다
+    setEditSenderPhone(formatPhoneNumber(item.sms_sender_phone || ""));
     setEditError(null);
   }
 
@@ -108,7 +112,13 @@ export default function AdminStaffPage() {
       const res = await fetch("/api/admin/staff", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "update_profile", id: editItem.id, name: editName, email: editEmail }),
+        body: JSON.stringify({
+          action: "update_profile",
+          id: editItem.id,
+          name: editName,
+          email: editEmail,
+          sms_sender_phone: editSenderPhone,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -245,6 +255,7 @@ export default function AdminStaffPage() {
                 <tr>
                   <th>이름</th>
                   <th>이메일</th>
+                  <th style={{ width: 130 }}>발신번호</th>
                   <th style={{ width: 110 }}>역할</th>
                   <th style={{ width: 100 }}>상태</th>
                   <th style={{ width: 90 }}>가입일</th>
@@ -256,6 +267,13 @@ export default function AdminStaffPage() {
                   <tr key={item.id}>
                     <td className="cell-nowrap" style={{ fontWeight: 700 }}>{item.name}</td>
                     <td className="cell-nowrap">{item.email}</td>
+                    <td className="cell-nowrap">
+                      {item.sms_sender_phone ? (
+                        <span className="num">{formatPhoneNumber(item.sms_sender_phone)}</span>
+                      ) : (
+                        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>미등록</span>
+                      )}
+                    </td>
                     <td className="cell-nowrap">
                       <select
                         value={item.role}
@@ -332,6 +350,15 @@ export default function AdminStaffPage() {
                     <span className="mobile-row-label">이메일</span>
                     <span>{item.email}</span>
                   </div>
+                  {/* 원칙 13번 — 데스크탑 표에 컬럼을 더하면 모바일 카드도 같이 챙길 것 */}
+                  <div className="mobile-row-line">
+                    <span className="mobile-row-label">발신번호</span>
+                    {item.sms_sender_phone ? (
+                      <span className="num">{formatPhoneNumber(item.sms_sender_phone)}</span>
+                    ) : (
+                      <span style={{ color: "var(--text-muted)" }}>미등록</span>
+                    )}
+                  </div>
                   <div className="mobile-row-line">
                     <span className="mobile-row-label">역할</span>
                     <select
@@ -402,6 +429,22 @@ export default function AdminStaffPage() {
             </div>
             <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: -10, marginBottom: 16 }}>
               이메일을 바꾸면 이후 로그인도 새 이메일로 해야 합니다.
+            </p>
+            <div className="field" style={{ marginBottom: 8 }}>
+              <label>SMS 발신번호 (선택)</label>
+              <input
+                type="text"
+                value={editSenderPhone}
+                onChange={(e) => setEditSenderPhone(formatPhoneNumber(e.target.value))}
+                placeholder="010-0000-0000"
+                autoComplete="off"
+              />
+            </div>
+            {/* ⚠️ 솔라피 사전등록 없이는 이 번호로 발송되지 않는다 — 화면에서 반드시 안내할 것 */}
+            <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: -6, marginBottom: 16, lineHeight: 1.7 }}>
+              이 번호로 문자가 발송되려면 솔라피에 발신번호로 사전 등록되어 있어야 합니다.
+              <br />
+              등록되지 않은 번호는 대표 발신번호로 대체 발송됩니다.
             </p>
             {editError && <div className="error-box" style={{ marginBottom: 12 }}>{editError}</div>}
             <div style={{ display: "flex", gap: 8 }}>

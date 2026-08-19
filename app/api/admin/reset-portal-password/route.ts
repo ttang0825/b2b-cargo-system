@@ -4,6 +4,7 @@ import { getCurrentStaff } from "@/lib/getCurrentStaff";
 import { reissueTempPassword } from "@/lib/portalAccountCredentials";
 import { portalPasswordReissuedMessage } from "@/lib/sms/templates";
 import { getPortalLoginUrl } from "@/lib/siteUrl";
+import { resolveSmsSender, contactPhoneForBody } from "@/lib/smsSenderPhone";
 
 export async function POST(req: Request) {
   const staff = await getCurrentStaff();
@@ -49,6 +50,15 @@ export async function POST(req: Request) {
   // 재발급 안내 SMS 미리보기(발송은 안 함) — 실제 발송은 client가
   // SmsConfirmModal로 확인·수정 후 /api/admin/send-sms를 호출해야만 일어남
   // (PR #73 리뷰 반영).
+  // 발신번호·본문 안내번호는 반드시 서버에서 세션으로 결정한다(클라이언트 입력값 신뢰 금지)
+  const sender = await resolveSmsSender();
+  const senderFields = {
+    senderDisplay: sender.display,
+    senderStaffName: sender.staffName,
+    senderIsStaffPhone: sender.isStaffPhone,
+  };
+  const contact = { contactPhone: contactPhoneForBody(sender), staffName: sender.staffName };
+
   const smsPreview = account
     ? {
         relatedType: "portal_account" as const,
@@ -60,7 +70,9 @@ export async function POST(req: Request) {
           loginId: account.login_id,
           password: tempPassword,
           portalUrl: getPortalLoginUrl(),
+          ...contact,
         }),
+        ...senderFields,
       }
     : null;
 

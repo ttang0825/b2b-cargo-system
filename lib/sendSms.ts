@@ -26,6 +26,14 @@ export interface SendSmsLogParams {
   recipientPhone: string | null; // null이면 스킵 처리(전화번호 없음)
   message: string;
   sentBy?: string | null; // 수동 재발송일 때만 담당자 id, 자동발송이면 비워둠
+  /**
+   * 발신번호(숫자만). 로그인한 담당자의 번호이며 **서버에서 세션으로 결정한 값만**
+   * 넘길 것(`lib/smsSenderPhone.ts`의 resolveSmsSender) — 클라이언트가 보낸 값을
+   * 그대로 넘기면 안 된다. 비우면 대표 발신번호(SOLAPI_SENDER_PHONE)를 쓴다.
+   */
+  senderPhone?: string | null;
+  /** LMS 제목(선택) */
+  subject?: string | null;
 }
 
 function getAdminClient() {
@@ -55,6 +63,21 @@ export async function sendSmsWithLog(params: SendSmsLogParams): Promise<void> {
   const admin = getAdminClient();
   if (!admin) return; // 서버 환경변수 자체가 없으면 로그도 못 남기고 조용히 포기
 
+  // sms_logs.sender_phone은 35차에 추가된 컬럼이고, 이 저장소는 마이그레이션을
+  // 사용자가 Supabase에서 직접 실행하는 구조라 **코드가 먼저 배포되는 구간**이 생긴다.
+  // 그 사이 insert가 통째로 실패하면 발송 기록이 조용히 사라지므로(이 함수는 예외를
+  // 밖으로 던지지 않는다), 컬럼이 없다는 에러면 그 컬럼만 빼고 한 번 더 시도한다.
+  // 마이그레이션 적용 후에는 첫 시도가 항상 성공하므로 부담이 없다.
+  async function insertLog(row: Record<string, unknown>) {
+    const { error } = await admin!.from("sms_logs").insert(row);
+    if (!error) return;
+    const msg = `${error.message || ""} ${(error as any).details || ""}`;
+    if (msg.includes("sender_phone")) {
+      const { sender_phone, ...withoutSender } = row;
+      await admin!.from("sms_logs").insert(withoutSender);
+    }
+  }
+
   const baseRow = {
     provider: "solapi",
     related_type: params.relatedType,
@@ -68,8 +91,9 @@ export async function sendSmsWithLog(params: SendSmsLogParams): Promise<void> {
   };
 
   if (!params.recipientPhone) {
-    await admin.from("sms_logs").insert({
+    await insertLog({
       ...baseRow,
+      sender_phone: null,
       message_type: null,
       status: "skipped",
       error_message: "수신자 전화번호가 없습니다.",
@@ -77,10 +101,14 @@ export async function sendSmsWithLog(params: SendSmsLogParams): Promise<void> {
     return;
   }
 
-  const from = process.env.SOLAPI_SENDER_PHONE;
+  const fallbackFrom = digitsOnly(process.env.SOLAPI_SENDER_PHONE || "");
+  const preferredFrom = digitsOnly(params.senderPhone || "");
+  const from = preferredFrom || fallbackFrom;
+
   if (!from) {
-    await admin.from("sms_logs").insert({
+    await insertLog({
       ...baseRow,
+      sender_phone: null,
       message_type: computeMessageType(params.message),
       status: "failed",
       error_message: "서버에 SOLAPI_SENDER_PHONE이 설정되어 있지 않습니다.",
@@ -88,25 +116,43 @@ export async function sendSmsWithLog(params: SendSmsLogParams): Promise<void> {
     return;
   }
 
-  try {
-    const result = await provider.sendSms({
-      to: digitsOnly(params.recipientPhone),
-      from: digitsOnly(from),
-      text: params.message,
-    });
-    await admin.from("sms_logs").insert({
-      ...baseRow,
-      provider_message_id: result.providerMessageId,
-      message_type: computeMessageType(params.message),
-      status: result.ok ? "sent" : "failed",
-      error_message: result.error,
-    });
-  } catch (e) {
-    await admin.from("sms_logs").insert({
-      ...baseRow,
-      message_type: computeMessageType(params.message),
-      status: "failed",
-      error_message: e instanceof Error ? e.message : "SMS 발송 중 오류가 발생했습니다.",
-    });
+  const to = digitsOnly(params.recipientPhone);
+  const subject = params.subject || undefined;
+
+  async function attempt(sender: string) {
+    try {
+      return await provider.sendSms({ to, from: sender, text: params.message, subject });
+    } catch (e) {
+      return {
+        ok: false,
+        providerMessageId: null,
+        error: e instanceof Error ? e.message : "SMS 발송 중 오류가 발생했습니다.",
+      };
+    }
   }
+
+  let result = await attempt(from);
+  let usedFrom = from;
+  let fallbackNote: string | null = null;
+
+  // 🔴 담당자 번호가 솔라피에 사전 등록되어 있지 않으면 발송이 실패한다. 그대로 두면
+  // **고객이 문자를 아예 못 받는다** — 그게 가장 나쁜 결과이므로 대표 발신번호로 한 번
+  // 더 시도한다(지시서 3-2). 조용히 대체하지 않고 사유를 로그에 남겨서, 관리자가
+  // "왜 회신이 담당자에게 안 오지"를 나중에 추적할 수 있게 한다.
+  if (!result.ok && preferredFrom && fallbackFrom && preferredFrom !== fallbackFrom) {
+    fallbackNote = `담당자 번호(${preferredFrom}) 발송 실패로 대표번호로 재발송함. 원인: ${
+      result.error || "알 수 없음"
+    }`;
+    result = await attempt(fallbackFrom);
+    usedFrom = fallbackFrom;
+  }
+
+  await insertLog({
+    ...baseRow,
+    sender_phone: usedFrom,
+    provider_message_id: result.providerMessageId,
+    message_type: computeMessageType(params.message),
+    status: result.ok ? "sent" : "failed",
+    error_message: [fallbackNote, result.error].filter(Boolean).join(" / ") || null,
+  });
 }
