@@ -86,7 +86,9 @@ export const COMPANY_GREETING_PRINCIPLES: { title: string; body: string }[] = [
 ];
 
 export const COMPANY_GREETING_CLOSING_PARAGRAPHS: string[] = [
-  "정식 허가와 적재물배상책임보험을 갖추고, 한 건 한 건 확인 가능한 기록으로 남기며 신뢰를 쌓아가겠습니다.",
+  // ⚠️ 보험 언급을 다시 넣지 말 것(34차) — 현 증권이 이사화물 특별약관이라 일반화물
+  // 담보 여부가 확인되지 않았음. 원래 "정식 허가와 적재물배상책임보험을 갖추고"였음
+  "정식 허가를 갖추고, 한 건 한 건 확인 가능한 기록으로 남기며 신뢰를 쌓아가겠습니다.",
   "문의 주시면 성실히 답변드리겠습니다. 감사합니다.",
 ];
 
