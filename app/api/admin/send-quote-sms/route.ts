@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
-import { quoteSummaryMessage } from "@/lib/sms/templates";
+import { quoteSummaryMessage, QUOTE_SMS_SUBJECT } from "@/lib/sms/templates";
+import { resolveSmsSender, contactPhoneForBody } from "@/lib/smsSenderPhone";
 
 // 견적 안내는 자동발송이 아니라 견적 상세의 "견적서 출력(PDF)" 옆 수동 버튼으로만
 // 나감(사전조사 1-3 결과 — 견적 상태값이 내부 영업퍼널 단계라 상태 변경마다
@@ -35,7 +36,7 @@ export async function POST(req: Request) {
 
   const { data: quote, error: quoteError } = await admin
     .from("quotes")
-    .select("id,item,vehicle_type,final_amount,requested_pickup_at,guest_phone,company_id,companies(contact_mobile)")
+    .select("id,item,vehicle_type,final_amount,requested_pickup_at,origin,destination,selected_options,guest_phone,company_id,companies(contact_mobile)")
     .eq("id", quote_id)
     .single();
   if (quoteError || !quote) {
@@ -43,11 +44,25 @@ export async function POST(req: Request) {
   }
 
   const phone: string | null = (quote as any).companies?.contact_mobile || quote.guest_phone || null;
+
+  // 발신번호는 반드시 서버에서 세션으로 결정한다(클라이언트 입력값 신뢰 금지)
+  const sender = await resolveSmsSender();
+
+  // ⚠️ quotes는 상·하차 조건을 별도 컬럼이 아니라 selected_options(jsonb) 안에
+  // 한글 키로 담는다(orders/portal_order_requests는 반대로 flat 컬럼) — CLAUDE.md 참고
+  const options = (quote as any).selected_options || {};
+
   const message = quoteSummaryMessage({
     item: quote.item,
     vehicleType: quote.vehicle_type,
     finalAmount: quote.final_amount,
     pickupAt: quote.requested_pickup_at,
+    origin: (quote as any).origin,
+    destination: (quote as any).destination,
+    loadCondition: options["상차조건"] || null,
+    unloadCondition: options["하차조건"] || null,
+    contactPhone: contactPhoneForBody(sender),
+    staffName: sender.staffName,
   });
 
   return NextResponse.json({
@@ -57,5 +72,9 @@ export async function POST(req: Request) {
     recipientType: "customer",
     recipientPhone: phone,
     message,
+    subject: QUOTE_SMS_SUBJECT,
+    senderDisplay: sender.display,
+    senderStaffName: sender.staffName,
+    senderIsStaffPhone: sender.isStaffPhone,
   });
 }

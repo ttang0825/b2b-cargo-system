@@ -47,5 +47,19 @@ export async function GET(req: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
-  return NextResponse.json({ data });
+
+  // 누가 보냈는지 이름으로 보여주려고 sent_by(uuid)를 여기서 이름으로 바꿔 붙인다.
+  // 담당자마다 발신번호가 달라진 35차부터는 "누가 어느 번호로 보냈는지"가 중요해졌음.
+  const staffIds = Array.from(new Set((data || []).map((r: any) => r.sent_by).filter(Boolean)));
+  let nameById: Record<string, string> = {};
+  if (staffIds.length > 0) {
+    const { data: staff } = await admin.from("staff_accounts").select("id,name").in("id", staffIds);
+    (staff || []).forEach((s: any) => {
+      nameById[s.id] = s.name;
+    });
+  }
+
+  return NextResponse.json({
+    data: (data || []).map((r: any) => ({ ...r, sent_by_name: r.sent_by ? nameById[r.sent_by] || null : null })),
+  });
 }

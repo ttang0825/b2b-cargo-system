@@ -6,6 +6,11 @@ export interface SendSmsParams {
   to: string; // 숫자만(하이픈 없이)
   from: string; // 숫자만(하이픈 없이)
   text: string;
+  /**
+   * LMS 제목(선택). 90byte를 넘는 장문에서만 의미가 있고, 알림창에서 어떤 문자인지
+   * 바로 구분되게 한다. 단문(SMS)에는 제목 개념이 없어 벤더가 무시한다.
+   */
+  subject?: string;
 }
 
 export interface SendSmsResult {

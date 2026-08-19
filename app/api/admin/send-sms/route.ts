@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
 import { sendSmsWithLog } from "@/lib/sendSms";
+import { resolveSmsSender } from "@/lib/smsSenderPhone";
+import { QUOTE_SMS_SUBJECT } from "@/lib/sms/templates";
 import type { SmsRelatedType, SmsRecipientType, SmsTemplateType } from "@/lib/sendSms";
 
 const RELATED_TYPES: SmsRelatedType[] = ["dispatch", "application", "portal_account", "quote"];
@@ -28,6 +30,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "필수 값이 누락되었습니다." }, { status: 400 });
   }
 
+  // 🔴 발신번호는 **서버에서 세션으로만** 결정한다. 클라이언트가 보낸 값을 쓰면
+  // 솔라피에 등록되지 않은 번호로 발송을 시도하거나 남의 번호로 사칭할 수 있다.
+  // 모달은 발신번호를 읽기 전용으로 보여주기만 하고 전송하지 않는다.
+  const sender = await resolveSmsSender();
+
   await sendSmsWithLog({
     relatedType: relatedType as SmsRelatedType,
     relatedId,
@@ -36,6 +43,9 @@ export async function POST(req: Request) {
     recipientPhone: recipientPhone || null,
     message,
     sentBy: staff.id,
+    senderPhone: sender.phone,
+    // 견적안내만 LMS 제목을 준다(35차). 나머지 7종은 제목 없이 기존과 동일하게 나감
+    subject: templateType === "quote_summary" ? QUOTE_SMS_SUBJECT : null,
   });
 
   if (!recipientPhone) {

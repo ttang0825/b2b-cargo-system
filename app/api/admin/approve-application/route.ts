@@ -4,6 +4,7 @@ import { getCurrentStaff } from "@/lib/getCurrentStaff";
 import { issuePortalAccount } from "@/lib/portalAccountCredentials";
 import { applicationApprovedWithAccountMessage } from "@/lib/sms/templates";
 import { getPortalLoginUrl } from "@/lib/siteUrl";
+import { resolveSmsSender, contactPhoneForBody } from "@/lib/smsSenderPhone";
 
 export async function POST(req: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -158,6 +159,15 @@ export async function POST(req: Request) {
   // "승인"과 "계정발급" 문구를 따로 두 통 보내지 않고 하나로 합침(사전조사 1-6
   // 결정사항). 실제 발송은 client가 이 미리보기를 SmsConfirmModal로 보여주고
   // 확인·수정한 뒤 /api/admin/send-sms를 호출해야만 일어남(PR #73 리뷰 반영).
+  // 발신번호·본문 안내번호는 반드시 서버에서 세션으로 결정한다(클라이언트 입력값 신뢰 금지)
+  const sender = await resolveSmsSender();
+  const senderFields = {
+    senderDisplay: sender.display,
+    senderStaffName: sender.staffName,
+    senderIsStaffPhone: sender.isStaffPhone,
+  };
+  const contact = { contactPhone: contactPhoneForBody(sender), staffName: sender.staffName };
+
   const smsPreview = {
     relatedType: "application" as const,
     relatedId: application_id,
@@ -169,7 +179,9 @@ export async function POST(req: Request) {
       loginId: issued.login_id,
       password: issued.password,
       portalUrl: getPortalLoginUrl(),
+      ...contact,
     }),
+    ...senderFields,
   };
 
   return NextResponse.json({

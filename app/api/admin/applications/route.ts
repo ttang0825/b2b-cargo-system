@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
 import { applicationRejectedMessage } from "@/lib/sms/templates";
+import { resolveSmsSender, contactPhoneForBody } from "@/lib/smsSenderPhone";
 
 // Next.js가 GET 응답(및 그 안에서 호출되는 fetch)을 캐시해버리면, 방금 처리한 결과가
 // 재조회 시 예전 값으로 보이는 문제가 있을 수 있어 매 요청마다 실제 DB를 다시 조회하도록 강제
@@ -106,6 +107,15 @@ export async function POST(req: Request) {
   // 이번 범위에 포함하지 않음(승인/거절만). 실제 발송은 client가
   // SmsConfirmModal로 확인·수정 후 /api/admin/send-sms를 호출해야만 일어남
   // (PR #73 리뷰 반영).
+  // 발신번호·본문 안내번호는 반드시 서버에서 세션으로 결정한다(클라이언트 입력값 신뢰 금지)
+  const sender = await resolveSmsSender();
+  const senderFields = {
+    senderDisplay: sender.display,
+    senderStaffName: sender.staffName,
+    senderIsStaffPhone: sender.isStaffPhone,
+  };
+  const contact = { contactPhone: contactPhoneForBody(sender), staffName: sender.staffName };
+
   const smsPreview =
     status === "거절" && updated
       ? {
@@ -117,7 +127,9 @@ export async function POST(req: Request) {
           message: applicationRejectedMessage({
             companyName: updated.company_name,
             reason: staff_note || null,
+            ...contact,
           }),
+          ...senderFields,
         }
       : null;
 

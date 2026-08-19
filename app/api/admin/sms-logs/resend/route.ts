@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
 import { sendSmsWithLog } from "@/lib/sendSms";
+import { resolveSmsSender } from "@/lib/smsSenderPhone";
+import { QUOTE_SMS_SUBJECT } from "@/lib/sms/templates";
 import type { SmsRelatedType, SmsRecipientType, SmsTemplateType } from "@/lib/sendSms";
 
 function getAdminClient() {
@@ -45,6 +47,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "수신자 전화번호가 없어 재발송할 수 없습니다." }, { status: 400 });
   }
 
+  // 재발송도 "지금 누른 사람" 기준으로 발신번호를 정한다 — 원래 로그에 남은 번호를
+  // 그대로 쓰면 퇴사자 번호로 다시 나갈 수 있다(문구는 원본 그대로 유지).
+  const sender = await resolveSmsSender();
+
   await sendSmsWithLog({
     relatedType: original.related_type as SmsRelatedType,
     relatedId: original.related_id,
@@ -53,6 +59,8 @@ export async function POST(req: Request) {
     recipientPhone: original.recipient_phone,
     message: original.message_content,
     sentBy: staff.id,
+    senderPhone: sender.phone,
+    subject: original.template_type === "quote_summary" ? QUOTE_SMS_SUBJECT : null,
   });
 
   return NextResponse.json({ ok: true });
