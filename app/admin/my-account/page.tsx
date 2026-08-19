@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabaseAdminAuth } from "@/lib/supabaseAdminAuthClient";
-import { getCurrentStaffInfo, refreshCurrentStaffCache } from "@/lib/currentStaff";
+import { getCurrentStaffInfo } from "@/lib/currentStaff";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import PasswordInput from "@/components/PasswordInput";
 import { formatPhoneNumber } from "@/lib/constants";
@@ -15,9 +15,6 @@ export default function MyAccountPage() {
   const [role, setRole] = useState<string | null>(null);
   const [senderPhone, setSenderPhone] = useState<string | null>(null);
   const [name, setName] = useState("");
-  const [savingName, setSavingName] = useState(false);
-  const [nameError, setNameError] = useState<string | null>(null);
-  const [nameSaved, setNameSaved] = useState(false);
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -55,37 +52,6 @@ export default function MyAccountPage() {
     }
     load();
   }, []);
-
-  async function handleSaveName(e: React.FormEvent) {
-    e.preventDefault();
-    setNameError(null);
-    setNameSaved(false);
-    if (!name.trim()) {
-      setNameError("이름을 입력해주세요.");
-      return;
-    }
-    setSavingName(true);
-    try {
-      const res = await fetch("/api/admin/my-account", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setNameError(data.error || "이름 저장에 실패했습니다.");
-        setSavingName(false);
-        return;
-      }
-      await refreshCurrentStaffCache();
-      setName(data.name || name.trim());
-      setNameSaved(true);
-      setTimeout(() => setNameSaved(false), 1500);
-    } catch {
-      setNameError("이름 저장 중 오류가 발생했습니다.");
-    }
-    setSavingName(false);
-  }
 
   async function handleChangePassword(e: React.FormEvent) {
     e.preventDefault();
@@ -158,10 +124,17 @@ export default function MyAccountPage() {
 
       <div className="card" style={{ padding: 20, marginBottom: 20, maxWidth: 480 }}>
         <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>기본 정보</h3>
-        <form onSubmit={handleSaveName} onKeyDown={handleFormKeyDown}>
+        {/* ⚠️ 이름은 읽기 전용이다. 상단메뉴 표시용 라벨일 뿐이었으나 35차부터
+            **고객에게 나가는 문자에 "(담당 OOO)"으로 찍히므로** 고객 접점 정보가 됐다.
+            발신번호와 같은 기준으로 관리자만 바꿀 수 있게 함(`/admin/staff` → 수정). */}
+        <div>
           <div className="field" style={{ marginBottom: 12 }}>
             <label>이름</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} />
+            <input value={name} disabled />
+            <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 6, lineHeight: 1.7 }}>
+              이 이름은 고객에게 발송되는 문자에 &quot;(담당 {name || "OOO"})&quot;으로 표시됩니다.
+              변경이 필요하면 관리자에게 문의해주세요.
+            </p>
           </div>
           <div className="field" style={{ marginBottom: 12 }}>
             <label>이메일 (로그인 아이디)</label>
@@ -186,11 +159,7 @@ export default function MyAccountPage() {
                 : "등록된 발신번호가 없어 내가 보내는 문자는 대표번호로 발송되며, 고객 회신이 나에게 오지 않습니다. 등록이 필요하면 관리자에게 문의해주세요."}
             </p>
           </div>
-          {nameError && <div className="error-box" style={{ marginBottom: 12 }}>{nameError}</div>}
-          <button className="btn" type="submit" disabled={savingName}>
-            {savingName ? "저장 중..." : nameSaved ? "저장 완료 ✓" : "이름 저장"}
-          </button>
-        </form>
+        </div>
       </div>
 
       <div className="card" style={{ padding: 20, maxWidth: 480 }}>
