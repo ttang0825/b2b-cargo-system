@@ -9,10 +9,21 @@
   --accent-soft: #e8f3ff;
   --danger: #f04452;
   --danger-soft: #ffeeee;
-  /* 브랜드 옐로(파비콘 배경색). **아직 어디에도 적용하지 않음** — 이 색을 사이트 전반
-     액센트로 쓸지는 미결정이라 변수만 등록해둠(나중에 쓰기 쉽게). 버튼·링크·헤더 등
-     기존 UI 색상을 이 값으로 바꾸려면 먼저 확인받을 것 */
-  --brand-yellow: #ffd833;
+  /* ── 브랜드 옐로 계열(11차에서 확정·적용됨) ─────────────────────────────────
+     공개 화면 헤더 배경과 랜딩 전반에 실제로 쓰인다. 27차에 변수만 등록해두고
+     "아직 어디에도 적용하지 않음"이던 상태가 이때 끝났다.
+
+     ⚠️ **`--accent-soft`(파랑 #e8f3ff)를 랜딩에 재사용하지 말 것.** 랜딩은
+     `.portal-theme` 안이라 `--accent-soft`가 #fff9d6으로 덮이긴 하지만, 그 값은
+     포털 배지용이라 색이 다르다 — 아래 5종을 쓸 것.
+
+     🔴 **옐로(#ffd833) 위에 `--text-muted`(#5f6b78)를 올리지 말 것** — 대비가 부족하다.
+     옐로 배경 위의 텍스트는 예외 없이 `--text`(#191f28) 계열로 쓴다. */
+  --brand-yellow: #ffd833; /* 헤더 배경, 번호 배지, 히어로 주 CTA */
+  --brand-yellow-soft: #fffdf0; /* "선택하는 이유" 섹션 배경, 혜택 칩 배경 */
+  --brand-yellow-border: #f0e7c4; /* 옅은 노랑 위에 얹는 카드·칩 테두리 */
+  --brand-yellow-tint: #f5f2e3; /* 아이콘 자리 배경 */
+  --brand-yellow-text: #8a6d00; /* 흰/옅은 배경 위 옐로 계열 진한 텍스트 */
   --radius: 14px;
   --radius-lg: 20px;
   --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
@@ -624,55 +635,6 @@ tbody tr:hover {
   background: var(--bg);
 }
 
-/* ── 랜딩 히어로 신뢰 배지 ───────────────────────────────────────────────────
-   다크 히어로 위에 **박스 없이 텍스트만** 올린다(박스로 감싸면 무거워져서 CTA가 죽음).
-   체크 표시에만 브랜드 옐로를 쓰고 본문은 밝은 회색. */
-.hero-trust {
-  list-style: none;
-  margin: 0 0 28px;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px 20px;
-}
-.hero-trust li {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: #e8e8e8;
-  line-height: 1.5;
-}
-.hero-trust-check {
-  color: #ffd833;
-  font-weight: 800;
-}
-/* 히어로 보조 링크("고객 등록 신청") — 버튼 2개보다 한 단계 낮은 위계 */
-.hero-secondary-link {
-  display: inline-flex;
-  align-items: center;
-  /* 터치 영역 44px 확보 */
-  min-height: 44px;
-  font-size: 14px;
-  font-weight: 700;
-  color: #c9c9c9;
-  text-decoration: none;
-}
-.hero-secondary-link:hover {
-  color: #ffd833;
-}
-
-@media (max-width: 560px) {
-  /* 좁은 화면에서 세 줄이 뒤엉키지 않게 세로로 쌓고 왼쪽 정렬 */
-  .hero-trust {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-    text-align: left;
-  }
-}
-
 /* ── 공개 화면 공용 헤더(스티키) ─────────────────────────────────────────────
    `components/LandingHeader.tsx`(랜딩·회사소개·차량안내·법적 문서)와
    `components/PublicPageHeader.tsx`(견적문의·고객등록·현황조회)가 **이 클래스를 공유**한다.
@@ -688,12 +650,67 @@ tbody tr:hover {
   /* 본문 위로 올라오되, 헤더 안의 모바일 드롭다운(.landing-nav-dropdown, z-index 50)은
      이 스택 컨텍스트 안에서 그려지므로 헤더에 가려지지 않는다 */
   z-index: 100;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
+  /* 11차: 흰색 → 브랜드 옐로. 공개 10개 화면(랜딩·견적문의·고객등록·현황조회 3종·
+     회사소개·차량안내·법적 문서 3종)이 이 클래스를 공유하므로 여기 한 곳만 바꾸면 된다.
+     ⚠️ 관리자(`/admin`)·운송관리(`/customer`)의 `TopNav`는 이 클래스를 쓰지 않으므로
+     영향을 받지 않는다(의도된 것 — 건드리지 말 것). */
+  background: var(--brand-yellow);
+  /* 옐로 위에서는 --border(#e5e8eb)가 배경보다 밝아 경계가 사라진다 — 어둡게 깐다 */
+  border-bottom: 1px solid rgba(26, 26, 26, 0.1);
+  /* 🔴 헤더 안의 모든 텍스트는 #191f28 계열로. --text-muted(#5f6b78)를 옐로 위에
+     올리면 대비가 부족하다(11차 3-3). 아래 .guide-link 재정의도 같은 이유. */
+  color: var(--text);
 }
-/* 최상단에서는 그림자 없음 — 스크롤이 시작되면 본문과 분리되어 보이도록 옅게만 */
+/* 최상단에서는 그림자 없음 — 스크롤이 시작되면 본문과 분리되어 보이도록.
+   ⚠️ 흰 배경 기준값(--shadow-sm, 파란빛 도는 옅은 그림자)은 옐로 위에서 거의 안 보이고
+   탁하게 번진다 — 옐로 대비로 강도를 다시 잡은 값이다(11차 3-2). */
 .public-header-scrolled {
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 2px 10px rgba(26, 26, 26, 0.16);
+}
+/* 데스크탑 메뉴 링크 — .guide-link 기본값이 --text-muted + --border라 옐로 위에서
+   둘 다 대비가 모자람 */
+.public-header .guide-link {
+  color: rgba(26, 26, 26, 0.72);
+  border-left-color: rgba(26, 26, 26, 0.16);
+}
+.public-header .guide-link:hover,
+.public-header .guide-link:focus-visible {
+  color: var(--text);
+}
+/* 헤더 CTA — 옐로 배경 위에서는 `.portal-theme .btn`(검정 배경 + 옐로 글자)의 글자가
+   배경과 같은 색이라 읽히지 않는다. 시안대로 검정 배경 + 흰 글자로 덮어씀 */
+.public-header .landing-nav-cta,
+.public-header .landing-nav-cta:hover {
+  background: #1a1a1a;
+  color: #ffffff;
+}
+.public-header .landing-nav-cta:hover {
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.22);
+}
+/* 햄버거 버튼 — 흰 배경/회색 테두리가 옐로 위에서 흐리게 떠 보임 */
+.public-header .landing-nav-toggle {
+  background: transparent;
+  border-color: rgba(26, 26, 26, 0.24);
+  color: var(--text);
+}
+.public-header .landing-nav-toggle:hover {
+  background: rgba(26, 26, 26, 0.06);
+}
+/* `/quote`·`/apply` 헤더 우측의 "문의·신청 현황 조회" 칩 — 옅은 노랑 배경(--accent-soft가
+   .portal-theme에서 #fff9d6)이라 옐로 헤더에 묻힌다. 흰 칩 + 진한 글자로 분리 */
+.public-header-status-link {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  padding: 9px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(26, 26, 26, 0.12);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.public-header-status-link:hover {
+  background: #ffffff;
 }
 
 /* 앵커(#해시)로 이동할 때 대상이 고정 헤더 아래로 숨지 않도록 헤더 높이만큼 띄운다.
@@ -1130,5 +1147,825 @@ tbody tr:hover {
 @media (max-width: 460px) {
   .home-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================================
+   랜딩(/) 레이아웃 — 11차 확정 시안(8차_desktop-1280 / 8차_mobile-360) 기준
+   ============================================================================
+   `app/page.tsx`만 쓰는 블록이다. `/about`·`/vehicles`는 아직 기존 카드 구성이라
+   이 클래스들을 쓰지 않는다(두 페이지 디자인은 이번 범위 밖).
+
+   🔴 **섹션 배경 교차 순서가 이 시안의 리듬 자체**다. 임의로 바꾸면 의도가 깨진다:
+     ① 히어로 다크 #1a1a1a → ② 운송 유형 흰색 → ③ 선택 이유 옅은 노랑
+     → ④ 차량 형태 흰색 → ⑤ 진행 단계 회색 #f2f4f6 → ⑥ 마감 CTA 다크 #1a1a1a
+
+   ⚠️ 회색 배경에 `var(--bg)`를 쓸 수 없다 — 랜딩은 `.portal-theme` 안이고 거기서
+   `--bg`가 #fffdf6(아주 옅은 노랑)으로 덮여 있어서 회색이 나오지 않는다. 그래서
+   #f2f4f6을 직접 적었다. 흰색 섹션도 같은 이유로 배경을 명시한다.
+   ============================================================================ */
+
+/* ── 섹션 공통 ─────────────────────────────────────────────────────────────── */
+/* 🔴 한글이 어절 중간에서 끊기지 않게 한다("관리합니 / 다"처럼 잘리던 것).
+   본문 폰트(SUIT)는 CDN에서 받아오므로 폰트가 늦게 뜨거나 못 뜨면 글자 폭이 달라져
+   줄바꿈 위치가 바뀐다 — 특정 폰트 폭에 맞춰 줄을 억지로 맞추지 말고 이 규칙에 맡길 것.
+   `overflow-wrap`은 한 어절이 칸보다 긴 극단적인 경우에만 예외적으로 끊기게 하는 안전장치다. */
+.landing-hero,
+.landing-section {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+.landing-section {
+  padding: 88px 0;
+}
+.landing-section-white {
+  background: var(--surface);
+}
+.landing-section-soft {
+  background: var(--brand-yellow-soft);
+}
+.landing-section-gray {
+  background: #f2f4f6; /* var(--bg)는 .portal-theme에서 덮여 있어 못 씀(위 주석 참고) */
+}
+.landing-section-dark {
+  background: #1a1a1a;
+}
+/* `.container`는 상하 패딩(32/64px)을 갖고 있어 섹션 패딩과 겹친다 — 랜딩은 좌우
+   여백만 담당하는 이 래퍼를 쓴다 */
+.landing-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+.landing-h2 {
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1.35;
+  letter-spacing: -0.025em;
+  margin: 0;
+}
+.landing-sub {
+  font-size: 15px;
+  color: var(--text-muted);
+  line-height: 1.7;
+  margin: 16px 0 0;
+}
+
+/* ── 이미지 자리(components/LandingImage.tsx) ──────────────────────────────────
+   크기·비율은 이 파일이 정하고 컴포넌트는 내용만 그린다. 실제 사진이 들어와도
+   상자 크기가 그대로라 레이아웃이 밀리지 않는다. */
+.landing-media {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  overflow: hidden;
+  background: #e9ebee;
+}
+.landing-media img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.landing-media-empty {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #98a2ae;
+  white-space: nowrap;
+}
+/* 다크 히어로 위에 놓이는 자리표시자 — 밝은 회색이면 화면이 반쪽으로 갈라져 보인다 */
+.landing-media-dark {
+  background: #262b31;
+}
+.landing-media-dark .landing-media-empty {
+  color: #6b727c;
+}
+
+/* ── ① 히어로 ──────────────────────────────────────────────────────────────── */
+.landing-hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: #1a1a1a;
+  overflow: hidden;
+}
+/* 데스크탑: 이미지가 우측 배경으로 깔리고 좌측 텍스트 위로 다크 그라데이션이 덮인다.
+   모바일에서는 아래 미디어쿼리에서 문서 흐름으로 되돌려 CTA·신뢰 3줄 **아래** 배너가 된다. */
+.landing-hero-media {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 68%;
+  max-width: 870px;
+}
+.landing-hero-media .landing-media {
+  height: 100%;
+}
+/* 이미지 위에서도 흰 글자가 읽히도록 좌측을 덮는 그라데이션.
+   실제 사진이 들어오면 밝기에 따라 정지점을 조절할 수 있다. */
+.landing-hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    #1a1a1a 0%,
+    #1a1a1a 34%,
+    rgba(26, 26, 26, 0.94) 46%,
+    rgba(26, 26, 26, 0.6) 62%,
+    rgba(26, 26, 26, 0) 80%
+  );
+  pointer-events: none;
+}
+.landing-hero-inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: 100%;
+  max-width: 1100px;
+  min-height: 600px;
+  margin: 0 auto;
+  padding: 96px 24px 104px;
+}
+.landing-hero-text {
+  max-width: 660px;
+}
+/* 신뢰 3줄은 본문보다 한 줄이 길어서(허가번호·정산 조건) 텍스트 폭에 가두면 2열이
+   눌린다 — 조금 더 넓게 잡는다 */
+.landing-hero-trust-wrap {
+  max-width: 780px;
+}
+.landing-hero-eyebrow {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--brand-yellow);
+  letter-spacing: -0.01em;
+  margin: 0 0 16px;
+}
+.landing-hero-title {
+  font-family: var(--font-display);
+  font-size: 44px;
+  font-weight: 800;
+  line-height: 1.32;
+  letter-spacing: -0.03em;
+  color: #ffffff;
+  margin: 0 0 20px;
+}
+.landing-hero-sub {
+  font-size: 16.5px;
+  line-height: 1.7;
+  color: #c9c9c9;
+  margin: 0 0 30px;
+}
+.landing-hero-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 38px;
+}
+
+/* 히어로·마감 CTA 공용 버튼.
+   ⚠️ `.btn`(=.portal-theme에서 검정 배경 + 옐로 글자)을 쓰지 않는 이유: 시안의 주 CTA는
+   반대로 **옐로 배경 + 검정 글자**라 색을 뒤집어야 하고, 다크 배경 위에서는 옐로 면이
+   훨씬 강하게 읽힌다. `.btn`을 고치면 공개 폼·포털 전체가 같이 바뀌므로 별도 클래스로 뒀다. */
+.landing-btn-primary,
+.landing-btn-phone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  /* 터치 영역 44px 이상 확보 */
+  min-height: 52px;
+  padding: 0 28px;
+  border-radius: 12px;
+  font-size: 15.5px;
+  font-weight: 800;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+}
+.landing-btn-primary {
+  background: var(--brand-yellow);
+  border: 1.5px solid var(--brand-yellow);
+  color: #1a1a1a;
+}
+.landing-btn-primary:hover {
+  background: #ffcf0a;
+  border-color: #ffcf0a;
+}
+.landing-btn-phone {
+  background: rgba(255, 216, 51, 0.08);
+  border: 1.5px solid var(--brand-yellow);
+  color: var(--brand-yellow);
+}
+.landing-btn-phone:hover {
+  background: rgba(255, 216, 51, 0.18);
+}
+/* 히어로 보조 링크("고객 등록 신청") — 버튼 2개보다 한 단계 낮은 위계 */
+.hero-secondary-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  /* 데스크탑에서는 버튼 2개와 같은 줄에 놓이므로 좌우 여백만 조금 준다 */
+  margin-left: 8px;
+  /* 터치 영역 44px 확보 */
+  min-height: 44px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #c9c9c9;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(201, 201, 201, 0.5);
+}
+.hero-secondary-link:hover {
+  color: var(--brand-yellow);
+  border-bottom-color: var(--brand-yellow);
+}
+
+/* 신뢰 3줄 — 다크 히어로 위에 **박스 없이 텍스트만** 올린다(박스로 감싸면 무거워져
+   CTA가 죽음). 체크 표시에만 브랜드 옐로를 쓰고 본문은 밝은 회색.
+   데스크탑은 2열(1·2번이 첫 줄, 3번이 둘째 줄), 모바일은 1열. */
+.hero-trust {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  justify-content: start;
+  gap: 10px 34px;
+}
+.hero-trust li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #e8e8e8;
+}
+.hero-trust-check {
+  color: var(--brand-yellow);
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+/* ── ② 이런 운송을 맡고 있습니다 ──────────────────────────────────────────── */
+.landing-types {
+  display: grid;
+  grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+  gap: 56px;
+  align-items: start;
+}
+/* 456×304 — 모바일에서는 아예 렌더링하지 않는다(세로가 길어져서, 지시서 4-2) */
+.landing-types-media {
+  aspect-ratio: 456 / 304;
+  border-radius: 18px;
+  margin-top: 32px;
+}
+.landing-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border);
+}
+.landing-list li {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+  padding: 17px 0;
+  border-bottom: 1px solid var(--border);
+}
+/* 번호 배지 — **노란 원 + 검정 숫자**로 반전한 것이다. 흰 배경 위에 노란 글씨만
+   올리면 대비가 부족해서 안 보인다(지시서 4-2). 색을 뒤집지 말 것. */
+.landing-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--brand-yellow);
+  color: #1a1a1a;
+  font-family: var(--font-display);
+  font-size: 11.5px;
+  font-weight: 800;
+  margin-top: 1px;
+}
+.landing-list-title {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0 0 4px;
+}
+.landing-list-desc {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  margin: 0;
+}
+/* 목록이 "취급 범위 한정"으로 읽히지 않도록 하는 문구 — 지우지 말 것(32차) */
+.landing-types-note {
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--text-muted);
+  margin: 18px 0 0;
+}
+
+/* ── ③ 위캐리를 선택하는 이유 ─────────────────────────────────────────────── */
+.landing-values-head {
+  text-align: center;
+}
+.landing-rule {
+  width: 56px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--brand-yellow);
+  margin: 20px auto 0;
+}
+.landing-values-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 26px;
+  margin-top: 46px;
+}
+.landing-value-card {
+  background: var(--surface);
+  border: 1px solid var(--brand-yellow-border);
+  border-radius: 20px;
+  padding: 34px 32px;
+}
+/* 아이콘 자리 64×64. 상자가 작아 "이미지 준비 중" 문구는 숨기고 색면만 남긴다 */
+.landing-value-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: var(--brand-yellow-tint);
+  margin-bottom: 22px;
+}
+.landing-value-icon .landing-media-empty {
+  display: none;
+}
+.landing-value-q {
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  margin: 0 0 10px;
+}
+.landing-value-a {
+  font-size: 16px;
+  line-height: 1.65;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* ── ④ 필요한 차량 형태로 배차해드립니다 ──────────────────────────────────── */
+.landing-vehicles-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 40px;
+  align-items: end;
+}
+.landing-vehicles-aside {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-muted);
+  text-align: right;
+  margin: 0;
+}
+/* 🔴 모바일에서도 2×2를 유지한다 — 4종을 **한눈에 비교**하는 것이 이 섹션의 목적이라
+   가로 스크롤로 바꾸면 안 된다(지시서 4-4). 아래 미디어쿼리 참고. */
+.landing-vehicles-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 24px;
+  margin-top: 34px;
+}
+.landing-vehicle-media {
+  aspect-ratio: 272 / 200;
+  border-radius: 14px;
+}
+.landing-vehicle-name {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 14px 0 4px;
+}
+.landing-vehicle-desc {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  margin: 0;
+}
+.landing-arrow-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  /* 터치 영역 44px 확보 */
+  min-height: 44px;
+  margin-top: 22px;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text);
+  text-decoration: none;
+}
+.landing-arrow-link .landing-arrow {
+  color: var(--brand-yellow-text);
+}
+.landing-arrow-link:hover .landing-arrow {
+  transform: translateX(3px);
+}
+.landing-arrow {
+  transition: transform 0.15s;
+}
+
+/* ── ⑤ 이렇게 진행됩니다 ──────────────────────────────────────────────────── */
+.landing-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 32px;
+  margin-top: 44px;
+}
+.landing-step {
+  position: relative;
+  padding-top: 54px;
+}
+/* 가로 진행선 — 각 단계가 자기 구간을 그리고, 배지는 그 위에 불투명하게 얹힌다.
+   모바일에서는 아래 미디어쿼리가 같은 요소를 **세로선**으로 바꾼다. */
+.landing-step::before {
+  content: "";
+  position: absolute;
+  top: 17px;
+  left: 18px;
+  right: -32px; /* 다음 칸까지 이어지도록 gap(32px)만큼 넘긴다 */
+  height: 2px;
+  background: var(--brand-yellow);
+}
+.landing-step:last-child::before {
+  right: 0;
+}
+.landing-step-badge {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #1a1a1a;
+  color: var(--brand-yellow);
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 800;
+}
+.landing-step-title {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0 0 10px;
+}
+.landing-step-desc {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* 운송관리 화면 카드 */
+.landing-portal-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 560px);
+  gap: 44px;
+  align-items: center;
+  margin-top: 56px;
+  padding: 44px;
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+.landing-portal-label {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--brand-yellow-text);
+  margin: 0 0 12px;
+}
+.landing-portal-title {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.45;
+  letter-spacing: -0.025em;
+  margin: 0 0 16px;
+}
+.landing-portal-desc {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text-muted);
+  margin: 0;
+}
+.landing-portal-media-wrap {
+  position: relative;
+}
+.landing-portal-media {
+  aspect-ratio: 560 / 240;
+  border-radius: 14px;
+  box-shadow: var(--shadow-md);
+}
+/* 🔴 캡처 하단 흰색 페이드 — 표가 잘린 자리를 자연스럽게 흐린다(데스크탑 36px).
+   카드 배경(--surface)과 같은 색이어야 이어져 보인다. */
+.landing-portal-fade {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 36px;
+  border-radius: 0 0 14px 14px;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), var(--surface));
+  pointer-events: none;
+}
+
+/* ── ⑥ 첫 거래 혜택(진행 단계 섹션 하단) ──────────────────────────────────── */
+.landing-perks {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 26px;
+  align-items: center;
+  margin-top: 52px;
+  padding-top: 30px;
+  border-top: 1px solid var(--border);
+}
+.landing-perks-label {
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.5;
+  color: var(--brand-yellow-text);
+}
+.landing-perks-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+/* ⚠️ 칩에 금액·비율을 쓰지 않는다 — 한시 프로모션이라 적용 조건·기간이 미확정이고,
+   조건 없이 금액만 게시하면 표시광고 문제가 된다(32차). 조건이 확정되면 함께 표기할 것 */
+.landing-chip {
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: var(--brand-yellow-soft);
+  border: 1px solid var(--brand-yellow-border);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* ── ⑦ 마감 CTA ───────────────────────────────────────────────────────────── */
+.landing-cta-final {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 36px;
+  align-items: center;
+}
+.landing-cta-title {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: #ffffff;
+  margin: 0 0 14px;
+}
+.landing-cta-sub {
+  font-size: 14.5px;
+  line-height: 1.8;
+  color: #c9c9c9;
+  margin: 0;
+}
+.landing-cta-phone {
+  color: var(--brand-yellow);
+  font-weight: 800;
+}
+.landing-cta-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+/* ── 태블릿(≤1000px) ──────────────────────────────────────────────────────── */
+@media (max-width: 1000px) {
+  .landing-types {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+  .landing-types-media {
+    margin-top: 0;
+  }
+  .landing-values-grid {
+    grid-template-columns: 1fr;
+  }
+  .landing-vehicles-head {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .landing-vehicles-aside {
+    text-align: left;
+  }
+  .landing-portal-card {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+  .landing-cta-final {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+}
+
+/* ── 모바일(≤760px) ───────────────────────────────────────────────────────── */
+@media (max-width: 760px) {
+  .landing-section {
+    padding: 56px 0;
+  }
+  .landing-inner {
+    padding: 0 20px;
+  }
+  .landing-h2 {
+    font-size: 24px;
+  }
+  .landing-sub {
+    font-size: 14px;
+    margin-top: 12px;
+  }
+
+  /* 🔴 히어로 모바일 순서: 텍스트 → CTA → 고객 등록 링크 → **신뢰 3줄** → 이미지.
+     이미지가 CTA와 신뢰 3줄 사이에 끼면 안 된다(지시서 4-1). 그래서 배경으로 깔던
+     미디어를 문서 흐름으로 되돌리고 order로 맨 뒤에 둔다. */
+  .landing-hero-media {
+    position: static;
+    order: 2;
+    width: 100%;
+    max-width: none;
+  }
+  .landing-hero-media .landing-media {
+    height: auto;
+    aspect-ratio: 360 / 170;
+  }
+  .landing-hero-overlay {
+    display: none; /* 이미지가 텍스트 뒤에 있지 않으므로 덮개가 필요 없다 */
+  }
+  .landing-hero-inner {
+    order: 1;
+    min-height: 0;
+    padding: 40px 20px 36px;
+  }
+  .landing-hero-text {
+    max-width: none;
+  }
+  .landing-hero-title {
+    font-size: 28px;
+    line-height: 1.35;
+  }
+  .landing-hero-sub {
+    font-size: 15px;
+    margin-bottom: 26px;
+  }
+  /* 좁은 화면에서는 버튼을 전폭으로 세로 배치 */
+  .landing-hero-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .landing-hero-actions .landing-btn-primary,
+  .landing-hero-actions .landing-btn-phone {
+    width: 100%;
+  }
+  .hero-secondary-link {
+    /* 버튼과 같은 세로 흐름에 놓이므로 좌측 여백을 없애고 가운데로.
+       align-self가 없으면 stretch되어 밑줄이 전폭 구분선처럼 보인다 */
+    align-self: center;
+    margin-left: 0;
+    margin-top: 4px;
+  }
+  /* 세 줄이 뒤엉키지 않게 1열로 쌓는다 */
+  .hero-trust {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .landing-list-title {
+    font-size: 16px;
+  }
+  .landing-value-card {
+    padding: 22px 20px;
+    border-radius: 16px;
+  }
+  .landing-value-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    margin-bottom: 16px;
+  }
+  .landing-value-q {
+    font-size: 17px;
+  }
+  .landing-value-a {
+    font-size: 14.5px;
+  }
+  .landing-values-grid {
+    gap: 14px;
+    margin-top: 30px;
+  }
+
+  /* 🔴 2×2 유지(가로 스크롤로 바꾸지 말 것) */
+  .landing-vehicles-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+  .landing-vehicle-media {
+    aspect-ratio: 154 / 104;
+  }
+  .landing-vehicle-name {
+    font-size: 14.5px;
+    margin-top: 10px;
+  }
+  .landing-vehicle-desc {
+    font-size: 12.5px;
+  }
+
+  /* 가로 진행선 → 세로 진행선 */
+  .landing-steps {
+    grid-template-columns: 1fr;
+    gap: 26px;
+    margin-top: 30px;
+  }
+  .landing-step {
+    padding: 0 0 0 48px;
+  }
+  .landing-step::before {
+    top: 36px;
+    bottom: -26px; /* 다음 단계까지 이어지도록 gap(26px)만큼 넘긴다 */
+    left: 17px;
+    right: auto;
+    width: 2px;
+    height: auto;
+  }
+  .landing-step:last-child::before {
+    display: none; /* 마지막 단계 아래로는 선을 흘리지 않는다 */
+  }
+  .landing-step-title {
+    font-size: 17px;
+    /* 배지와 같은 줄에서 시작하도록 */
+    padding-top: 6px;
+    margin-bottom: 8px;
+  }
+  .landing-step-desc {
+    font-size: 13.5px;
+  }
+
+  .landing-portal-card {
+    margin-top: 36px;
+    padding: 24px 20px;
+    border-radius: 18px;
+  }
+  .landing-portal-title {
+    font-size: 20px;
+  }
+  .landing-portal-desc {
+    font-size: 14px;
+  }
+  .landing-portal-media {
+    aspect-ratio: 284 / 130;
+    border-radius: 12px;
+  }
+  .landing-portal-fade {
+    height: 24px;
+    border-radius: 0 0 12px 12px;
+  }
+
+  .landing-perks {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    margin-top: 36px;
+  }
+  .landing-chip {
+    padding: 9px 14px;
+    font-size: 12.5px;
+  }
+
+  .landing-cta-title {
+    font-size: 24px;
+  }
+  .landing-cta-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .landing-cta-actions .landing-btn-primary,
+  .landing-cta-actions .landing-btn-phone {
+    width: 100%;
   }
 }
