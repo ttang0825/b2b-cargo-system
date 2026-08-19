@@ -52,6 +52,7 @@ const ADMIN_ONLY_GROUP: NavGroup = {
   items: [
     { href: "/admin/dashboard", label: "운영 대시보드" },
     { href: "/admin/staff", label: "직원 계정 관리" },
+    { href: "/admin/sms-logs", label: "문자 발송 이력" },
     { href: "/admin/support-logs", label: "지원접속 이력" },
   ],
 };
