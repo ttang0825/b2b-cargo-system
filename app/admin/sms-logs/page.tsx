@@ -36,12 +36,35 @@ type SmsLog = {
   link: { href: string; label: string } | null;
 };
 
-function formatDateTime(value: string) {
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/** 발송시각은 칸을 좁히려고 날짜/시간을 두 줄로 나눠 보여준다 */
+function formatDate(value: string) {
   const d = new Date(value);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(
-    d.getMinutes()
-  )}`;
+  return `${d.getFullYear()}.${pad2(d.getMonth() + 1)}.${pad2(d.getDate())}`;
+}
+function formatTime(value: string) {
+  const d = new Date(value);
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+function formatDateTime(value: string) {
+  return `${formatDate(value)} ${formatTime(value)}`;
+}
+
+/** 목록에는 한 줄 미리보기만 — 전문은 팝업에서 본다 */
+function previewOf(message: string | null): string {
+  if (!message) return "";
+  return message.replace(/\s+/g, " ").trim();
+}
+
+/** 여러 줄을 넘기면 말줄임 처리(오류 메시지가 옆 칸을 침범하지 않게) */
+function clampStyle(lines: number): React.CSSProperties {
+  return {
+    display: "-webkit-box",
+    WebkitLineClamp: lines,
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
+  };
 }
 
 /** 저장은 숫자만 하므로 표시할 때만 하이픈을 붙인다 */
@@ -65,6 +88,9 @@ export default function AdminSmsLogsPage() {
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // 문자 본문은 150~350byte 여러 줄이라 표 셀 안에 두면 칸이 세로로 길어지고 다른
+  // 칸까지 눌린다(PR #85 리뷰) — 목록에는 한 줄 미리보기만 두고 전문은 팝업에서 본다
+  const [detailLog, setDetailLog] = useState<SmsLog | null>(null);
 
   const [preset, setPreset] = useState<DatePreset>("month");
   const [templateType, setTemplateType] = useState("");
@@ -104,6 +130,16 @@ export default function AdminSmsLogsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // 팝업은 ESC로도 닫히게(다른 모달들과 동일한 동작)
+  useEffect(() => {
+    if (!detailLog) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setDetailLog(null);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [detailLog]);
 
   // 발송 결과는 자동으로 갱신되지 않는다(Webhook/폴링은 1차 범위 밖) — 여기서도
   // 상세 화면 패널과 똑같이 눌러서 최신 상태를 가져올 수 있게 함
@@ -146,29 +182,30 @@ export default function AdminSmsLogsPage() {
   const selectStyle = { fontSize: 12.5, padding: "6px 8px" };
   const reachedLimit = total > items.length;
 
-  function MessageDetails({ log }: { log: SmsLog }) {
-    if (!log.message_content) return null;
+  function MessagePreview({ log }: { log: SmsLog }) {
+    if (!log.message_content) return <span style={{ color: "var(--text-muted)" }}>-</span>;
     return (
-      <details>
-        <summary style={{ cursor: "pointer", fontSize: 12, color: "var(--text-muted)", userSelect: "none" }}>
-          문자 내용 보기
-        </summary>
-        <div
-          style={{
-            marginTop: 6,
-            padding: "10px 12px",
-            borderRadius: 8,
-            background: "var(--bg-subtle, #f7f8f9)",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
-            fontSize: 12.5,
-            lineHeight: 1.7,
-            maxWidth: 460,
-          }}
-        >
-          {log.message_content}
-        </div>
-      </details>
+      <button
+        type="button"
+        onClick={() => setDetailLog(log)}
+        title="클릭하면 전문을 봅니다"
+        style={{
+          display: "block",
+          width: "100%",
+          textAlign: "left",
+          background: "none",
+          border: "none",
+          padding: 0,
+          cursor: "pointer",
+          font: "inherit",
+          fontSize: 12.5,
+          lineHeight: 1.6,
+          color: "inherit",
+          ...clampStyle(2),
+        }}
+      >
+        {previewOf(log.message_content)}
+      </button>
     );
   }
 
@@ -182,7 +219,7 @@ export default function AdminSmsLogsPage() {
           disabled={busyId === log.id}
           onClick={() => handleRefresh(log.id)}
         >
-          상태 새로고침
+          새로고침
         </button>
       );
     }
@@ -297,14 +334,15 @@ export default function AdminSmsLogsPage() {
               <table className="desktop-only">
                 <thead>
                   <tr>
-                    <th style={{ width: 130 }}>발송시각</th>
-                    <th style={{ width: 130 }}>종류</th>
-                    <th style={{ width: 120 }}>상태</th>
-                    <th style={{ width: 130 }}>받는 사람</th>
-                    <th style={{ width: 130 }}>보낸 번호</th>
-                    <th style={{ width: 90 }}>보낸 사람</th>
+                    {/* 칸 너비 합을 줄여서 "내용"이 실제로 넓게 쓰이도록 함(PR #85 리뷰).
+                        발송시각은 날짜/시간 2줄, 보낸 번호·사람은 한 칸에 2줄로 합침 */}
+                    <th style={{ width: 88 }}>발송시각</th>
+                    <th style={{ width: 124 }}>종류</th>
+                    <th style={{ width: 96 }}>상태</th>
+                    <th style={{ width: 116 }}>받는 사람</th>
+                    <th style={{ width: 116 }}>보낸 번호/사람</th>
                     <th>내용</th>
-                    <th style={{ width: 100 }}></th>
+                    <th style={{ width: 76 }}></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -312,16 +350,24 @@ export default function AdminSmsLogsPage() {
                     const color: { bg?: string; text?: string } = SMS_STATUS_COLORS[log.status] || {};
                     return (
                       <tr key={log.id}>
-                        <td className="cell-nowrap">
-                          <span className="num">{formatDateTime(log.sent_at)}</span>
+                        <td className="cell-nowrap" style={{ verticalAlign: "top" }}>
+                          <div className="num">{formatDate(log.sent_at)}</div>
+                          <div className="num" style={{ color: "var(--text-muted)" }}>
+                            {formatTime(log.sent_at)}
+                          </div>
                         </td>
-                        <td className="cell-nowrap">
-                          {getSmsTemplateLabel(log.template_type)}
+                        <td style={{ verticalAlign: "top", wordBreak: "keep-all" }}>
+                          <div>{getSmsTemplateLabel(log.template_type)}</div>
                           {log.message_type && (
                             <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{log.message_type}</div>
                           )}
+                          {log.link && (
+                            <Link href={log.link.href} style={{ fontSize: 11.5 }}>
+                              {log.link.label} →
+                            </Link>
+                          )}
                         </td>
-                        <td className="cell-nowrap">
+                        <td style={{ verticalAlign: "top" }}>
                           <span
                             className="badge"
                             style={{ background: color.bg, color: color.text, cursor: "help" }}
@@ -329,30 +375,36 @@ export default function AdminSmsLogsPage() {
                           >
                             {getSmsStatusLabel(log.status)}
                           </span>
+                          {/* 오류 메시지는 길면 옆 칸을 밀어내므로 2줄에서 자르고
+                              전문은 마우스를 올리면 보이게 함 */}
                           {log.error_message && (
-                            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3, maxWidth: 200 }}>
+                            <div
+                              title={log.error_message}
+                              style={{
+                                fontSize: 11,
+                                color: "var(--text-muted)",
+                                marginTop: 3,
+                                lineHeight: 1.5,
+                                ...clampStyle(2),
+                              }}
+                            >
                               {log.error_message}
                             </div>
                           )}
                         </td>
-                        <td className="cell-nowrap">
+                        <td className="cell-nowrap" style={{ verticalAlign: "top" }}>
                           <span className="num">{log.recipient_phone || "번호 없음"}</span>
                         </td>
-                        <td className="cell-nowrap">
-                          <span className="num">{formatPhone(log.sender_phone) || "기록 없음"}</span>
+                        <td className="cell-nowrap" style={{ verticalAlign: "top" }}>
+                          <div className="num">{formatPhone(log.sender_phone) || "기록 없음"}</div>
+                          <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
+                            {log.sent_by_name || "-"}
+                          </div>
                         </td>
-                        <td className="cell-nowrap">{log.sent_by_name || "-"}</td>
-                        <td>
-                          <MessageDetails log={log} />
-                          {log.link && (
-                            <div style={{ marginTop: 4 }}>
-                              <Link href={log.link.href} style={{ fontSize: 12 }}>
-                                {log.link.label} →
-                              </Link>
-                            </div>
-                          )}
+                        <td style={{ verticalAlign: "top" }}>
+                          <MessagePreview log={log} />
                         </td>
-                        <td className="cell-nowrap">
+                        <td className="cell-nowrap" style={{ verticalAlign: "top" }}>
                           <ActionButtons log={log} />
                         </td>
                       </tr>
@@ -401,7 +453,7 @@ export default function AdminSmsLogsPage() {
                       </div>
                     )}
                     <div style={{ marginTop: 8 }}>
-                      <MessageDetails log={log} />
+                      <MessagePreview log={log} />
                     </div>
                     <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
                       {log.link && (
@@ -418,6 +470,118 @@ export default function AdminSmsLogsPage() {
           </>
         )}
       </div>
+
+      {/* 문자 전문 팝업. 목록에서 미리보기를 누르면 열린다 */}
+      {detailLog && (
+        <div
+          onClick={() => setDetailLog(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 200,
+            padding: 20,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="card"
+            style={{ padding: 20, width: "100%", maxWidth: 480, maxHeight: "85vh", overflowY: "auto" }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+              <h3 style={{ fontSize: 15, margin: 0 }}>
+                {getSmsTemplateLabel(detailLog.template_type)}
+                {detailLog.message_type && (
+                  <span style={{ fontSize: 12, fontWeight: 400, color: "var(--text-muted)" }}>
+                    {" "}
+                    ({detailLog.message_type})
+                  </span>
+                )}
+              </h3>
+              <button
+                type="button"
+                aria-label="닫기"
+                onClick={() => setDetailLog(null)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: 20,
+                  lineHeight: 1,
+                  cursor: "pointer",
+                  color: "var(--text-muted)",
+                  padding: 0,
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <dl
+              style={{
+                display: "grid",
+                gridTemplateColumns: "76px 1fr",
+                rowGap: 4,
+                columnGap: 10,
+                fontSize: 12.5,
+                margin: "12px 0 0",
+              }}
+            >
+              <dt style={{ color: "var(--text-muted)" }}>발송시각</dt>
+              <dd style={{ margin: 0 }} className="num">
+                {formatDateTime(detailLog.sent_at)}
+              </dd>
+              <dt style={{ color: "var(--text-muted)" }}>받는 사람</dt>
+              <dd style={{ margin: 0 }} className="num">
+                {detailLog.recipient_phone || "번호 없음"}
+              </dd>
+              <dt style={{ color: "var(--text-muted)" }}>보낸 번호</dt>
+              <dd style={{ margin: 0 }} className="num">
+                {formatPhone(detailLog.sender_phone) || "기록 없음"}
+              </dd>
+              <dt style={{ color: "var(--text-muted)" }}>보낸 사람</dt>
+              <dd style={{ margin: 0 }}>{detailLog.sent_by_name || "-"}</dd>
+              <dt style={{ color: "var(--text-muted)" }}>상태</dt>
+              <dd style={{ margin: 0 }}>{getSmsStatusLabel(detailLog.status)}</dd>
+              {detailLog.error_message && (
+                <>
+                  <dt style={{ color: "var(--text-muted)" }}>오류</dt>
+                  <dd style={{ margin: 0 }}>{detailLog.error_message}</dd>
+                </>
+              )}
+            </dl>
+
+            {/* 실제로 나간 문구 그대로 — 줄바꿈을 살려서 보여준다 */}
+            <div
+              style={{
+                marginTop: 14,
+                padding: "12px 14px",
+                borderRadius: 8,
+                background: "var(--bg-subtle, #f7f8f9)",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                fontSize: 13,
+                lineHeight: 1.75,
+              }}
+            >
+              {detailLog.message_content}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>
+              {detailLog.link && (
+                <Link href={detailLog.link.href} className="btn-ghost" style={{ padding: "7px 14px", fontSize: 12.5 }}>
+                  {detailLog.link.label} →
+                </Link>
+              )}
+              <button className="btn" onClick={() => setDetailLog(null)} style={{ padding: "7px 16px", fontSize: 12.5 }}>
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
