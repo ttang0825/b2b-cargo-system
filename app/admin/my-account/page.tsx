@@ -5,6 +5,7 @@ import { supabaseAdminAuth } from "@/lib/supabaseAdminAuthClient";
 import { getCurrentStaffInfo, refreshCurrentStaffCache } from "@/lib/currentStaff";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import PasswordInput from "@/components/PasswordInput";
+import { formatPhoneNumber } from "@/lib/constants";
 
 const ROLE_LABELS: Record<string, string> = { admin: "관리자", staff: "직원" };
 
@@ -12,6 +13,7 @@ export default function MyAccountPage() {
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<string | null>(null);
+  const [senderPhone, setSenderPhone] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [savingName, setSavingName] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
@@ -37,6 +39,18 @@ export default function MyAccountPage() {
       const info = await getCurrentStaffInfo();
       setName(info?.name || "");
       setRole(info?.role || null);
+
+      // SMS 발신번호는 이 화면에서만 필요하므로 여기서 따로 조회한다.
+      // ⚠️ getCurrentStaffInfo()의 캐시 쿼리에 얹지 말 것 — 그 쿼리는 TopNav 등
+      // 사이트 전체가 쓰는 것이라, 한 화면에서만 쓰는 컬럼을 넣으면 모든 페이지가
+      // 불필요한 값을 같이 가져오게 된다.
+      const { data: senderRow } = await supabaseAdminAuth
+        .from("staff_accounts")
+        .select("sms_sender_phone")
+        .eq("id", user.id)
+        .maybeSingle();
+      setSenderPhone((senderRow as any)?.sms_sender_phone || null);
+
       setLoading(false);
     }
     load();
@@ -156,9 +170,21 @@ export default function MyAccountPage() {
               이메일 변경이 필요하면 관리자에게 문의해주세요.
             </p>
           </div>
-          <div className="field" style={{ marginBottom: 14 }}>
+          <div className="field" style={{ marginBottom: 12 }}>
             <label>역할</label>
             <input value={role ? ROLE_LABELS[role] || role : "-"} disabled />
+          </div>
+          {/* 내가 보낸 문자가 어느 번호로 나가는지 본인이 확인할 수 있어야 한다.
+              ⚠️ 수정은 관리자만 가능하다(`/admin/staff`) — 이 번호는 솔라피 사전등록과
+              연동되어 있어서, 임의로 바꾸면 등록되지 않은 번호가 되어 발송이 깨진다. */}
+          <div className="field" style={{ marginBottom: 14 }}>
+            <label>SMS 발신번호</label>
+            <input value={senderPhone ? formatPhoneNumber(senderPhone) : "미등록"} disabled />
+            <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 6, lineHeight: 1.7 }}>
+              {senderPhone
+                ? "내가 보내는 문자는 이 번호로 발송되며, 고객 회신도 이 번호로 옵니다. 변경이 필요하면 관리자에게 문의해주세요."
+                : "등록된 발신번호가 없어 내가 보내는 문자는 대표번호로 발송되며, 고객 회신이 나에게 오지 않습니다. 등록이 필요하면 관리자에게 문의해주세요."}
+            </p>
           </div>
           {nameError && <div className="error-box" style={{ marginBottom: 12 }}>{nameError}</div>}
           <button className="btn" type="submit" disabled={savingName}>
