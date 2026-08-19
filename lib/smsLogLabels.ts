@@ -15,6 +15,18 @@ export function getSmsTemplateLabel(type: string): string {
   return SMS_TEMPLATE_LABELS[type] || type;
 }
 
+// 받는 사람이 화주(고객)인지 차주인지 — 같은 배차 건에서도 배차확정은 차주에게,
+// 상차·하차완료는 고객에게 나가므로 이름만 보면 헷갈린다
+export const SMS_RECIPIENT_TYPE_LABELS: Record<string, string> = {
+  driver: "차주",
+  customer: "고객",
+  applicant: "신청자",
+};
+
+export function getSmsRecipientTypeLabel(type: string): string {
+  return SMS_RECIPIENT_TYPE_LABELS[type] || type;
+}
+
 export const SMS_STATUS_LABELS: Record<string, string> = {
   sent: "발송됨(결과대기)",
   delivered: "전달완료",

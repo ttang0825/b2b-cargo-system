@@ -86,6 +86,7 @@ export async function middleware(req: NextRequest) {
   if (
     (pathname.startsWith("/admin/staff") ||
       pathname.startsWith("/admin/support-logs") ||
+      pathname.startsWith("/admin/sms-logs") ||
       pathname.startsWith("/admin/dashboard")) &&
     role !== "admin"
   ) {
