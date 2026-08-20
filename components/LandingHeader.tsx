@@ -63,7 +63,8 @@ export default function LandingHeader() {
   }, [menuOpen]);
 
   return (
-    // 스티키 동작·배경·그림자는 `.public-header`가 담당(PublicPageHeader와 공유)
+    // 스티키 동작·배경(11차부터 브랜드 옐로)·그림자는 `.public-header`가 담당하며
+    // PublicPageHeader와 공유한다 — 헤더 색·높이는 그 클래스 한 곳만 고치면 된다
     <header className={scrolled ? "public-header public-header-scrolled" : "public-header"}>
       <div
         className="container"
@@ -134,7 +135,10 @@ export default function LandingHeader() {
             )}
           </div>
 
-          {/* 주 CTA — 모바일에서도 접지 않고 항상 노출 */}
+          {/* 주 CTA — 모바일에서도 접지 않고 항상 노출.
+              ⚠️ `.btn`(=.portal-theme에서 검정 배경 + 옐로 글자)을 그대로 두면 11차에
+              옐로로 바뀐 헤더 위에서 글자가 배경과 같은 색이 된다 — globals.css의
+              `.public-header .landing-nav-cta`가 검정 배경 + 흰 글자로 덮어쓴다. */}
           <Link href="/quote" className="btn landing-nav-cta" style={{ padding: "9px 16px", fontSize: 13 }}>
             견적 문의
           </Link>

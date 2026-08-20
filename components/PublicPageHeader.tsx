@@ -48,19 +48,11 @@ export default function PublicPageHeader({
           <BrandLogo className="landing-brand-logo" />
         </Link>
 
+        {/* 11차에 헤더가 옐로로 바뀌면서 인라인 스타일(옅은 노랑 배경 + --accent 글자)이
+            헤더 배경에 묻혔다 — 스타일을 `.public-header-status-link`(globals.css)로 옮겼다.
+            🔴 헤더 안 텍스트에 `--text-muted`를 쓰지 말 것(옐로 위 대비 부족). */}
         {showStatusLink && (
-          <Link
-            href="/status"
-            style={{
-              fontSize: 13,
-              fontWeight: 700,
-              color: "var(--accent)",
-              padding: "8px 14px",
-              borderRadius: 8,
-              background: "var(--accent-soft)",
-              textDecoration: "none",
-            }}
-          >
+          <Link href="/status" className="public-header-status-link">
             문의·신청 현황 조회
           </Link>
         )}
