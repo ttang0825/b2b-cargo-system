@@ -114,7 +114,7 @@ const PERKS = [
 
 export default function LandingPage() {
   return (
-    <div className="portal-theme">
+    <div className="portal-theme landing-page">
       <LandingHeader />
 
       {/* ── ① 히어로 (다크) ─────────────────────────────────────────────────
