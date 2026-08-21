@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import PasswordInput from "@/components/PasswordInput";
 import { syntheticLoginEmail } from "@/lib/portalAccountCredentials";
@@ -134,6 +135,21 @@ export default function CustomerLoginPage() {
           </a>
           )
         </p>
+        {/* 계정이 없는 사람에게 그 자리에서 경로를 준다.
+            ⚠️ 랜딩 히어로의 세 번째 CTA("운송관리 계정 신청")를 뺀 뒤로 데스크탑 랜딩의
+            계정 신청 진입점이 ⑥ 운송관리 섹션 하나만 남았기 때문에 넣은 것이다.
+            라벨은 12차에 화면 6곳을 통일한 "운송관리 계정 신청" 그대로 쓸 것 — 그 전에
+            쓰던 옛 표현으로 되돌리지 말 것(법적 문서 본문에 남아 있는 심사 관련 표현은
+            처리방침의 수집 목적 표와 짝을 이루는 것이라 별개다).
+            🔴 같은 PUBLIC_PATHS 분기를 타는 `/customer/support-verify`에는 붙이지 않는다 —
+            지원 접속 인증 화면에 계정 신청 링크는 맞지 않는다. */}
+        <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 20, marginBottom: 0, textAlign: "center" }}>
+          계정이 없으신가요?{" "}
+          <Link href="/apply" className="login-apply-link">
+            운송관리 계정 신청 <span aria-hidden="true">→</span>
+          </Link>
+        </p>
+
         {/* "← 홈으로" — 26차에 넣었다가 12차에 헤더 로고와 중복이라고 뺐던 링크를
             13차 리뷰에서 되살린 것이다. 🔴 **헤더 로고와 동작이 다르다**: 로고는 홈 맨
             위로 가고, 이 링크는 **왔던 자리로 되돌아간다**(랜딩 ⑥ 운송관리 섹션이 페이지
