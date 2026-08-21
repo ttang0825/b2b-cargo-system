@@ -712,6 +712,31 @@ tbody tr:hover {
 .public-header-status-link:hover {
   background: #ffffff;
 }
+/* 랜딩 헤더의 "운송관리 로그인"(13차) — 위 현황조회 칩과 같은 방식(흰 칩 + 옅은 검정
+   테두리)이다. 옐로 배경 위에서 읽히는 조합이 이것뿐이라 그대로 따랐다.
+   🔴 `.btn`·`.btn-ghost`를 재사용하지 말 것: 전자는 .portal-theme에서 검정 배경 +
+   **옐로 글자**라 옐로 헤더 위에서 글자가 묻히고, 후자는 배경이 #fffdf6에 border: none이라
+   테두리 버튼이 성립하지 않는다.
+   ⚠️ 데스크탑 전용이다 — `.landing-nav-desktop` 안에 있어 760px 이하에서 함께 숨는다. */
+.landing-nav-login {
+  display: inline-flex;
+  align-items: center;
+  /* 터치 영역 44px 확보 */
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(26, 26, 26, 0.24);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.landing-nav-login:hover {
+  background: #ffffff;
+  border-color: rgba(26, 26, 26, 0.42);
+}
 
 /* 앵커(#해시)로 이동할 때 대상이 고정 헤더 아래로 숨지 않도록 헤더 높이만큼 띄운다.
    헤더 높이 = 상하 패딩 18px + 내용 최소높이 44px + 테두리 1px = 81px (여유 포함 92px).
