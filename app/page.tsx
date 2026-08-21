@@ -324,8 +324,11 @@ export default function LandingPage() {
               </p>
             </div>
             <div className="landing-portal-media-wrap">
+              {/* 캡처는 안에 글자가 있어서 모바일 전용 크롭을 따로 쓴다 —
+                  데스크탑 자산을 모바일 폭으로 줄이면 표 안 글자가 뭉개진다. */}
               <LandingImage
                 src={LANDING_IMAGES.portal.desktop}
+                mobileSrc={LANDING_IMAGES.portal.mobile}
                 alt="운송관리 화면의 운송 목록 예시"
                 className="landing-portal-media"
               />

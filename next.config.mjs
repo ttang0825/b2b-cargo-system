@@ -39,7 +39,15 @@ const PLACEHOLDER_CHECKS = [
     file: "lib/legalInfo.ts",
     flag: "VERCEL_PRIVACY_CONTACT_IS_PLACEHOLDER",
     label: "VERCEL_PRIVACY_CONTACT",
-    note: '개인정보처리방침 제6조(국외 이전)의 "이전받는 자의 연락처" — 현재 "확인 중"으로 표시됨',
+    note: '개인정보처리방침 제6조(국외 이전)의 "이전받는 자의 연락처" — 비어 있으면 "확인 중"으로 표시됨',
+  },
+  {
+    // 아직 가입 전이라 값이 전부 비어 있음. 가입이 끝나면 lib/insuranceInfo.ts의 값들을
+    // 채우고 이 플래그를 false로, INSURANCE_ENABLED를 true로 함께 바꿀 것.
+    file: "lib/insuranceInfo.ts",
+    flag: "INSURANCE_INFO_IS_PLACEHOLDER",
+    label: "적재물배상책임보험 정보",
+    note: "미가입 상태 — INSURANCE_ENABLED가 false라 관련 UI는 렌더링되지 않음(13차에 UI 예정)",
   },
 ];
 
