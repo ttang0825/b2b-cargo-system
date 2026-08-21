@@ -5,6 +5,13 @@ import SiteFooter from "@/components/SiteFooter";
 import { LANDING_IMAGES } from "@/lib/landingImages";
 import { COMPANY_SUPPORT_PHONE, COMPANY_SUPPORT_HOURS } from "@/lib/contactInfo";
 import { COMPANY_FREIGHT_BROKER_LICENSE } from "@/lib/companyInfo";
+import {
+  INSURANCE_ENABLED,
+  INSURANCE_PRODUCT_NAME,
+  INSURANCE_INSURER,
+  INSURANCE_COVERAGE_LIMIT,
+  INSURANCE_EXCLUSION_NOTE,
+} from "@/lib/insuranceInfo";
 
 // 랜딩(/)의 title·description은 app/layout.tsx(루트 metadata)에서 관리함 —
 // 여기서 다시 title을 export하면 루트 값을 덮어써서 두 곳을 같이 고쳐야 하므로 두지 않음
@@ -23,14 +30,17 @@ import { COMPANY_FREIGHT_BROKER_LICENSE } from "@/lib/companyInfo";
 
 // 히어로 하단 신뢰 배지. 누적 실적이 없는 신생사가 내세울 수 있는 검증 가능한 지표들.
 //
-// ⚠️ **보험 언급을 다시 넣지 말 것**(34차). 현재 가입된 적재물배상책임보험이 이사화물
-// 특별약관이라 **일반화물 사고가 담보되는지 자체가 확인되지 않았다** — 이 상태에서
-// "보험 가입"이라고 적으면 고객은 일반화물도 보상된다고 읽는다. 담보 범위가 정리되어도
-// 다시 넣을지는 별도 판단 사항이며, 약관 제19조는 보험 없이도 성립하도록 짜여 있음.
+// 🔴 **보험 줄은 `INSURANCE_ENABLED`가 켜졌을 때만 붙는다**(13차). 미가입 상태에서
+// "보험 가입"이 보이면 허위·과장 광고다 — 34차에 고객 접점에서 전부 지웠던 이유도
+// 같다(당시 증권이 이사화물 특별약관이라 일반화물 담보 여부가 확인되지 않았음).
+// 🔴 **여기엔 한도 숫자를 넣지 말 것.** 금액이 들어가는 곳은 ⑦ 안전·책임 카드 한 곳뿐이다.
+// 🔴 노출 제어 플래그를 새로 만들지 말 것 — 이 줄과 ⑦-3 카드를 같은 플래그 하나가
+// 제어해야 한쪽만 켜지는 사고가 안 난다.
 const TRUST_POINTS = [
   `화물자동차 운송주선사업 정식 허가업체 ${COMPANY_FREIGHT_BROKER_LICENSE}`,
   "세금계산서 발행 · 건별 정산 및 월정산 가능",
   "전국 배차망 연계 · 1톤부터 5톤 이상까지",
+  ...(INSURANCE_ENABLED ? ["적재물배상책임보험 가입"] : []),
 ];
 
 // "어떤 업체인가"가 아니라 "어떤 운송인가"로 제시한다.
@@ -111,6 +121,47 @@ const MANAGEMENT_FEATURES = [
   { title: "배차·운송 조회", desc: "배차 확정과 상·하차 진행 상황을 확인하실 수 있습니다." },
   { title: "정산 확인", desc: "청구 내역, 세금계산서 발행일, 입금일이 기록으로 남습니다." },
   { title: "월별 통계", desc: "월별 운송 건수와 운임, 자주 쓰는 구간을 확인하실 수 있습니다." },
+];
+
+// ⑦ 안전·책임 카드. 🔴 **열 수가 항목 수를 따라간다** — 2항목이면 2열, 3항목이면 3열.
+// 9/7 공개 시점의 실제 출시본은 **2항목**이므로 2항목 완성도를 우선한다.
+//
+// 🔴 보험 카드는 `INSURANCE_ENABLED`가 true일 때만 **배열에 들어간다** — display:none이
+// 아니라 조건부 렌더링이어야 한다. 숨기기만 하면 페이지 소스에 남아 검색·스크래핑에 잡힌다.
+// ⚠️ 보험 문구를 여기에 하드코딩하지 말 것. 값은 전부 `lib/insuranceInfo.ts`에서 온다.
+const SAFETY_ITEMS = [
+  {
+    icon: LANDING_IMAGES.safety.record,
+    title: "기록으로 남습니다",
+    // ⚠️ 둘째 문장은 11차 운송관리 곁다리 카드에 있던 원문을 13차에 이관한 것이다 —
+    // 이 회사가 하지 않겠다고 약속하는 것을 적은 문장이라 버리지 말 것.
+    desc: "견적서, 배차 내역, 인수증, 정산 내역이 운송관리 화면에 남습니다. 전화와 문자로만 오가다 나중에 확인할 방법이 없는 일을 만들지 않겠습니다.",
+    tags: ["견적서", "배차 내역", "인수증", "정산 내역"],
+    rows: [] as { label: string; value: string }[],
+  },
+  {
+    icon: LANDING_IMAGES.safety.process,
+    title: "문제가 생기면 절차로 대응합니다",
+    desc: "사진과 현장 상황, 기사 확인을 거쳐 접수하고, 중재 절차를 진행합니다.",
+    tags: ["사진 확인", "현장 상황", "기사 확인", "중재 절차"],
+    rows: [] as { label: string; value: string }[],
+  },
+  ...(INSURANCE_ENABLED
+    ? [
+        {
+          icon: LANDING_IMAGES.safety.insurance,
+          title: "적재물배상책임보험",
+          desc: INSURANCE_EXCLUSION_NOTE,
+          tags: [] as string[],
+          // 값이 빈 항목은 줄 자체를 그리지 않는다(가입 직후 일부만 채워진 상태 대비)
+          rows: [
+            { label: "상품명", value: INSURANCE_PRODUCT_NAME },
+            { label: "보험사", value: INSURANCE_INSURER },
+            { label: "배상 한도", value: INSURANCE_COVERAGE_LIMIT },
+          ].filter((r) => r.value),
+        },
+      ]
+    : []),
 ];
 
 export default function LandingPage() {
@@ -386,6 +437,61 @@ export default function LandingPage() {
                 </span>
               </span>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── ⑦ 안전·책임 (흰색) ────────────────────────────────────────────────
+          13차 신설. 🔴 카드 열 수는 항목 수를 따라간다(2항목 2열 / 3항목 3열).
+          🔴 보험 카드는 `INSURANCE_ENABLED`가 false면 배열에 아예 들어가지 않는다 —
+          숨기는 것이 아니라 렌더링하지 않는 것이다(SAFETY_ITEMS 주석 참고). */}
+      <section id="safety" className="landing-section landing-section-white">
+        <div className="landing-inner">
+          <div className="landing-values-head">
+            <h2 className="landing-h2">맡기신 화물에 대한 책임</h2>
+            <p className="landing-sub">기록과 절차로 관리합니다.</p>
+          </div>
+
+          <div className={`landing-safety-grid landing-safety-grid-${SAFETY_ITEMS.length}`}>
+            {SAFETY_ITEMS.map((item) => (
+              <div key={item.title} className="landing-safety-card">
+                <LandingImage src={item.icon} alt="" className="landing-safety-icon" />
+                <h3 className="landing-safety-title">{item.title}</h3>
+                {item.rows.length > 0 && (
+                  <dl className="landing-safety-rows">
+                    {item.rows.map((r) => (
+                      <div key={r.label}>
+                        <dt>{r.label}</dt>
+                        <dd>{r.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
+                {item.desc && <p className="landing-safety-desc">{item.desc}</p>}
+                {item.tags.length > 0 && (
+                  <div className="landing-safety-tags">
+                    {item.tags.map((t) => (
+                      <span key={t} className="landing-safety-tag">
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* 하단 띠 — 허가 사실과 문의처를 한 줄로 붙인다.
+              🔴 전화번호를 하드코딩하지 말 것(lib/contactInfo.ts 상수). 모바일에서
+              탭하면 바로 발신되도록 tel: 링크. */}
+          <div className="landing-safety-band">
+            <p className="landing-safety-band-text">
+              화물자동차 운송주선사업 정식 허가업체 · 허가번호 {COMPANY_FREIGHT_BROKER_LICENSE}
+            </p>
+            <a href={`tel:${COMPANY_SUPPORT_PHONE}`} className="landing-safety-band-tel">
+              문제 발생 시 <span className="num">{COMPANY_SUPPORT_PHONE}</span>{" "}
+              <span aria-hidden="true">→</span>
+            </a>
           </div>
         </div>
       </section>

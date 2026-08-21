@@ -1429,6 +1429,12 @@ tbody tr:hover {
   line-height: 1.5;
   color: #e8e8e8;
 }
+/* 🔴 보험 줄이 꺼져 있으면(3줄) 3번째가 혼자 둘째 줄에 남아 오른쪽이 비어 보인다 —
+   그때만 전체 폭으로 늘린다. 보험 줄이 켜지면(4줄) 3번째는 last-child가 아니게 되므로
+   이 규칙이 자동으로 풀리고 2×2가 된다(별도 분기 불필요). */
+.hero-trust li:nth-child(3):last-child {
+  grid-column: 1 / -1;
+}
 .hero-trust-check {
   color: var(--brand-yellow);
   font-weight: 800;
@@ -1823,6 +1829,126 @@ tbody tr:hover {
   color: var(--text-muted);
 }
 
+/* ── ⑦ 안전·책임 (13차 신설) ──────────────────────────────────────────────────
+   🔴 **열 수가 항목 수를 따라간다** — 보험 카드가 꺼진 9/7 공개 시점에는 2항목 2열이
+   실제 출시본이다. 3항목 3열이 더 예뻐 보이더라도 2항목 완성도를 우선할 것.
+   (열 수를 컴포넌트 inline style로 계산하지 않고 항목 수 클래스로 나눈 이유: 레이아웃
+   값은 이 파일이 갖는다는 랜딩 블록 전체의 규칙을 지키기 위함.) */
+.landing-safety-grid {
+  display: grid;
+  gap: 24px;
+  margin-top: 46px;
+}
+.landing-safety-grid-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.landing-safety-grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.landing-safety-card {
+  padding: 32px 30px;
+  border-radius: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+/* 아이콘 자리 56×56. 상자가 작아 "이미지 준비 중" 문구는 숨기고 색면만 남긴다
+   (선택 이유 카드 아이콘과 같은 처리) */
+.landing-safety-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: var(--brand-yellow-tint);
+  margin-bottom: 20px;
+}
+.landing-safety-icon .landing-media-empty {
+  display: none;
+}
+.landing-safety-title {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  margin: 0 0 10px;
+}
+.landing-safety-desc {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text-muted);
+  margin: 0;
+}
+/* 보험 카드 전용 — 상품명·보험사·배상 한도 라벨-값 목록(값이 빈 항목은 렌더링되지 않음) */
+.landing-safety-rows {
+  margin: 0 0 14px;
+  display: grid;
+  gap: 6px;
+}
+.landing-safety-rows > div {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+}
+.landing-safety-rows dt {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.landing-safety-rows dd {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.landing-safety-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+.landing-safety-tag {
+  padding: 7px 13px;
+  border-radius: 999px;
+  background: var(--brand-yellow-soft);
+  border: 1px solid var(--brand-yellow-border);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+/* 하단 띠 — 허가 사실과 문의처. 회색 배경이라 var(--bg)를 쓸 수 없다(.portal-theme에서
+   #fffdf6으로 덮여 있음) — 섹션 배경과 같은 이유로 #f2f4f6을 직접 적는다. */
+.landing-safety-band {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px 24px;
+  margin-top: 26px;
+  padding: 18px 24px;
+  border-radius: 14px;
+  background: #f2f4f6;
+}
+.landing-safety-band-text {
+  font-size: 13.5px;
+  line-height: 1.6;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+.landing-safety-band-tel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  /* 터치 영역 44px 확보 */
+  min-height: 44px;
+  font-size: 14.5px;
+  font-weight: 800;
+  color: var(--brand-yellow-text);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.landing-safety-band-tel:hover {
+  text-decoration: underline;
+}
+
 /* ── ⑧ 마감 CTA ───────────────────────────────────────────────────────────── */
 .landing-cta-final {
   display: grid;
@@ -1896,6 +2022,10 @@ tbody tr:hover {
   }
   .landing-vehicles-aside {
     text-align: left;
+  }
+  /* 3항목(보험 ON)일 때 1000px에서 카드가 너무 좁아진다 — 2열로 접는다 */
+  .landing-safety-grid-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .landing-mgmt-card {
     grid-template-columns: 1fr;
@@ -2090,6 +2220,38 @@ tbody tr:hover {
   }
   .landing-mgmt-notice-body {
     font-size: 13.5px;
+  }
+
+  /* 카드가 좁아지면 태그 칩이 잘리므로 열 수와 무관하게 1열로 */
+  .landing-safety-grid,
+  .landing-safety-grid-2,
+  .landing-safety-grid-3 {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    margin-top: 30px;
+  }
+  .landing-safety-card {
+    padding: 22px 20px;
+    border-radius: 16px;
+  }
+  .landing-safety-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    margin-bottom: 16px;
+  }
+  .landing-safety-title {
+    font-size: 17px;
+  }
+  .landing-safety-desc {
+    font-size: 14px;
+  }
+  .landing-safety-band {
+    padding: 16px 18px;
+    gap: 4px;
+  }
+  .landing-safety-band-text {
+    font-size: 12.5px;
   }
 
   .landing-cta-title {
