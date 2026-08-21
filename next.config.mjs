@@ -31,7 +31,9 @@ const PLACEHOLDER_CHECKS = [
     file: "lib/legalInfo.ts",
     flag: "LEGAL_EFFECTIVE_DATE_IS_PLACEHOLDER",
     label: "LEGAL_EFFECTIVE_DATE",
-    note: "이용약관 부칙·개인정보처리방침 시행일·이메일무단수집거부 게시일 총 5곳에 표시됨",
+    // ⚠️ 예전에 "총 5곳"으로 적혀 있었으나 그건 **문서 본문만** 센 숫자였다.
+    // 실제로는 본문 5개 항목 + 페이지 헤더 3곳 + 법적 문서 모달 3곳 = 11곳이다.
+    note: "이용약관 부칙·개인정보처리방침 시행일·이메일무단수집거부 게시일 등 총 11곳에 표시됨(본문 5 + 페이지 헤더 3 + 모달 3)",
   },
   {
     file: "lib/legalInfo.ts",

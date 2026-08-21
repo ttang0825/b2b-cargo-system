@@ -10,15 +10,26 @@
 
 // ── 시행일 ────────────────────────────────────────────────────────────────────
 
-// ⚠️ 자리표시자. 실제 공개일이 정해지면 이 값과 아래 플래그를 **같이** 바꿀 것.
-// 약관 부칙 1곳 + 처리방침 3곳(시행일자·최종 개정일·부칙) + 이메일무단수집거부
-// 게시일 1곳, 총 5곳이 이 값을 참조한다.
-export const LEGAL_EFFECTIVE_DATE = "2026-09-01";
+// 실제 공개일(2026-09-07, 월). 값과 아래 플래그는 **항상 같이** 바꿀 것 —
+// 값만 바꾸고 플래그를 true로 두면 빌드 경고가 계속 남는다.
+//
+// ⚠️ **화면에 나오는 곳은 11곳이다**(예전 주석의 "5곳"은 문서 본문만 센 숫자였음).
+// 시행일을 바꾸면 아래를 전부 확인할 것:
+//   본문 5개 표시 항목 — `lib/legal/terms.ts`(약관 부칙) /
+//     `lib/legal/privacy.ts`(시행일자·최종 개정일이 **한 줄에 2항목** + 부칙) /
+//     이메일무단수집거부 게시일
+//   페이지 헤더 3곳 — `app/terms|privacy|email-policy/page.tsx`
+//   모달 헤더 3곳 — `components/LegalLinks.tsx`
+// 🔴 이메일무단수집거부 게시일은 `lib/legal/emailPolicy.ts`에 참조가 **0건**이고
+//    `app/email-policy/page.tsx`가 `effectiveLabel` prop으로 넘긴다 —
+//    내용 파일만 보고 찾으면 놓친다.
+export const LEGAL_EFFECTIVE_DATE = "2026-09-07";
 
 // 위 시행일이 아직 미확정 자리표시자임을 나타내는 플래그.
 // next.config.mjs가 빌드·서버 기동 시 이 파일을 읽어 true이면 콘솔에 경고를 출력함
 // (빌드를 실패시키지는 않음 — 26차 대표번호와 동일한 방식).
-export const LEGAL_EFFECTIVE_DATE_IS_PLACEHOLDER = true;
+// 12차에 공개일이 2026-09-07로 확정되어 false로 내림.
+export const LEGAL_EFFECTIVE_DATE_IS_PLACEHOLDER = false;
 
 // ── 문서 버전 ─────────────────────────────────────────────────────────────────
 
@@ -31,12 +42,14 @@ export const TERMS_VERSION = "terms-v1";
 
 // ── 국외 이전(처리방침 제6조) ──────────────────────────────────────────────────
 
-// Vercel Inc.의 개인정보 문의처. 29차·30차 모두 이 실행 환경의 네트워크 정책에서
-// vercel.com 접근이 차단되어(프록시 403) 실제 값을 확인하지 못함.
-// **추측으로 이메일을 적지 말 것** — 사용자가 Vercel 개인정보처리방침에서 확인해
-// 주면 이 값과 아래 플래그를 같이 바꾸면 됨.
-export const VERCEL_PRIVACY_CONTACT = "";
-export const VERCEL_PRIVACY_CONTACT_IS_PLACEHOLDER = true;
+// Vercel Inc.의 개인정보 문의처. 29차·30차에는 이 실행 환경에서 vercel.com 접근이
+// 차단되어(프록시 403) 확인하지 못했고, **12차에 사용자가 Vercel 공식 개인정보처리방침
+// 에서 확인해 전달한 값**으로 채웠다(법인 주소가 필요해지면
+// 440 N Barranca Avenue #4133, Covina, CA 91723, United States).
+// ⚠️ 값이 비면 `lib/legal/privacy.ts`가 "확인 중"으로 표시한다 — 폴백은 그대로 두되
+// **추측으로 다른 주소를 적지 말 것.**
+export const VERCEL_PRIVACY_CONTACT = "privacy@vercel.com";
+export const VERCEL_PRIVACY_CONTACT_IS_PLACEHOLDER = false;
 
 // ── 표시용 헬퍼 ───────────────────────────────────────────────────────────────
 
