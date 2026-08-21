@@ -179,7 +179,7 @@ export default function LandingPage() {
       {/* ── ① 히어로 (다크) ─────────────────────────────────────────────────
           데스크탑은 우측에 이미지가 배경으로 깔리고 좌측 텍스트 위로 그라데이션이 덮인다.
           🔴 모바일에서는 CSS(order)로 이미지가 맨 아래로 내려간다 —
-          텍스트 → CTA → 계정 신청 링크 → 신뢰 3줄 → 이미지 순서를 지킬 것. */}
+          텍스트 → CTA 2개 → 신뢰 3줄 → 이미지 순서를 지킬 것. */}
       <section className="landing-hero">
         <div className="landing-hero-media" aria-hidden="true">
           <LandingImage src={LANDING_IMAGES.hero.desktop} alt="" dark />
@@ -207,7 +207,10 @@ export default function LandingPage() {
               견적서부터 월정산까지, 운송 내역이 기록으로 남습니다.
             </p>
 
-            {/* 견적 → 전화 순서. 두 버튼은 동등 비중이고, "운송관리 계정 신청"은 보조 링크 */}
+            {/* 견적 → 전화 순서. 🔴 **CTA는 2개다** — 여기 있던 세 번째 보조 링크
+                "운송관리 계정 신청"은 9차 시안 검수 결과 제거했다(첫 화면에 선택지가 셋이면
+                결정이 늦어진다). 계정 신청은 ⑥ 운송관리 섹션에 있고 맥락상 그 자리가 맞다.
+                🔴 히어로에 세 번째 선택지를 다시 넣지 말 것. */}
             <div className="landing-hero-actions">
               <Link href="/quote" className="landing-btn-primary">
                 무료 견적 문의 <span aria-hidden="true">→</span>
@@ -216,11 +219,6 @@ export default function LandingPage() {
               <a href={`tel:${COMPANY_SUPPORT_PHONE}`} className="landing-btn-phone">
                 전화 문의 {COMPANY_SUPPORT_PHONE}
               </a>
-              {/* 보조 링크는 데스크탑에서 버튼 2개와 같은 줄에, 모바일에서는 세로로 쌓인
-                  버튼 아래 가운데에 놓인다(CSS가 전환) */}
-              <Link href="/apply" className="hero-secondary-link">
-                운송관리 계정 신청 <span aria-hidden="true">→</span>
-              </Link>
             </div>
           </div>
 
