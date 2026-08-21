@@ -31,13 +31,23 @@ const PLACEHOLDER_CHECKS = [
     file: "lib/legalInfo.ts",
     flag: "LEGAL_EFFECTIVE_DATE_IS_PLACEHOLDER",
     label: "LEGAL_EFFECTIVE_DATE",
-    note: "이용약관 부칙·개인정보처리방침 시행일·이메일무단수집거부 게시일 총 5곳에 표시됨",
+    // ⚠️ 예전에 "총 5곳"으로 적혀 있었으나 그건 **문서 본문만** 센 숫자였다.
+    // 실제로는 본문 5개 항목 + 페이지 헤더 3곳 + 법적 문서 모달 3곳 = 11곳이다.
+    note: "이용약관 부칙·개인정보처리방침 시행일·이메일무단수집거부 게시일 등 총 11곳에 표시됨(본문 5 + 페이지 헤더 3 + 모달 3)",
   },
   {
     file: "lib/legalInfo.ts",
     flag: "VERCEL_PRIVACY_CONTACT_IS_PLACEHOLDER",
     label: "VERCEL_PRIVACY_CONTACT",
-    note: '개인정보처리방침 제6조(국외 이전)의 "이전받는 자의 연락처" — 현재 "확인 중"으로 표시됨',
+    note: '개인정보처리방침 제6조(국외 이전)의 "이전받는 자의 연락처" — 비어 있으면 "확인 중"으로 표시됨',
+  },
+  {
+    // 아직 가입 전이라 값이 전부 비어 있음. 가입이 끝나면 lib/insuranceInfo.ts의 값들을
+    // 채우고 이 플래그를 false로, INSURANCE_ENABLED를 true로 함께 바꿀 것.
+    file: "lib/insuranceInfo.ts",
+    flag: "INSURANCE_INFO_IS_PLACEHOLDER",
+    label: "적재물배상책임보험 정보",
+    note: "미가입 상태 — INSURANCE_ENABLED가 false라 관련 UI는 렌더링되지 않음(13차에 UI 예정)",
   },
 ];
 

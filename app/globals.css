@@ -1230,6 +1230,13 @@ tbody tr:hover {
   overflow: hidden;
   background: #e9ebee;
 }
+/* 모바일 전용 자산이 있는 이미지는 <picture>로 감싸진다(components/LandingImage.tsx).
+   `display: contents`로 <picture> 자신은 박스를 만들지 않게 해서, 안의 <img>가 예전처럼
+   `.landing-media`의 직접 자식인 것처럼 100%로 채우게 한다 — 이게 없으면 <picture>가
+   크기 없는 인라인 요소라 안의 img가 접힌다. */
+.landing-media picture {
+  display: contents;
+}
 .landing-media img {
   display: block;
   width: 100%;

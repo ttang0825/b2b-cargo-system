@@ -18,7 +18,10 @@ import { useScrolled } from "@/lib/useScrolled";
 // 드롭다운으로 들어가야 함.
 //
 // 라벨은 고객 접점 용어를 따름(용어정리 가이드 2-1·2-2): "화주 로그인"→"로그인",
-// "화주 등록 신청"→"고객 등록". 관리자 화면(app/admin/**)의 "화주"는 그대로 유지.
+// "화주 등록 신청"→"고객 등록"(28차)→**"운송관리 계정 신청"**(12차).
+// 관리자 화면(app/admin/**)의 "화주"는 그대로 유지.
+// ⚠️ 12차에 `/apply` 라벨을 화면 6곳에서 이 표현으로 통일했다 — 로그인과 신청이
+// 둘 다 "운송관리로 가는 문"임을 용어로 잇기 위한 것이니 한 곳만 되돌리지 말 것.
 type NavLink = { href: string; label: string };
 
 // 드롭다운(모바일) 항목 — 지시서 2-3의 순서를 그대로 따름
@@ -26,12 +29,12 @@ const MOBILE_LINKS: NavLink[] = [
   { href: "/about", label: "회사소개" },
   { href: "/vehicles", label: "차량·요금 안내" },
   { href: "/status", label: "문의·신청 현황" },
-  { href: "/apply", label: "고객 등록" },
+  { href: "/apply", label: "운송관리 계정 신청" },
   { href: "/customer/login", label: "로그인" },
 ];
 
-// 데스크탑에 그대로 노출하는 링크. "고객 등록"은 헤더가 복잡해지는 것을 막기 위해
-// 빼고 랜딩 본문 Hero의 "고객 등록 신청" CTA로 유도함(지시서 2-2).
+// 데스크탑에 그대로 노출하는 링크. "운송관리 계정 신청"은 헤더가 복잡해지는 것을 막기 위해
+// 빼고 랜딩 본문 Hero의 "운송관리 계정 신청" CTA로 유도함(지시서 2-2).
 const DESKTOP_LINKS: NavLink[] = MOBILE_LINKS.filter((l) => l.href !== "/apply");
 
 export default function LandingHeader() {

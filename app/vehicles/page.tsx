@@ -126,11 +126,15 @@ export default function VehiclesPage() {
         {/* 차량 형태 */}
         <section className="card" style={{ padding: 28, marginBottom: 20 }}>
           <h2 className="about-section-title">차량 형태</h2>
-          {/* 차량 범위 표현 기준(32차): "다마스·라보부터 1톤~5톤 이상까지".
-              ⚠️ "25톤"·"전 차종"은 쓰지 말 것 — 배차망으로 대형이 가능하긴 하나
-              아직 수월하지 않아 약속하지 않기로 함 */}
+          {/* 차량 범위 표현 기준(12차 확정): **"1톤부터 5톤 이상까지"**.
+              🔴 "이상"을 빼면 "1톤부터 5톤까지"가 되어 금지 표현이 된다.
+              ⚠️ "25톤"·"전 차종"도 쓰지 말 것.
+              ⚠️ **하한에 소형 차종명을 다시 붙이지 말 것**(12차에 뺐음) — 2021년 5월 단종되어
+              배차 확보가 불확실하다.
+              ⚠️ 이 문장은 랜딩 ④ 차량 형태 섹션(app/page.tsx)과 **글자까지 같다** —
+              한쪽을 고치면 다른 쪽도 같이 고칠 것. */}
           <p style={{ fontSize: 13.5, color: "var(--text-muted)", lineHeight: 1.7, margin: "0 0 14px" }}>
-            다마스·라보부터 1톤~5톤 이상까지 다양한 차량에 배차가 가능합니다.
+            1톤부터 5톤 이상까지 다양한 차량에 배차가 가능합니다.
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
             {BODY_TYPES_SHOWN.map((t) => (

@@ -29,7 +29,7 @@ import { COMPANY_FREIGHT_BROKER_LICENSE } from "@/lib/companyInfo";
 const TRUST_POINTS = [
   `화물자동차 운송주선사업 정식 허가업체 ${COMPANY_FREIGHT_BROKER_LICENSE}`,
   "세금계산서 발행 · 건별 정산 및 월정산 가능",
-  "전국 배차망 연계 · 다마스부터 5톤 이상까지",
+  "전국 배차망 연계 · 1톤부터 5톤 이상까지",
 ];
 
 // "어떤 업체인가"가 아니라 "어떤 운송인가"로 제시한다.
@@ -120,7 +120,7 @@ export default function LandingPage() {
       {/* ── ① 히어로 (다크) ─────────────────────────────────────────────────
           데스크탑은 우측에 이미지가 배경으로 깔리고 좌측 텍스트 위로 그라데이션이 덮인다.
           🔴 모바일에서는 CSS(order)로 이미지가 맨 아래로 내려간다 —
-          텍스트 → CTA → 고객 등록 링크 → 신뢰 3줄 → 이미지 순서를 지킬 것. */}
+          텍스트 → CTA → 계정 신청 링크 → 신뢰 3줄 → 이미지 순서를 지킬 것. */}
       <section className="landing-hero">
         <div className="landing-hero-media" aria-hidden="true">
           <LandingImage src={LANDING_IMAGES.hero.desktop} alt="" dark />
@@ -141,7 +141,7 @@ export default function LandingPage() {
               견적서부터 월정산까지, 운송 내역이 기록으로 남습니다.
             </p>
 
-            {/* 견적 → 전화 순서. 두 버튼은 동등 비중이고, "고객 등록 신청"은 보조 링크 */}
+            {/* 견적 → 전화 순서. 두 버튼은 동등 비중이고, "운송관리 계정 신청"은 보조 링크 */}
             <div className="landing-hero-actions">
               <Link href="/quote" className="landing-btn-primary">
                 무료 견적 문의 <span aria-hidden="true">→</span>
@@ -153,7 +153,7 @@ export default function LandingPage() {
               {/* 보조 링크는 데스크탑에서 버튼 2개와 같은 줄에, 모바일에서는 세로로 쌓인
                   버튼 아래 가운데에 놓인다(CSS가 전환) */}
               <Link href="/apply" className="hero-secondary-link">
-                고객 등록 신청 <span aria-hidden="true">→</span>
+                운송관리 계정 신청 <span aria-hidden="true">→</span>
               </Link>
             </div>
           </div>
@@ -248,10 +248,15 @@ export default function LandingPage() {
                 <br />
                 배차해드립니다
               </h2>
-              {/* 차량 범위 표현 기준(32차): "다마스·라보부터 1톤~5톤 이상까지".
-                  ⚠️ "25톤"·"전 차종"은 쓰지 말 것 — 배차망으로 대형이 가능하긴 하나
-                  아직 수월하지 않아 약속하지 않기로 함 */}
-              <p className="landing-sub">다마스·라보부터 1톤~5톤 이상까지 다양한 차량에 배차가 가능합니다.</p>
+              {/* 차량 범위 표현 기준(12차 확정): **"1톤부터 5톤 이상까지"**.
+                  🔴 "이상" 한 단어가 금지와 허용을 가른다 — "1톤부터 5톤까지"는 상한을
+                  못 박는 금지 표현이므로 "이상"을 절대 빼지 말 것.
+                  ⚠️ "25톤"·"전 차종"도 쓰지 말 것(배차망으로 대형이 가능하긴 하나 아직
+                  수월하지 않아 약속하지 않음).
+                  ⚠️ **하한에 소형 차종명을 다시 붙이지 말 것**(12차에 뺐음) — 2021년 5월
+                  단종되어 신차가 없고 전부 중고 운행분이라 배차 확보가 불확실하다.
+                  못 잡는 차를 광고하면 첫 통화에서 신뢰를 잃는다. */}
+              <p className="landing-sub">1톤부터 5톤 이상까지 다양한 차량에 배차가 가능합니다.</p>
             </div>
             <p className="landing-vehicles-aside">
               그 밖의 차량 형태가 필요하시면 문의해 주세요.
@@ -319,8 +324,11 @@ export default function LandingPage() {
               </p>
             </div>
             <div className="landing-portal-media-wrap">
+              {/* 캡처는 안에 글자가 있어서 모바일 전용 크롭을 따로 쓴다 —
+                  데스크탑 자산을 모바일 폭으로 줄이면 표 안 글자가 뭉개진다. */}
               <LandingImage
                 src={LANDING_IMAGES.portal.desktop}
+                mobileSrc={LANDING_IMAGES.portal.mobile}
                 alt="운송관리 화면의 운송 목록 예시"
                 className="landing-portal-media"
               />

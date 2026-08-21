@@ -140,7 +140,7 @@ export default function PublicQuotePage() {
               있습니다.
             </p>
             <Link href="/apply" className="btn-ghost" style={{ padding: "10px 18px", borderRadius: 10, display: "inline-flex" }}>
-              고객 등록 신청하기 →
+              운송관리 계정 신청 →
             </Link>
           </div>
         </main>
