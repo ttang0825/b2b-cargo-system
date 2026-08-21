@@ -1158,7 +1158,8 @@ tbody tr:hover {
 
    🔴 **섹션 배경 교차 순서가 이 시안의 리듬 자체**다. 임의로 바꾸면 의도가 깨진다:
      ① 히어로 다크 #1a1a1a → ② 운송 유형 흰색 → ③ 선택 이유 옅은 노랑
-     → ④ 차량 형태 흰색 → ⑤ 진행 단계 회색 #f2f4f6 → ⑥ 마감 CTA 다크 #1a1a1a
+     → ④ 차량 형태 흰색 → ⑤ 진행 단계 회색 #f2f4f6 → ⑥ 운송관리 옅은 노랑
+     → ⑦ 안전·책임 흰색 → ⑧ 마감 CTA 다크 #1a1a1a  (13차에 ⑥⑦ 신설)
 
    ⚠️ 회색 배경에 `var(--bg)`를 쓸 수 없다 — 랜딩은 `.portal-theme` 안이고 거기서
    `--bg`가 #fffdf6(아주 옅은 노랑)으로 덮여 있어서 회색이 나오지 않는다. 그래서
@@ -1659,7 +1660,170 @@ tbody tr:hover {
   margin: 0;
 }
 
-/* ── ⑥ 마감 CTA ───────────────────────────────────────────────────────────── */
+/* ── ⑥ 운송관리 (13차 신설) ───────────────────────────────────────────────────
+   옅은 노랑 섹션 위에 **흰 카드** 하나. 🔴 설명문에 --text-muted를 쓰려면 흰 배경이
+   필요하다 — 옅은 노랑 위에 직접 올리면 대비가 모자란다.
+
+   🔴 카드는 grid-template-areas로 배치한다. 데스크탑은 좌 캡처 / 우 (기능·버튼·배지)
+   2열이고, 모바일은 **기능 4줄 → 캡처 → 버튼 → 배지** 1열이다. DOM 순서가 아니라
+   영역 이름으로 배치하므로, 두 순서를 각각 정확히 지정할 수 있다.
+   (캡처를 모바일 맨 위에 두면 버튼이 한참 아래로 밀린다.) */
+.landing-mgmt-card {
+  display: grid;
+  grid-template-columns: minmax(0, 620px) minmax(0, 1fr);
+  grid-template-areas:
+    "media features"
+    "media actions"
+    "media notice";
+  align-content: start;
+  column-gap: 44px;
+  row-gap: 24px;
+  margin-top: 46px;
+  padding: 40px;
+  border-radius: 24px;
+  background: var(--surface);
+  border: 1px solid var(--brand-yellow-border);
+  box-shadow: var(--shadow-sm);
+}
+.landing-mgmt-media-wrap {
+  grid-area: media;
+  position: relative;
+  align-self: center;
+}
+/* 데스크탑 620×400 표시(제작 1240×800) */
+.landing-mgmt-media {
+  aspect-ratio: 620 / 400;
+  border-radius: 14px;
+  box-shadow: var(--shadow-md);
+}
+/* 🔴 캡처 하단 페이드 — 목록이 잘린 자리를 흐린다. 카드 배경(--surface)과 같은 색이어야
+   이어져 보인다 */
+.landing-mgmt-fade {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 40px;
+  border-radius: 0 0 14px 14px;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), var(--surface));
+  pointer-events: none;
+}
+.landing-mgmt-features {
+  grid-area: features;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 20px;
+}
+.landing-mgmt-features li {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.landing-mgmt-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--brand-yellow);
+  color: #1a1a1a;
+  font-size: 12px;
+  font-weight: 800;
+  margin-top: 1px;
+}
+.landing-mgmt-feature-title {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0 0 4px;
+}
+.landing-mgmt-feature-desc {
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--text-muted);
+  margin: 0;
+}
+.landing-mgmt-actions {
+  grid-area: actions;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
+/* 🔴 `.btn`(.portal-theme에서 검정 배경 + **옐로 글자**)과 `.btn-ghost`
+   (background: var(--bg) = #fffdf6, border: none)를 재사용하지 않는다 —
+   전자는 흰 카드 위에서 글자가 흐리고, 후자는 테두리 버튼이 성립하지 않는다. */
+.landing-mgmt-btn,
+.landing-mgmt-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  /* 터치 영역 44px 확보 */
+  min-height: 44px;
+  padding: 0 22px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 800;
+  text-decoration: none;
+}
+.landing-mgmt-btn {
+  background: #1a1a1a;
+  color: #ffffff;
+  border: 1.5px solid #1a1a1a;
+}
+.landing-mgmt-btn:hover {
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.22);
+}
+.landing-mgmt-btn-ghost {
+  background: var(--surface);
+  color: var(--text);
+  border: 1.5px solid rgba(26, 26, 26, 0.18);
+}
+.landing-mgmt-btn-ghost:hover {
+  border-color: rgba(26, 26, 26, 0.42);
+}
+/* 계정 발급 안내 — 🔴 "2~3시간"이 이 회사의 차별점이라 큰 숫자로 강조한다.
+   회색 보조 텍스트로 흘리지 말 것. 둘째 줄(접수 시간 단서)도 각주로 밀지 않는다. */
+.landing-mgmt-notice {
+  grid-area: notice;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 16px;
+  padding: 18px 22px;
+  border-radius: 14px;
+  background: var(--brand-yellow-soft);
+  border: 1px solid var(--brand-yellow-border);
+}
+.landing-mgmt-notice-lead {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--brand-yellow-text);
+  white-space: nowrap;
+}
+.landing-mgmt-notice-body {
+  font-size: 14.5px;
+  font-weight: 700;
+  line-height: 1.6;
+  color: var(--text);
+}
+.landing-mgmt-notice-sub {
+  display: block;
+  margin-top: 4px;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+/* ── ⑧ 마감 CTA ───────────────────────────────────────────────────────────── */
 .landing-cta-final {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1732,6 +1896,14 @@ tbody tr:hover {
   }
   .landing-vehicles-aside {
     text-align: left;
+  }
+  .landing-mgmt-card {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "features"
+      "media"
+      "actions"
+      "notice";
   }
   .landing-cta-final {
     grid-template-columns: 1fr;
@@ -1878,6 +2050,45 @@ tbody tr:hover {
     margin-bottom: 8px;
   }
   .landing-step-desc {
+    font-size: 13.5px;
+  }
+
+  .landing-mgmt-card {
+    margin-top: 30px;
+    padding: 24px 20px;
+    border-radius: 18px;
+    row-gap: 20px;
+  }
+  /* 모바일 320×228 표시(제작 640×456) — 데스크탑과 다른 자산이라 비율도 다르다 */
+  .landing-mgmt-media {
+    aspect-ratio: 320 / 228;
+    border-radius: 12px;
+  }
+  .landing-mgmt-fade {
+    height: 28px;
+    border-radius: 0 0 12px 12px;
+  }
+  .landing-mgmt-features {
+    gap: 16px;
+  }
+  .landing-mgmt-feature-title {
+    font-size: 15.5px;
+  }
+  .landing-mgmt-feature-desc {
+    font-size: 13.5px;
+  }
+  /* 버튼은 전폭으로 세로 배치 */
+  .landing-mgmt-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .landing-mgmt-notice {
+    padding: 16px 18px;
+  }
+  .landing-mgmt-notice-lead {
+    font-size: 18px;
+  }
+  .landing-mgmt-notice-body {
     font-size: 13.5px;
   }
 

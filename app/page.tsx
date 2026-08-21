@@ -13,8 +13,9 @@ import { COMPANY_FREIGHT_BROKER_LICENSE } from "@/lib/companyInfo";
 // "1톤~5톤"처럼 상한을 못박는 표현, "25톤"·"전 차종"처럼 대형을 약속하는 표현, "이사",
 // "B2B", 고객 접점의 "화주". 포지셔닝이 "보조 배차처"에서 "정식 물류 파트너"로 바뀌었다.
 //
-// 🔴 **섹션 배경 교차 순서가 11차 시안 리듬의 핵심**이다(다크 → 흰색 → 옅은 노랑 →
-// 흰색 → 회색 → 다크). 섹션을 추가·이동할 때 이 교차가 깨지지 않는지 먼저 확인할 것.
+// 🔴 **섹션 배경 교차 순서가 시안 리듬의 핵심**이다(다크 → 흰색 → 옅은 노랑 → 흰색 →
+// 회색 → **옅은 노랑 → 흰색** → 다크. 뒤 두 개가 13차에 신설된 ⑥⑦). 섹션을 추가·이동할
+// 때 이 교차가 깨지지 않는지 먼저 확인할 것.
 // 레이아웃 값은 전부 `app/globals.css`의 "랜딩(/) 레이아웃" 블록에 모여 있다.
 //
 // ⚠️ **이미지 5종은 아직 자리표시자**다. 경로는 `lib/landingImages.ts` 한 곳에만 있으니
@@ -101,6 +102,15 @@ const STEPS = [
     title: "운송·정산",
     desc: ["운송 완료 후 인수증과 정산 내역이 남습니다.", "세금계산서 발행, 건별 정산 및 월정산 가능합니다."],
   },
+];
+
+// ⑥ 운송관리 섹션의 기능 4줄. 화면 이름과 순서는 실제 운송관리 좌측 메뉴 순서를 따른다
+// (견적확인 → 배차·운송조회 → 정산확인 → 월별통계) — 캡처와 어긋나면 안 되기 때문.
+const MANAGEMENT_FEATURES = [
+  { title: "견적 확인", desc: "받으신 견적서를 화면에서 다시 보고, PDF로 내려받으실 수 있습니다." },
+  { title: "배차·운송 조회", desc: "배차 확정과 상·하차 진행 상황을 확인하실 수 있습니다." },
+  { title: "정산 확인", desc: "청구 내역, 세금계산서 발행일, 입금일이 기록으로 남습니다." },
+  { title: "월별 통계", desc: "월별 운송 건수와 운임, 자주 쓰는 구간을 확인하실 수 있습니다." },
 ];
 
 export default function LandingPage() {
@@ -310,7 +320,77 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── ⑥ 마감 CTA (다크) ──────────────────────────────────────────────── */}
+      {/* ── ⑥ 운송관리 (옅은 노랑) ─────────────────────────────────────────────
+          13차 신설. 그 전에는 ⑤ 안의 곁다리 카드 하나로만 소개했고 **버튼이 없어
+          클릭할 데가 없었다** — 소개는 하는데 갈 곳을 주지 않는 상태였음.
+          🔴 옅은 노랑 배경 위에 직접 회색 텍스트(--text-muted)를 올리면 대비가 모자라므로
+          설명문은 반드시 **흰 카드 안**에 넣는다.
+          🔴 모바일 순서는 기능 4줄 → 캡처 → 버튼 → 배지다(CSS grid-template-areas가
+          전환한다). 캡처를 맨 위에 두면 버튼이 한참 아래로 밀린다. */}
+      <section id="management" className="landing-section landing-section-soft">
+        <div className="landing-inner">
+          <div className="landing-values-head">
+            <h2 className="landing-h2">맡기신 운송, 화면에서 직접 확인하세요</h2>
+            <p className="landing-sub">견적서부터 월정산까지, 전화하지 않아도 됩니다.</p>
+          </div>
+
+          <div className="landing-mgmt-card">
+            <div className="landing-mgmt-media-wrap">
+              {/* 캡처는 안에 글자가 있어서 모바일 전용 크롭을 따로 쓴다 —
+                  데스크탑 자산(1240px)을 모바일 폭(320px)으로 줄이면 표 안 글자가 뭉개진다.
+                  모바일 자산은 표가 아니라 **카드 뷰**를 찍는다(.mobile-row-card). */}
+              <LandingImage
+                src={LANDING_IMAGES.portal.desktop}
+                mobileSrc={LANDING_IMAGES.portal.mobile}
+                alt="운송관리 화면의 운송 목록 예시"
+                className="landing-mgmt-media"
+              />
+              {/* 🔴 캡처 하단 페이드 — 표가 잘린 자리를 자연스럽게 흐린다 */}
+              <div className="landing-mgmt-fade" aria-hidden="true" />
+            </div>
+
+            <ul className="landing-mgmt-features">
+              {MANAGEMENT_FEATURES.map((f) => (
+                <li key={f.title}>
+                  <span className="landing-mgmt-check" aria-hidden="true">
+                    ✓
+                  </span>
+                  <div>
+                    <h3 className="landing-mgmt-feature-title">{f.title}</h3>
+                    <p className="landing-mgmt-feature-desc">{f.desc}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            {/* 로그인(주) → 계정 신청(보조) 순서. 헤더의 `.btn`·`.btn-ghost`는 옐로 위에서
+                묻히거나 테두리가 없어서 여기서도 쓰지 않고 전용 클래스를 둔다 */}
+            <div className="landing-mgmt-actions">
+              <Link href="/customer/login" className="landing-mgmt-btn">
+                운송관리 로그인 <span aria-hidden="true">→</span>
+              </Link>
+              <Link href="/apply" className="landing-mgmt-btn-ghost">
+                운송관리 계정 신청 <span aria-hidden="true">→</span>
+              </Link>
+            </div>
+
+            {/* 🔴 "2~3시간"은 이 회사의 차별점이라 큰 숫자로 강조한다 — 회색 보조
+                텍스트로 흘리지 말 것. 둘째 줄(접수 시간 단서)도 각주로 밀거나 접지
+                않는다(`/vehicles`의 PRICING_NOTES와 같은 급). 운영시간은 상수 참조. */}
+            <div className="landing-mgmt-notice">
+              <span className="landing-mgmt-notice-lead num">2~3시간 이내</span>
+              <span className="landing-mgmt-notice-body">
+                신청 접수 후 계정을 발급해드립니다.
+                <span className="landing-mgmt-notice-sub">
+                  {COMPANY_SUPPORT_HOURS} 접수 기준 · 15시 이후 접수는 다음 영업일 오전 중 발급
+                </span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── ⑧ 마감 CTA (다크) ──────────────────────────────────────────────── */}
       <section className="landing-section landing-section-dark">
         <div className="landing-inner landing-cta-final">
           <div>
