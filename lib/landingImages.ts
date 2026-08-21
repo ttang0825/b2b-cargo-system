@@ -12,7 +12,8 @@
 //   transportTypes    데스크탑 456×304 / 모바일 없음      (이런 운송을 맡고 있습니다)
 //   vehicles          데스크탑 272×200 / 모바일 154×104   (차량 형태 4장)
 //   icons             데스크탑 64×64   / 모바일 48×48     (선택 이유 카드 4종)
-//   portal            데스크탑 1240×720 → 620×360 표시 / 모바일 640×400 → 320×200 표시
+//   portal            데스크탑 1240×800 → 620×400 표시 / 모바일 640×456 → 320×228 표시
+//   safety            데스크탑 56×56   / 모바일 48×48     (안전·책임 카드 3종)
 //
 // ⚠️ 히어로 데스크탑은 **870×716**이 확정값이다(규격서에 있던 520은 폐기됨).
 //
@@ -59,6 +60,16 @@ export type LandingImages = {
    * `mobileSrc` prop으로 넘어가 `<picture>`의 `<source media="(max-width: 760px)">`가 된다.
    */
   portal: { desktop: LandingImageSrc; mobile: LandingImageSrc };
+  /**
+   * ⑦ 안전·책임 카드 아이콘 3종(13차 신설).
+   * ⚠️ `insurance`는 `lib/insuranceInfo.ts`의 `INSURANCE_ENABLED`가 false인 동안
+   * 카드 자체가 렌더링되지 않으므로 화면에 나타나지 않는다 — 값을 채워도 마찬가지다.
+   */
+  safety: {
+    record: LandingImageSrc;
+    process: LandingImageSrc;
+    insurance: LandingImageSrc;
+  };
 };
 
 export const LANDING_IMAGES: LandingImages = {
@@ -67,4 +78,5 @@ export const LANDING_IMAGES: LandingImages = {
   vehicles: { cargo: null, box: null, wing: null, lift: null },
   icons: { dispatch: null, price: null, support: null, repeat: null },
   portal: { desktop: null, mobile: null },
+  safety: { record: null, process: null, insurance: null },
 };

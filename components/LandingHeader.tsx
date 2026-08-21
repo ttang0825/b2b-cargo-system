@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import BrandLogo from "@/components/BrandLogo";
 import { useScrolled } from "@/lib/useScrolled";
 
@@ -14,8 +15,10 @@ import { useScrolled } from "@/lib/useScrolled";
 // 드롭다운으로 접는다.
 //
 // **모바일 헤더에 눈에 보이는 항목을 더 넣지 말 것** — 로고 종횡비가 6.5:1이라
-// 360px에서 CTA 우측 끝까지 쓰고 남는 폭이 24px뿐임(27차 실측). 신규 메뉴는 전부
-// 드롭다운으로 들어가야 함.
+// 360px에서 로고 156 + 햄버거 44 + 견적 문의 87 = 287px을 쓰고 **남는 폭이 15px뿐**임
+// (38차 실측. 27차 기록의 24px는 햄버거가 들어오기 전 값이라 무효). 신규 메뉴는 전부
+// 드롭다운으로 들어가야 함 — 13차의 "운송관리 로그인"도 그래서 데스크탑 전용이다.
+// 🟢 데스크탑은 여유가 크다(1280px에서 좌우 그룹 사이 551px).
 //
 // 라벨은 고객 접점 용어를 따름(용어정리 가이드 2-1·2-2): "화주 로그인"→"로그인",
 // "화주 등록 신청"→"고객 등록"(28차)→**"운송관리 계정 신청"**(12차).
@@ -24,23 +27,38 @@ import { useScrolled } from "@/lib/useScrolled";
 // 둘 다 "운송관리로 가는 문"임을 용어로 잇기 위한 것이니 한 곳만 되돌리지 말 것.
 type NavLink = { href: string; label: string };
 
-// 드롭다운(모바일) 항목 — 지시서 2-3의 순서를 그대로 따름
+// 드롭다운(모바일) 항목 4개 — 운송관리로 가는 두 문(로그인·계정 신청)을 위에 모은다.
+// ⚠️ 13차에 「문의·신청 현황」(/status)을 뺐다 — 12차에 **푸터**에 같은 항목을 넣어뒀고,
+// 헤더에 남겨두면 중복이다. 🔴 `PublicPageHeader`의 현황조회 칩은 그대로 두었다
+// (그 화면들은 푸터까지 내려가지 않고도 바로 조회로 가야 하는 자리).
 const MOBILE_LINKS: NavLink[] = [
+  { href: "/customer/login", label: "운송관리 로그인" },
+  { href: "/apply", label: "운송관리 계정 신청" },
   { href: "/about", label: "회사소개" },
   { href: "/vehicles", label: "차량·요금 안내" },
-  { href: "/status", label: "문의·신청 현황" },
-  { href: "/apply", label: "운송관리 계정 신청" },
-  { href: "/customer/login", label: "로그인" },
 ];
 
-// 데스크탑에 그대로 노출하는 링크. "운송관리 계정 신청"은 헤더가 복잡해지는 것을 막기 위해
-// 빼고 랜딩 본문 Hero의 "운송관리 계정 신청" CTA로 유도함(지시서 2-2).
-const DESKTOP_LINKS: NavLink[] = MOBILE_LINKS.filter((l) => l.href !== "/apply");
+// 데스크탑에 텍스트 링크로 그대로 노출하는 항목.
+// "운송관리 로그인"은 텍스트가 아니라 **테두리 버튼**으로 따로 빼고(아래 참고),
+// "운송관리 계정 신청"은 헤더가 복잡해지는 것을 막기 위해 빼서 히어로 CTA로 유도한다.
+const DESKTOP_LINKS: NavLink[] = MOBILE_LINKS.filter(
+  (l) => l.href !== "/apply" && l.href !== "/customer/login"
+);
 
 export default function LandingHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const scrolled = useScrolled();
+  const pathname = usePathname();
+
+  // 이 헤더는 랜딩 말고 /about·/vehicles·법적 문서 3종도 함께 쓴다.
+  // ⚠️ `?from=landing`은 "랜딩의 어느 지점에서 왔으니 돌아갈 때 그 자리로"라는 표시라
+  // **랜딩에서 눌렀을 때만** 붙여야 한다(components/BackToHomeLink.tsx 참고).
+  // 다른 화면에서 붙이면 홈에 가본 적도 없는데 뒤로가기를 하게 된다.
+  const withReturn = (href: string) =>
+    pathname === "/" && (href === "/customer/login" || href === "/apply")
+      ? `${href}?from=landing`
+      : href;
 
   // 메뉴 바깥의 빈 곳을 클릭하면 닫힘(TopNav·CustomerPortalShell과 동일한 동작, 원칙 20번)
   useEffect(() => {
@@ -104,10 +122,20 @@ export default function LandingHeader() {
           {/* 데스크탑: 링크를 그대로 노출 (760px 이하에서는 CSS로 숨김) */}
           <div className="landing-nav-desktop" style={{ display: "flex", gap: 10, alignItems: "center" }}>
             {DESKTOP_LINKS.map((link) => (
-              <Link key={link.href} href={link.href} className="guide-link">
+              <Link key={link.href} href={withReturn(link.href)} className="guide-link">
                 {link.label}
               </Link>
             ))}
+            {/* 운송관리 로그인 — 회색 텍스트 링크가 아니라 테두리 버튼(13차).
+                ⚠️ `.btn`(옐로 헤더 위에서 글자가 배경과 같은 색)도, `.btn-ghost`
+                (background: var(--bg)가 .portal-theme에서 #fffdf6이고 border: none)도
+                쓸 수 없어서 `.public-header-status-link`와 같은 방식(흰 칩 + 옅은
+                검정 테두리)으로 전용 클래스를 뒀다.
+                🔴 모바일에는 이 버튼을 노출하지 않는다 — 360px 헤더 여유가 15px뿐이라
+                자리가 없다. 모바일에서는 위 드롭다운 첫 항목이 같은 역할을 한다. */}
+            <Link href={withReturn("/customer/login")} className="landing-nav-login">
+              운송관리 로그인
+            </Link>
           </div>
 
           {/* 모바일: 햄버거 버튼 + 드롭다운 (760px 초과에서는 CSS로 숨김) */}
@@ -126,7 +154,7 @@ export default function LandingHeader() {
                 {MOBILE_LINKS.map((link) => (
                   <Link
                     key={link.href}
-                    href={link.href}
+                    href={withReturn(link.href)}
                     className="landing-nav-dropdown-item"
                     // 항목을 선택해 이동할 때도 닫히도록(뒤로가기로 돌아왔을 때 열린 채 남지 않게)
                     onClick={() => setMenuOpen(false)}

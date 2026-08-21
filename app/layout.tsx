@@ -11,7 +11,7 @@ import TopNav from "@/components/TopNav";
 export const metadata = {
   title: "위캐리 운송 | 화물 배차·운송 주선",
   description:
-    "상·하차지와 품목만 알려주시면 차량과 운임을 확인해 연락드립니다. 견적부터 정산까지 기록으로 남는 화물 배차 주선. 정식 허가업체(제180254호).",
+    "상·하차지와 연락처만 남겨주시면 차량과 운임을 확인해 연락드립니다. 견적부터 정산까지 기록으로 남는 화물 배차 주선. 정식 허가업체(제180254호).",
 };
 
 export default function RootLayout({

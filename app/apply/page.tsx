@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import PublicPageHeader from "@/components/PublicPageHeader";
+import BackToHomeLink from "@/components/BackToHomeLink";
 import { formatPhoneNumber, formatBizRegNo, REGIONS, VEHICLE_TYPES } from "@/lib/constants";
 import MultiSelectTags from "@/components/MultiSelectTags";
 import AddressSearch from "@/components/AddressSearch";
@@ -334,12 +335,21 @@ export default function ApplyPage() {
           </form>
         </div>
 
-        <p style={{ textAlign: "center", fontSize: 12.5, color: "var(--text-muted)", margin: "20px 0 60px" }}>
+        <p style={{ textAlign: "center", fontSize: 12.5, color: "var(--text-muted)", margin: "20px 0 0" }}>
           먼저 운임부터 확인하고 싶으신가요?{" "}
           <Link href="/quote" style={{ color: "var(--accent)", textDecoration: "underline" }}>
             견적 문의하기
           </Link>
         </p>
+
+        {/* "← 홈으로" — 🔴 헤더 로고와 동작이 다르다: 로고는 홈 맨 위로 가고, 이 링크는
+            **왔던 자리로 되돌아간다**(랜딩 ⑥ 운송관리 섹션이 페이지 한참 아래라, 맨 위로
+            튕기면 스크롤을 다시 내려야 했다 — 13차 PR #88 리뷰).
+            ⚠️ 접수 완료 화면의 "홈으로 돌아가기" 버튼과는 별개다 — 그쪽은 신청을 마치고
+            떠나는 자리라 홈 맨 위로 가는 것이 맞다. */}
+        <div style={{ marginBottom: 60 }}>
+          <BackToHomeLink />
+        </div>
       </main>
     </div>
   );

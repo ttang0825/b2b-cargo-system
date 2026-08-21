@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import PasswordInput from "@/components/PasswordInput";
 import { syntheticLoginEmail } from "@/lib/portalAccountCredentials";
+import BackToHomeLink from "@/components/BackToHomeLink";
 import { COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
 
 const SAVED_LOGIN_ID_KEY = "wecarry_portal_saved_login_id";
@@ -133,12 +134,12 @@ export default function CustomerLoginPage() {
           </a>
           )
         </p>
-        {/* ⚠️ 여기 있던 "← 홈으로" 링크는 12차에 제거했다 — 이 화면에 공개 화면 공용
-            헤더(`PublicPageHeader`)가 붙으면서 헤더 로고가 같은 역할을 하게 되어
-            중복이 됐기 때문(헤더는 `app/customer/CustomerPortalShell.tsx`의
-            PUBLIC_PATHS 분기가 렌더링한다). 26차에 이 링크를 넣은 이유였던
-            "들어오면 홈으로 돌아갈 방법이 없음"(PR #75 리뷰)은 헤더가 해소한다.
-            🔴 헤더를 다시 떼게 되면 이 링크도 같이 되살릴 것. */}
+        {/* "← 홈으로" — 26차에 넣었다가 12차에 헤더 로고와 중복이라고 뺐던 링크를
+            13차 리뷰에서 되살린 것이다. 🔴 **헤더 로고와 동작이 다르다**: 로고는 홈 맨
+            위로 가고, 이 링크는 **왔던 자리로 되돌아간다**(랜딩 ⑥ 운송관리 섹션이 페이지
+            한참 아래라, 맨 위로 튕기면 스크롤을 다시 내려야 했다). 자세한 판정 기준은
+            components/BackToHomeLink.tsx 주석 참고. */}
+        <BackToHomeLink />
       </div>
     </main>
   );

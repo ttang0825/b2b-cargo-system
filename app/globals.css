@@ -20,7 +20,7 @@
      🔴 **옐로(#ffd833) 위에 `--text-muted`(#5f6b78)를 올리지 말 것** — 대비가 부족하다.
      옐로 배경 위의 텍스트는 예외 없이 `--text`(#191f28) 계열로 쓴다. */
   --brand-yellow: #ffd833; /* 헤더 배경, 번호 배지, 히어로 주 CTA */
-  --brand-yellow-soft: #fffdf0; /* "선택하는 이유" 섹션 배경, 혜택 칩 배경 */
+  --brand-yellow-soft: #fffdf0; /* "선택하는 이유"·"운송관리" 섹션 배경, 안내 박스 */
   --brand-yellow-border: #f0e7c4; /* 옅은 노랑 위에 얹는 카드·칩 테두리 */
   --brand-yellow-tint: #f5f2e3; /* 아이콘 자리 배경 */
   --brand-yellow-text: #8a6d00; /* 흰/옅은 배경 위 옐로 계열 진한 텍스트 */
@@ -712,6 +712,50 @@ tbody tr:hover {
 .public-header-status-link:hover {
   background: #ffffff;
 }
+/* 랜딩 헤더의 "운송관리 로그인"(13차) — 위 현황조회 칩과 같은 방식(흰 칩 + 옅은 검정
+   테두리)이다. 옐로 배경 위에서 읽히는 조합이 이것뿐이라 그대로 따랐다.
+   🔴 `.btn`·`.btn-ghost`를 재사용하지 말 것: 전자는 .portal-theme에서 검정 배경 +
+   **옐로 글자**라 옐로 헤더 위에서 글자가 묻히고, 후자는 배경이 #fffdf6에 border: none이라
+   테두리 버튼이 성립하지 않는다.
+   ⚠️ 데스크탑 전용이다 — `.landing-nav-desktop` 안에 있어 760px 이하에서 함께 숨는다. */
+.landing-nav-login {
+  display: inline-flex;
+  align-items: center;
+  /* 터치 영역 44px 확보 */
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(26, 26, 26, 0.24);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.landing-nav-login:hover {
+  background: #ffffff;
+  border-color: rgba(26, 26, 26, 0.42);
+}
+
+/* 공개 진입 화면(`/customer/login`·`/apply`) 폼 하단의 "← 홈으로"(components/BackToHomeLink.tsx).
+   헤더 로고와 나란히 있지만 동작이 달라서(왔던 자리로 복귀) 위계를 한 단계 낮춘 보조 링크다. */
+.back-to-home-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  /* 터치 영역 44px 확보 */
+  min-height: 44px;
+  padding: 0 4px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-decoration: none;
+}
+.back-to-home-link:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
 
 /* 앵커(#해시)로 이동할 때 대상이 고정 헤더 아래로 숨지 않도록 헤더 높이만큼 띄운다.
    헤더 높이 = 상하 패딩 18px + 내용 최소높이 44px + 테두리 1px = 81px (여유 포함 92px).
@@ -1158,7 +1202,8 @@ tbody tr:hover {
 
    🔴 **섹션 배경 교차 순서가 이 시안의 리듬 자체**다. 임의로 바꾸면 의도가 깨진다:
      ① 히어로 다크 #1a1a1a → ② 운송 유형 흰색 → ③ 선택 이유 옅은 노랑
-     → ④ 차량 형태 흰색 → ⑤ 진행 단계 회색 #f2f4f6 → ⑥ 마감 CTA 다크 #1a1a1a
+     → ④ 차량 형태 흰색 → ⑤ 진행 단계 회색 #f2f4f6 → ⑥ 운송관리 옅은 노랑
+     → ⑦ 안전·책임 흰색 → ⑧ 마감 CTA 다크 #1a1a1a  (13차에 ⑥⑦ 신설)
 
    ⚠️ 회색 배경에 `var(--bg)`를 쓸 수 없다 — 랜딩은 `.portal-theme` 안이고 거기서
    `--bg`가 #fffdf6(아주 옅은 노랑)으로 덮여 있어서 회색이 나오지 않는다. 그래서
@@ -1186,6 +1231,13 @@ tbody tr:hover {
 }
 .landing-section-gray {
   background: #f2f4f6; /* var(--bg)는 .portal-theme에서 덮여 있어 못 씀(위 주석 참고) */
+}
+/* ⑤ 진행 단계 전용 여백. 13차에 이 섹션에서 운송관리 카드와 첫 거래 혜택이 빠지면서
+   콘텐츠가 227px(1280 기준)로 줄었는데, 다른 섹션과 같은 88px 패딩을 그대로 두니
+   회색 띠가 내용보다 여백이 더 커 보였다(13차 PR #88 리뷰 "여백이 어색하다").
+   내용 높이에 맞춰 줄인 값이며, 🔴 **이 섹션에 블록을 다시 넣으면 88px로 되돌릴 것.** */
+.landing-section-steps {
+  padding: 60px 0 64px;
 }
 .landing-section-dark {
   background: #1a1a1a;
@@ -1428,6 +1480,12 @@ tbody tr:hover {
   line-height: 1.5;
   color: #e8e8e8;
 }
+/* 🔴 보험 줄이 꺼져 있으면(3줄) 3번째가 혼자 둘째 줄에 남아 오른쪽이 비어 보인다 —
+   그때만 전체 폭으로 늘린다. 보험 줄이 켜지면(4줄) 3번째는 last-child가 아니게 되므로
+   이 규칙이 자동으로 풀리고 2×2가 된다(별도 분기 불필요). */
+.hero-trust li:nth-child(3):last-child {
+  grid-column: 1 / -1;
+}
 .hero-trust-check {
   color: var(--brand-yellow);
   font-weight: 800;
@@ -1543,6 +1601,25 @@ tbody tr:hover {
   color: var(--text-muted);
   margin: 0;
 }
+/* 3·4번 카드에서 신설 섹션(⑦·⑥)으로 보내는 앵커 링크(13차) */
+.landing-value-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  /* 터치 영역 44px 확보 */
+  min-height: 44px;
+  margin-top: 6px;
+  font-size: 14.5px;
+  font-weight: 800;
+  color: var(--text);
+  text-decoration: none;
+}
+.landing-value-link .landing-arrow {
+  color: var(--brand-yellow-text);
+}
+.landing-value-link:hover .landing-arrow {
+  transform: translateX(3px);
+}
 
 /* ── ④ 필요한 차량 형태로 배차해드립니다 ──────────────────────────────────── */
 .landing-vehicles-head {
@@ -1609,7 +1686,7 @@ tbody tr:hover {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 32px;
-  margin-top: 44px;
+  margin-top: 38px;
 }
 .landing-step {
   position: relative;
@@ -1659,93 +1736,290 @@ tbody tr:hover {
   margin: 0;
 }
 
-/* 운송관리 화면 카드 */
-.landing-portal-card {
+/* ── ⑥ 운송관리 (13차 신설) ───────────────────────────────────────────────────
+   옅은 노랑 섹션 위에 **흰 카드** 하나. 🔴 설명문에 --text-muted를 쓰려면 흰 배경이
+   필요하다 — 옅은 노랑 위에 직접 올리면 대비가 모자란다.
+
+   🔴 카드는 grid-template-areas로 배치한다. 데스크탑은 좌 캡처 / 우 (기능·버튼·배지)
+   2열이고, 모바일은 **기능 4줄 → 캡처 → 버튼 → 배지** 1열이다. DOM 순서가 아니라
+   영역 이름으로 배치하므로, 두 순서를 각각 정확히 지정할 수 있다.
+   (캡처를 모바일 맨 위에 두면 버튼이 한참 아래로 밀린다.) */
+.landing-mgmt-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 560px);
-  gap: 44px;
-  align-items: center;
-  margin-top: 56px;
-  padding: 44px;
+  grid-template-columns: minmax(0, 620px) minmax(0, 1fr);
+  grid-template-areas:
+    "media features"
+    "media actions"
+    "media notice";
+  align-content: start;
+  column-gap: 44px;
+  row-gap: 24px;
+  margin-top: 46px;
+  padding: 40px;
   border-radius: 24px;
   background: var(--surface);
+  border: 1px solid var(--brand-yellow-border);
   box-shadow: var(--shadow-sm);
 }
-.landing-portal-label {
-  font-size: 13px;
-  font-weight: 800;
-  color: var(--brand-yellow-text);
-  margin: 0 0 12px;
+.landing-mgmt-media-wrap {
+  grid-area: media;
+  position: relative;
+  align-self: center;
 }
-.landing-portal-title {
+/* 데스크탑 620×400 표시(제작 1240×800) */
+.landing-mgmt-media {
+  aspect-ratio: 620 / 400;
+  border-radius: 14px;
+  box-shadow: var(--shadow-md);
+}
+/* 🔴 캡처 하단 페이드 — 목록이 잘린 자리를 흐린다. 카드 배경(--surface)과 같은 색이어야
+   이어져 보인다 */
+.landing-mgmt-fade {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 40px;
+  border-radius: 0 0 14px 14px;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), var(--surface));
+  pointer-events: none;
+}
+.landing-mgmt-features {
+  grid-area: features;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 20px;
+}
+.landing-mgmt-features li {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.landing-mgmt-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--brand-yellow);
+  color: #1a1a1a;
+  font-size: 12px;
+  font-weight: 800;
+  margin-top: 1px;
+}
+.landing-mgmt-feature-title {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0 0 4px;
+}
+.landing-mgmt-feature-desc {
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--text-muted);
+  margin: 0;
+}
+.landing-mgmt-actions {
+  grid-area: actions;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
+/* 🔴 `.btn`(.portal-theme에서 검정 배경 + **옐로 글자**)과 `.btn-ghost`
+   (background: var(--bg) = #fffdf6, border: none)를 재사용하지 않는다 —
+   전자는 흰 카드 위에서 글자가 흐리고, 후자는 테두리 버튼이 성립하지 않는다. */
+.landing-mgmt-btn,
+.landing-mgmt-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  /* 터치 영역 44px 확보 */
+  min-height: 44px;
+  padding: 0 22px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 800;
+  text-decoration: none;
+}
+.landing-mgmt-btn {
+  background: #1a1a1a;
+  color: #ffffff;
+  border: 1.5px solid #1a1a1a;
+}
+.landing-mgmt-btn:hover {
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.22);
+}
+.landing-mgmt-btn-ghost {
+  background: var(--surface);
+  color: var(--text);
+  border: 1.5px solid rgba(26, 26, 26, 0.18);
+}
+.landing-mgmt-btn-ghost:hover {
+  border-color: rgba(26, 26, 26, 0.42);
+}
+/* 계정 발급 안내 — 🔴 "2~3시간"이 이 회사의 차별점이라 큰 숫자로 강조한다.
+   회색 보조 텍스트로 흘리지 말 것. 둘째 줄(접수 시간 단서)도 각주로 밀지 않는다. */
+.landing-mgmt-notice {
+  grid-area: notice;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 16px;
+  padding: 18px 22px;
+  border-radius: 14px;
+  background: var(--brand-yellow-soft);
+  border: 1px solid var(--brand-yellow-border);
+}
+.landing-mgmt-notice-lead {
   font-family: var(--font-display);
-  font-size: 26px;
+  font-size: 20px;
   font-weight: 800;
-  line-height: 1.45;
-  letter-spacing: -0.025em;
-  margin: 0 0 16px;
+  letter-spacing: -0.02em;
+  color: var(--brand-yellow-text);
+  white-space: nowrap;
 }
-.landing-portal-desc {
+.landing-mgmt-notice-body {
+  font-size: 14.5px;
+  font-weight: 700;
+  line-height: 1.6;
+  color: var(--text);
+}
+.landing-mgmt-notice-sub {
+  display: block;
+  margin-top: 4px;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+/* ── ⑦ 안전·책임 (13차 신설) ──────────────────────────────────────────────────
+   🔴 **열 수가 항목 수를 따라간다** — 보험 카드가 꺼진 9/7 공개 시점에는 2항목 2열이
+   실제 출시본이다. 3항목 3열이 더 예뻐 보이더라도 2항목 완성도를 우선할 것.
+   (열 수를 컴포넌트 inline style로 계산하지 않고 항목 수 클래스로 나눈 이유: 레이아웃
+   값은 이 파일이 갖는다는 랜딩 블록 전체의 규칙을 지키기 위함.) */
+.landing-safety-grid {
+  display: grid;
+  gap: 24px;
+  margin-top: 46px;
+}
+.landing-safety-grid-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.landing-safety-grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.landing-safety-card {
+  padding: 32px 30px;
+  border-radius: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+/* 아이콘 자리 56×56. 상자가 작아 "이미지 준비 중" 문구는 숨기고 색면만 남긴다
+   (선택 이유 카드 아이콘과 같은 처리) */
+.landing-safety-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: var(--brand-yellow-tint);
+  margin-bottom: 20px;
+}
+.landing-safety-icon .landing-media-empty {
+  display: none;
+}
+.landing-safety-title {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  margin: 0 0 10px;
+}
+.landing-safety-desc {
   font-size: 15px;
   line-height: 1.7;
   color: var(--text-muted);
   margin: 0;
 }
-.landing-portal-media-wrap {
-  position: relative;
-}
-.landing-portal-media {
-  aspect-ratio: 560 / 240;
-  border-radius: 14px;
-  box-shadow: var(--shadow-md);
-}
-/* 🔴 캡처 하단 흰색 페이드 — 표가 잘린 자리를 자연스럽게 흐린다(데스크탑 36px).
-   카드 배경(--surface)과 같은 색이어야 이어져 보인다. */
-.landing-portal-fade {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 36px;
-  border-radius: 0 0 14px 14px;
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), var(--surface));
-  pointer-events: none;
-}
-
-/* ── ⑥ 첫 거래 혜택(진행 단계 섹션 하단) ──────────────────────────────────── */
-.landing-perks {
+/* 보험 카드 전용 — 상품명·보험사·배상 한도 라벨-값 목록(값이 빈 항목은 렌더링되지 않음) */
+.landing-safety-rows {
+  margin: 0 0 14px;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 26px;
-  align-items: center;
-  margin-top: 52px;
-  padding-top: 30px;
-  border-top: 1px solid var(--border);
+  gap: 6px;
 }
-.landing-perks-label {
+.landing-safety-rows > div {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+}
+.landing-safety-rows dt {
   font-size: 13px;
-  font-weight: 800;
-  line-height: 1.5;
-  color: var(--brand-yellow-text);
+  font-weight: 700;
+  color: var(--text-muted);
 }
-.landing-perks-chips {
+.landing-safety-rows dd {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.landing-safety-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
+  margin-top: 18px;
 }
-/* ⚠️ 칩에 금액·비율을 쓰지 않는다 — 한시 프로모션이라 적용 조건·기간이 미확정이고,
-   조건 없이 금액만 게시하면 표시광고 문제가 된다(32차). 조건이 확정되면 함께 표기할 것 */
-.landing-chip {
-  padding: 10px 18px;
+.landing-safety-tag {
+  padding: 7px 13px;
   border-radius: 999px;
   background: var(--brand-yellow-soft);
   border: 1px solid var(--brand-yellow-border);
-  font-size: 13.5px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--text);
 }
+/* 하단 띠 — 허가 사실과 문의처. 회색 배경이라 var(--bg)를 쓸 수 없다(.portal-theme에서
+   #fffdf6으로 덮여 있음) — 섹션 배경과 같은 이유로 #f2f4f6을 직접 적는다. */
+.landing-safety-band {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px 24px;
+  margin-top: 26px;
+  padding: 18px 24px;
+  border-radius: 14px;
+  background: #f2f4f6;
+}
+.landing-safety-band-text {
+  font-size: 13.5px;
+  line-height: 1.6;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+.landing-safety-band-tel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  /* 터치 영역 44px 확보 */
+  min-height: 44px;
+  font-size: 14.5px;
+  font-weight: 800;
+  color: var(--brand-yellow-text);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.landing-safety-band-tel:hover {
+  text-decoration: underline;
+}
 
-/* ── ⑦ 마감 CTA ───────────────────────────────────────────────────────────── */
+/* ── ⑧ 마감 CTA ───────────────────────────────────────────────────────────── */
 .landing-cta-final {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1819,9 +2093,17 @@ tbody tr:hover {
   .landing-vehicles-aside {
     text-align: left;
   }
-  .landing-portal-card {
+  /* 3항목(보험 ON)일 때 1000px에서 카드가 너무 좁아진다 — 2열로 접는다 */
+  .landing-safety-grid-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .landing-mgmt-card {
     grid-template-columns: 1fr;
-    gap: 28px;
+    grid-template-areas:
+      "features"
+      "media"
+      "actions"
+      "notice";
   }
   .landing-cta-final {
     grid-template-columns: 1fr;
@@ -1941,6 +2223,9 @@ tbody tr:hover {
     font-size: 12.5px;
   }
 
+  .landing-section-steps {
+    padding: 40px 0 44px;
+  }
   /* 가로 진행선 → 세로 진행선 */
   .landing-steps {
     grid-template-columns: 1fr;
@@ -1971,33 +2256,74 @@ tbody tr:hover {
     font-size: 13.5px;
   }
 
-  .landing-portal-card {
-    margin-top: 36px;
+  .landing-mgmt-card {
+    margin-top: 30px;
     padding: 24px 20px;
     border-radius: 18px;
+    row-gap: 20px;
   }
-  .landing-portal-title {
-    font-size: 20px;
-  }
-  .landing-portal-desc {
-    font-size: 14px;
-  }
-  .landing-portal-media {
-    aspect-ratio: 284 / 130;
+  /* 모바일 320×228 표시(제작 640×456) — 데스크탑과 다른 자산이라 비율도 다르다 */
+  .landing-mgmt-media {
+    aspect-ratio: 320 / 228;
     border-radius: 12px;
   }
-  .landing-portal-fade {
-    height: 24px;
+  .landing-mgmt-fade {
+    height: 28px;
     border-radius: 0 0 12px 12px;
   }
+  .landing-mgmt-features {
+    gap: 16px;
+  }
+  .landing-mgmt-feature-title {
+    font-size: 15.5px;
+  }
+  .landing-mgmt-feature-desc {
+    font-size: 13.5px;
+  }
+  /* 버튼은 전폭으로 세로 배치 */
+  .landing-mgmt-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .landing-mgmt-notice {
+    padding: 16px 18px;
+  }
+  .landing-mgmt-notice-lead {
+    font-size: 18px;
+  }
+  .landing-mgmt-notice-body {
+    font-size: 13.5px;
+  }
 
-  .landing-perks {
+  /* 카드가 좁아지면 태그 칩이 잘리므로 열 수와 무관하게 1열로 */
+  .landing-safety-grid,
+  .landing-safety-grid-2,
+  .landing-safety-grid-3 {
     grid-template-columns: 1fr;
     gap: 14px;
-    margin-top: 36px;
+    margin-top: 30px;
   }
-  .landing-chip {
-    padding: 9px 14px;
+  .landing-safety-card {
+    padding: 22px 20px;
+    border-radius: 16px;
+  }
+  .landing-safety-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    margin-bottom: 16px;
+  }
+  .landing-safety-title {
+    font-size: 17px;
+  }
+  .landing-safety-desc {
+    font-size: 14px;
+  }
+  .landing-safety-band {
+    padding: 16px 18px;
+    gap: 4px;
+  }
+  .landing-safety-band-text {
     font-size: 12.5px;
   }
 
