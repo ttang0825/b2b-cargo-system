@@ -38,6 +38,10 @@ import {
 const FOOTER_LINKS: { href: string; label: string }[] = [
   { href: "/about", label: "회사소개" },
   { href: "/vehicles", label: "차량·요금 안내" },
+  // ⚠️ `/status`는 `app/robots.ts`의 disallow 대상이고 layout에 noindex가 걸려 있다 —
+  // 푸터에서 링크하는 것은 무방하지만 검색 유입을 기대할 자리는 아니다(기존 고객이
+  // 링크·메뉴로 들어오는 조회 도구, 26차 결정).
+  { href: "/status", label: "문의·신청 현황" },
 ];
 
 // 사업자 표시사항. [라벨, 값] 쌍으로 두고 한 줄씩 렌더링한다.

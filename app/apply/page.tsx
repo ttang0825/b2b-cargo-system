@@ -132,7 +132,7 @@ export default function ApplyPage() {
       <main className="container" style={{ maxWidth: 640, paddingTop: 40 }}>
         <div className="page-header">
           <div>
-            <h1 className="page-title">고객 등록 신청</h1>
+            <h1 className="page-title">운송관리 계정 신청</h1>
             <p className="page-desc">
               등록하시면 운송관리 화면에서 견적·배차·정산 현황을 직접 확인하실 수
               있습니다. 검토 후 계정을 발급해드립니다.

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import NavCountBadge from "@/components/NavCountBadge";
+import PublicPageHeader from "@/components/PublicPageHeader";
 import {
   getLastSeen,
   markSeen,
@@ -268,8 +269,24 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
     router.push("/customer/login");
   }
 
+  // 로그인 전 화면(로그인·지원접속 확인)은 포털 셸(좌측 메뉴·알림 배지)을 건너뛴다.
+  // 다만 **공개 화면 공용 헤더는 붙인다**(12차) — 랜딩의 옐로 헤더를 보고 넘어왔는데
+  // 여기서 헤더가 사라지면 브랜드 연속성이 끊기고, 헤더 로고가 홈으로 돌아가는 길도 된다.
+  // `.public-header` 클래스를 공유하므로 헤더 색·높이는 자동으로 따라온다.
+  //
+  // 🔴 색인 차단에는 영향이 없다 — noindex는 `app/customer/layout.tsx`의 metadata가
+  // 결정하고 `/customer/login`에는 자체 layout이 없어 부모 설정을 그대로 상속한다.
+  // 헤더는 렌더 트리에 컴포넌트를 하나 더 넣는 것일 뿐 metadata를 건드리지 않는다.
+  //
+  // ⚠️ 현황조회 칩은 끈다(showStatusLink={false}) — 로그인하러 온 사람에게
+  // 비회원 조회로 새는 링크를 주지 않기 위함.
   if (PUBLIC_PATHS.includes(pathname || "")) {
-    return <div className="portal-theme">{children}</div>;
+    return (
+      <div className="portal-theme">
+        <PublicPageHeader showStatusLink={false} />
+        {children}
+      </div>
+    );
   }
 
   if (checking) {
