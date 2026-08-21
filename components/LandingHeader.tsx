@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import BrandLogo from "@/components/BrandLogo";
 import { useScrolled } from "@/lib/useScrolled";
 
@@ -48,6 +49,16 @@ export default function LandingHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const scrolled = useScrolled();
+  const pathname = usePathname();
+
+  // 이 헤더는 랜딩 말고 /about·/vehicles·법적 문서 3종도 함께 쓴다.
+  // ⚠️ `?from=landing`은 "랜딩의 어느 지점에서 왔으니 돌아갈 때 그 자리로"라는 표시라
+  // **랜딩에서 눌렀을 때만** 붙여야 한다(components/BackToHomeLink.tsx 참고).
+  // 다른 화면에서 붙이면 홈에 가본 적도 없는데 뒤로가기를 하게 된다.
+  const withReturn = (href: string) =>
+    pathname === "/" && (href === "/customer/login" || href === "/apply")
+      ? `${href}?from=landing`
+      : href;
 
   // 메뉴 바깥의 빈 곳을 클릭하면 닫힘(TopNav·CustomerPortalShell과 동일한 동작, 원칙 20번)
   useEffect(() => {
@@ -111,7 +122,7 @@ export default function LandingHeader() {
           {/* 데스크탑: 링크를 그대로 노출 (760px 이하에서는 CSS로 숨김) */}
           <div className="landing-nav-desktop" style={{ display: "flex", gap: 10, alignItems: "center" }}>
             {DESKTOP_LINKS.map((link) => (
-              <Link key={link.href} href={link.href} className="guide-link">
+              <Link key={link.href} href={withReturn(link.href)} className="guide-link">
                 {link.label}
               </Link>
             ))}
@@ -122,7 +133,7 @@ export default function LandingHeader() {
                 검정 테두리)으로 전용 클래스를 뒀다.
                 🔴 모바일에는 이 버튼을 노출하지 않는다 — 360px 헤더 여유가 15px뿐이라
                 자리가 없다. 모바일에서는 위 드롭다운 첫 항목이 같은 역할을 한다. */}
-            <Link href="/customer/login" className="landing-nav-login">
+            <Link href={withReturn("/customer/login")} className="landing-nav-login">
               운송관리 로그인
             </Link>
           </div>
@@ -143,7 +154,7 @@ export default function LandingHeader() {
                 {MOBILE_LINKS.map((link) => (
                   <Link
                     key={link.href}
-                    href={link.href}
+                    href={withReturn(link.href)}
                     className="landing-nav-dropdown-item"
                     // 항목을 선택해 이동할 때도 닫히도록(뒤로가기로 돌아왔을 때 열린 채 남지 않게)
                     onClick={() => setMenuOpen(false)}

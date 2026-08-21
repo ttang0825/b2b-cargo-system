@@ -738,6 +738,25 @@ tbody tr:hover {
   border-color: rgba(26, 26, 26, 0.42);
 }
 
+/* 공개 진입 화면(`/customer/login`·`/apply`) 폼 하단의 "← 홈으로"(components/BackToHomeLink.tsx).
+   헤더 로고와 나란히 있지만 동작이 달라서(왔던 자리로 복귀) 위계를 한 단계 낮춘 보조 링크다. */
+.back-to-home-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  /* 터치 영역 44px 확보 */
+  min-height: 44px;
+  padding: 0 4px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-decoration: none;
+}
+.back-to-home-link:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
 /* 앵커(#해시)로 이동할 때 대상이 고정 헤더 아래로 숨지 않도록 헤더 높이만큼 띄운다.
    헤더 높이 = 상하 패딩 18px + 내용 최소높이 44px + 테두리 1px = 81px (여유 포함 92px).
    ⚠️ `.portal-theme` 안으로 범위를 좁힌 이유: 전역(html)에 걸면 `/admin/guide`의
@@ -1213,6 +1232,13 @@ tbody tr:hover {
 .landing-section-gray {
   background: #f2f4f6; /* var(--bg)는 .portal-theme에서 덮여 있어 못 씀(위 주석 참고) */
 }
+/* ⑤ 진행 단계 전용 여백. 13차에 이 섹션에서 운송관리 카드와 첫 거래 혜택이 빠지면서
+   콘텐츠가 227px(1280 기준)로 줄었는데, 다른 섹션과 같은 88px 패딩을 그대로 두니
+   회색 띠가 내용보다 여백이 더 커 보였다(13차 PR #88 리뷰 "여백이 어색하다").
+   내용 높이에 맞춰 줄인 값이며, 🔴 **이 섹션에 블록을 다시 넣으면 88px로 되돌릴 것.** */
+.landing-section-steps {
+  padding: 60px 0 64px;
+}
 .landing-section-dark {
   background: #1a1a1a;
 }
@@ -1660,7 +1686,7 @@ tbody tr:hover {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 32px;
-  margin-top: 44px;
+  margin-top: 38px;
 }
 .landing-step {
   position: relative;
@@ -2197,6 +2223,9 @@ tbody tr:hover {
     font-size: 12.5px;
   }
 
+  .landing-section-steps {
+    padding: 40px 0 44px;
+  }
   /* 가로 진행선 → 세로 진행선 */
   .landing-steps {
     grid-template-columns: 1fr;

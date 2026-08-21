@@ -370,7 +370,7 @@ export default function LandingPage() {
           (적용 조건·기간이 확정되지 않은 한시 프로모션이라 표시광고 문제가 되고,
           나머지 칩 2개는 혜택이 아니라 ⑥·⑦과 겹치는 기능 설명이었음).
           🔴 혜택을 다시 쓰려면 **조건·기간을 확정한 뒤** 별도 차수로 설계할 것. */}
-      <section className="landing-section landing-section-gray">
+      <section className="landing-section landing-section-gray landing-section-steps">
         <div className="landing-inner">
           <h2 className="landing-h2">이렇게 진행됩니다</h2>
 
@@ -442,10 +442,12 @@ export default function LandingPage() {
             {/* 로그인(주) → 계정 신청(보조) 순서. 헤더의 `.btn`·`.btn-ghost`는 옐로 위에서
                 묻히거나 테두리가 없어서 여기서도 쓰지 않고 전용 클래스를 둔다 */}
             <div className="landing-mgmt-actions">
-              <Link href="/customer/login" className="landing-mgmt-btn">
+              {/* ⚠️ `?from=landing`은 이 화면들의 "← 홈으로"가 **왔던 자리로 되돌아가야**
+                  한다는 표시다(components/BackToHomeLink.tsx). 지우면 홈 맨 위로 튕긴다. */}
+              <Link href="/customer/login?from=landing" className="landing-mgmt-btn">
                 운송관리 로그인 <span aria-hidden="true">→</span>
               </Link>
-              <Link href="/apply" className="landing-mgmt-btn-ghost">
+              <Link href="/apply?from=landing" className="landing-mgmt-btn-ghost">
                 운송관리 계정 신청 <span aria-hidden="true">→</span>
               </Link>
             </div>
