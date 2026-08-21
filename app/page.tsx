@@ -103,15 +103,6 @@ const STEPS = [
   },
 ];
 
-// ⚠️ 금액·비율을 쓰지 않는다 — 한시 프로모션이라 적용 조건·기간이 미확정이고,
-// 조건 없이 금액만 게시하면 표시광고 문제가 된다. 조건이 확정되면 그때 함께 표기할 것(32차).
-const PERKS = [
-  "자주 나가는 구간 무료 비교 견적",
-  "첫 운송 운임 지원",
-  "반복 주소·물품 조건 저장",
-  "운송 내역서 및 세금계산서 처리 지원",
-];
-
 export default function LandingPage() {
   return (
     <div className="portal-theme landing-page">
@@ -287,7 +278,12 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── ⑤ 이렇게 진행됩니다 + 운송관리 카드 + 첫 거래 혜택 (회색) ─────── */}
+      {/* ── ⑤ 이렇게 진행됩니다 (회색) ─────────────────────────────────────────
+          ⚠️ 13차에 이 섹션에서 두 블록을 뺐다: **운송관리 곁다리 카드**(⑥ 독립 섹션으로
+          승격 — 소개만 하고 갈 곳을 주지 않던 상태였음)와 **첫 거래 혜택 칩 4개**
+          (적용 조건·기간이 확정되지 않은 한시 프로모션이라 표시광고 문제가 되고,
+          나머지 칩 2개는 혜택이 아니라 ⑥·⑦과 겹치는 기능 설명이었음).
+          🔴 혜택을 다시 쓰려면 **조건·기간을 확정한 뒤** 별도 차수로 설계할 것. */}
       <section className="landing-section landing-section-gray">
         <div className="landing-inner">
           <h2 className="landing-h2">이렇게 진행됩니다</h2>
@@ -310,45 +306,6 @@ export default function LandingPage() {
                 </p>
               </div>
             ))}
-          </div>
-
-          <div className="landing-portal-card">
-            <div>
-              <p className="landing-portal-label">운송관리 화면</p>
-              {/* ⚠️ 여기엔 <br />로 줄을 고정하지 않는다 — 카드 폭이 데스크탑·모바일에서
-                  크게 다르고, 고정하면 모바일에서 "내역이"만 남는 어색한 3줄이 된다.
-                  어절 단위 줄바꿈은 섹션에 걸어둔 word-break: keep-all이 처리한다. */}
-              <h3 className="landing-portal-title">견적서·배차 내역·인수증·정산 내역이 한 곳에 남습니다</h3>
-              <p className="landing-portal-desc">
-                전화와 문자로만 오가다 나중에 확인할 방법이 없는 일을 만들지 않겠습니다.
-              </p>
-            </div>
-            <div className="landing-portal-media-wrap">
-              {/* 캡처는 안에 글자가 있어서 모바일 전용 크롭을 따로 쓴다 —
-                  데스크탑 자산을 모바일 폭으로 줄이면 표 안 글자가 뭉개진다. */}
-              <LandingImage
-                src={LANDING_IMAGES.portal.desktop}
-                mobileSrc={LANDING_IMAGES.portal.mobile}
-                alt="운송관리 화면의 운송 목록 예시"
-                className="landing-portal-media"
-              />
-              {/* 🔴 캡처 하단 페이드 — 표가 잘린 자리를 자연스럽게 흐린다 */}
-              <div className="landing-portal-fade" aria-hidden="true" />
-            </div>
-          </div>
-
-          <div className="landing-perks">
-            <div className="landing-perks-label">
-              신규 고객
-              <br />첫 거래 혜택
-            </div>
-            <div className="landing-perks-chips">
-              {PERKS.map((p) => (
-                <span key={p} className="landing-chip">
-                  {p}
-                </span>
-              ))}
-            </div>
           </div>
         </div>
       </section>

@@ -20,7 +20,7 @@
      🔴 **옐로(#ffd833) 위에 `--text-muted`(#5f6b78)를 올리지 말 것** — 대비가 부족하다.
      옐로 배경 위의 텍스트는 예외 없이 `--text`(#191f28) 계열로 쓴다. */
   --brand-yellow: #ffd833; /* 헤더 배경, 번호 배지, 히어로 주 CTA */
-  --brand-yellow-soft: #fffdf0; /* "선택하는 이유" 섹션 배경, 혜택 칩 배경 */
+  --brand-yellow-soft: #fffdf0; /* "선택하는 이유"·"운송관리" 섹션 배경, 안내 박스 */
   --brand-yellow-border: #f0e7c4; /* 옅은 노랑 위에 얹는 카드·칩 테두리 */
   --brand-yellow-tint: #f5f2e3; /* 아이콘 자리 배경 */
   --brand-yellow-text: #8a6d00; /* 흰/옅은 배경 위 옐로 계열 진한 텍스트 */
@@ -1659,93 +1659,7 @@ tbody tr:hover {
   margin: 0;
 }
 
-/* 운송관리 화면 카드 */
-.landing-portal-card {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 560px);
-  gap: 44px;
-  align-items: center;
-  margin-top: 56px;
-  padding: 44px;
-  border-radius: 24px;
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
-}
-.landing-portal-label {
-  font-size: 13px;
-  font-weight: 800;
-  color: var(--brand-yellow-text);
-  margin: 0 0 12px;
-}
-.landing-portal-title {
-  font-family: var(--font-display);
-  font-size: 26px;
-  font-weight: 800;
-  line-height: 1.45;
-  letter-spacing: -0.025em;
-  margin: 0 0 16px;
-}
-.landing-portal-desc {
-  font-size: 15px;
-  line-height: 1.7;
-  color: var(--text-muted);
-  margin: 0;
-}
-.landing-portal-media-wrap {
-  position: relative;
-}
-.landing-portal-media {
-  aspect-ratio: 560 / 240;
-  border-radius: 14px;
-  box-shadow: var(--shadow-md);
-}
-/* 🔴 캡처 하단 흰색 페이드 — 표가 잘린 자리를 자연스럽게 흐린다(데스크탑 36px).
-   카드 배경(--surface)과 같은 색이어야 이어져 보인다. */
-.landing-portal-fade {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 36px;
-  border-radius: 0 0 14px 14px;
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), var(--surface));
-  pointer-events: none;
-}
-
-/* ── ⑥ 첫 거래 혜택(진행 단계 섹션 하단) ──────────────────────────────────── */
-.landing-perks {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 26px;
-  align-items: center;
-  margin-top: 52px;
-  padding-top: 30px;
-  border-top: 1px solid var(--border);
-}
-.landing-perks-label {
-  font-size: 13px;
-  font-weight: 800;
-  line-height: 1.5;
-  color: var(--brand-yellow-text);
-}
-.landing-perks-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-/* ⚠️ 칩에 금액·비율을 쓰지 않는다 — 한시 프로모션이라 적용 조건·기간이 미확정이고,
-   조건 없이 금액만 게시하면 표시광고 문제가 된다(32차). 조건이 확정되면 함께 표기할 것 */
-.landing-chip {
-  padding: 10px 18px;
-  border-radius: 999px;
-  background: var(--brand-yellow-soft);
-  border: 1px solid var(--brand-yellow-border);
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-/* ── ⑦ 마감 CTA ───────────────────────────────────────────────────────────── */
+/* ── ⑥ 마감 CTA ───────────────────────────────────────────────────────────── */
 .landing-cta-final {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1818,10 +1732,6 @@ tbody tr:hover {
   }
   .landing-vehicles-aside {
     text-align: left;
-  }
-  .landing-portal-card {
-    grid-template-columns: 1fr;
-    gap: 28px;
   }
   .landing-cta-final {
     grid-template-columns: 1fr;
@@ -1969,36 +1879,6 @@ tbody tr:hover {
   }
   .landing-step-desc {
     font-size: 13.5px;
-  }
-
-  .landing-portal-card {
-    margin-top: 36px;
-    padding: 24px 20px;
-    border-radius: 18px;
-  }
-  .landing-portal-title {
-    font-size: 20px;
-  }
-  .landing-portal-desc {
-    font-size: 14px;
-  }
-  .landing-portal-media {
-    aspect-ratio: 284 / 130;
-    border-radius: 12px;
-  }
-  .landing-portal-fade {
-    height: 24px;
-    border-radius: 0 0 12px 12px;
-  }
-
-  .landing-perks {
-    grid-template-columns: 1fr;
-    gap: 14px;
-    margin-top: 36px;
-  }
-  .landing-chip {
-    padding: 9px 14px;
-    font-size: 12.5px;
   }
 
   .landing-cta-title {
