@@ -56,6 +56,9 @@ const TRANSPORT_TYPES = [
 ];
 
 // 고객이 배차처를 고를 때 실제로 던지는 질문 4개.
+// ⚠️ 13차에 3·4번 설명을 **한 문장 약속**으로 줄이고 신설 섹션(⑦·⑥)으로 가는 앵커
+// 링크를 붙였다 — 이 섹션은 "판단 기준(질문) + 약속"을 맡고, **방법과 절차는 ⑥·⑦이
+// 맡는다**는 계층 분리다. 여기에 방법 설명을 다시 늘리면 두 곳이 같은 말을 하게 된다.
 // ⚠️ 11차에서 5문항 → 4문항으로 합쳤다(사용자 확정) — 기존 "정산이 편한가?"와
 // "다음 거래가 더 편한가?"가 결국 같은 이야기(반복 거래의 편의)라 시안이 한 장으로
 // 묶었고, 그래야 2×2 그리드가 맞는다. 다시 5개로 늘리면 시안 레이아웃이 깨진다.
@@ -64,21 +67,25 @@ const VALUES = [
     icon: LANDING_IMAGES.icons.dispatch,
     q: "차량이 잘 잡히는가?",
     a: "가능 차량을 빠르게 확인하고, 배차 확정 정보를 명확히 안내합니다.",
+    link: null,
   },
   {
     icon: LANDING_IMAGES.icons.price,
     q: "운임이 납득 가능한가?",
     a: "거리·차량·상하차·시간·대기 조건을 기준으로 운임을 설명합니다.",
+    link: null,
   },
   {
     icon: LANDING_IMAGES.icons.support,
     q: "문제 생기면 대응하는가?",
-    a: "사진·현장 상황·기사 확인을 통해 접수와 중재 절차를 운영합니다.",
+    a: "사진과 기사 확인으로 사실부터 확인합니다.",
+    link: { href: "#safety", label: "책임 절차 보기" },
   },
   {
     icon: LANDING_IMAGES.icons.repeat,
     q: "반복 거래가 편한가?",
-    a: "세금계산서 발행과 월정산을 제공하고, 자주 쓰는 주소·물품 조건을 저장해 다음 접수를 줄입니다.",
+    a: "자주 쓰는 주소와 물품 조건을 저장해 다음 접수를 줄입니다.",
+    link: { href: "#management", label: "운송관리 보기" },
   },
 ];
 
@@ -284,6 +291,17 @@ export default function LandingPage() {
                 <LandingImage src={v.icon} alt="" className="landing-value-icon" />
                 <h3 className="landing-value-q">{v.q}</h3>
                 <p className="landing-value-a">{v.a}</p>
+                {/* 앵커 스크롤 오프셋은 31차의 `.portal-theme :target`이 이미 처리한다
+                    (스티키 헤더가 대상 제목을 가리는 문제) — 섹션에 id만 붙이면 된다.
+                    🔴 전역(html)에 새로 걸지 말 것: /admin/guide의 해시 앵커까지 밀린다. */}
+                {v.link && (
+                  <a href={v.link.href} className="landing-value-link">
+                    {v.link.label}{" "}
+                    <span className="landing-arrow" aria-hidden="true">
+                      →
+                    </span>
+                  </a>
+                )}
               </div>
             ))}
           </div>

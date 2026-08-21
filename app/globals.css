@@ -1550,6 +1550,25 @@ tbody tr:hover {
   color: var(--text-muted);
   margin: 0;
 }
+/* 3·4번 카드에서 신설 섹션(⑦·⑥)으로 보내는 앵커 링크(13차) */
+.landing-value-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  /* 터치 영역 44px 확보 */
+  min-height: 44px;
+  margin-top: 6px;
+  font-size: 14.5px;
+  font-weight: 800;
+  color: var(--text);
+  text-decoration: none;
+}
+.landing-value-link .landing-arrow {
+  color: var(--brand-yellow-text);
+}
+.landing-value-link:hover .landing-arrow {
+  transform: translateX(3px);
+}
 
 /* ── ④ 필요한 차량 형태로 배차해드립니다 ──────────────────────────────────── */
 .landing-vehicles-head {
