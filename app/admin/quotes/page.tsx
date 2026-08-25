@@ -190,7 +190,6 @@ function QuotesPageInner() {
     물품특성: "일반화물",
     운송시간: "평일 주간",
     "왕복/편도": "편도",
-    firstDealDiscount: false,
     waitingMinutes: "",
     waypointCount: "",
     requested_pickup_at: "",
@@ -500,17 +499,6 @@ function QuotesPageInner() {
       }
     }
 
-    if (form.firstDealDiscount) {
-      const disc = findOption("특별할인", "첫거래지원(10%)");
-      if (disc) {
-        ratePctTotal += disc.rate_pct;
-        breakdown.push({
-          label: "첫거래지원(10%)",
-          amount: base * disc.rate_pct,
-        });
-      }
-    }
-
     const extra = extraFees.find((e) => e.vehicle_type === form.vehicle_type);
     let waitingExtra = 0;
     const waitingMin = Number(form.waitingMinutes) || 0;
@@ -748,7 +736,6 @@ function QuotesPageInner() {
           "왕복/편도": form["왕복/편도"],
           대기시간_분: Number(form.waitingMinutes) || 0,
           경유지수: Number(form.waypointCount) || 0,
-          첫거래지원할인: form.firstDealDiscount,
         },
       })
       .select("id")
@@ -859,8 +846,7 @@ function QuotesPageInner() {
       item: "",
       waitingMinutes: "",
       waypointCount: "",
-      firstDealDiscount: false,
-      requested_pickup_at: "",
+        requested_pickup_at: "",
       requested_dropoff_at: "",
       notes: "",
     });
@@ -1569,25 +1555,6 @@ function QuotesPageInner() {
                 />
               </div>
             </div>
-
-            <label
-              style={{
-                display: "flex",
-                gap: 6,
-                alignItems: "center",
-                fontSize: 13,
-                margin: "14px 0",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={form.firstDealDiscount}
-                onChange={(e) =>
-                  setForm({ ...form, firstDealDiscount: e.target.checked })
-                }
-              />
-              첫거래지원 할인 적용 (10%)
-            </label>
 
             {error && <div className="error-box">{error}</div>}
             <button className="btn" type="submit" disabled={saving}>
