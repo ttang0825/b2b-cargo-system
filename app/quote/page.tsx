@@ -9,6 +9,7 @@ import { LOADING_METHODS } from "@/lib/loadingMethods";
 import DateTimePicker from "@/components/DateTimePicker";
 import AddressSearch from "@/components/AddressSearch";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
+import { QUOTE_CONSENT_TEXT } from "@/lib/legalInfo";
 import { localInputToISOString } from "@/lib/localDateTime";
 
 export default function PublicQuotePage() {
@@ -295,10 +296,10 @@ export default function PublicQuotePage() {
                 onChange={(e) => setAgreed(e.target.checked)}
                 style={{ margin: "2px 0 0", width: "auto", flexShrink: 0 }}
               />
-              <span>
-                [필수] 입력하신 정보는 견적 상담 목적으로만 이용되며, 상담 완료 후 별도 보관 기간
-                없이 처리됩니다. 개인정보 수집·이용에 동의합니다.
-              </span>
+              {/* 🔴 문구를 여기 직접 적지 말 것 — 버전 상수와 함께 보게 하려고
+                  `lib/legalInfo.ts`에 두었다(14차). 예전 문구는 보관하지 않는 것처럼
+                  읽혔는데 사실과 달라, 처리방침 제3조의 보유기간에 맞춰 정정했다. */}
+              <span>{QUOTE_CONSENT_TEXT}</span>
             </label>
 
             {error && <div className="error-box">{error}</div>}

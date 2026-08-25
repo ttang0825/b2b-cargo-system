@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import PublicPageHeader from "@/components/PublicPageHeader";
 import BackToHomeLink from "@/components/BackToHomeLink";
+import { APPLY_CONSENT_TEXT } from "@/lib/legalInfo";
 import { formatPhoneNumber, formatBizRegNo, REGIONS, VEHICLE_TYPES } from "@/lib/constants";
 import MultiSelectTags from "@/components/MultiSelectTags";
 import AddressSearch from "@/components/AddressSearch";
@@ -310,10 +311,9 @@ export default function ApplyPage() {
                 onChange={(e) => setAgreed(e.target.checked)}
                 style={{ margin: "2px 0 0", width: "auto", flexShrink: 0 }}
               />
-              <span>
-                [필수] 입력하신 정보는 고객 등록 심사 목적으로만 이용되며, 승인 여부와 무관하게
-                안전하게 관리됩니다. 개인정보 수집·이용에 동의합니다.
-              </span>
+              {/* 🔴 문구를 여기 직접 적지 말 것 — `lib/legalInfo.ts` 참고(14차).
+                  내용은 그대로 두고 상수로 옮기기만 했다. */}
+              <span>{APPLY_CONSENT_TEXT}</span>
             </label>
 
             {error && (
