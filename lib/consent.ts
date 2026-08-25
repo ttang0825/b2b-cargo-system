@@ -49,6 +49,22 @@ export const CONSENT_TYPES_BY_SOURCE: Record<ConsentSource, readonly ConsentType
   "/apply": ["privacy"],
 };
 
+/** 관리자 화면 표시용 라벨. 화면마다 다시 적지 말 것. */
+export const CONSENT_TYPE_LABELS: Record<ConsentType, string> = {
+  privacy: "개인정보 수집·이용",
+  terms: "이용약관",
+};
+
+/** 관리자 화면이 받아 쓰는 동의 기록 한 행(서버 API가 원본 행에 붙여서 내려준다). */
+export type ConsentRecord = {
+  id: string;
+  consent_type: string;
+  version: string;
+  agreed: boolean;
+  agreed_at: string;
+  source: string | null;
+};
+
 type RecordConsentsParams = {
   subjectType: ConsentSubjectType;
   /** 방금 만든 원본 행의 id */

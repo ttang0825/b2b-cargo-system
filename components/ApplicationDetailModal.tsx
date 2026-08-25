@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
+import ConsentInfo from "@/components/ConsentInfo";
 import SmsLogPanel from "@/components/SmsLogPanel";
 import SmsConfirmModal, { SmsPreview } from "@/components/SmsConfirmModal";
 import { getCurrentStaffRole, getCurrentStaffName } from "@/lib/currentStaff";
@@ -342,6 +343,11 @@ export default function ApplicationDetailModal({
                 {item.status}
               </span>
             </div>
+
+            {/* 동의 기록(14차). 「처리 이력」 위 — 접수 시점의 사실이라 처리 결과보다 앞선다.
+                값은 `/api/admin/applications`가 붙여서 내려준다(`consents`는 anon 조회 불가). */}
+            <SectionTitle>개인정보 수집·이용 동의</SectionTitle>
+            <ConsentInfo consents={item.consents} />
 
             {item.status !== "검토중" && (
               <>
