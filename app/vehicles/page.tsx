@@ -20,13 +20,16 @@ const VEHICLE_SPECS: { name: string; capacity: string; example: string }[] = [
   { name: "5톤 플러스/축", capacity: "35CBM", example: "장거리·대량 물량" },
 ];
 
+// 16차(2026-08-25) 갱신 — `rate_distance_tiers`의 "10km 이내" 행과 1원도 다르면 안 된다.
+// 게시가와 실제 견적이 어긋나면 그대로 표시가격 분쟁이 되므로, 운임기준표를 바꾸는
+// 마이그레이션과 이 배열은 **항상 같은 PR에서 함께** 움직일 것.
 const START_PRICES: { name: string; price: string }[] = [
-  { name: "1톤", price: "40,000원부터" },
-  { name: "1.4톤", price: "50,000원부터" },
-  { name: "2.5톤", price: "70,000원부터" },
-  { name: "3.5톤", price: "80,000원부터" },
-  { name: "5톤", price: "90,000원부터" },
-  { name: "5톤 플러스/축", price: "110,000원부터" },
+  { name: "1톤", price: "48,000원부터" },
+  { name: "1.4톤", price: "60,000원부터" },
+  { name: "2.5톤", price: "84,000원부터" },
+  { name: "3.5톤", price: "96,000원부터" },
+  { name: "5톤", price: "108,000원부터" },
+  { name: "5톤 플러스/축", price: "133,000원부터" },
 ];
 
 const PRICING_NOTES = [
