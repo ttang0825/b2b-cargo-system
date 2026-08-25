@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { ConsentRecord } from "@/lib/consent";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
 
 // Next.js가 GET 응답(및 그 안에서 호출되는 fetch)을 캐시해버리면, 방금 저장한 답변/상태가
@@ -13,6 +14,35 @@ function getAdminClient() {
   return createClient(url, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+}
+
+// 원본 행에 동의 기록을 붙인다.
+// 🔴 `consents`는 RLS on + 정책 0개라 anon으로 읽을 수 없다 — 화면이 직접 조회하지 못하므로
+// 이 서버 API가 함께 내려준다. 행마다 조회하면 N+1이 되므로 **id 목록으로 한 번만** 조회한다
+// (36차 문자 이력에서 이름을 붙일 때 쓴 것과 같은 방식).
+async function attachConsents<T extends { id: string }>(
+  admin: SupabaseClient,
+  subjectType: string,
+  rows: T[]
+): Promise<(T & { consents: ConsentRecord[] })[]> {
+  const ids = rows.map((r) => r.id);
+  if (ids.length === 0) return [];
+
+  const { data } = await admin
+    .from("consents")
+    .select("id,subject_id,consent_type,version,agreed,agreed_at,source")
+    .eq("subject_type", subjectType)
+    .in("subject_id", ids)
+    .order("agreed_at", { ascending: true });
+
+  const bySubject = new Map<string, ConsentRecord[]>();
+  (data || []).forEach((c: ConsentRecord & { subject_id: string }) => {
+    const list = bySubject.get(c.subject_id) || [];
+    list.push(c);
+    bySubject.set(c.subject_id, list);
+  });
+
+  return rows.map((r) => ({ ...r, consents: bySubject.get(r.id) || [] }));
 }
 
 export async function GET() {
@@ -33,7 +63,7 @@ export async function GET() {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
-  return NextResponse.json({ data });
+  return NextResponse.json({ data: await attachConsents(admin, "quote_request", data || []) });
 }
 
 export async function POST(req: Request) {

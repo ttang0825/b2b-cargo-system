@@ -3,12 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import PublicPageHeader from "@/components/PublicPageHeader";
-import { supabase } from "@/lib/supabaseClient";
 import { VEHICLE_TYPES, formatPhoneNumber } from "@/lib/constants";
 import { LOADING_METHODS } from "@/lib/loadingMethods";
 import DateTimePicker from "@/components/DateTimePicker";
 import AddressSearch from "@/components/AddressSearch";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
+import { QUOTE_CONSENT_TEXT } from "@/lib/legalInfo";
 import { localInputToISOString } from "@/lib/localDateTime";
 
 export default function PublicQuotePage() {
@@ -72,27 +72,42 @@ export default function PublicQuotePage() {
     const fullOrigin = [form.origin, form.originDetail].filter((v) => v.trim()).join(" ");
     const fullDestination = [form.destination, form.destinationDetail].filter((v) => v.trim()).join(" ");
 
-    const { error: insertError } = await supabase.from("public_quote_requests").insert({
-      name: form.name,
-      phone: form.phone,
-      email: form.email || null,
-      origin: fullOrigin,
-      origin_sido: form.originSido || null,
-      origin_sigungu: form.originSigungu || null,
-      destination: fullDestination,
-      destination_sido: form.destinationSido || null,
-      destination_sigungu: form.destinationSigungu || null,
-      vehicle_type: form.vehicle_type,
-      item: form.item || null,
-      pickup_loading_method: form.pickup_loading_method || null,
-      dropoff_loading_method: form.dropoff_loading_method || null,
-      requested_pickup_at: localInputToISOString(form.requested_pickup_at),
-      notes: form.notes || null,
-      status: "신규",
-    });
-
-    setSaving(false);
-    if (insertError) {
+    // 🔴 anon 클라이언트로 `public_quote_requests`에 직접 insert하지 말 것(14차에 이전).
+    // 그 테이블은 INSERT 정책만 있고 SELECT 정책이 없어서 방금 넣은 행의 id를 못 받고,
+    // 그러면 동의 기록(`consents`)을 붙일 수 없다. 서버 API가 service_role로 처리한다.
+    // ⚠️ `agreed`는 form과 분리된 별도 state라 **명시적으로 함께 보내야 한다** —
+    // 14차 전에는 이 값이 검증에만 쓰이고 서버로 가지 않아 동의가 저장되지 않았다.
+    try {
+      const res = await fetch("/api/quote-submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name,
+          phone: form.phone,
+          email: form.email || null,
+          origin: fullOrigin,
+          origin_sido: form.originSido || null,
+          origin_sigungu: form.originSigungu || null,
+          destination: fullDestination,
+          destination_sido: form.destinationSido || null,
+          destination_sigungu: form.destinationSigungu || null,
+          vehicle_type: form.vehicle_type,
+          item: form.item || null,
+          pickup_loading_method: form.pickup_loading_method || null,
+          dropoff_loading_method: form.dropoff_loading_method || null,
+          requested_pickup_at: localInputToISOString(form.requested_pickup_at),
+          notes: form.notes || null,
+          agreed,
+        }),
+      });
+      const data = await res.json();
+      setSaving(false);
+      if (!res.ok) {
+        setError(data.error || "문의 접수 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+        return;
+      }
+    } catch {
+      setSaving(false);
       setError("문의 접수 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
       return;
     }
@@ -295,10 +310,10 @@ export default function PublicQuotePage() {
                 onChange={(e) => setAgreed(e.target.checked)}
                 style={{ margin: "2px 0 0", width: "auto", flexShrink: 0 }}
               />
-              <span>
-                [필수] 입력하신 정보는 견적 상담 목적으로만 이용되며, 상담 완료 후 별도 보관 기간
-                없이 처리됩니다. 개인정보 수집·이용에 동의합니다.
-              </span>
+              {/* 🔴 문구를 여기 직접 적지 말 것 — 버전 상수와 함께 보게 하려고
+                  `lib/legalInfo.ts`에 두었다(14차). 예전 문구는 보관하지 않는 것처럼
+                  읽혔는데 사실과 달라, 처리방침 제3조의 보유기간에 맞춰 정정했다. */}
+              <span>{QUOTE_CONSENT_TEXT}</span>
             </label>
 
             {error && <div className="error-box">{error}</div>}

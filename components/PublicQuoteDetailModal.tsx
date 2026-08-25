@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { formatDate } from "@/components/ApplicationDetailModal";
 import { notifyBadgeRefresh } from "@/lib/notifyBadgeRefresh";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
+import ConsentInfo from "@/components/ConsentInfo";
 import { getCurrentStaffRole, getCurrentStaffName } from "@/lib/currentStaff";
 
 export const STATUS_OPTIONS = ["신규", "연락완료", "종료"];
@@ -172,6 +173,9 @@ export default function PublicQuoteDetailModal({
         <SectionTitle>접수정보</SectionTitle>
         <DetailRow label="접수일" value={item.created_at ? formatDateTime(item.created_at) : "-"} />
         {item.processed_by && <DetailRow label="처리자" value={item.processed_by} />}
+        {/* 동의 기록(14차). 값은 `/api/admin/public-quote-requests`가 붙여서 내려준다 —
+            `consents`는 RLS on + 정책 0개라 화면에서 직접 조회할 수 없다. */}
+        <ConsentInfo consents={item.consents} />
 
         <div style={{ marginTop: 10 }}>
           {item.quote_id ? (
