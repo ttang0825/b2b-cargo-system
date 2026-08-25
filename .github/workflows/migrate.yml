@@ -1,0 +1,72 @@
+# DB 마이그레이션 — 손으로 실행하는 버튼
+#
+# 🔴 자동으로 돌지 않습니다. Actions 탭에서 사람이 버튼을 눌러야만 실행됩니다.
+#    운임 테이블에는 되돌리기가 없어서(운임 이력 테이블이 없음), merge와 동시에
+#    DB가 바뀌는 구조는 위험하다고 판단했습니다. 코드 배포(Vercel)와 DB 반영은
+#    시점을 따로 잡습니다.
+#
+# 쓰는 법
+#   1. GitHub 저장소 → 상단 Actions 탭 → 왼쪽에서 "DB 마이그레이션" 선택
+#   2. 오른쪽 "Run workflow" 버튼 → 브랜치와 mode 를 고르고 실행
+#   3. 실행 결과(SQL 출력 전부)가 로그에 그대로 남습니다
+#
+# mode
+#   dry-run  실행할 파일 목록만 보여주고 DB를 건드리지 않음  ← 항상 이것부터
+#   apply    실제로 반영
+#   verify   운임·동의 데이터 상태 점검 (읽기 전용, migrations/_verify.sql)
+
+name: DB 마이그레이션
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "무엇을 할지"
+        required: true
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - apply
+          - verify
+
+concurrency:
+  # 두 사람이 동시에 눌러서 같은 마이그레이션이 겹쳐 도는 것을 막는다.
+  group: db-migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    # apply 는 되돌리기가 없으므로 승인 단계를 붙일 수 있게 environment 를 둔다.
+    # (저장소 Settings → Environments 에서 'production' 에 리뷰어를 지정하면
+    #  버튼을 눌러도 승인 전까지는 실행되지 않습니다. 지정하지 않으면 그냥 통과합니다.)
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: psql 준비
+        run: |
+          if ! command -v psql >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq postgresql-client
+          fi
+          psql --version
+
+      - name: 데이터 점검 (verify)
+        if: ${{ inputs.mode == 'verify' }}
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::Secret 'SUPABASE_DB_URL' 이 등록되지 않았습니다."
+            exit 1
+          fi
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 --no-psqlrc -f migrations/_verify.sql
+
+      - name: 마이그레이션 (dry-run / apply)
+        if: ${{ inputs.mode != 'verify' }}
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+          MODE: ${{ inputs.mode }}
+        run: bash scripts/run-migrations.sh
