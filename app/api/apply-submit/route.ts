@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { recordConsents } from "@/lib/consent";
 
 export async function POST(req: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -26,10 +27,19 @@ export async function POST(req: Request) {
     preferred_regions,
     preferred_vehicle,
     notes,
+    agreed,
   } = body;
 
   if (!company_name?.trim() || !contact_name?.trim() || !contact_phone?.trim()) {
     return NextResponse.json({ error: "회사명, 담당자명, 담당자 연락처는 필수입니다." }, { status: 400 });
+  }
+  // 🔴 화면에서 이미 막지만 서버에서도 확인한다(원칙 25번) — 브라우저 콘솔에서 직접
+  // 호출하면 화면 검증은 우회되고, 동의 없이 접수된 건이 남으면 기록의 의미가 없다.
+  if (agreed !== true) {
+    return NextResponse.json(
+      { error: "개인정보 수집·이용에 동의해주셔야 신청을 접수할 수 있습니다." },
+      { status: 400 }
+    );
   }
 
   const admin = createClient(url, serviceKey, {
@@ -82,7 +92,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { error: insertError } = await admin.from("customer_applications").insert({
+  const { data: inserted, error: insertError } = await admin.from("customer_applications").insert({
     company_name,
     business_reg_no: bizRegNo,
     contact_name,
@@ -100,10 +110,31 @@ export async function POST(req: Request) {
     preferred_vehicle: preferred_vehicle || null,
     notes: notes || null,
     status: "검토중",
+  })
+    .select("id")
+    .single();
+
+  if (insertError || !inserted) {
+    return NextResponse.json(
+      { error: insertError?.message || "신청 접수 중 오류가 발생했습니다." },
+      { status: 400 }
+    );
+  }
+
+  // 🔴 동의 기록. 트랜잭션이 없으므로 여기서 실패하면 **동의 없는 신청서가 남는다** —
+  // 방금 만든 행을 되돌린다(quote-submit·approve-application과 같은 롤백 패턴).
+  const { error: consentError } = await recordConsents(admin, {
+    subjectType: "application",
+    subjectId: inserted.id,
+    source: "/apply",
   });
 
-  if (insertError) {
-    return NextResponse.json({ error: insertError.message }, { status: 400 });
+  if (consentError) {
+    await admin.from("customer_applications").delete().eq("id", inserted.id);
+    return NextResponse.json(
+      { error: "신청 접수 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요." },
+      { status: 400 }
+    );
   }
 
   return NextResponse.json({ ok: true });

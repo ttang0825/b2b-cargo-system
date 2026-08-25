@@ -68,10 +68,13 @@ export default function ApplyPage() {
       const res = await fetch("/api/apply-submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        // ⚠️ `agreed`는 form과 분리된 별도 state라 **명시적으로 함께 보내야 한다** —
+        // 14차 전에는 이 값이 검증에만 쓰이고 서버로 가지 않아 동의가 저장되지 않았다.
         body: JSON.stringify({
           ...form,
           main_origin: fullMainOrigin,
           main_destination: fullMainDestination,
+          agreed,
         }),
       });
       const data = await res.json();
