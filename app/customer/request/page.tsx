@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
-import { VEHICLE_TYPES } from "@/lib/constants";
+import { VEHICLE_TYPES_PUBLIC } from "@/lib/constants";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import DateTimePicker from "@/components/DateTimePicker";
 import AddressSearch from "@/components/AddressSearch";
@@ -101,7 +101,7 @@ export default function PortalRequestPage() {
     destinationSido: "",
     destinationSigungu: "",
     ...EMPTY_PICKUP_DROPOFF_CONTACT,
-    vehicle_type: VEHICLE_TYPES[0],
+    vehicle_type: VEHICLE_TYPES_PUBLIC[0],
     차량형태: "",
     상차조건: LOADING_METHOD_OPTIONS[0] as string,
     하차조건: LOADING_METHOD_OPTIONS[0] as string,
@@ -474,7 +474,7 @@ export default function PortalRequestPage() {
             <div className="field">
               <label>희망 톤수</label>
               <select value={form.vehicle_type} onChange={(e) => setField("vehicle_type", e.target.value)}>
-                {VEHICLE_TYPES.map((v) => (
+                {VEHICLE_TYPES_PUBLIC.map((v) => (
                   <option key={v} value={v}>{v}</option>
                 ))}
               </select>

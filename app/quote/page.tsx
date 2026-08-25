@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import PublicPageHeader from "@/components/PublicPageHeader";
-import { VEHICLE_TYPES, formatPhoneNumber } from "@/lib/constants";
+import { VEHICLE_TYPES_PUBLIC, formatPhoneNumber } from "@/lib/constants";
 import { LOADING_METHODS } from "@/lib/loadingMethods";
 import DateTimePicker from "@/components/DateTimePicker";
 import AddressSearch from "@/components/AddressSearch";
@@ -29,7 +29,7 @@ export default function PublicQuotePage() {
     destinationDetail: "",
     destinationSido: "",
     destinationSigungu: "",
-    vehicle_type: VEHICLE_TYPES[0],
+    vehicle_type: VEHICLE_TYPES_PUBLIC[0],
     item: "",
     pickup_loading_method: LOADING_METHODS[0].label as string,
     dropoff_loading_method: LOADING_METHODS[0].label as string,
@@ -228,7 +228,7 @@ export default function PublicQuotePage() {
               <div className="field">
                 <label>희망 톤수</label>
                 <select value={form.vehicle_type} onChange={(e) => setField("vehicle_type", e.target.value)}>
-                  {VEHICLE_TYPES.map((v) => (
+                  {VEHICLE_TYPES_PUBLIC.map((v) => (
                     <option key={v} value={v}>{v}</option>
                   ))}
                 </select>

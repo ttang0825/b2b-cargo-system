@@ -3,11 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { REGIONS, formatPhoneNumber } from "@/lib/constants";
+import { REGIONS, formatPhoneNumber, VEHICLE_TYPES_ALL } from "@/lib/constants";
 import MultiSelectTags from "@/components/MultiSelectTags";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
-
-const VEHICLE_TYPES = ["1톤", "1.4톤", "2.5톤", "3.5톤", "5톤", "5톤 플러스/축"];
 const BODY_TYPES = [
   "카고",
   "탑차",
@@ -264,7 +262,7 @@ export default function DriversPage() {
                     setForm({ ...form, vehicle_type: e.target.value })
                   }
                 >
-                  {VEHICLE_TYPES.map((v) => (
+                  {VEHICLE_TYPES_ALL.map((v) => (
                     <option key={v} value={v}>
                       {v}
                     </option>

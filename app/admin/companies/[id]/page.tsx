@@ -8,7 +8,7 @@ import { STATUS_OPTIONS, getStatusColor } from "@/lib/statusColors";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import {
   REGIONS,
-  VEHICLE_TYPES,
+  VEHICLE_TYPES_ALL,
   BODY_TYPES,
   GRADE_OPTIONS,
   formatPhoneNumber,
@@ -74,16 +74,16 @@ function EditableField({
 
 // "1톤 카고" 형태의 저장 문자열을 톤수/차량형태 선택값으로 분리
 function parseRecommendedVehicle(v: string | null | undefined) {
-  if (!v) return { tonnage: VEHICLE_TYPES[0], bodytype: BODY_TYPES[0] };
+  if (!v) return { tonnage: VEHICLE_TYPES_ALL[0], bodytype: BODY_TYPES[0] };
   const trimmed = v.trim();
-  for (const t of VEHICLE_TYPES) {
+  for (const t of VEHICLE_TYPES_ALL) {
     if (trimmed.startsWith(t)) {
       const rest = trimmed.slice(t.length).trim();
       const matchedBody = BODY_TYPES.find((b) => b === rest);
       return { tonnage: t, bodytype: matchedBody || BODY_TYPES[0] };
     }
   }
-  return { tonnage: VEHICLE_TYPES[0], bodytype: BODY_TYPES[0] };
+  return { tonnage: VEHICLE_TYPES_ALL[0], bodytype: BODY_TYPES[0] };
 }
 
 const BASIC_FIELDS = [
@@ -202,7 +202,7 @@ export default function CompanyDetailPage() {
     repeat_customer: false,
     manual_source_type: "",
     manual_source_note: "",
-    recommended_vehicle_tonnage: VEHICLE_TYPES[0],
+    recommended_vehicle_tonnage: VEHICLE_TYPES_ALL[0],
     recommended_vehicle_bodytype: BODY_TYPES[0],
   });
 
@@ -895,7 +895,7 @@ export default function CompanyDetailPage() {
                       }
                       style={{ flex: 1 }}
                     >
-                      {VEHICLE_TYPES.map((t) => (
+                      {VEHICLE_TYPES_ALL.map((t) => (
                         <option key={t} value={t}>
                           {t}
                         </option>

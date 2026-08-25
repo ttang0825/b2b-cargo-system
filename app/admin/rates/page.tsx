@@ -15,8 +15,7 @@ import {
   DEFAULT_MIXED_LOADING_DISCOUNT_SETTINGS,
   type MixedLoadingDiscountSettingsRow,
 } from "@/lib/mixedLoadingDiscountSettings";
-
-const VEHICLES = ["1톤", "1.4톤", "2.5톤", "3.5톤", "5톤", "5톤 플러스/축"];
+import { VEHICLE_TYPES_ALL } from "@/lib/constants";
 
 const RATE_TABS = [
   { key: "base", label: "기본운임" },
@@ -643,7 +642,7 @@ export default function RatesPage() {
               <thead>
                 <tr>
                   <th>거리구간</th>
-                  {VEHICLES.map((v) => (
+                  {VEHICLE_TYPES_ALL.map((v) => (
                     <th key={v}>{v}</th>
                   ))}
                 </tr>
@@ -652,7 +651,7 @@ export default function RatesPage() {
                 {labelOrder.map((label) => (
                   <tr key={label}>
                     <td style={{ fontWeight: 600 }}>{label}</td>
-                    {VEHICLES.map((v) => {
+                    {VEHICLE_TYPES_ALL.map((v) => {
                       const cell = matrix[label]?.[v];
                       return (
                         <td key={v}>

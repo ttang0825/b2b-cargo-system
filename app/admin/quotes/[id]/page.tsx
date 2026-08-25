@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
+import { VEHICLE_TYPES_ALL } from "@/lib/constants";
 import { STATUS_OPTIONS as COMPANY_STATUS_ORDER } from "@/lib/statusColors";
 import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
@@ -797,7 +798,7 @@ export default function QuoteDetailPage() {
                 value={editForm.vehicle_type}
                 onChange={(e) => setEditForm({ ...editForm, vehicle_type: e.target.value })}
               >
-                {["1톤", "1.4톤", "2.5톤", "3.5톤", "5톤", "5톤 플러스/축"].map((v) => (
+                {VEHICLE_TYPES_ALL.map((v) => (
                   <option key={v} value={v}>
                     {v}
                   </option>

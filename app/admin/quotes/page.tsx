@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { generateDailyNumber } from "@/lib/generateNumber";
 import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
-import { formatPhoneNumber } from "@/lib/constants";
+import { formatPhoneNumber, VEHICLE_TYPES_ALL } from "@/lib/constants";
 import { calcInclusiveAmount } from "@/lib/vat";
 import { mapToLegacySettlementType } from "@/lib/settlementLabels";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
@@ -22,8 +22,6 @@ import PickupDropoffContactFields, {
 import { getLatestMixedLoadingDiscountSettings } from "@/lib/mixedLoadingDiscountSettings";
 import { localInputToISOString, toLocalDateTimeInput } from "@/lib/localDateTime";
 import { applyMixedDiscount } from "@/lib/settlementCalc";
-
-const VEHICLES = ["1톤", "1.4톤", "2.5톤", "3.5톤", "5톤", "5톤 플러스/축"];
 
 // .field input 전역 CSS(width:100%, padding, border-radius 등)가 텍스트
 // 입력창 기준이라 체크박스/라디오에 그대로 적용되면 뭉개져 보임 — 명시적으로
@@ -1057,7 +1055,7 @@ function QuotesPageInner() {
                     setForm({ ...form, vehicle_type: e.target.value })
                   }
                 >
-                  {VEHICLES.map((v) => (
+                  {VEHICLE_TYPES_ALL.map((v) => (
                     <option key={v} value={v}>
                       {v}
                     </option>
