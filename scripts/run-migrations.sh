@@ -31,6 +31,23 @@ fi
 export PGOPTIONS='--client-min-messages=warning'
 PSQL=(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 --no-psqlrc)
 
+# 🔴 Direct connection URI 를 넣었을 때 알아보기 쉬운 오류를 낸다.
+#    `db.<프로젝트ID>.supabase.co` 는 **IPv6 전용**이고 GitHub Actions 러너는 IPv4만
+#    쓰므로 "Network is unreachable" 로 끝난다. 원인을 짐작하기 어려운 메시지라
+#    여기서 미리 걸러준다. (URL 자체는 절대 출력하지 않는다 — 비밀번호가 들어 있다.)
+if [[ "$DATABASE_URL" == *"@db."*".supabase.co"* ]]; then
+  echo "::error::Secret 'SUPABASE_DB_URL' 이 Direct connection URI 입니다."
+  echo "  Direct connection(db.<프로젝트ID>.supabase.co)은 IPv6 전용이라 GitHub Actions"
+  echo "  러너(IPv4)에서 접속되지 않습니다. **Session pooler** 로 바꿔주십시오."
+  echo ""
+  echo "  Supabase 프로젝트 화면 맨 위 초록색 [Connect] 버튼 → 'Session pooler' 탭"
+  echo "    postgresql://postgres.<프로젝트ID>:<비밀번호>@aws-0-<리전>.pooler.supabase.com:5432/postgres"
+  echo ""
+  echo "  ⚠️ 포트는 5432(Session)입니다. 6543(Transaction)이 아닙니다."
+  echo "  ⚠️ 사용자 이름이 'postgres' 가 아니라 'postgres.<프로젝트ID>' 입니다."
+  exit 1
+fi
+
 echo "▶ 접속 확인"
 "${PSQL[@]}" -Atc "select 'ok ' || current_database() || ' / ' || current_user"
 

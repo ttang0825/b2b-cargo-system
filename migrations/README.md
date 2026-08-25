@@ -37,6 +37,15 @@ Supabase SQL Editor에 손으로 붙여넣던 방식을 대신하는 것입니�
 postgresql://postgres.<프로젝트ID>:[YOUR-PASSWORD]@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres
 ```
 
+⚠️ Direct connection과 두 군데가 다릅니다. 눈으로 확인하십시오.
+- 사용자 이름이 `postgres` 가 아니라 **`postgres.<프로젝트ID>`**
+- 호스트가 `db.…supabase.co` 가 아니라 **`aws-0-<리전>.pooler.supabase.com`**
+
+⚠️ 포트는 **5432(Session)** 입니다. 6543은 Transaction 모드라 세션 단위 기능이 제한됩니다.
+
+Direct connection을 넣으면 실행이 `Network is unreachable` 로 끝납니다. 원인을 짐작하기
+어려운 메시지라 스크립트가 접속 전에 미리 걸러내고 안내를 출력합니다.
+
 ⚠️ `[YOUR-PASSWORD]` 를 **대괄호까지 지우고** 실제 데이터베이스 비밀번호로 바꾸십시오.
 프로젝트를 만들 때 정한 값이며, 기억나지 않으면 같은 모달의 *Reset database password*
 로 새로 정하면 됩니다(앱은 이 비밀번호가 아니라 anon / service_role 키로 붙으므로
