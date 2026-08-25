@@ -2,6 +2,8 @@
 --
 -- 🔴 이 파일은 사용자가 Supabase SQL Editor에서 직접 실행합니다.
 --
+-- ⚠️ 1~3단계를 **한 번에 실행하지 말고 순서대로 하나씩** 실행하십시오.
+--
 -- 배경 — 5톤급 견적에 대기료가 0원으로 잡히고 있었습니다
 --
 --   이 두 차급은 `waiting_fee_per_unit`·`waypoint_fee`가 **null** 입니다.
@@ -29,36 +31,56 @@
 --   5톤               30분     25,000     40,000   ← 이번에 채움
 --   5톤 플러스/축      30분     25,000     50,000   ← 이번에 채움
 
-begin;
+
+-- ═══════════════════════════════════════════════════════════════════
+-- 1단계 — 백업 스냅샷
+-- ═══════════════════════════════════════════════════════════════════
 
 create table if not exists _bak_rate_vehicle_extra_fees_20260825 as
   select * from rate_vehicle_extra_fees;
 
-update rate_vehicle_extra_fees
-set waiting_fee_per_unit = 25000, waypoint_fee = 40000
-where vehicle_type = '5톤';
--- 기대: UPDATE 1
 
-update rate_vehicle_extra_fees
-set waiting_fee_per_unit = 25000, waypoint_fee = 50000
-where vehicle_type = '5톤 플러스/축';
--- 기대: UPDATE 1
+-- ═══════════════════════════════════════════════════════════════════
+-- 2단계 — 2행 교체
+--
+-- 🔴 결과에 `반영된_행수`가 나옵니다. **2여야 합니다.**
+--    (한 문장이라 중간에 실패하면 아무것도 반영되지 않습니다.)
+-- ═══════════════════════════════════════════════════════════════════
 
-commit;
+with upd as (
+  update rate_vehicle_extra_fees t
+  set waiting_fee_per_unit = v.waiting_fee,
+      waypoint_fee         = v.waypoint_fee
+  from (values
+    ('5톤',            25000, 40000),
+    ('5톤 플러스/축',   25000, 50000)
+  ) as v(vehicle_type, waiting_fee, waypoint_fee)
+  where t.vehicle_type = v.vehicle_type
+  returning 1
+)
+select count(*) as 반영된_행수 from upd;
 
--- 실행 후 검증 — commit 뒤에 따로 돌리십시오.
 
--- 완료조건 5: 0행이어야 함
+-- ═══════════════════════════════════════════════════════════════════
+-- 3단계 — 검증 (완료조건 5)
+--
+-- 🔴 **0행이 나와야 정상입니다.**
+-- ═══════════════════════════════════════════════════════════════════
+
+select vehicle_type, free_waiting_minutes, waiting_fee_per_unit, waypoint_fee
+from rate_vehicle_extra_fees
+where waiting_fee_per_unit is null or waypoint_fee is null;
+
+
+-- 눈으로도 한 번 (6차급이 전부 값을 가져야 함)
 -- select vehicle_type, free_waiting_minutes, waiting_fee_per_unit, waypoint_fee
--- from rate_vehicle_extra_fees
--- where waiting_fee_per_unit is null or waypoint_fee is null;
+-- from rate_vehicle_extra_fees order by vehicle_type;
 
--- 전체 확인 (6차급이 모두 값을 가져야 함)
--- select vehicle_type, free_waiting_minutes, waiting_fee_per_unit, waypoint_fee
--- from rate_vehicle_extra_fees
--- order by vehicle_type;
 
--- 되돌려야 하면 (스냅샷이 남아 있는 동안만 유효):
+-- ═══════════════════════════════════════════════════════════════════
+-- 되돌리기 — 2단계가 잘못됐을 때만
+-- ═══════════════════════════════════════════════════════════════════
+
 -- update rate_vehicle_extra_fees t
 -- set waiting_fee_per_unit = b.waiting_fee_per_unit, waypoint_fee = b.waypoint_fee
 -- from _bak_rate_vehicle_extra_fees_20260825 b where t.id = b.id;
