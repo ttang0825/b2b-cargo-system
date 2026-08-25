@@ -5,7 +5,7 @@ import Link from "next/link";
 import PublicPageHeader from "@/components/PublicPageHeader";
 import BackToHomeLink from "@/components/BackToHomeLink";
 import { APPLY_CONSENT_TEXT } from "@/lib/legalInfo";
-import { formatPhoneNumber, formatBizRegNo, REGIONS, VEHICLE_TYPES } from "@/lib/constants";
+import { formatPhoneNumber, formatBizRegNo, REGIONS, VEHICLE_TYPES_PUBLIC } from "@/lib/constants";
 import MultiSelectTags from "@/components/MultiSelectTags";
 import AddressSearch from "@/components/AddressSearch";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
@@ -268,14 +268,14 @@ export default function ApplyPage() {
                           boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
                         }}
                       >
-                        주로 이용하시는 차량 톤수를 선택해주세요. 예: {VEHICLE_TYPES.join(", ")}
+                        주로 이용하시는 차량 톤수를 선택해주세요. 예: {VEHICLE_TYPES_PUBLIC.join(", ")}
                       </span>
                     )}
                   </span>
                 </label>
                 <select value={form.preferred_vehicle} onChange={(e) => setField("preferred_vehicle", e.target.value)}>
                   <option value="">선택 안 함</option>
-                  {VEHICLE_TYPES.map((v) => (
+                  {VEHICLE_TYPES_PUBLIC.map((v) => (
                     <option key={v} value={v}>{v}</option>
                   ))}
                 </select>

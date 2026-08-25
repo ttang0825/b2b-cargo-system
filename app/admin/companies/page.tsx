@@ -7,7 +7,7 @@ import { STATUS_OPTIONS, getStatusColor } from "@/lib/statusColors";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import {
   REGIONS,
-  VEHICLE_TYPES,
+  VEHICLE_TYPES_ALL,
   BODY_TYPES,
   GRADE_OPTIONS,
   formatPhoneNumber,
@@ -79,7 +79,7 @@ const EMPTY_FORM = {
   main_pickup_region: "",
   main_dropoff_region: "",
   assigned_staff: "",
-  recommended_vehicle_tonnage: VEHICLE_TYPES[0],
+  recommended_vehicle_tonnage: VEHICLE_TYPES_ALL[0],
   recommended_vehicle_bodytype: BODY_TYPES[0],
   status: "미접촉",
   grade: "",
@@ -532,7 +532,7 @@ export default function CompaniesPage() {
                     }
                     style={{ flex: 1 }}
                   >
-                    {VEHICLE_TYPES.map((t) => (
+                    {VEHICLE_TYPES_ALL.map((t) => (
                       <option key={t} value={t}>
                         {t}
                       </option>
