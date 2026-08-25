@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import PublicPageHeader from "@/components/PublicPageHeader";
-import { supabase } from "@/lib/supabaseClient";
 import { VEHICLE_TYPES, formatPhoneNumber } from "@/lib/constants";
 import { LOADING_METHODS } from "@/lib/loadingMethods";
 import DateTimePicker from "@/components/DateTimePicker";
@@ -73,27 +72,42 @@ export default function PublicQuotePage() {
     const fullOrigin = [form.origin, form.originDetail].filter((v) => v.trim()).join(" ");
     const fullDestination = [form.destination, form.destinationDetail].filter((v) => v.trim()).join(" ");
 
-    const { error: insertError } = await supabase.from("public_quote_requests").insert({
-      name: form.name,
-      phone: form.phone,
-      email: form.email || null,
-      origin: fullOrigin,
-      origin_sido: form.originSido || null,
-      origin_sigungu: form.originSigungu || null,
-      destination: fullDestination,
-      destination_sido: form.destinationSido || null,
-      destination_sigungu: form.destinationSigungu || null,
-      vehicle_type: form.vehicle_type,
-      item: form.item || null,
-      pickup_loading_method: form.pickup_loading_method || null,
-      dropoff_loading_method: form.dropoff_loading_method || null,
-      requested_pickup_at: localInputToISOString(form.requested_pickup_at),
-      notes: form.notes || null,
-      status: "신규",
-    });
-
-    setSaving(false);
-    if (insertError) {
+    // 🔴 anon 클라이언트로 `public_quote_requests`에 직접 insert하지 말 것(14차에 이전).
+    // 그 테이블은 INSERT 정책만 있고 SELECT 정책이 없어서 방금 넣은 행의 id를 못 받고,
+    // 그러면 동의 기록(`consents`)을 붙일 수 없다. 서버 API가 service_role로 처리한다.
+    // ⚠️ `agreed`는 form과 분리된 별도 state라 **명시적으로 함께 보내야 한다** —
+    // 14차 전에는 이 값이 검증에만 쓰이고 서버로 가지 않아 동의가 저장되지 않았다.
+    try {
+      const res = await fetch("/api/quote-submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name,
+          phone: form.phone,
+          email: form.email || null,
+          origin: fullOrigin,
+          origin_sido: form.originSido || null,
+          origin_sigungu: form.originSigungu || null,
+          destination: fullDestination,
+          destination_sido: form.destinationSido || null,
+          destination_sigungu: form.destinationSigungu || null,
+          vehicle_type: form.vehicle_type,
+          item: form.item || null,
+          pickup_loading_method: form.pickup_loading_method || null,
+          dropoff_loading_method: form.dropoff_loading_method || null,
+          requested_pickup_at: localInputToISOString(form.requested_pickup_at),
+          notes: form.notes || null,
+          agreed,
+        }),
+      });
+      const data = await res.json();
+      setSaving(false);
+      if (!res.ok) {
+        setError(data.error || "문의 접수 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+        return;
+      }
+    } catch {
+      setSaving(false);
       setError("문의 접수 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
       return;
     }
