@@ -517,10 +517,12 @@ export default function RatesPage() {
     matrix[t.distance_label][t.vehicle_type] = t;
   }
 
-  // "긴급여부"는 항목 자체가 폐지됨 — 기존 데이터는 남겨두되(참조가 있을 수 있어
-  // 완전삭제는 안 함, 원칙 32번과 같은 취지) 화면에서만 숨김
+  // "긴급여부"(폐지)와 "특별할인"(16차에 첫거래지원 할인을 걷어냄)은 항목 자체가 없어졌다.
+  // 기존 데이터는 남겨두되(참조가 있을 수 있어 완전삭제는 안 함, 원칙 32번과 같은 취지)
+  // 화면에서만 숨긴다.
+  const HIDDEN_CATEGORIES = ["긴급여부", "특별할인"];
   const categories = Array.from(new Set(surcharges.map((s) => s.category))).filter(
-    (c) => c !== "긴급여부"
+    (c) => !HIDDEN_CATEGORIES.includes(c)
   );
 
   if (loading) {

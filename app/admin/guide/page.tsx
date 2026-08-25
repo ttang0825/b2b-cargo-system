@@ -304,7 +304,6 @@ export default function GuidePage() {
             { name: "차량형태 / 상하차방식 / 물품특성 / 운송시간 / 왕복편도", desc: "5개 항목 모두 운임기준표의 가산기준과 연결된 단일 선택 옵션입니다." },
             { name: "대기시간(분) / 경유지 수", desc: "무료 대기시간 초과분, 경유지 개수만큼 자동 가산됩니다." },
             { name: "품목", desc: "자유 입력" },
-            { name: "첫거래지원 할인(10%)", desc: "체크하면 최종금액에서 10% 할인 적용" },
           ]}
         />
         <p style={{ fontSize: 13.5, lineHeight: 1.7, marginTop: 12 }}>

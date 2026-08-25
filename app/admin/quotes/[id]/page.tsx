@@ -455,6 +455,11 @@ export default function QuoteDetailPage() {
         "왕복/편도": editForm["왕복/편도"],
         대기시간_분: Number(editForm.waitingMinutes) || 0,
         경유지수: Number(editForm.waypointCount) || 0,
+        // 🔴 16차에 첫거래지원 할인을 화면·계산에서 걷어냈지만 이 줄은 남긴다.
+        // 견적 상세 수정은 `selected_options` 전체를 새 객체로 교체하므로, 이 줄을 빼면
+        // 그 견적을 한 번 수정하는 것만으로 **과거에 기록된 동의 값이 사라진다.**
+        // 지시서가 "기존 키를 손대지 말 것"이라고 한 것이 이 경우다(원칙 32번과 같은 결).
+        // 신규 등록(`/admin/quotes`)은 이 키를 더 이상 쓰지 않는다.
         첫거래지원할인: (quote.selected_options as any)?.첫거래지원할인 || false,
       },
       updated_by: await getCurrentStaffId(),
