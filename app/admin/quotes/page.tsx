@@ -437,12 +437,18 @@ function QuotesPageInner() {
 
   const calc = useMemo(() => {
     const distance = Number(form.distance_km) || 0;
-    const tierMatch = tiers.find(
-      (t) =>
-        t.vehicle_type === form.vehicle_type &&
-        distance >= t.distance_from_km &&
-        (t.distance_to_km === null || distance <= t.distance_to_km)
-    );
+    // 거리 상한(distance_to_km) 오름차순으로 정렬한 뒤, distance가 들어가는 첫 구간을 고른다.
+    // distance_from_km을 보지 않는 이유: 구간이 0~10 / 11~20 으로 끊겨 있어 정수 사이가
+    // 비어 있고(10.4km 등 소수 거리가 어느 구간에도 안 걸림), 거리 API는 소수 첫째 자리까지
+    // 돌려준다. 구간 라벨이 "10km 이내"이므로 10.0까지가 그 구간이고 10.1부터는 다음 구간이다.
+    // 상한이 없는 마지막 구간(distance_to_km === null)은 Infinity로 취급해 항상 뒤로 보낸다.
+    const tierMatch = tiers
+      .filter((t) => t.vehicle_type === form.vehicle_type)
+      .sort(
+        (a, b) =>
+          (a.distance_to_km ?? Infinity) - (b.distance_to_km ?? Infinity)
+      )
+      .find((t) => t.distance_to_km === null || distance <= t.distance_to_km);
     if (!tierMatch) return null;
 
     const base = tierMatch.base_fare;
@@ -1596,8 +1602,14 @@ function QuotesPageInner() {
             자동 계산 결과
           </h3>
           {!calc ? (
+            /* 톤수는 기본값이 있는 select라 비어 있을 수 없고, 거리가 비면 0으로
+               읽혀 첫 구간에 걸린다. 즉 calc가 null이라는 것은 "아직 안 입력했다"가
+               아니라 선택한 톤수의 운임기준 행이 없다는 뜻이다(로딩 중 제외).
+               그 원인이 화면에 드러나게 문구를 가른다. */
             <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
-              거리와 톤수를 입력하면 실시간으로 계산됩니다.
+              {ratesLoading
+                ? "운임기준을 불러오는 중입니다."
+                : "선택하신 톤수에 해당하는 운임기준이 없습니다. 운임기준표를 확인해주세요."}
             </p>
           ) : (
             <div style={{ fontSize: 13.5 }}>
