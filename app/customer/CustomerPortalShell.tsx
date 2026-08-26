@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
-import NavCountBadge from "@/components/NavCountBadge";
 import PublicPageHeader from "@/components/PublicPageHeader";
+import PortalIcon, { PortalIconName } from "@/components/PortalIcon";
 import {
   getLastSeen,
   markSeen,
@@ -18,34 +18,40 @@ const PUBLIC_PATHS = ["/customer/login", "/customer/support-verify"];
 
 type NotifyKey = "request" | "quotes" | "dispatches" | "invoices";
 
-type NavItem = { href: string; label: string; key?: NotifyKey };
-type NavGroup = { label: string; items: NavItem[] };
+type NavItem = { href: string; label: string; icon: PortalIconName; key?: NotifyKey };
 
-const NAV_GROUPS: NavGroup[] = [
-  {
-    label: "운송 현황",
-    items: [
-      { href: "/customer/request", label: "발주 요청", key: "request" },
-      { href: "/customer/quotes", label: "견적 확인", key: "quotes" },
-      { href: "/customer/dispatches", label: "배차·운송 조회", key: "dispatches" },
-      { href: "/customer/calendar", label: "캘린더" },
-    ],
-  },
-  {
-    label: "정산",
-    items: [
-      { href: "/customer/invoices", label: "정산·세금계산서", key: "invoices" },
-      { href: "/customer/stats", label: "월별 통계" },
-    ],
-  },
-  {
-    label: "내 계정",
-    items: [
-      { href: "/customer/locations", label: "배송지 관리" },
-      { href: "/customer/profile", label: "담당자 정보" },
-      { href: "/customer/change-password", label: "비밀번호 변경" },
-    ],
-  },
+// 🔴 **4그룹 8항목. 그룹 라벨 텍스트는 없다** — 그룹 사이를 1px 구분선 + 위아래 12px
+// 여백으로만 나눈다(시안 §6). 배열을 중첩으로 둔 것이 곧 구분선 위치다.
+//
+// 🔴 **캘린더·공지사항·비밀번호 변경이 메뉴에서 빠진 것은 확정이다**(2026-08-26).
+// 라우트는 셋 다 살아 있다 — "안 쓰는 라우트"로 보고 지우지 말 것.
+//   · 공지사항  → 홈의 공지 블록이 진입로다
+//   · 캘린더    → 25차에 월별 통계 화면 하단으로 들어간다. ⚠️ 그때까지는 진입 경로가 없다
+//   · 비밀번호 변경 → 아래 사이드바 하단·바텀시트에 링크로 남겼다.
+//     지우면 must_change_password 인 신규 계정의 첫 로그인이 갇힌다(21차)
+const NAV_GROUPS: NavItem[][] = [
+  [{ href: "/customer", label: "홈", icon: "home" }],
+  [
+    { href: "/customer/request", label: "발주 요청", icon: "request", key: "request" },
+    { href: "/customer/quotes", label: "견적 확인", icon: "quotes", key: "quotes" },
+    { href: "/customer/dispatches", label: "배차·운송 조회", icon: "dispatch", key: "dispatches" },
+  ],
+  [
+    { href: "/customer/invoices", label: "정산·결제내역", icon: "invoices", key: "invoices" },
+    { href: "/customer/stats", label: "월별 통계", icon: "stats" },
+  ],
+  [
+    { href: "/customer/locations", label: "배송지·화물 관리", icon: "locations" },
+    { href: "/customer/profile", label: "담당자 정보", icon: "profile" },
+  ],
+];
+
+// 모바일 하단 탭 5개 — 마지막 "전체"는 화면 이동이 아니라 바텀시트 토글이다.
+const MOBILE_TABS: { href: string; label: string; icon: PortalIconName; key?: NotifyKey }[] = [
+  { href: "/customer", label: "홈", icon: "home" },
+  { href: "/customer/request", label: "발주", icon: "request", key: "request" },
+  { href: "/customer/quotes", label: "견적", icon: "quotes", key: "quotes" },
+  { href: "/customer/dispatches", label: "운송", icon: "dispatch", key: "dispatches" },
 ];
 
 // pathname이 이 항목의 화면일 때 "확인함"으로 표시할 매핑
@@ -57,63 +63,48 @@ const PATH_TO_NOTIFY_KEY: Record<string, NotifyKey | "announcements"> = {
   "/customer/announcements": "announcements",
 };
 
-function NavDropdown({
-  group,
+// 홈(`/customer`)은 다른 모든 경로의 접두어라 startsWith 로 판정하면 항상 활성이 된다.
+function isActive(pathname: string | null, href: string) {
+  if (!pathname) return false;
+  if (href === "/customer") return pathname === "/customer";
+  return pathname.startsWith(href);
+}
+
+function NavList({
   pathname,
   counts,
-  open,
-  onToggle,
+  onNavigate,
 }: {
-  group: NavGroup;
   pathname: string | null;
   counts: Record<string, number>;
-  open: boolean;
-  onToggle: () => void;
+  onNavigate?: () => void;
 }) {
-  const isActiveGroup = group.items.some((i) => pathname?.startsWith(i.href));
-  const groupTotal = group.items.reduce((sum, i) => sum + (i.key ? counts[i.key] || 0 : 0), 0);
-
   return (
-    <div style={{ position: "relative" }}>
-      <button
-        type="button"
-        onClick={onToggle}
-        className={isActiveGroup ? "nav-chip nav-chip-active" : "nav-chip"}
-        style={{ border: "none", cursor: "pointer" }}
-      >
-        {group.label}
-        <span style={{ marginLeft: 5, fontSize: 9 }}>{open ? "▲" : "▼"}</span>
-        <NavCountBadge count={groupTotal} />
-      </button>
-      {open && (
-        <div
-          className="card"
-          style={{
-            position: "absolute",
-            top: "calc(100% + 6px)",
-            left: 0,
-            minWidth: 190,
-            padding: 6,
-            zIndex: 30,
-          }}
-        >
-          {group.items.map((item) => {
-            const active = pathname?.startsWith(item.href);
+    <>
+      {NAV_GROUPS.map((group, gi) => (
+        <div key={gi} className="pv2-nav-group">
+          {group.map((item) => {
+            const active = isActive(pathname, item.href);
             const count = item.key ? counts[item.key] || 0 : 0;
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={active ? "nav-dropdown-item nav-dropdown-item-active" : "nav-dropdown-item"}
+                onClick={onNavigate}
+                aria-current={active ? "page" : undefined}
+                className={active ? "pv2-nav-item pv2-nav-item-active" : "pv2-nav-item"}
               >
-                {item.label}
-                <NavCountBadge count={count} />
+                <span className="pv2-nav-item-icon">
+                  <PortalIcon name={item.icon} selected={active} size={21} />
+                </span>
+                <span className="pv2-nav-item-label">{item.label}</span>
+                {count > 0 && <span className="pv2-nav-badge">{count}</span>}
               </Link>
             );
           })}
         </div>
-      )}
-    </div>
+      ))}
+    </>
   );
 }
 
@@ -130,9 +121,8 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
     invoices: 0,
     announcements: 0,
   });
-  const [openGroup, setOpenGroup] = useState<string | null>(null);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const navGroupRef = useRef<HTMLDivElement>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const sheetCloseRef = useRef<HTMLButtonElement>(null);
 
   // 항목별 배지 개수를 다시 계산 — quotes/dispatches/invoices/announcements는
   // "마지막 확인 시각 이후 변경된 행 수", 발주요청은 "대기중을 벗어났는데
@@ -229,22 +219,25 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
       loadCounts(account.company_id || null);
     }
     check();
-    setOpenGroup(null);
-    setMobileMenuOpen(false);
+    setSheetOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname, router]);
 
-  // 드롭다운이 열려있을 때 메뉴 바깥의 빈 곳을 클릭하면 닫히게 함
+  // 바텀시트가 열리면 배경 스크롤을 잠그고 ESC 로 닫는다.
   useEffect(() => {
-    if (!openGroup) return;
-    function handleClickOutside(e: MouseEvent) {
-      if (navGroupRef.current && !navGroupRef.current.contains(e.target as Node)) {
-        setOpenGroup(null);
-      }
+    if (!sheetOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    sheetCloseRef.current?.focus();
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setSheetOpen(false);
     }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [openGroup]);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [sheetOpen]);
 
   useEffect(() => {
     if (PUBLIC_PATHS.includes(pathname || "")) return;
@@ -269,14 +262,13 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
     router.push("/customer/login");
   }
 
-  // 로그인 전 화면(로그인·지원접속 확인)은 포털 셸(좌측 메뉴·알림 배지)을 건너뛴다.
+  // 로그인 전 화면(로그인·지원접속 확인)은 포털 셸(사이드바·알림 배지)을 건너뛴다.
   // 다만 **공개 화면 공용 헤더는 붙인다**(12차) — 랜딩의 옐로 헤더를 보고 넘어왔는데
   // 여기서 헤더가 사라지면 브랜드 연속성이 끊기고, 헤더 로고가 홈으로 돌아가는 길도 된다.
   // `.public-header` 클래스를 공유하므로 헤더 색·높이는 자동으로 따라온다.
   //
   // 🔴 색인 차단에는 영향이 없다 — noindex는 `app/customer/layout.tsx`의 metadata가
   // 결정하고 `/customer/login`에는 자체 layout이 없어 부모 설정을 그대로 상속한다.
-  // 헤더는 렌더 트리에 컴포넌트를 하나 더 넣는 것일 뿐 metadata를 건드리지 않는다.
   //
   // ⚠️ 현황조회 칩은 끈다(showStatusLink={false}) — 로그인하러 온 사람에게
   // 비회원 조회로 새는 링크를 주지 않기 위함.
@@ -291,192 +283,172 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
 
   if (checking) {
     return (
-      <div className="portal-theme">
-        <main className="container">
-          <div className="empty-state">확인 중...</div>
-        </main>
+      <div className="portal-v2">
+        <div className="pv2-main">
+          <div className="pv2-empty">확인 중...</div>
+        </div>
       </div>
     );
   }
 
   // 지금 보고 있는 화면의 항목은 배지를 0으로 눌러둠 — 이미 보고 있는데
-  // 실시간 이벤트로 배지가 다시 뜨는 걸 방지 (기존 boolean 방식의 "현재
-  // 페이지면 건드리지 않음" 동작을 렌더 시점 계산으로 대체)
+  // 실시간 이벤트로 배지가 다시 뜨는 걸 방지
   const currentNotifyKey = PATH_TO_NOTIFY_KEY[pathname || ""];
   const displayCounts = currentNotifyKey ? { ...counts, [currentNotifyKey]: 0 } : counts;
+  const mobileTabTotal = MOBILE_TABS.reduce((s, t) => s + (t.key ? displayCounts[t.key] || 0 : 0), 0);
+  const allBadgeTotal =
+    NAV_GROUPS.flat().reduce((s, i) => s + (i.key ? displayCounts[i.key] || 0 : 0), 0) - mobileTabTotal;
+
+  const accountLinks = (onNavigate?: () => void) => (
+    <div className="pv2-foot-links">
+      <Link href="/customer/change-password" className="pv2-foot-link" onClick={onNavigate}>
+        비밀번호 변경
+      </Link>
+      <span className="pv2-foot-sep">·</span>
+      <button type="button" onClick={handleLogout} className="pv2-foot-link">
+        로그아웃
+      </button>
+    </div>
+  );
 
   return (
-    <div className="portal-theme" style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-      <div className="top-nav">
-        <div className="top-nav-inner" style={{ flexWrap: "wrap", gap: 16 }}>
-          <Link href="/customer" className="brand-link">
-            {/* 아래에 있던 작은 회색 "위캐리 운송 · 홈으로" 보조문구는 제거함(PR #77 리뷰 —
-                애매하고 헷갈린다는 지적). 대신 이 브랜드 표기 자체를 키워서 홈 버튼임이
-                분명하게 보이도록 함(.portal-brand-home) */}
-            <div className="brand portal-brand-home">
-              {companyName ? `${companyName} 운송관리` : "위캐리 운송관리"}
+    <div className="portal-v2">
+      {/* 태블릿·모바일 상단 로고 헤더 */}
+      <header className="pv2-mobile-header">
+        <Link href="/customer" aria-label="위캐리 운송관리 홈">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/portal/wecarry-system-logo.svg" alt="위캐리 운송관리" className="pv2-mobile-logo" />
+        </Link>
+        <span className="pv2-mobile-company">{companyName}</span>
+      </header>
+
+      <div className="pv2-shell">
+        <aside className="pv2-sidebar">
+          <div className="pv2-sidebar-head">
+            <Link href="/customer" className="pv2-logo-btn" aria-label="위캐리 운송관리 홈">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/portal/wecarry-system-logo.svg" alt="위캐리 운송관리" className="pv2-logo" />
+            </Link>
+            <div className="pv2-company">{companyName}</div>
+          </div>
+
+          <nav className="pv2-nav" aria-label="운송관리 메뉴">
+            <NavList pathname={pathname} counts={displayCounts} />
+          </nav>
+
+          <div className="pv2-sidebar-foot">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/portal/wecarry-eng-cropped.svg" alt="WeCarry" className="pv2-eng-logo" />
+            <div>
+              <div className="pv2-foot-label">고객센터 · {COMPANY_SUPPORT_HOURS}</div>
+              <a href={`tel:${COMPANY_SUPPORT_PHONE}`} className="pv2-foot-phone">
+                {COMPANY_SUPPORT_PHONE}
+              </a>
             </div>
-          </Link>
-          <div
-            ref={navGroupRef}
-            className="nav-desktop-group"
-            style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}
-          >
-            {NAV_GROUPS.map((group) => (
-              <NavDropdown
-                key={group.label}
-                group={group}
-                pathname={pathname}
-                counts={displayCounts}
-                open={openGroup === group.label}
-                onToggle={() => setOpenGroup((g) => (g === group.label ? null : group.label))}
-              />
-            ))}
-            <Link
-              href="/customer/announcements"
-              className={pathname === "/customer/announcements" ? "nav-chip nav-chip-active" : "nav-chip"}
-            >
-              공지사항
-              <NavCountBadge count={displayCounts.announcements || 0} />
-            </Link>
-            <button
-              onClick={handleLogout}
-              className="guide-link"
-              style={{ border: "none", background: "none", cursor: "pointer" }}
-            >
-              로그아웃
-            </button>
+            {accountLinks()}
           </div>
+        </aside>
 
-          <button
-            type="button"
-            className="nav-mobile-toggle"
-            onClick={() => setMobileMenuOpen((o) => !o)}
-            aria-label="메뉴 열기"
-          >
-            {mobileMenuOpen ? "✕" : "☰"}
-          </button>
-        </div>
-
-        {mobileMenuOpen && (
-          <div
-            className="mobile-only"
-            style={{
-              borderTop: "1px solid var(--border)",
-              padding: "8px 20px 16px",
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            {NAV_GROUPS.map((group) => (
-              <div key={group.label} style={{ marginTop: 10 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 4 }}>
-                  {group.label}
-                </div>
-                {group.items.map((item) => {
-                  const active = pathname?.startsWith(item.href);
-                  const count = item.key ? displayCounts[item.key] || 0 : 0;
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        padding: "10px 4px",
-                        fontSize: 14,
-                        fontWeight: active ? 700 : 500,
-                        color: active ? "var(--accent)" : "var(--text)",
-                        textDecoration: "none",
-                      }}
-                    >
-                      {item.label}
-                      <NavCountBadge count={count} />
-                    </Link>
-                  );
-                })}
-              </div>
-            ))}
-            <Link
-              href="/customer/announcements"
-              style={{
-                padding: "10px 4px",
-                marginTop: 10,
-                fontSize: 14,
-                fontWeight: pathname === "/customer/announcements" ? 700 : 500,
-                color: pathname === "/customer/announcements" ? "var(--accent)" : "var(--text)",
-                textDecoration: "none",
-                borderTop: "1px solid var(--border)",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              공지사항
-              <NavCountBadge count={displayCounts.announcements || 0} />
-            </Link>
-            <button
-              onClick={handleLogout}
-              style={{
-                marginTop: 10,
-                padding: "10px 4px",
-                fontSize: 14,
-                textAlign: "left",
-                border: "none",
-                background: "none",
-                color: "var(--text-muted)",
-                cursor: "pointer",
-              }}
-            >
-              로그아웃
-            </button>
-          </div>
-        )}
+        <main className="pv2-main">
+          <div className="pv2-main-inner">{children}</div>
+        </main>
       </div>
 
-      <div style={{ flex: 1 }}>{children}</div>
-
-      <footer style={{ borderTop: "1px solid var(--border)", background: "var(--surface)", marginTop: 40 }}>
-        <div
-          className="container"
-          style={{
-            padding: "32px 24px",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: 20,
-          }}
-        >
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>
-              📞 고객센터
-            </div>
-            <a
-              href={`tel:${COMPANY_SUPPORT_PHONE}`}
-              className="num"
-              style={{
-                display: "block",
-                fontSize: 24,
-                fontWeight: 800,
-                color: "#8a6d00",
-                textDecoration: "none",
-                marginBottom: 6,
-              }}
+      {/* 모바일 하단 탭바 — 선택 표시는 아이콘 채움 + 텍스트 진해짐만 (시안 §7) */}
+      <nav className="pv2-tabbar" aria-label="운송관리 하단 메뉴">
+        {MOBILE_TABS.map((tab) => {
+          const active = !sheetOpen && isActive(pathname, tab.href);
+          const count = tab.key ? displayCounts[tab.key] || 0 : 0;
+          return (
+            <Link
+              key={tab.href}
+              href={tab.href}
+              aria-current={active ? "page" : undefined}
+              className={active ? "pv2-tab pv2-tab-active" : "pv2-tab"}
             >
-              {COMPANY_SUPPORT_PHONE}
-            </a>
-            <div style={{ fontSize: 14, color: "var(--text)", fontWeight: 600 }}>
-              {COMPANY_SUPPORT_HOURS}
-              <span style={{ color: "var(--text-muted)", fontWeight: 500 }}> (주말·공휴일 휴무)</span>
+              <span className="pv2-tab-icon" style={{ position: "relative" }}>
+                <PortalIcon name={tab.icon} selected={active} size={26} />
+                {count > 0 && (
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      position: "absolute",
+                      top: -2,
+                      right: -4,
+                      minWidth: 8,
+                      height: 8,
+                      borderRadius: 99,
+                      background: "var(--pv2-yellow)",
+                      border: "1.5px solid var(--pv2-surface)",
+                    }}
+                  />
+                )}
+              </span>
+              {tab.label}
+            </Link>
+          );
+        })}
+        {/* ⚠️ "전체"는 화면 이동이 아니라 토글이다 — 선택 상태는 시트가 열려 있는 동안만 */}
+        <button
+          type="button"
+          onClick={() => setSheetOpen((o) => !o)}
+          aria-expanded={sheetOpen}
+          className={sheetOpen ? "pv2-tab pv2-tab-active" : "pv2-tab"}
+        >
+          <span className="pv2-tab-icon" style={{ position: "relative" }}>
+            <PortalIcon name="menu" selected={sheetOpen} size={26} />
+            {allBadgeTotal > 0 && (
+              <span
+                aria-hidden="true"
+                style={{
+                  position: "absolute",
+                  top: -2,
+                  right: -4,
+                  minWidth: 8,
+                  height: 8,
+                  borderRadius: 99,
+                  background: "var(--pv2-yellow)",
+                  border: "1.5px solid var(--pv2-surface)",
+                }}
+              />
+            )}
+          </span>
+          전체
+        </button>
+      </nav>
+
+      {/* 전체 메뉴 — 전체화면이 아니라 바텀시트 */}
+      {sheetOpen && (
+        <>
+          <div className="pv2-sheet-backdrop" onClick={() => setSheetOpen(false)} />
+          <div className="pv2-sheet" role="dialog" aria-modal="true" aria-label="전체 메뉴">
+            <div className="pv2-sheet-handle" />
+            <div className="pv2-sheet-head">
+              <span className="pv2-sheet-title">전체 메뉴</span>
+              <button
+                type="button"
+                ref={sheetCloseRef}
+                onClick={() => setSheetOpen(false)}
+                className="pv2-sheet-close"
+                aria-label="전체 메뉴 닫기"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="pv2-sheet-body">
+              <NavList
+                pathname={pathname}
+                counts={displayCounts}
+                onNavigate={() => setSheetOpen(false)}
+              />
+              {/* 🔴 모바일에는 사이드바 하단이 없으므로 여기에 둘 다 넣는다 */}
+              <div className="pv2-nav-group" style={{ padding: "0 10px" }}>
+                {accountLinks(() => setSheetOpen(false))}
+              </div>
             </div>
           </div>
-          <div style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 500 }}>
-            위캐리 운송관리
-          </div>
-        </div>
-      </footer>
+        </>
+      )}
     </div>
   );
 }
