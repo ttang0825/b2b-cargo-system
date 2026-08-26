@@ -121,5 +121,56 @@ select option_name, rate_pct, flat_amount
 from rate_surcharges where category = '상하차방식' order by option_name;
 
 \echo ''
+\echo '=== ⑧-g RLS·정책 요약 (21차) — 읽기 전용 ================='
+select
+  (select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace
+     and n.nspname='public' where c.relkind='r' and not c.relrowsecurity)   as "RLS꺼진표_0이어야",
+  (select count(*) from pg_policy p
+     where p.polroles::regrole[] @> array['anon'::regrole])                 as "anon정책_2여야",
+  (select count(*) from pg_policy p
+     where p.polroles::regrole[] @> array['anon'::regrole] and p.polcmd='a') as "그중_INSERT전용_2",
+  (select count(*) from pg_policy p join pg_class c on c.oid=p.polrelid
+     where p.polname = 'staff_all_' || c.relname)                          as "직원정책_26이어야",
+  (select count(*) from pg_policy p
+     where p.polroles::regrole[] @> array['authenticated'::regrole]
+       and p.polname not like 'staff\_all\_%')                            as "화주정책_14여야";
+
+\echo ''
+\echo '=== ⑧-h 🔴 롤별 실측 — anon 은 0행, 직원은 전부 (21차) ==='
+-- ⚠️ set local 은 트랜잭션 안에서만 듣는다. 이 블록을 한 줄씩 따로 실행하면
+--    조용히 postgres 권한으로 돌아 시험이 통째로 무의미해진다(19차가 한 번 속았다).
+begin;
+  set local role anon;
+  select 'anon' as 롤,
+    (select count(*) from companies)            as companies,
+    (select count(*) from quotes)               as quotes,
+    (select count(*) from drivers)              as drivers,
+    (select count(*) from individual_customers) as 개인고객,
+    (select count(*) from rate_distance_tiers)  as 운임구간,
+    (select count(*) from staff_accounts)       as 직원;
+  reset role;
+  select set_config('request.jwt.claims',
+    json_build_object('sub', (select id from staff_accounts where status='active'
+                              order by created_at limit 1),
+                      'role','authenticated')::text, true);
+  set local role authenticated;
+  select '직원' as 롤,
+    (select count(*) from companies)            as companies,
+    (select count(*) from quotes)               as quotes,
+    (select count(*) from drivers)              as drivers,
+    (select count(*) from individual_customers) as 개인고객,
+    (select count(*) from rate_distance_tiers)  as 운임구간,
+    (select count(*) from staff_accounts)       as 직원;
+  reset role;
+commit;
+
+\echo ''
+\echo '=== ⑧-i 묶음 후보 뷰 security_invoker (21차, on 이어야) ==='
+select coalesce((select option_value from pg_options_to_table(c.reloptions)
+                 where option_name='security_invoker'), '(꺼짐)') as security_invoker
+from pg_class c join pg_namespace n on n.oid=c.relnamespace and n.nspname='public'
+where c.relname='customer_billing_batch_candidates';
+
+\echo ''
 \echo '=== ⑨ 마이그레이션 이력 ================================='
 select filename, applied_at, applied_by from _migrations order by filename;
