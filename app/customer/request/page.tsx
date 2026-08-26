@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
-import { VEHICLE_TYPES_PUBLIC } from "@/lib/constants";
+// 🔴 희망 톤수는 9종(VEHICLE_TYPES_ALL)이다. 로그인한 화주만 보는 화면이라
+//   공개 화면의 금지 표현 기준(32차·12차)이 적용되지 않는다 — 사용자 결정 2026-08-26.
+//   공개 4개 화면(`/`·`/vehicles`·`/quote`·`/apply`)은 여전히 6종이니 헷갈리지 말 것.
+import { VEHICLE_TYPES_ALL } from "@/lib/constants";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import DateTimePicker from "@/components/DateTimePicker";
 import AddressSearch from "@/components/AddressSearch";
@@ -104,7 +107,7 @@ export default function PortalRequestPage() {
     destinationSido: "",
     destinationSigungu: "",
     ...EMPTY_PICKUP_DROPOFF_CONTACT,
-    vehicle_type: VEHICLE_TYPES_PUBLIC[0],
+    vehicle_type: VEHICLE_TYPES_ALL[0],
     차량형태: "",
     상차조건: LOADING_METHOD_OPTIONS[0] as string,
     하차조건: LOADING_METHOD_OPTIONS[0] as string,
@@ -514,7 +517,7 @@ export default function PortalRequestPage() {
             <div className="field">
               <label>희망 톤수</label>
               <select value={form.vehicle_type} onChange={(e) => setField("vehicle_type", e.target.value)}>
-                {VEHICLE_TYPES_PUBLIC.map((v) => (
+                {VEHICLE_TYPES_ALL.map((v) => (
                   <option key={v} value={v}>{v}</option>
                 ))}
               </select>
