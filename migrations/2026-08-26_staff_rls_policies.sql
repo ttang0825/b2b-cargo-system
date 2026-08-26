@@ -56,7 +56,14 @@ declare
     'customer_billing_batch_items', 'customer_billing_batches',
     'customer_locations', 'dispatches', 'external_networks', 'invoices',
     'orders', 'portal_order_requests', 'public_quote_requests',
-    'quote_items', 'quotes'
+    'quote_items', 'quotes',
+    -- 🔴 staff_accounts 도 필요하다. 이 표의 {public} 정책은 `using(true)` 가 아니라
+    --   **본인 행만**(id = auth.uid()) 이라, 직원 세션으로는 자기 한 줄만 보인다.
+    --   관리자 화면은 "등록/최종수정: OOO" 표시(ProcessedByFooter)·직원 계정 관리·
+    --   문자 이력의 보낸 사람 등에서 **다른 직원의 이름**을 읽어야 한다.
+    --   ⚠️ 넓히는 것이 아니다 — anon 정책이 이미 전체를 열어두고 있고, 그것을
+    --   회수하는 ③ 차수 뒤에는 이 정책이 유일한 통로가 된다.
+    'staff_accounts'
   ];
 begin
   foreach t in array targets loop
@@ -89,8 +96,8 @@ begin
   join pg_namespace ns on ns.oid = c.relnamespace and ns.nspname = 'public'
   where p.polname = 'staff_all_' || c.relname
     and p.polroles::regrole[] @> array['authenticated'::regrole];
-  if n <> 15 then
-    raise exception '직원 정책이 15개여야 하는데 %개다.', n;
+  if n <> 16 then
+    raise exception '직원 정책이 16개여야 하는데 %개다.', n;
   end if;
 
   -- 🔴 기존 정책이 지워지지 않았는지 확인한다. 화주포털 정책 14개 + anon 정책들이
