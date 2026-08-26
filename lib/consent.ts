@@ -65,10 +65,13 @@ const VERSION_BY_CONSENT_TYPE: Record<ConsentType, string> = {
  * 제3자 제공만 말한다(47차).
  */
 export const CONSENT_TYPES_BY_SOURCE: Record<ConsentSource, readonly ConsentType[]> = {
+  // 🔴 `/quote`에 `"terms"`를 추가하지 말 것 — **사용자 결정(2026-08-26)으로 견적
+  // 문의 화면에는 약관 동의를 넣지 않는다.** 견적 문의 자체는 계약이 아니다.
+  // 그래서 그 화면 문구에 약관이 없고, 문구에 없는 동의를 기록하면 거짓이 된다(14차).
+  "/quote": ["privacy"],
   // 🔴 18차에 `terms`가 추가됐다. **문구를 먼저 넣고 나서** 추가한 것이다 —
-  // 두 화면에 이용약관 동의 체크박스가 실제로 생겼고(`TERMS_CONSENT`), 그래서
+  // `/apply`에 이용약관 동의 체크박스가 실제로 생겼고(`TERMS_CONSENT`), 그래서
   // 이제 기록해도 거짓이 아니다. 순서를 뒤집지 말 것.
-  "/quote": ["privacy", "terms"],
   "/apply": ["privacy", "terms"],
   // 🔴 발주요청 화면은 `third_party` **하나만** 받는다. 로그인한 화주 본인의 개인정보는
   // 계정 발급(`/apply`) 시점에 이미 동의를 받았고, 이 화면이 새로 받는 것은 **제3자

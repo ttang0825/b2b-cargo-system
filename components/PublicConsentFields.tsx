@@ -3,7 +3,12 @@
 import Link from "next/link";
 import { TERMS_CONSENT } from "@/lib/legalInfo";
 
-// `/quote`·`/apply` 공개 폼의 동의 블록 (18차).
+// 이용약관 + 개인정보 동의 블록 (18차).
+//
+// ⚠️ **지금 쓰는 곳은 `/apply` 하나뿐이다.** 처음엔 `/quote`도 함께 쓸 생각으로 만들었으나
+// **사용자 결정(2026-08-26)으로 견적 문의에는 약관 동의를 넣지 않기로** 했다.
+// 그래도 컴포넌트로 남겨둔 이유는 아래 두 규칙(체크박스 2개 · 문구는 상수)을 한 곳에
+// 붙들어두기 위해서다 — 화면 JSX에 흩어지면 다음에 조용히 어긋난다.
 //
 // 🔴 **체크박스가 두 개인 것이 핵심이다. 하나로 합치지 말 것.**
 // 개인정보보호법 제22조 1항이 **각각의 동의 사항을 구분해 알리고 각각 동의를 받도록**
@@ -11,10 +16,6 @@ import { TERMS_CONSENT } from "@/lib/legalInfo";
 //
 // 🔴 **문구를 여기 적지 말 것** — `lib/legalInfo.ts`가 유일 정의처다. 버전 상수와 같은
 // 파일에 있어야 문구를 고칠 때 버전을 같이 보게 된다(14차 판단).
-//
-// ⚠️ 두 화면이 같은 컴포넌트를 쓰는 이유는 **한쪽만 고쳐서 어긋나는 것을 막기 위해서**다.
-// 개인정보 문구만 화면마다 다르므로(`QUOTE_CONSENT_TEXT` / `APPLY_CONSENT_TEXT`) 그것만
-// prop으로 받는다.
 //
 // ⚠️ 약관·처리방침 링크는 **새 탭으로 연다** — 같은 탭에서 열면 작성 중이던 폼이 날아간다.
 
@@ -35,11 +36,11 @@ const linkStyle: React.CSSProperties = {
 };
 
 type Props = {
-  /** 이용약관 동의 라벨. `TERMS_CONSENT.applyLabel` / `.quoteLabel` 중 하나 */
+  /** 이용약관 동의 라벨. 지금은 `TERMS_CONSENT.applyLabel` 하나뿐이다 */
   termsLabel: string;
   termsAgreed: boolean;
   onTermsChange: (v: boolean) => void;
-  /** 개인정보 동의 문구. `APPLY_CONSENT_TEXT` / `QUOTE_CONSENT_TEXT` */
+  /** 개인정보 동의 문구. `APPLY_CONSENT_TEXT` */
   privacyText: string;
   privacyAgreed: boolean;
   onPrivacyChange: (v: boolean) => void;

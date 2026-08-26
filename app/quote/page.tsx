@@ -8,8 +8,7 @@ import { LOADING_METHODS } from "@/lib/loadingMethods";
 import DateTimePicker from "@/components/DateTimePicker";
 import AddressSearch from "@/components/AddressSearch";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
-import { QUOTE_CONSENT_TEXT, TERMS_CONSENT } from "@/lib/legalInfo";
-import PublicConsentFields from "@/components/PublicConsentFields";
+import { QUOTE_CONSENT_TEXT } from "@/lib/legalInfo";
 import { localInputToISOString } from "@/lib/localDateTime";
 
 export default function PublicQuotePage() {
@@ -17,9 +16,6 @@ export default function PublicQuotePage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [agreed, setAgreed] = useState(false);
-  // 🔴 이용약관 동의는 개인정보 동의와 **별개 state**다(18차). 법 제22조 1항이
-  // 각각 구분해 받도록 하고 있어 한 값으로 합치면 안 된다.
-  const [termsAgreed, setTermsAgreed] = useState(false);
 
   const [form, setForm] = useState({
     name: "",
@@ -66,10 +62,6 @@ export default function PublicQuotePage() {
       setError("출발지와 도착지를 입력해주세요.");
       return;
     }
-    if (!termsAgreed) {
-      setError("이용약관에 동의해주셔야 문의를 접수할 수 있습니다.");
-      return;
-    }
     if (!agreed) {
       setError("개인정보 수집·이용에 동의해주셔야 문의를 접수할 수 있습니다.");
       return;
@@ -106,7 +98,6 @@ export default function PublicQuotePage() {
           requested_pickup_at: localInputToISOString(form.requested_pickup_at),
           notes: form.notes || null,
           agreed,
-          termsAgreed,
         }),
       });
       const data = await res.json();
@@ -300,14 +291,30 @@ export default function PublicQuotePage() {
               </div>
             </div>
 
-            <PublicConsentFields
-              termsLabel={TERMS_CONSENT.quoteLabel}
-              termsAgreed={termsAgreed}
-              onTermsChange={setTermsAgreed}
-              privacyText={QUOTE_CONSENT_TEXT}
-              privacyAgreed={agreed}
-              onPrivacyChange={setAgreed}
-            />
+            <label
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 8,
+                marginTop: 16,
+                marginBottom: 18,
+                fontSize: 12.5,
+                color: "var(--text-muted)",
+                cursor: "pointer",
+                lineHeight: 1.5,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={agreed}
+                onChange={(e) => setAgreed(e.target.checked)}
+                style={{ margin: "2px 0 0", width: "auto", flexShrink: 0 }}
+              />
+              {/* 🔴 문구를 여기 직접 적지 말 것 — 버전 상수와 함께 보게 하려고
+                  `lib/legalInfo.ts`에 두었다(14차). 예전 문구는 보관하지 않는 것처럼
+                  읽혔는데 사실과 달라, 처리방침 제3조의 보유기간에 맞춰 정정했다. */}
+              <span>{QUOTE_CONSENT_TEXT}</span>
+            </label>
 
             {error && <div className="error-box">{error}</div>}
             <button className="btn" type="submit" disabled={saving} style={{ width: "100%", justifyContent: "center" }}>

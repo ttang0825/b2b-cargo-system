@@ -37,7 +37,6 @@ export async function POST(req: Request) {
     requested_pickup_at,
     notes,
     agreed,
-    termsAgreed,
   } = body;
 
   if (!name?.trim() || !phone?.trim()) {
@@ -48,15 +47,6 @@ export async function POST(req: Request) {
   }
   // 🔴 화면에서 이미 막지만 서버에서도 확인한다(원칙 25번). 동의 없이 접수된 건이 남으면
   // 기록의 의미가 없고, 브라우저 콘솔에서 직접 호출하면 화면 검증은 우회된다.
-  // 🔴 **게이트가 두 개다**(18차). 법 제22조 1항이 각각 구분해 받도록 하고 있어
-  // 동의도 검증도 항목별로 따로 한다 — 한쪽만 확인하면 다른 쪽은 동의 없이 통과한다.
-  // ⚠️ `!== true` **엄격 비교**여야 한다. `!x`로 쓰면 문자열 `"true"`나 `1`이 통과한다.
-  if (termsAgreed !== true) {
-    return NextResponse.json(
-      { error: "이용약관에 동의해주셔야 문의를 접수할 수 있습니다." },
-      { status: 400 }
-    );
-  }
   if (agreed !== true) {
     return NextResponse.json(
       { error: "개인정보 수집·이용에 동의해주셔야 문의를 접수할 수 있습니다." },
