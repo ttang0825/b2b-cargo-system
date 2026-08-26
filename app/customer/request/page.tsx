@@ -151,8 +151,16 @@ export default function PortalRequestPage() {
   }
 
   async function loadSurcharges() {
-    const { data } = await supabase.from("rate_surcharges").select("category,option_name");
-    const list = (data as Surcharge[]) || [];
+    // 21차 — rate_surcharges 에 RLS 가 켜지면서 직원 전용이 됐다(가산 금액이 같이 들어
+    // 있어 화주에게 열 수 없다, 28차 비공개 확정). 선택지 이름만 서버 API 로 받는다.
+    let list: Surcharge[] = [];
+    try {
+      const res = await fetch("/api/customer/surcharge-options");
+      const json = await res.json();
+      if (res.ok) list = (json.data || []) as Surcharge[];
+    } catch {
+      // 목록을 못 받아도 화면은 뜨게 둔다(선택지가 비는 것으로 드러난다)
+    }
     setSurcharges(list);
     setForm((prev) => {
       const next = { ...prev };
