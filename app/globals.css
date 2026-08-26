@@ -2776,3 +2776,258 @@ tbody tr:hover {
     padding: 18px 16px 96px;
   }
 }
+
+/* ── 포털 v2 홈 (24차) ─────────────────────────────────── */
+.pv2-home-top {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-top: 24px;
+}
+.pv2-cta {
+  position: relative;
+  overflow: hidden;
+  background: var(--pv2-yellow);
+  border-radius: var(--pv2-r-card);
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: 300px;
+  text-decoration: none;
+  color: var(--pv2-text);
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+.pv2-cta:hover {
+  filter: brightness(0.97);
+  transform: translateY(-2px);
+}
+/* 화살표 모티프 — 오른쪽·아래 여백은 고정이고 카드가 좁아지면 왼쪽이 잘린다(시안 §8.1) */
+.pv2-cta-motif {
+  position: absolute;
+  right: -12px;
+  bottom: 10px;
+  height: 112%;
+  width: auto;
+  max-width: none;
+  opacity: 0.42;
+  -webkit-mask-image: linear-gradient(to left, #000 4%, rgba(0, 0, 0, 0.55) 28%, transparent 54%);
+  mask-image: linear-gradient(to left, #000 4%, rgba(0, 0, 0, 0.55) 28%, transparent 54%);
+  pointer-events: none;
+}
+.pv2-cta-text {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  z-index: 1;
+  word-break: keep-all;
+}
+.pv2-cta-title {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+}
+.pv2-cta-desc {
+  font-size: 15.5px;
+  color: rgba(26, 26, 26, 0.72);
+  line-height: 1.55;
+}
+.pv2-cta-arrow {
+  position: relative;
+  z-index: 1;
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+}
+
+.pv2-response {
+  display: flex;
+  flex-direction: column;
+  min-height: 300px;
+}
+.pv2-block {
+  margin-top: 20px;
+}
+.pv2-block-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--pv2-border);
+}
+.pv2-block-head .pv2-btn-ghost {
+  margin-left: auto;
+}
+.pv2-response-list {
+  display: flex;
+  flex-direction: column;
+}
+.pv2-response-row,
+.pv2-active-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 20px;
+}
+.pv2-response-row + .pv2-response-row,
+.pv2-active-row + .pv2-active-row {
+  border-top: 1px solid var(--pv2-border-soft);
+}
+.pv2-response-body,
+.pv2-active-body {
+  flex: 1;
+  min-width: 0;
+}
+.pv2-response-title,
+.pv2-active-title {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.45;
+  word-break: keep-all;
+}
+.pv2-response-meta,
+.pv2-active-meta {
+  font-size: 13px;
+  color: var(--pv2-text-3);
+  margin-top: 3px;
+  line-height: 1.5;
+}
+.pv2-active-when {
+  flex: none;
+  font-size: 13px;
+  color: var(--pv2-text-2);
+}
+.pv2-arrow-glyph {
+  color: var(--pv2-yellow-text);
+  font-weight: 700;
+}
+.pv2-badge-info,
+.pv2-badge-warn,
+.pv2-status-badge {
+  flex: none;
+  display: inline-block;
+  font-size: 12.5px;
+  font-weight: 700;
+  border-radius: var(--pv2-r-badge);
+  padding: 5px 10px;
+  white-space: nowrap;
+}
+.pv2-badge-info {
+  background: var(--pv2-info-bg);
+  color: var(--pv2-info-text);
+}
+.pv2-badge-warn {
+  background: var(--pv2-yellow-soft);
+  color: var(--pv2-yellow-text);
+}
+.pv2-btn-yellow {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--pv2-yellow);
+  color: var(--pv2-text);
+  border: none;
+  border-radius: var(--pv2-r-pill);
+  padding: 8px 14px;
+  font-size: 13.5px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.pv2-btn-yellow:hover {
+  filter: brightness(0.97);
+}
+.pv2-btn-ghost {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--pv2-surface);
+  color: var(--pv2-text);
+  border: 1px solid var(--pv2-border);
+  border-radius: var(--pv2-r-pill);
+  padding: 7px 13px;
+  font-size: 13.5px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.pv2-btn-ghost:hover {
+  background: var(--pv2-hover-grey);
+}
+.pv2-notice {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px;
+}
+.pv2-notice-body {
+  flex: 1;
+  min-width: 0;
+}
+.pv2-notice-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+.pv2-notice-desc {
+  font-size: 13px;
+  color: var(--pv2-text-3);
+  margin-top: 3px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+}
+.pv2-notice-empty {
+  flex: 1;
+  font-size: 14px;
+  color: var(--pv2-text-3);
+}
+
+@media (max-width: 1023px) {
+  .pv2-home-top {
+    grid-template-columns: 1fr;
+    margin-top: 18px;
+  }
+  .pv2-cta {
+    min-height: 0;
+    padding: 18px 20px;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+  }
+  /* 모바일 CTA — 높이 56px, 보조 문구 없이 모티프만, 모티프 112% 스케일(시안 §8.1) */
+  .pv2-cta-title {
+    font-size: 16.5px;
+  }
+  .pv2-cta-desc {
+    display: none;
+  }
+  .pv2-cta-arrow {
+    margin-left: auto;
+    align-self: center;
+  }
+  .pv2-response {
+    min-height: 0;
+  }
+  .pv2-response-row,
+  .pv2-active-row,
+  .pv2-notice {
+    flex-wrap: wrap;
+  }
+  .pv2-active-when {
+    width: 100%;
+  }
+  .pv2-response-row .pv2-btn-yellow,
+  .pv2-notice .pv2-btn-ghost {
+    margin-left: auto;
+  }
+}
