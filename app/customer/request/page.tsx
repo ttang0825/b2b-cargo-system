@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
-// 🔴 희망 톤수는 9종(VEHICLE_TYPES_ALL)이다. 로그인한 화주만 보는 화면이라
+// 🔴 희망 톤수는 배열 그대로다(22차 이후 11종). 로그인한 화주만 보는 화면이라
 //   공개 화면의 금지 표현 기준(32차·12차)이 적용되지 않는다 — 사용자 결정 2026-08-26.
 //   공개 4개 화면(`/`·`/vehicles`·`/quote`·`/apply`)은 여전히 6종이니 헷갈리지 말 것.
 import { VEHICLE_TYPES_ALL } from "@/lib/constants";

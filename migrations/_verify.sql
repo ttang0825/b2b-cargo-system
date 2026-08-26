@@ -9,7 +9,7 @@
 
 \echo ''
 \echo '=== ① 운임기준표 구조 ==================================='
--- 기대: 차급 수 × 15구간. 9차급이면 135행.
+-- 기대: 차급 수 × 15구간. **22차 이후 11차급 = 165행**, 가산기준 11행.
 select
   (select count(distinct vehicle_type) from rate_distance_tiers) as 차급수,
   (select count(distinct distance_label) from rate_distance_tiers) as 구간수,
@@ -45,18 +45,52 @@ select count(*) as 거리역전_건수 from (
 ) t where 앞구간 is not null and base_fare < 앞구간;
 
 \echo ''
-\echo '=== ⑥ 기준점 표본 (16·17차 확정값) ======================'
---   1톤 10km 이내 = 48,000  /  1톤 60km 이내 = 84,000  /  1톤 400km 이내 = 289,000
+\echo '=== ⑥ 기준점 표본 (16·17·22차 확정값) ==================='
+--   1톤  10km 이내 = 48,000  /  1톤 60km 이내 = 84,000  /  1톤 400km 이내 = 289,000  (16차)
+--   11톤 10km 이내 = 169,000 /  25톤 400km 초과 = 954,000                            (17차, 무변경)
+--   8톤  10km 이내 = 151,000 /  8톤  400km 초과 = 636,000                            (22차 신설)
+--   15톤 60km 이내 = 215,000 /  15톤 400km 초과 = 740,000                            (22차 신설)
+--   18톤 10km 이내 = 182,000 /  🔴 18톤 200km 이내 = **341,000**                      (22차 하향)
+--      ⚠️ 200km 만 −5.5% 다 — ×0.89 면 321,000 이라 11톤 325,000 보다 낮아진다(차급 역전).
 select vehicle_type, distance_label, base_fare
 from rate_distance_tiers
 where (vehicle_type, distance_label) in
-      (('1톤','10km 이내'), ('1톤','60km 이내'), ('1톤','400km 이내'))
+      (('1톤','10km 이내'), ('1톤','60km 이내'), ('1톤','400km 이내'),
+       ('11톤','10km 이내'), ('25톤','400km 초과'),
+       ('8톤','10km 이내'), ('8톤','400km 초과'),
+       ('15톤','60km 이내'), ('15톤','400km 초과'),
+       ('18톤','10km 이내'), ('18톤','200km 이내'))
 order by base_fare;
 
 \echo ''
-\echo '=== ⑦ 가산기준 전체 ====================================='
+\echo '=== ⑥-b 차급 역전 — 인접 차급끼리 값이 안 커지는 칸 (0이어야 함) =='
+-- 🔴 22차에 8톤·15톤이 **중간에** 끼어들었다. 차급을 더 넣을 때마다 여기를 갱신할 것.
+with ord(vt, rk) as (values
+  ('1톤',1),('1.4톤',2),('2.5톤',3),('3.5톤',4),('5톤',5),('5톤 플러스/축',6),
+  ('8톤',7),('11톤',8),('15톤',9),('18톤',10),('25톤',11)
+)
+select count(*) as 차급역전_건수
+  from rate_distance_tiers a join ord oa on oa.vt = a.vehicle_type
+  join rate_distance_tiers b on b.distance_label = a.distance_label
+  join ord ob on ob.vt = b.vehicle_type
+ where ob.rk = oa.rk + 1 and b.base_fare <= a.base_fare;
+
+\echo ''
+\echo '=== ⑦ 가산기준 전체 (22차 이후 11행) ===================='
+-- 🔴 차급 수와 반드시 같아야 한다 — 빠진 차급은 대기료가 조용히 0원이 된다(16차).
 select vehicle_type, free_waiting_minutes, waiting_fee_per_unit, waypoint_fee
 from rate_vehicle_extra_fees order by waiting_fee_per_unit, vehicle_type;
+select count(*) as 가산기준_없는_차급 from (
+  select distinct vehicle_type from rate_distance_tiers
+  except select vehicle_type from rate_vehicle_extra_fees
+) s;
+
+\echo ''
+\echo '=== ⑦-b 물품특성 가산 (22차 하향분 포함) ================'
+--   파손주의  0.1  / 15,000   (22차. 이전 30,000)
+--   장척/중량 0.15 / 40,000   (22차. 이전 0.2 / 80,000. ⚠️ 표본 5건 — 관찰 대상)
+select option_name, rate_pct, flat_amount
+from rate_surcharges where category = '물품특성' order by option_name;
 
 \echo ''
 \echo '=== ⑧ 동의 기록 (14차) =================================='
