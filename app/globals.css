@@ -2510,9 +2510,10 @@ tbody tr:hover {
   min-width: 22px;
   text-align: center;
 }
+/* 🔴 위쪽 구분선을 두지 않는다 — 계정 칩 자체에 테두리가 있어 충분하고,
+   얇은 회색 라인이 거슬린다는 실사용 지적(PR #102). 되살리지 말 것. */
 .pv2-sidebar-foot {
   padding: 16px 24px 22px;
-  border-top: 1px solid var(--pv2-border);
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -2578,17 +2579,29 @@ tbody tr:hover {
   max-width: var(--pv2-main-max);
   min-width: 0;
 }
+/* 시안 규격 — 34px/800. 볼드가 약하다는 실사용 지적(PR #102)으로 시안 값에 맞췄다. */
 .pv2-h1 {
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
   margin: 0;
 }
 .pv2-sub {
-  font-size: 15.5px;
+  font-size: 17px;
   color: var(--pv2-text-2);
-  margin: 6px 0 0;
+  margin: 8px 0 0;
   line-height: 1.6;
+}
+@media (max-width: 1023px) {
+  /* 시안 모바일 규격 — 20.5px/800 */
+  .pv2-h1 {
+    font-size: 20.5px;
+    letter-spacing: -0.01em;
+  }
+  .pv2-sub {
+    font-size: 14px;
+    margin: 2px 0 0;
+  }
 }
 .pv2-card {
   background: var(--pv2-surface);
