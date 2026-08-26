@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { fetchExtraChargesByDispatchIds, fetchActiveExtraCharges } from "@/lib/fetchDispatchExtraCharges";
 import { STATUS_OPTIONS } from "@/lib/statusColors";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import {
@@ -207,14 +208,13 @@ function InvoicesPageInner() {
       return;
     }
 
-    const { data: extraRows } = await supabase
-      .from("dispatch_extra_charges")
-      .select("dispatch_id,customer_charge_amount,driver_payout_amount,correction_invoice_id,created_at")
-      .in("dispatch_id", dispatchIds)
-      .eq("status", "active");
+    // 19차 — 차주 지급액이 authenticated 롤에서 회수돼 있어 서버 API로 조회한다
+    const extraRows = (await fetchExtraChargesByDispatchIds(dispatchIds)).filter(
+      (e) => e.status === "active"
+    );
 
     const correctionIds = new Set<string>();
-    (extraRows || []).forEach((e: any) => {
+    extraRows.forEach((e: any) => {
       if (e.correction_invoice_id) correctionIds.add(e.correction_invoice_id);
     });
     setCorrectionInvoiceIds(correctionIds);
@@ -327,13 +327,9 @@ function InvoicesPageInner() {
       // 로드맵③ 현장 추가비 — 정산 등록 전 미리 등록된 활성 추가비가 있으면
       // 프리필 금액에 포함해서 보여줌(사용자가 최종 제출 전 그대로 확인 가능,
       // 3-2 "최초 생성 시점에 스냅샷 포함" 원칙과 동일)
-      const { data: activeExtras } = await supabase
-        .from("dispatch_extra_charges")
-        .select("customer_charge_amount,driver_payout_amount")
-        .eq("dispatch_id", dispatch.id)
-        .eq("status", "active");
-      const extraCharge = (activeExtras || []).reduce((s, e) => s + (e.customer_charge_amount || 0), 0);
-      const extraPayout = (activeExtras || []).reduce((s, e) => s + (e.driver_payout_amount || 0), 0);
+      const activeExtras = await fetchActiveExtraCharges(dispatch.id);
+      const extraCharge = activeExtras.reduce((s, e) => s + (e.customer_charge_amount || 0), 0);
+      const extraPayout = activeExtras.reduce((s, e) => s + (e.driver_payout_amount || 0), 0);
       const chargeTotal = (dispatch.customer_charge || 0) + extraCharge;
       const payoutTotal = (dispatch.driver_payout || 0) + extraPayout;
 

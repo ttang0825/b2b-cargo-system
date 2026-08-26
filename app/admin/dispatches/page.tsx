@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { fetchActiveExtraCharges } from "@/lib/fetchDispatchExtraCharges";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import {
   DISPATCH_STATUS_OPTIONS,
@@ -442,13 +443,9 @@ function DispatchesPageInner() {
 
     // 로드맵③ 현장 추가비 — 정산 건이 아직 없는 상태에서 미리 등록된 활성
     // 추가비가 있으면 최초 스냅샷에 포함해서 얼림(3-2)
-    const { data: activeExtras } = await supabase
-      .from("dispatch_extra_charges")
-      .select("customer_charge_amount,driver_payout_amount")
-      .eq("dispatch_id", target.id)
-      .eq("status", "active");
-    const extraCharge = (activeExtras || []).reduce((s, e) => s + (e.customer_charge_amount || 0), 0);
-    const extraPayout = (activeExtras || []).reduce((s, e) => s + (e.driver_payout_amount || 0), 0);
+    const activeExtras = await fetchActiveExtraCharges(target.id);
+    const extraCharge = activeExtras.reduce((s, e) => s + (e.customer_charge_amount || 0), 0);
+    const extraPayout = activeExtras.reduce((s, e) => s + (e.driver_payout_amount || 0), 0);
 
     const charge = (target.customer_charge || 0) + extraCharge;
     const payout = (target.driver_payout || 0) + extraPayout;

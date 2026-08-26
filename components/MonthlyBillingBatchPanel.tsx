@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
+import { fetchExtraChargesByDispatchIds } from "@/lib/fetchDispatchExtraCharges";
 import { getCurrentStaffRole } from "@/lib/currentStaff";
 import { getBillingBatchReasonLabel } from "@/lib/billingBatchReasons";
 
@@ -388,12 +389,10 @@ export default function MonthlyBillingBatchPanel({
       setNeedsRefreshByItemId({});
       return;
     }
-    const { data: extraRows } = await supabase
-      .from("dispatch_extra_charges")
-      .select("dispatch_id,created_at")
-      .in("dispatch_id", dispatchIds)
-      .eq("status", "active")
-      .is("correction_invoice_id", null);
+    // 19차 — 차주 지급액이 authenticated 롤에서 회수돼 있어 서버 API로 조회한다
+    const extraRows = (await fetchExtraChargesByDispatchIds(dispatchIds)).filter(
+      (e) => e.status === "active" && !e.correction_invoice_id
+    );
 
     const invoiceById: Record<string, { order_id: string | null; created_at: string }> = {};
     ((invs as any[]) || []).forEach((i) => (invoiceById[i.id] = i));
@@ -404,7 +403,7 @@ export default function MonthlyBillingBatchPanel({
       if (!inv || !inv.order_id) return;
       const dispatchId = dispatchIdByOrderId[inv.order_id];
       if (!dispatchId) return;
-      const hasNewExtra = (extraRows || []).some(
+      const hasNewExtra = extraRows.some(
         (e: any) => e.dispatch_id === dispatchId && new Date(e.created_at) > new Date(inv.created_at)
       );
       if (hasNewExtra) result[item.id] = true;
