@@ -65,5 +65,61 @@ from consents group by source, consent_type, version, agreed
 order by source, consent_type;
 
 \echo ''
+\echo '=== ⑧-b 동의가 어느 접수 건에 붙었는가 (고아 행 0이어야 함) =='
+--   🔴 14차에 "행이 생겼다만 보면 안 되고 join까지 볼 것"이라고 못박은 지점이다.
+--   subject_id 는 text 라 원본 테이블 id 를 text 로 맞춰 붙여 본다.
+select c.subject_type, c.consent_type,
+       count(*)                                     as 동의행수,
+       count(*) filter (where 원본.id is not null)  as 원본_있음,
+       count(*) filter (where 원본.id is null)      as 고아_행
+from consents c
+left join lateral (
+  select p.id from portal_order_requests p
+   where c.subject_type = 'portal_order_request' and p.id::text = c.subject_id
+  union all
+  select a.id from customer_applications a
+   where c.subject_type = 'application' and a.id::text = c.subject_id
+  union all
+  select q.id from public_quote_requests q
+   where c.subject_type = 'quote_request' and q.id::text = c.subject_id
+) as 원본 on true
+group by c.subject_type, c.consent_type
+order by c.subject_type, c.consent_type;
+
+\echo ''
+\echo '=== ⑧-c 동의 항목별 건수 (privacy / terms / third_party) =='
+select consent_type, version, count(*) as 건수
+from consents group by consent_type, version order by consent_type;
+
+\echo ''
+\echo '=== ⑧-d customer_locations 컬럼 (20차) ==================='
+--   🔴 `name`·`note` 는 0이어야 한다 — `location_name`·`notes` 를 재사용하기로
+--   확정했다(48차, 사용자 확인). 1 이상이면 중복 컬럼이 생긴 것이다.
+select
+  count(*) filter (where column_name = 'location_name')  as location_name,
+  count(*) filter (where column_name = 'notes')          as notes,
+  count(*) filter (where column_name = 'address_detail') as address_detail,
+  count(*) filter (where column_name = 'contact_name')   as contact_name,
+  count(*) filter (where column_name = 'contact_phone')  as contact_phone,
+  count(*) filter (where column_name in ('name','note')) as "중복컬럼_0이어야"
+from information_schema.columns where table_name = 'customer_locations';
+
+\echo ''
+\echo '=== ⑧-e customer_presets (20차) =========================='
+select
+  (select count(*) from pg_class
+    where relname = 'customer_presets' and relrowsecurity)                 as "RLS_켜짐_1",
+  (select count(*) from pg_policies where tablename = 'customer_presets')  as "정책_2",
+  (select count(*) from pg_constraint
+    where conrelid = 'customer_presets'::regclass and contype = 'c'
+      and pg_get_constraintdef(oid) like '%preset_type%')                  as "CHECK_1이상",
+  (select count(*) from customer_presets)                                  as 행수;
+
+\echo ''
+\echo '=== ⑧-f 상하차방식 8행 · 도크 (20차) ====================='
+select option_name, rate_pct, flat_amount
+from rate_surcharges where category = '상하차방식' order by option_name;
+
+\echo ''
 \echo '=== ⑨ 마이그레이션 이력 ================================='
 select filename, applied_at, applied_by from _migrations order by filename;
