@@ -299,12 +299,13 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
   const allBadgeTotal =
     NAV_GROUPS.flat().reduce((s, i) => s + (i.key ? displayCounts[i.key] || 0 : 0), 0) - mobileTabTotal;
 
+  // 🔴 계정 링크는 브랜드 블록 **위**에 둔다 — 아래에 두면 로고·전화번호에 묻혀
+  // 찾기 어렵다는 실사용 지적(PR #102). 테두리 칩으로 만들어 눈에 띄게 했다.
   const accountLinks = (onNavigate?: () => void) => (
-    <div className="pv2-foot-links">
+    <div className="pv2-foot-account">
       <Link href="/customer/change-password" className="pv2-foot-link" onClick={onNavigate}>
         비밀번호 변경
       </Link>
-      <span className="pv2-foot-sep">·</span>
       <button type="button" onClick={handleLogout} className="pv2-foot-link">
         로그아웃
       </button>
@@ -337,6 +338,7 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
           </nav>
 
           <div className="pv2-sidebar-foot">
+            {accountLinks()}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/portal/wecarry-eng-cropped.svg" alt="WeCarry" className="pv2-eng-logo" />
             <div>
@@ -345,7 +347,6 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
                 {COMPANY_SUPPORT_PHONE}
               </a>
             </div>
-            {accountLinks()}
           </div>
         </aside>
 

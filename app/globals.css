@@ -2511,12 +2511,20 @@ tbody tr:hover {
   text-align: center;
 }
 .pv2-sidebar-foot {
-  padding: 22px 24px;
+  padding: 16px 24px 22px;
   border-top: 1px solid var(--pv2-border);
   display: flex;
   flex-direction: column;
   gap: 14px;
   color: var(--pv2-text);
+}
+/* 🔴 계정 링크(비밀번호 변경·로그아웃)를 브랜드 블록 **위**에 둔다.
+   아래에 두면 로고·전화번호에 묻혀 찾기 어렵다는 실사용 지적(PR #102). */
+.pv2-foot-account {
+  display: flex;
+  gap: 8px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--pv2-border);
 }
 .pv2-eng-logo {
   width: 118px;
@@ -2536,28 +2544,28 @@ tbody tr:hover {
   text-decoration: none;
   display: block;
 }
-.pv2-foot-links {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
 .pv2-foot-link {
-  border: none;
-  background: none;
-  padding: 0;
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid var(--pv2-border);
+  border-radius: var(--pv2-r-sm);
+  background: var(--pv2-surface);
   cursor: pointer;
   font-size: 13.5px;
-  color: var(--pv2-text-3);
+  font-weight: 600;
+  color: var(--pv2-text-2);
   text-decoration: none;
   font-family: inherit;
+  white-space: nowrap;
+  transition: background 0.12s ease, color 0.12s ease;
 }
 .pv2-foot-link:hover {
+  background: var(--pv2-hover-grey);
   color: var(--pv2-text);
-}
-.pv2-foot-sep {
-  color: var(--pv2-border);
-  font-size: 12px;
 }
 
 /* ── 본문 ─────────────────────────────────────────────── */
@@ -2703,8 +2711,7 @@ tbody tr:hover {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 10px 18px;
-    min-height: 44px;
+    padding: 8px 18px 12px;
     background: var(--pv2-surface);
     border-bottom: 1px solid var(--pv2-border);
     position: sticky;
@@ -2712,14 +2719,15 @@ tbody tr:hover {
     z-index: 100;
   }
   .pv2-mobile-logo {
-    width: 130px;
+    width: 118px;
     display: block;
     height: auto;
   }
   .pv2-mobile-company {
-    font-size: 13.5px;
-    font-weight: 700;
+    font-size: 13px;
+    font-weight: 600;
     color: var(--pv2-text-2);
+    white-space: nowrap;
     text-align: right;
     min-width: 0;
   }
@@ -2780,9 +2788,10 @@ tbody tr:hover {
 /* ── 포털 v2 홈 (24차) ─────────────────────────────────── */
 .pv2-home-top {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
   margin-top: 24px;
+  align-items: stretch;
 }
 .pv2-cta {
   position: relative;
@@ -2790,11 +2799,12 @@ tbody tr:hover {
   background: var(--pv2-yellow);
   border-radius: var(--pv2-r-card);
   padding: 28px;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 24px;
-  min-height: 300px;
+  gap: 20px;
+  min-height: 230px;
   text-decoration: none;
   color: var(--pv2-text);
   transition: filter 0.15s ease, transform 0.15s ease;
@@ -2804,10 +2814,12 @@ tbody tr:hover {
   transform: translateY(-2px);
 }
 /* 화살표 모티프 — 오른쪽·아래 여백은 고정이고 카드가 좁아지면 왼쪽이 잘린다(시안 §8.1) */
+/* 🔴 모티프는 카드 **안쪽**에 둔다(시안 `right:14px; bottom:14px`).
+   음수 offset 을 주면 overflow:hidden 에 라인 끝이 잘린다(PR #102 실사용 지적). */
 .pv2-cta-motif {
   position: absolute;
-  right: -12px;
-  bottom: 10px;
+  right: 14px;
+  bottom: 14px;
   height: 112%;
   width: auto;
   max-width: none;
@@ -2841,21 +2853,24 @@ tbody tr:hover {
   align-self: flex-start;
   display: flex;
   align-items: center;
+  margin-bottom: -6px;
 }
 
+/* 🔴 CTA 와 같은 230px 이다(시안). 더 키우면 두 카드가 함께 길어진다(PR #102). */
 .pv2-response {
   display: flex;
   flex-direction: column;
-  min-height: 300px;
+  min-height: 230px;
+  box-sizing: border-box;
 }
 .pv2-block {
-  margin-top: 20px;
+  margin-top: 12px;
 }
 .pv2-block-head {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 18px 20px;
+  padding: 20px 24px 12px;
   border-bottom: 1px solid var(--pv2-border);
 }
 .pv2-block-head .pv2-btn-ghost {
@@ -2870,7 +2885,7 @@ tbody tr:hover {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 16px 20px;
+  padding: 15px 24px;
 }
 .pv2-response-row + .pv2-response-row,
 .pv2-active-row + .pv2-active-row {
@@ -2967,7 +2982,7 @@ tbody tr:hover {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 18px 20px;
+  padding: 18px 24px;
 }
 .pv2-notice-body {
   flex: 1;
@@ -2997,26 +3012,24 @@ tbody tr:hover {
     grid-template-columns: 1fr;
     margin-top: 18px;
   }
+  /* 모바일 CTA — 시안 규격: 세로 배치, 오른쪽 여백 76px 로 모티프 자리를 비운다 */
   .pv2-cta {
     min-height: 0;
-    padding: 18px 20px;
-    flex-direction: row;
-    align-items: center;
-    gap: 12px;
+    padding: 16px 76px 14px 16px;
+    border-radius: 13px;
+    gap: 18px;
+    align-items: flex-start;
+    box-shadow: 0 4px 12px rgba(255, 216, 51, 0.35);
   }
-  /* 모바일 CTA — 높이 56px, 보조 문구 없이 모티프만, 모티프 112% 스케일(시안 §8.1) */
   .pv2-cta-title {
     font-size: 16.5px;
   }
   .pv2-cta-desc {
     display: none;
   }
-  .pv2-cta-arrow {
-    margin-left: auto;
-    align-self: center;
-  }
-  .pv2-response {
-    min-height: 0;
+  .pv2-cta-motif {
+    right: 12px;
+    bottom: 10px;
   }
   /* 🔴 배지와 버튼이 고정폭이라 그대로 두면 가운데 본문이 짓눌려 주소가 8줄로 접히고
      공지 제목이 어절 중간에서 끊긴다(390px 실측). 본문을 한 줄 전체로 내리고 배지 →
