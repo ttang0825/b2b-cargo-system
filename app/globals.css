@@ -3018,16 +3018,41 @@ tbody tr:hover {
   .pv2-response {
     min-height: 0;
   }
+  /* 🔴 배지와 버튼이 고정폭이라 그대로 두면 가운데 본문이 짓눌려 주소가 8줄로 접히고
+     공지 제목이 어절 중간에서 끊긴다(390px 실측). 본문을 한 줄 전체로 내리고 배지 →
+     본문 → 버튼 순으로 쌓는다. */
   .pv2-response-row,
   .pv2-active-row,
   .pv2-notice {
     flex-wrap: wrap;
+    gap: 10px;
+  }
+  .pv2-response-body,
+  .pv2-active-body,
+  .pv2-notice-body,
+  .pv2-notice-empty {
+    flex: 1 1 100%;
+    order: 2;
+  }
+  .pv2-badge-info,
+  .pv2-badge-warn,
+  .pv2-status-badge {
+    order: 1;
   }
   .pv2-active-when {
+    order: 3;
     width: 100%;
   }
   .pv2-response-row .pv2-btn-yellow,
   .pv2-notice .pv2-btn-ghost {
+    order: 3;
     margin-left: auto;
+  }
+  .pv2-notice .pv2-section-title {
+    order: 1;
+    flex: none;
+  }
+  .pv2-notice-desc {
+    -webkit-line-clamp: 2;
   }
 }
