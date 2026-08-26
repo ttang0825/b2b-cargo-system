@@ -4,7 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import PublicPageHeader from "@/components/PublicPageHeader";
 import BackToHomeLink from "@/components/BackToHomeLink";
-import { APPLY_CONSENT_TEXT } from "@/lib/legalInfo";
+import { APPLY_CONSENT_TEXT, TERMS_CONSENT } from "@/lib/legalInfo";
+import PublicConsentFields from "@/components/PublicConsentFields";
 import { formatPhoneNumber, formatBizRegNo, REGIONS, VEHICLE_TYPES_PUBLIC } from "@/lib/constants";
 import MultiSelectTags from "@/components/MultiSelectTags";
 import AddressSearch from "@/components/AddressSearch";
@@ -16,6 +17,9 @@ export default function ApplyPage() {
   const [errorReason, setErrorReason] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [agreed, setAgreed] = useState(false);
+  // 🔴 이용약관 동의는 개인정보 동의와 **별개 state**다(18차). 법 제22조 1항이
+  // 각각 구분해 받도록 하고 있어 한 값으로 합치면 안 된다.
+  const [termsAgreed, setTermsAgreed] = useState(false);
   const [showVehicleHint, setShowVehicleHint] = useState(false);
 
   const [form, setForm] = useState({
@@ -52,6 +56,10 @@ export default function ApplyPage() {
       setError("회사명, 담당자명, 담당자 연락처는 필수입니다.");
       return;
     }
+    if (!termsAgreed) {
+      setError("이용약관에 동의해주셔야 신청을 접수할 수 있습니다.");
+      return;
+    }
     if (!agreed) {
       setError("개인정보 수집·이용에 동의해주셔야 신청을 접수할 수 있습니다.");
       return;
@@ -75,6 +83,7 @@ export default function ApplyPage() {
           main_origin: fullMainOrigin,
           main_destination: fullMainDestination,
           agreed,
+          termsAgreed,
         }),
       });
       const data = await res.json();
@@ -295,29 +304,14 @@ export default function ApplyPage() {
               </div>
             </div>
 
-            <label
-              style={{
-                display: "flex",
-                alignItems: "flex-start",
-                gap: 8,
-                marginTop: 16,
-                marginBottom: 18,
-                fontSize: 12.5,
-                color: "var(--text-muted)",
-                cursor: "pointer",
-                lineHeight: 1.5,
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={agreed}
-                onChange={(e) => setAgreed(e.target.checked)}
-                style={{ margin: "2px 0 0", width: "auto", flexShrink: 0 }}
-              />
-              {/* 🔴 문구를 여기 직접 적지 말 것 — `lib/legalInfo.ts` 참고(14차).
-                  내용은 그대로 두고 상수로 옮기기만 했다. */}
-              <span>{APPLY_CONSENT_TEXT}</span>
-            </label>
+            <PublicConsentFields
+              termsLabel={TERMS_CONSENT.applyLabel}
+              termsAgreed={termsAgreed}
+              onTermsChange={setTermsAgreed}
+              privacyText={APPLY_CONSENT_TEXT}
+              privacyAgreed={agreed}
+              onPrivacyChange={setAgreed}
+            />
 
             {error && (
               <div className="error-box">
