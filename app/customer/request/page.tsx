@@ -11,6 +11,7 @@ import PickupDropoffContactFields, {
 } from "@/components/PickupDropoffContactFields";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import { localInputToISOString } from "@/lib/localDateTime";
+import { PORTAL_ORDER_THIRD_PARTY_CONSENT } from "@/lib/legalInfo";
 import { useListSearchSort, sortIndicator } from "@/lib/useListSearchSort";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 
@@ -52,7 +53,6 @@ function AddressBadge({ address, onClick }: { address: string; onClick: () => vo
 
 export default function PortalRequestPage() {
   const [companyId, setCompanyId] = useState<string | null>(null);
-  const [accountId, setAccountId] = useState<string | null>(null);
   const [requests, setRequests] = useState<any[]>([]);
   const [savedLocations, setSavedLocations] = useState<SavedLocation[]>([]);
   const [surcharges, setSurcharges] = useState<Surcharge[]>([]);
@@ -60,6 +60,9 @@ export default function PortalRequestPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  // 🔴 제3자 제공 동의(20차). `form`과 분리된 별도 state라 **서버로 명시적으로 함께 보내야**
+  // 한다 — 14차 전의 `/quote`가 정확히 이 값을 안 보내서 동의가 저장되지 않고 있었다.
+  const [thirdPartyAgreed, setThirdPartyAgreed] = useState(false);
   const [saveOrigin, setSaveOrigin] = useState(false);
   const [saveDestination, setSaveDestination] = useState(false);
   const [period, setPeriod] = useState<DatePreset>("all");
@@ -178,7 +181,6 @@ export default function PortalRequestPage() {
         .single();
       if (account) {
         setCompanyId(account.company_id);
-        setAccountId(account.id);
 
         const { data: company } = await supabase
           .from("companies")
@@ -232,6 +234,10 @@ export default function PortalRequestPage() {
       setError("하차지 담당자 연락처를 입력해주세요.");
       return;
     }
+    if (!thirdPartyAgreed) {
+      setError("상·하차지 담당자 정보 제3자 제공에 동의해주셔야 접수할 수 있습니다.");
+      return;
+    }
     if (!companyId) {
       setError("계정 정보를 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.");
       return;
@@ -251,40 +257,63 @@ export default function PortalRequestPage() {
     const fullOrigin = [form.origin, form.originDetail].filter((v) => v.trim()).join(" ");
     const fullDestination = [form.destination, form.destinationDetail].filter((v) => v.trim()).join(" ");
 
-    const { error: insertError } = await supabase.from("portal_order_requests").insert({
-      company_id: companyId,
-      requested_by: accountId,
-      origin: fullOrigin,
-      origin_sido: form.originSido || null,
-      origin_sigungu: form.originSigungu || null,
-      destination: fullDestination,
-      destination_sido: form.destinationSido || null,
-      destination_sigungu: form.destinationSigungu || null,
-      origin_company_name: form.origin_company_name.trim() || null,
-      origin_contact_name: form.origin_contact_name.trim() || null,
-      origin_contact_phone: form.origin_contact_phone.trim() || null,
-      destination_company_name: form.destination_company_name.trim() || null,
-      destination_contact_name: form.destination_contact_name.trim() || null,
-      destination_contact_phone: form.destination_contact_phone.trim() || null,
-      vehicle_type: form.vehicle_type,
-      body_type: form.차량형태 || null,
-      load_condition: form.상차조건 || null,
-      unload_condition: form.하차조건 || null,
-      item_condition: form.물품특성 || null,
-      transport_time: form.운송시간 || null,
-      trip_type: form["왕복/편도"] || null,
-      waiting_minutes: form.waitingMinutes ? Number(form.waitingMinutes) : null,
-      waypoint_count: form.waypointCount ? Number(form.waypointCount) : null,
-      item: form.item || null,
-      requested_pickup_at: localInputToISOString(form.requested_pickup_at),
-      requested_dropoff_at: localInputToISOString(form.requested_dropoff_at),
-      notes: form.notes || null,
-      status: "대기중",
-    });
-
-    if (insertError) {
+    // 🔴 `portal_order_requests`에 직접 insert하지 말 것(20차에 서버 API로 이전).
+    // `consents`는 RLS를 켜고 정책이 0개라 **로그인한 화주도 동의 기록을 남길 수 없다** —
+    // service_role을 쓰는 서버가 접수와 동의를 함께 처리해야 한다.
+    // ⚠️ `company_id`·`requested_by`를 보내지 않는다. 서버가 세션에서 직접 구한다(원칙 30번).
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) {
+        setSaving(false);
+        setError("로그인이 만료되었습니다. 다시 로그인해주세요.");
+        return;
+      }
+      const res = await fetch("/api/customer/order-request", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          origin: fullOrigin,
+          origin_sido: form.originSido || null,
+          origin_sigungu: form.originSigungu || null,
+          destination: fullDestination,
+          destination_sido: form.destinationSido || null,
+          destination_sigungu: form.destinationSigungu || null,
+          origin_company_name: form.origin_company_name.trim() || null,
+          origin_contact_name: form.origin_contact_name.trim() || null,
+          origin_contact_phone: form.origin_contact_phone.trim() || null,
+          destination_company_name: form.destination_company_name.trim() || null,
+          destination_contact_name: form.destination_contact_name.trim() || null,
+          destination_contact_phone: form.destination_contact_phone.trim() || null,
+          vehicle_type: form.vehicle_type,
+          body_type: form.차량형태 || null,
+          load_condition: form.상차조건 || null,
+          unload_condition: form.하차조건 || null,
+          item_condition: form.물품특성 || null,
+          transport_time: form.운송시간 || null,
+          trip_type: form["왕복/편도"] || null,
+          waiting_minutes: form.waitingMinutes ? Number(form.waitingMinutes) : null,
+          waypoint_count: form.waypointCount ? Number(form.waypointCount) : null,
+          item: form.item || null,
+          requested_pickup_at: localInputToISOString(form.requested_pickup_at),
+          requested_dropoff_at: localInputToISOString(form.requested_dropoff_at),
+          notes: form.notes || null,
+          agreed: thirdPartyAgreed,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSaving(false);
+        setError(data.error || "요청 접수 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+        return;
+      }
+    } catch {
       setSaving(false);
-      setError(insertError.message);
+      setError("요청 접수 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
       return;
     }
 
@@ -312,6 +341,9 @@ export default function PortalRequestPage() {
 
     setSaving(false);
     setSuccess(true);
+    // 🔴 동의는 **발주 건별**이다. 체크가 남아 있으면 다음 건을 보낼 때 화주가 그 건에
+    // 대해 의식적으로 동의하지 않았는데도 동의 행이 기록된다 — 기록이 거짓이 된다.
+    setThirdPartyAgreed(false);
     setSaveOrigin(false);
     setSaveDestination(false);
     setForm((prev) => ({
@@ -548,6 +580,55 @@ export default function PortalRequestPage() {
               <textarea rows={2} value={form.notes} onChange={(e) => setField("notes", e.target.value)} placeholder="상하차 조건 관련 요청, 기타 참고사항" />
             </div>
           </div>
+          {/* 🔴 제3자 제공 동의(20차). 상·하차지 담당자의 성명·연락처는 화주 본인이 아니라
+              **제3자의 개인정보**이고, 처리방침 제4조가 "발주 시점에 별도의 동의를 받은
+              후에만" 차주에게 제공한다고 약속하고 있다. 그 약속을 실제로 지키는 자리다.
+              ⚠️ 문구를 여기 직접 적지 말 것 — `lib/legalInfo.ts`가 유일 정의처다.
+              ⚠️ 21차가 이 화면을 새 디자인으로 갈아엎을 때 **문구·저장 로직·DB는 그대로
+              재사용**한다. 스타일만 바꾸고 동의 자체를 빠뜨리지 말 것. */}
+          <div
+            style={{
+              border: "1px solid var(--border)",
+              borderRadius: 10,
+              padding: "12px 14px",
+              margin: "4px 0 14px",
+              fontSize: 12.5,
+              color: "var(--text-muted)",
+              lineHeight: 1.6,
+            }}
+          >
+            <div style={{ fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>
+              {PORTAL_ORDER_THIRD_PARTY_CONSENT.title}
+            </div>
+            <p style={{ margin: "0 0 6px" }}>{PORTAL_ORDER_THIRD_PARTY_CONSENT.intro}</p>
+            <ul style={{ margin: "0 0 6px", paddingLeft: 16 }}>
+              {PORTAL_ORDER_THIRD_PARTY_CONSENT.items.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+            <p style={{ margin: "0 0 4px" }}>{PORTAL_ORDER_THIRD_PARTY_CONSENT.confirm}</p>
+            <p style={{ margin: 0 }}>{PORTAL_ORDER_THIRD_PARTY_CONSENT.refusal}</p>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 8,
+                marginTop: 10,
+                color: "var(--text)",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={thirdPartyAgreed}
+                onChange={(e) => setThirdPartyAgreed(e.target.checked)}
+                style={{ margin: "2px 0 0", width: "auto", flexShrink: 0 }}
+              />
+              <span>위 제3자 제공에 동의합니다.</span>
+            </label>
+          </div>
+
           {error && <div className="error-box">{error}</div>}
           {success && (
             <div style={{ background: "var(--accent-soft)", color: "var(--accent)", padding: "10px 14px", borderRadius: 10, fontSize: 13, fontWeight: 600, marginBottom: 14 }}>
