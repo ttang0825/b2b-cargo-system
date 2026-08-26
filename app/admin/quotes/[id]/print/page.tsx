@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { COMPANY_INFO } from "@/lib/companyInfo";
+import CompanyNameMark from "@/components/CompanyNameMark";
 
 type QuoteItem = { id: string; item_name: string | null; amount: number | null };
 
@@ -160,7 +161,7 @@ export default function QuotePrintPage() {
             </p>
           </div>
           <div style={{ textAlign: "right", fontSize: 12.5, lineHeight: 1.6, color: "#333" }}>
-            <div style={{ fontWeight: 700, fontSize: 14 }}>{COMPANY_INFO.name}</div>
+            <div style={{ fontWeight: 700, fontSize: 14 }}><CompanyNameMark /></div>
             <div>
               대표 {COMPANY_INFO.ceo} · 사업자등록번호 {COMPANY_INFO.bizRegNo}
             </div>
