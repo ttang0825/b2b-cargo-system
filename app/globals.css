@@ -2328,3 +2328,451 @@ tbody tr:hover {
     width: 100%;
   }
 }
+
+/* ============================================================
+   화주 운송관리 포털 v2 — 시안 리디자인 스코프 (24차)
+   ============================================================
+   🔴 **왜 새 스코프인가.** 23차 조사(§9-4)에서 확인된 것:
+   포털이 쓰는 CSS 클래스 25개 중 **포털 전용은 `.portal-brand-home` 하나뿐**이고
+   `.container`(31개 파일)·`.card`(31)·`.empty-state`(28)·`.num`(28)·`.btn`(26)·
+   `.badge`(19)·`.field`(18)를 **관리자 화면이 같이 쓴다.**
+   그래서 전역 클래스 정의를 고치면 관리자 화면이 통째로 같이 바뀐다.
+
+   🔴 **다음 세션이 "중복이니 전역으로 합치자"고 하지 말 것.** 26차 `.public-form`과
+   같은 스코프 격리이며, 합치는 순간 관리자가 딸려온다.
+
+   🔴 **전역 클래스를 재사용하지 않는 것이 최선의 방어다** — `.portal-v2 .card` 처럼
+   전역 클래스를 덮어쓰면 특성도가 같아져 선언 순서가 승부를 가른다(26차 함정).
+   그래서 새 컴포넌트는 예외 없이 `.pv2-*` 전용 클래스를 쓴다.
+
+   🔴 **본문 서체 변수(`:root`의 sans 계열)를 건드리지 않는다.** SUIT Variable 유지가
+   확정이다(2026-08-26). 시안이 다른 서체를 쓰는 것은 Claude Design 기본값으로 보이며,
+   사용자가 SUIT 유지를 택했다. ⚠️ 이 주석에 그 변수·서체 이름을 문자로 쓰지 않는 이유는
+   완료조건 검사(`grep`)에 주석 자신이 걸리기 때문이다(12·51차에 두 번 겪은 오탐).
+   ============================================================ */
+.portal-v2 {
+  /* 텍스트 */
+  --pv2-text: #1a1a1a;
+  --pv2-text-2: #6b6759;
+  --pv2-text-3: #888378;
+  --pv2-text-4: #bab9b6;
+  --pv2-icon: #a8a49a;
+  /* 면 */
+  --pv2-bg: #f4f3ef;
+  --pv2-surface: #ffffff;
+  --pv2-border: #ebeae7;
+  --pv2-border-soft: #f0efec;
+  /* 브랜드 */
+  --pv2-yellow: #ffd833;
+  --pv2-yellow-soft: #fff9d6;
+  --pv2-yellow-text: #7a5f00;
+  /* 상태 */
+  --pv2-selected-bg: #1a1a1a;
+  --pv2-selected-text: #ffffff;
+  --pv2-selected-hover: #2a2825;
+  --pv2-hover-card: #fffdf5;
+  --pv2-hover-grey: #fff9d6;
+  --pv2-info-text: #1d57c6;
+  --pv2-info-bg: #e8effc;
+  --pv2-danger-text: #b91c1c;
+  --pv2-danger-bg: #fee2e2;
+  /* 입력 */
+  --pv2-input-bg: #f4f3ef;
+  --pv2-input-border: #e3e1dc;
+  /* 반경 */
+  --pv2-r-card: 20px;
+  --pv2-r-mid: 16px;
+  --pv2-r-sm: 12px;
+  --pv2-r-badge: 8px;
+  --pv2-r-pill: 99px;
+  --pv2-r-menu: 10px;
+  /* 치수 */
+  --pv2-sidebar-w: 248px;
+  --pv2-shell-max: 1600px;
+  --pv2-main-max: 1160px;
+
+  min-height: 100vh;
+  background: var(--pv2-bg);
+  color: var(--pv2-text);
+}
+
+/* 긴 한글 문장 — 시안 §4 */
+.portal-v2 h1,
+.portal-v2 h2,
+.portal-v2 h3,
+.portal-v2 p {
+  word-break: keep-all;
+  text-wrap: pretty;
+}
+
+/* ── 셸 골격 ───────────────────────────────────────────── */
+.pv2-shell {
+  display: flex;
+  max-width: var(--pv2-shell-max);
+  margin: 0 auto;
+  min-height: 100vh;
+}
+.pv2-sidebar {
+  width: var(--pv2-sidebar-w);
+  flex: none;
+  background: var(--pv2-surface);
+  border-right: 1px solid var(--pv2-border);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+.pv2-sidebar-head {
+  padding: 36px 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pv2-logo-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  display: block;
+  color: var(--pv2-text);
+}
+.pv2-logo {
+  width: 178px;
+  display: block;
+  height: auto;
+}
+.pv2-company {
+  font-size: 19.5px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  padding: 2px 0;
+}
+.pv2-nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 12px;
+}
+.pv2-nav-group + .pv2-nav-group {
+  border-top: 1px solid var(--pv2-border);
+  margin-top: 12px;
+  padding-top: 12px;
+}
+.pv2-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: var(--pv2-r-menu);
+  font-size: 16.5px;
+  font-weight: 600;
+  color: var(--pv2-text-2);
+  text-decoration: none;
+  border: none;
+  background: none;
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s ease, box-shadow 0.12s ease;
+}
+.pv2-nav-item:hover {
+  box-shadow: inset 0 0 0 999px rgba(105, 90, 20, 0.08);
+}
+.pv2-nav-item-icon {
+  flex: none;
+  display: inline-flex;
+  color: var(--pv2-icon);
+}
+.pv2-nav-item-label {
+  flex: 1;
+  min-width: 0;
+}
+.pv2-nav-item-active {
+  background: var(--pv2-selected-bg);
+  color: var(--pv2-selected-text);
+}
+.pv2-nav-item-active:hover {
+  background: var(--pv2-selected-hover);
+  box-shadow: none;
+}
+.pv2-nav-item-active .pv2-nav-item-icon {
+  color: var(--pv2-selected-text);
+}
+.pv2-nav-badge {
+  flex: none;
+  background: var(--pv2-yellow);
+  color: var(--pv2-text);
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: var(--pv2-r-pill);
+  padding: 1px 8px;
+  min-width: 22px;
+  text-align: center;
+}
+.pv2-sidebar-foot {
+  padding: 22px 24px;
+  border-top: 1px solid var(--pv2-border);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  color: var(--pv2-text);
+}
+.pv2-eng-logo {
+  width: 118px;
+  display: block;
+  height: auto;
+}
+.pv2-foot-label {
+  font-size: 13px;
+  color: var(--pv2-text-3);
+  margin-bottom: 2px;
+}
+.pv2-foot-phone {
+  font-size: 20.5px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--pv2-text);
+  text-decoration: none;
+  display: block;
+}
+.pv2-foot-links {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.pv2-foot-link {
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 13.5px;
+  color: var(--pv2-text-3);
+  text-decoration: none;
+  font-family: inherit;
+}
+.pv2-foot-link:hover {
+  color: var(--pv2-text);
+}
+.pv2-foot-sep {
+  color: var(--pv2-border);
+  font-size: 12px;
+}
+
+/* ── 본문 ─────────────────────────────────────────────── */
+.pv2-main {
+  flex: 1;
+  min-width: 0;
+  padding: 36px 36px 64px;
+}
+.pv2-main-inner {
+  max-width: var(--pv2-main-max);
+  min-width: 0;
+}
+.pv2-h1 {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+.pv2-sub {
+  font-size: 15.5px;
+  color: var(--pv2-text-2);
+  margin: 6px 0 0;
+  line-height: 1.6;
+}
+.pv2-card {
+  background: var(--pv2-surface);
+  border-radius: var(--pv2-r-card);
+  border: 1px solid var(--pv2-border);
+}
+.pv2-section-title {
+  font-size: 17.5px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.pv2-count-chip {
+  display: inline-block;
+  background: var(--pv2-yellow-soft);
+  color: var(--pv2-yellow-text);
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: var(--pv2-r-badge);
+  padding: 2px 9px;
+}
+.pv2-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 44px 24px;
+  text-align: center;
+}
+.pv2-empty-logo {
+  width: 106px;
+  display: block;
+  opacity: 0.16;
+  margin-bottom: 4px;
+  height: auto;
+}
+.pv2-empty-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+.pv2-empty-desc {
+  font-size: 14px;
+  color: var(--pv2-text-3);
+}
+
+/* ── 모바일 헤더 · 하단 탭바 · 바텀시트 ─────────────────── */
+.pv2-mobile-header {
+  display: none;
+}
+.pv2-tabbar {
+  display: none;
+}
+.pv2-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 26, 26, 0.45);
+  z-index: 200;
+}
+.pv2-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 201;
+  background: var(--pv2-surface);
+  border-radius: 22px 22px 0 0;
+  box-shadow: 0 -6px 24px rgba(26, 26, 26, 0.14);
+  max-height: 82%;
+  display: flex;
+  flex-direction: column;
+}
+.pv2-sheet-handle {
+  width: 38px;
+  height: 4px;
+  border-radius: 99px;
+  background: var(--pv2-border);
+  margin: 10px auto 4px;
+  flex: none;
+}
+.pv2-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 18px 10px;
+  flex: none;
+}
+.pv2-sheet-title {
+  font-size: 17.5px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.pv2-sheet-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 99px;
+  border: none;
+  background: var(--pv2-input-bg);
+  color: var(--pv2-text-2);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pv2-sheet-body {
+  overflow-y: auto;
+  padding: 0 12px 20px;
+}
+
+@media (max-width: 1023px) {
+  /* 태블릿 — 사이드바를 접고 모바일 헤더의 햄버거로 대체한다.
+     🔴 `.desktop-only`·`.mobile-only`의 분기점(760px)을 건드리지 않는다 —
+     관리자도 각 7~8개 파일에서 쓴다(23차 §9-3). */
+  .pv2-sidebar {
+    display: none;
+  }
+  .pv2-mobile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 18px;
+    min-height: 44px;
+    background: var(--pv2-surface);
+    border-bottom: 1px solid var(--pv2-border);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .pv2-mobile-logo {
+    width: 130px;
+    display: block;
+    height: auto;
+  }
+  .pv2-mobile-company {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--pv2-text-2);
+    text-align: right;
+    min-width: 0;
+  }
+  .pv2-main {
+    padding: 20px 16px 96px;
+  }
+  .pv2-tabbar {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 150;
+    background: var(--pv2-surface);
+    border-top: 1px solid var(--pv2-border-soft);
+    border-radius: 20px 20px 0 0;
+    padding: 8px 6px 12px;
+    box-shadow: 0 -2px 14px rgba(26, 26, 26, 0.05);
+  }
+  .pv2-tab {
+    flex: 1;
+    min-height: 52px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    text-decoration: none;
+    padding: 4px 2px;
+    color: var(--pv2-text-3);
+    font-size: 12.5px;
+    font-weight: 600;
+    font-family: inherit;
+  }
+  .pv2-tab-icon {
+    display: inline-flex;
+    color: var(--pv2-icon);
+  }
+  /* 🔴 선택 표시는 아이콘 채움 + 텍스트 진해짐만. 표시선·배경 없음 (시안 §7) */
+  .pv2-tab-active {
+    color: var(--pv2-text);
+    font-weight: 700;
+  }
+  .pv2-tab-active .pv2-tab-icon {
+    color: var(--pv2-text);
+  }
+}
+
+@media (max-width: 760px) {
+  .pv2-main {
+    padding: 18px 16px 96px;
+  }
+}
