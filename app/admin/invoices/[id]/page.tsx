@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
+import { fetchActiveExtraCharges, fetchCorrectionSource } from "@/lib/fetchDispatchExtraCharges";
 import {
   INVOICE_STATUS_OPTIONS,
   getInvoiceStatusColor,
@@ -118,24 +119,16 @@ export default function InvoiceDetailPage() {
         .maybeSingle();
 
       if (dispatchRow && latestInvoice?.id === data.id) {
-        const { data: extraRows } = await supabase
-          .from("dispatch_extra_charges")
-          .select("id,category,customer_charge_amount,driver_payout_amount,note,created_at,correction_invoice_id")
-          .eq("dispatch_id", dispatchRow.id)
-          .eq("status", "active")
-          .is("correction_invoice_id", null)
-          .gt("created_at", data.created_at);
-        setTrailingExtraCharges(extraRows || []);
+        const extraRows = (await fetchActiveExtraCharges(dispatchRow.id)).filter(
+          (e) => !e.correction_invoice_id && e.created_at > data.created_at
+        );
+        setTrailingExtraCharges(extraRows);
       } else {
         setTrailingExtraCharges([]);
       }
 
-      const { data: correctionSource } = await supabase
-        .from("dispatch_extra_charges")
-        .select("id")
-        .eq("correction_invoice_id", data.id)
-        .limit(1);
-      setIsCorrectionInvoice(!!(correctionSource && correctionSource.length > 0));
+      const correctionSource = await fetchCorrectionSource(data.id);
+      setIsCorrectionInvoice(correctionSource.length > 0);
     } else {
       setDriverCalcInfo(null);
       setTrailingExtraCharges([]);

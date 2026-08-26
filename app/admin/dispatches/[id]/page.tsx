@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
+import { fetchExtraChargesByDispatchIds, fetchActiveExtraCharges } from "@/lib/fetchDispatchExtraCharges";
 import {
   DISPATCH_STATUS_OPTIONS,
   getDispatchStatusColor,
@@ -309,12 +310,8 @@ export default function DispatchDetailPage() {
   // 로드맵③ 현장 추가비 — 취소된 것도 이력으로 같이 보여줌(재무 데이터는
   // 삭제하지 않고 이력 보존)
   async function loadExtraCharges() {
-    const { data } = await supabase
-      .from("dispatch_extra_charges")
-      .select("*")
-      .eq("dispatch_id", id)
-      .order("created_at", { ascending: false });
-    setExtraCharges(data || []);
+    // 19차 — 차주 지급액이 authenticated 롤에서 회수돼 있어 서버 API로 조회한다
+    setExtraCharges(await fetchExtraChargesByDispatchIds([id]));
   }
 
   // 로드맵⑤ 클레임·사고 — 일반 업무 테이블 관례(anon 전체허용 RLS,
@@ -844,13 +841,9 @@ export default function DispatchDetailPage() {
 
     // 로드맵③ 현장 추가비 — 정산 건이 아직 없는 상태에서 미리 등록된 활성
     // 추가비가 있으면 최초 스냅샷에 포함해서 얼림(3-2)
-    const { data: activeExtras } = await supabase
-      .from("dispatch_extra_charges")
-      .select("customer_charge_amount,driver_payout_amount")
-      .eq("dispatch_id", id)
-      .eq("status", "active");
-    const extraCharge = (activeExtras || []).reduce((s, e) => s + (e.customer_charge_amount || 0), 0);
-    const extraPayout = (activeExtras || []).reduce((s, e) => s + (e.driver_payout_amount || 0), 0);
+    const activeExtras = await fetchActiveExtraCharges(id);
+    const extraCharge = activeExtras.reduce((s, e) => s + (e.customer_charge_amount || 0), 0);
+    const extraPayout = activeExtras.reduce((s, e) => s + (e.driver_payout_amount || 0), 0);
 
     // 혼적 할인은 이미 견적 단계 최종금액에 반영되어 저장되므로 별도 변환
     // 없이 화주 청구운임을 그대로 사용
