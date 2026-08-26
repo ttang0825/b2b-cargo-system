@@ -4,7 +4,157 @@
 > 최종 버전입니다. 앞으로는 이 문서(또는 `CLAUDE.md`)를 참고해서 Claude Code가
 > 작업을 이어갑니다.
 
-**작성일: 2026-07-23** (최종 갱신: 2026-08-26, Claude Code 세션에서 직접 갱신 — 49차
+**작성일: 2026-07-23** (최종 갱신: 2026-08-26, Claude Code 세션에서 직접 갱신 — 50차
+세션: "관리자 질의를 직원 세션으로 — anon RLS 정리 ①(19차)" — 신규 파일 3개
+(마이그레이션 SQL · 서버 API · 조회 헬퍼). 커밋 2개. **PR #99 merge됨 — 리뷰 지적은 없었다.**
+🔴 **DB 변경 있음**(정책 16개 + 함수 1개 신설. **기존 정책은 하나도 안 지웠다**).
+🟢 **세션이 직접 반영했다** — dry-run → apply(1회 실패 후 통과) → verify.
+🔴 **지시서 전제가 틀려서 범위를 바꿨다 — 아래 (1)을 반드시 읽을 것.**
+
+**(0) 🔴 차수 이동.** 49차 조사 결과를 보고 **사용자가 anon 정리를 가산기준보다 먼저 하기로
+확정(2026-08-26)**했다. 그래서 **19차 = anon 정리 ①**이고 **가산기준은 미정으로 밀렸다**
+(21·22차 화주포털 화면 예고는 그대로). ⚠️ **랜딩 이미지 5종도 보류됐다** — 랜딩페이지를
+Claude Design 에서 다시 잡은 뒤 넣기로 했다(2026-08-26). Go-Live 차단 목록에서 빠진 것이
+아니라 **순서가 뒤로 간 것**이다.
+
+**═══ ① 🔴 지시서의 핵심 전제가 틀렸다. 착수 전 조사가 아니었으면 관리자 화면이 통째로 막혔다 ═══**
+지시서 0장은 *"anon 정책이 `USING(true)` 로 열려 있으므로 질의가 `authenticated` 롤로
+바뀌어도 그대로 통과한다. 즉 화면이 깨질 수가 없다"*고 했다. **아니다.**
+🔴 **RLS 정책은 롤별로 갈린다.** anon 정책은 `TO anon` 이라 `authenticated` 요청에는
+**아예 적용되지 않는다.** 실제 운영 DB 를 읽어 확인한 것:
+```
+  화주 전용 정책만 있음 (10개 테이블)  → 조건이 "화주 본인 회사"라 직원은 0행.
+    companies quotes orders dispatches invoices quote_items customer_locations
+    customer_accounts portal_order_requests announcements
+    게다가 대부분 SELECT 전용이라 저장도 안 된다.
+  anon 정책만 있음 (5개)              → 맞는 정책이 없어 RLS 기본값인 거부.
+    claims external_networks customer_billing_batches customer_billing_batch_items
+    public_quote_requests
+  컬럼 GRANT 제한 (1개)               → dispatch_extra_charges. 권한 오류.
+```
+🔴 **그래서 ①(클라이언트 전환)과 ②(정책)는 분리할 수 없다.** 사용자 확인 후 한 차수로
+합쳤다. **다음에 "지시서대로 ①만 하자"는 말이 나오면 이 문단을 먼저 볼 것.**
+⚠️ 조사 방법은 48·49차와 같다 — 브랜치에 조사용 SQL 을 올려 워크플로를 **그 브랜치 ref**
+로 돌렸다. 확인 후 `_verify.sql` 을 원본으로 되돌리고 임시 커밋은 PR 전에 정리했다.
+
+**═══ ② 직원 전용 정책 16개 ═══**
+**(2-1) 🔴 기존 정책을 하나도 지우지 않았다.** RLS 정책은 permissive 라 **OR 로 합쳐진다.**
+anon 정책 19개(현행 동작)와 화주 정책 14개(화주포털)는 그대로 두고 직원용을 **한 겹 더한
+것**이다. 그래서 이 마이그레이션만으로는 **노출이 넓어지지도 좁아지지도 않고**, 되돌릴 때도
+`staff_all_*` 만 지우면 된다. 🔴 **다음 차수에서 anon 정책을 교체할 때도 "지우기 전에
+대체 정책이 이미 있는가"를 먼저 확인할 것.**
+**(2-2) 🔴 조건은 반드시 "재직 직원"이어야 한다.** `authenticated` 롤은 **화주포털 계정도
+같이 쓴다.** 단순 `authenticated` 로 두면 화주가 관리자 데이터를 읽는다.
+```sql
+  exists (select 1 from staff_accounts where id = auth.uid() and status = 'active')
+```
+🔴 **`public.is_active_staff()` 는 security definer 다. 빼지 말 것** — `staff_accounts`
+자체에도 RLS 가 걸려 있어서, 정책 안에서 그냥 서브쿼리로 조회하면 그 조회에 다시 RLS 가
+걸려 **조용히 false** 가 될 수 있다.
+**(2-3) 🔴 `staff_accounts` 도 대상에 넣었다 — 운영 apply 가 실제로 이걸 잡아냈다.**
+첫 apply 가 `staff_accounts 가 안 보인다: 전체 4행 / 직원에게 1행` 으로 멈췄다. 이 표의
+`{public}` 정책이 `using(true)` 가 아니라 **본인 행만**(`id = auth.uid()`)이었기 때문이다.
+관리자 화면은 **다른 직원의 이름**을 읽어야 한다(등록/최종수정 표시 `ProcessedByFooter` ·
+직원 계정 관리 · 문자 이력의 보낸 사람). 🟢 **단언 덕분에 아무것도 반영되지 않고 통째로
+롤백됐다** — 47차가 정한 "안전장치는 `select` 가 아니라 `raise exception` 으로"가 실제로
+값어치를 한 첫 사례다.
+**(2-4) ⚠️ `customer_billing_batch_candidates` 는 뷰라 정책을 걸 수 없다.** GRANT 로만
+통제되어서 anon 과 같은 수준을 authenticated 에도 줬다. 🔴 **③(anon GRANT 회수) 차수에서
+`security_invoker` 로 바꾸거나 서버 API 로 옮길지 함께 정할 것** — 지금은 화주도 읽을 수
+있는 상태다. ⚠️ **`dispatch_extra_charges` 에는 일부러 정책을 안 만들었다**(아래 ③).
+
+**═══ ③ dispatch_extra_charges — 16차 보호가 무너질 뻔했다 ═══**
+🔴 16차가 차주 지급액(`driver_payout_amount`)을 화주에게 감추려고 **`authenticated` 롤의
+전체 SELECT 를 회수하고 안전한 8개 컬럼만 다시 GRANT** 해뒀다. **직원도 이제 authenticated
+가 되므로 컬럼 GRANT 로는 둘을 구분할 수 없다.**
+🔴 **`authenticated` 에 전체 SELECT 를 되돌려주지 말 것** — 그 순간 화주가 자기 건의 차주
+지급액을 **DB 수준에서** 읽는다(프론트 화이트리스트만 남는 방어가 된다). 그래서 **관리자
+조회만** service_role 서버 API 로 옮겼다(사용자 결정 2026-08-26).
+신설 `app/api/admin/dispatch-extra-charges/list/route.ts` + `lib/fetchDispatchExtraCharges.ts`.
+🔴 **관리자 화면에서 `supabase.from("dispatch_extra_charges")` 로 직접 조회하지 말 것** —
+호출부 6곳을 전부 헬퍼로 바꿨다. ⚠️ 등록·취소는 이미 서버 API(register/cancel)라 무변경.
+⚠️ **화주포털 조회는 손대지 않았다** — 화주는 지금도 컬럼 GRANT 로 8개만 본다(16차 그대로).
+⚠️ **`lib/dispatchExtraCharges.ts`(라벨 상수)와 `lib/fetchDispatchExtraCharges.ts`(조회)는
+다른 파일이다.** 내가 처음에 전자를 덮어써서 날렸다가 복구했다 — **이름이 비슷하니 주의.**
+
+**═══ ④ 클라이언트 전환은 파일 하나였다 ═══**
+🟢 **지시서는 40여 개 화면을 하나씩 옮기는 것을 전제했지만, 30개 파일이 전부
+`lib/supabaseClient.ts` 싱글턴 하나를 공유**하고 있어서 그 파일만 바꾸면 30개가 함께
+전환된다. 🟢 그리고 `@supabase/ssr` 의 `createBrowserClient` 는 **브라우저에서 모듈
+싱글턴**이라(소스 확인), `supabaseAdminAuth`(로그인용)와 **literally 같은 인스턴스**가 된다
+— GoTrue 가 두 개 생기지 않는다(실측 `supabase === supabaseAdminAuth` → `true`).
+🔴 **원칙 24번("두 클라이언트를 섞지 말 것")의 전제가 이번에 바뀌었다.** 예전엔
+`supabaseClient` 가 anon·localStorage 였지만 이제 둘 다 같은 쿠키 세션이다. 로그인·로그아웃은
+여전히 `supabaseAdminAuth` 이름으로만 부른다(이름이 곧 용도 표시).
+**(4-1) 대상 수 — 지시서가 요구한 전수 집계.** 정본 import 30개 =
+관리자 화면 20 + 관리자 공용 컴포넌트 3(`TopNav`·`ProcessedByFooter`·`MonthlyBillingBatchPanel`)
++ 관리자용 lib 헬퍼 7. **공개 화면 0개 · 화주포털 0개.**
+🔴 **공개 화면은 애초에 이 클라이언트를 안 쓴다** — 세션이 없어 anon 으로 붙는 것이
+**의도된 동작**이고 "정리" 대상이 아니다. ⚠️ `TopNav` 는 공개 화면에도 렌더링되지만
+`isPublicPath` 일 때 질의를 건너뛴다.
+**(4-2) 🟢 화주포털은 범위 밖이었다** — `lib/supabaseCustomerClient.ts` 는 별도이고,
+로그인(`signInWithPassword`)과 데이터 조회가 **같은 클라이언트**라 **예전부터 화주 세션이
+실려 이미 `authenticated` 로 붙고 있었다.** 지시서 2장 6번이 분기라고 한 지점인데 조사
+결과 손댈 것이 없었다.
+**(4-3) ⚠️ `lib/settlementTypeChangeLog.ts` 는 죽은 파일이다** — 이 클라이언트를 import
+하지만 **어디서도 안 쓰인다**(13차에 `settlementFieldChangeLog.ts` 로 대체됨).
+금지 15번대로 "정리"하지 않고 뒀다.
+
+**═══ ⑤ 곁다리로 드러난 것 ═══**
+⚠️ **`app/admin/quotes/page.tsx` 의 "공개문의 → 견적 전환" UPDATE 가 지금까지 조용히
+0행이었다.** `public_quote_requests` 의 anon 정책이 INSERT 전용이라, `연락완료` + `quote_id`
+연결이 **한 번도 반영된 적이 없다**(원칙 22번이 경고한 "에러 없이 조용히 실패"). 직원 정책이
+생기면서 **이제 실제로 반영된다.** 고치려고 한 것이 아니라 부수 효과다.
+
+**(6) 검증 — 실제 요청 헤더를 봤다.** "코드를 바꿨으니 됐다"로 넘기지 않았다.
+목 Supabase 서버(node http)를 띄우고 임시 스텁 페이지 + Playwright 로 나가는
+`Authorization` 헤더를 디코딩했다.
+🟢 로그인 전 = **anon key 그대로** / 로그인 후 = **`role: authenticated`, `sub` = 직원 uuid**
+/ 새로고침 후 유지 / 🔴 **만료된 토큰으로 시작해도 갱신 요청이 실제로 나가고 새 토큰의
+`exp` 가 미래**였다. middleware 에 **만료된 쿠키**를 직접 보내니 토큰 갱신을 호출하고
+`Set-Cookie` 로 갱신본을 돌려줬다(지시서 3-1이 "가장 놓치기 쉬운 지점"이라 한 것).
+**DB 쪽은 마이그레이션 안의 단언이 증명한다** — 재직 직원을 흉내내어
+(`set_config('request.jwt.claims', …)` + `set local role authenticated`) 관리자 화면이 읽는
+**26개 테이블 전부**의 행수를 소유자 기준과 비교한다. 하나라도 다르면 통째로 롤백된다.
+🔴 **이 흉내내기 기법을 기억할 것** — Supabase RLS 를 psql 에서 시험하는 표준 방법이고,
+②·④ 차수에서 계속 쓴다. ⚠️ **`set local` 은 트랜잭션 안에서만 듣는다** — psql 자동커밋
+상태로 한 줄씩 실행하면 조용히 postgres 권한으로 돌아 **시험이 통째로 무의미해진다**
+(실제로 한 번 속았다. `begin; … commit;` 으로 감쌀 것).
+**로컬 PostgreSQL 16** 에 운영과 같은 모양(anon 19 / 화주 14 / public 5)을 만들어 세 롤을
+각각 쟀다 — anon 은 전과 동일 / **화주는 자기 회사 1건, claims·staff_accounts 는 0** /
+직원은 전부. **음성 시험**도 했다(정책 하나를 지우면 `전체 2행 / 직원에게 0행` 으로 정확히 멈춤).
+**회귀**: `npx tsc --noEmit` 통과(출력 0줄) + `npm run build` 프리렌더 실패 **48개가
+`origin/main` 별도 worktree 빌드와 항목 단위로 완전히 동일** + 보험 경고 그대로 +
+**`package.json`·`package-lock.json` 변경 0건**(`@supabase/ssr` 이 **이미 설치돼 있었다** —
+관리자 로그인이 쓰고 있었으므로 지시서 완료조건 16의 "추가 하나뿐"이 아니라 **0건**이다).
+⚠️ **`/admin/*` 은 미들웨어·로그인 때문에 이 환경에서 렌더링으로 확인하지 못했다**
+(46·48차와 같은 제약). **DB 는 단언으로 증명됐고 남은 것은 "화면에 어떻게 보이는가"뿐이다.**
+
+**(7) 🔴 오해하지 말 것 — 아직 잠기지 않았다.** 이번 차수는 **권한을 조이지 않았다.**
+anon 정책 19개가 그대로 열려 있고 `anon` 은 여전히 47개 테이블 전부에 DML GRANT 를 갖고
+있다. **화면이 도는 것은 anon 정책 덕분이 아니라 새로 만든 직원 정책 덕분이다.**
+남은 순서와 이유:
+```
+  ② anon 정책 → authenticated + 직원 조건 으로 교체 (~30개)
+  ④ RLS 꺼진 13개 켜고 직원 전용 정책
+  ③ anon GRANT 회수   ← 마지막. 공개 사이트가 진짜 필요한 것은
+                        public_quote_requests · customer_applications INSERT 둘뿐이라,
+                        앞의 둘을 끝낸 뒤 한 번에 회수하는 편이 안전하다.
+```
+⚠️ **④ 대상 13개**(`activity_logs contacts drivers files individual_customer_addresses
+individual_customers profiles rate_distance_tiers rate_surcharges rate_vehicle_extra_fees
+rates sales_activities vehicles`)는 RLS 를 켜는 순간 **정책이 없으면 전부 거부**가 되므로
+**정책과 반드시 같은 파일에** 넣을 것.
+
+**(8) ⚠️ 검증 중 겪은 함정 3가지.** (a) 🔴 **`pkill -f "node /tmp/mock.js"` 가 또 자기 자신을
+죽였다**(44차와 같음, 종료코드 144) — 그 바람에 같은 명령의 뒷부분(heredoc)이 실행되지 않아
+파일이 안 만들어졌고 원인을 한참 찾았다. **포트를 바꿔 새로 띄울 것.**
+(b) 🔴 **`raise exception` 의 `%%` 는 리터럴 `%` 다** — 인자 3개에 자리표시자 2개가 되어
+`too many parameters specified for RAISE` 가 났다. 로컬 시험이 아니었으면 운영 apply 에서
+났을 것이다. (c) **파일을 새로 만들기 전에 같은 이름이 있는지 확인할 것**(28차와 같은 사고
+재발 — 위 ③ 참고).
+
+49차
 세션: "이용약관 동의 + anon RLS 조사(18차)" — 신규 파일 1개
 (`components/PublicConsentFields.tsx`). 커밋 4개(그중 1개는 사용자 결정에 따른 되돌리기).
 **DB 스키마 변경 없음 · 마이그레이션 없음.** **PR #98 merge됨.**
@@ -2753,9 +2903,12 @@ Supabase에 저장하면 `timestamptz` 컬럼이 이를 UTC로 오인식해 실�
     Realtime이 안 돼서 `TopNav.tsx`가 15초 폴링에만 의존하는데, 이 함수를 호출하면
     폴링을 기다리지 않고 바로 배지를 재조회함. 새로운 처리 액션(승인/거절/답변저장
     등)을 추가할 때도 이 호출을 빠뜨리지 말 것
-24. **관리자 로그인/권한 확인용 클라이언트는 `lib/supabaseAdminAuthClient.ts`
-    (`supabaseAdminAuth`, 쿠키 기반 세션) 딱 하나만 사용** — `lib/supabaseClient.ts`(anon,
-    localStorage)와 절대 섞지 말 것. "지금 로그인한 직원이 누구/무슨 role인지" 필요할 때는
+24. **관리자 로그인/로그아웃은 `lib/supabaseAdminAuthClient.ts`(`supabaseAdminAuth`)
+    로만 부를 것.** ⚠️ **19차(50차 세션)에 이 원칙의 전제가 바뀌었다** — 그전에는
+    `lib/supabaseClient.ts`가 anon·localStorage라 "절대 섞지 말 것"이었지만, 지금은
+    **둘 다 `createBrowserClient`(쿠키 세션)이고 브라우저에서 모듈 싱글턴이라 같은
+    인스턴스**다. 그래도 이름은 갈라 둔다 — 이름이 곧 용도 표시라 데이터 조회 코드에서
+    `auth`를 만지지 않게 막아준다. "지금 로그인한 직원이 누구/무슨 role인지" 필요할 때는
     새로 만들지 말고 기존 헬퍼 재사용: 클라이언트 컴포넌트는 `lib/currentStaff.ts`의
     `getCurrentStaffId()`(id만)/`getCurrentStaffRole()`(role만, "admin"|"staff"|null),
     서버 API 라우트는 `lib/getCurrentStaff.ts`의 `getCurrentStaff()`(id+name+role+status,
@@ -4339,11 +4492,12 @@ Supabase에 저장하면 `timestamptz` 컬럼이 이를 UTC로 오인식해 실�
 15차 사전조사·보완조사 2회도 차수를 쓰지 않았다).
 ⚠️ **동의 절차가 두 번 밀렸다.** 원래 11차로 예약돼 있었는데 11차 지시서가 레이아웃 개편으로
 와서 12차로, 12차 지시서가 정합성 작업으로 와서 다시 **14차**로 밀렸다. 실행 순서대로 다시
-붙인 결과가 아래이며, **17차 · 20차 전체 · 18차까지 끝났다** — 🟢 **Go-Live 차단이던
-이용약관 동의가 49차에 해소됐다**(시행일 2026-09-07). 🔴 **다음은 19차(가산기준)이며
-17차 실측으로 범위가 늘었다**, 그 뒤가 **21·22차 화면 개편**이다.
-🔴 **그리고 49차 조사에서 새 항목이 하나 생겼다 — anon RLS 정리**(아래 5번 참고).
-아래 5번 첫 항목들을 볼 것:
+붙인 결과가 아래이며, **17차 · 20차 전체 · 18차 · 19차까지 끝났다** — 🟢 **Go-Live 차단이던
+이용약관 동의가 49차에 해소됐다**(시행일 2026-09-07).
+🔴 **19차는 가산기준이 아니라 anon RLS 정리 ①이 됐다**(사용자 확정 2026-08-26 — 49차 조사
+결과를 보고 순서를 바꿨다). **가산기준은 미정으로 밀렸다.**
+🔴 **다음은 anon 정리 ②(정책 교체)+④(RLS 켜기)**이고, 그 뒤가 **③(GRANT 회수)** ·
+**21·22차 화면 개편**이다. 아래 5번 첫 항목들을 볼 것:
 
 - ~~1차(사전조사)~~ / ~~2차(모바일 오버플로우·색인차단·메타)~~ / ~~3차(로고·파비콘)~~ /
   ~~4차(용어 정리·메뉴 개편·`/about`·`/vehicles` 신규)~~ — 완료
@@ -4658,23 +4812,40 @@ Supabase에 저장하면 `timestamptz` 컬럼이 이를 UTC로 오인식해 실�
     때문이다. 처리 방법은 사용자가 정한다
   - ⚠️ **동의 2행이 실제로 저장되는 것은 아직 미확인**이다 — 배포본에서 `/apply` 신청을
     한 건 넣고 `verify` ⑧-c에 `terms / terms-v1`이 뜨는지 볼 것
-- 🔴 **49차 조사에서 나온 새 항목 — anon RLS 정리. 사용자 결정 대기 중.**
-  **개인정보가 anon key로 열려 있다.** `drivers`(차주 성명·연락처·차량번호)와
-  `individual_customers`(개인고객 성명·연락처) 등 **13개 테이블은 RLS 자체가 꺼져 있고**,
-  17개 테이블에 anon 무조건 허용 정책 19개가 있으며, `anon`은 **47개 테이블 전부에
-  DML GRANT**를 갖고 있다. 상세 목록과 근거는 위 49차 기록 ①을 볼 것.
-  🔴 **권장안은 ③(관리자 데이터 질의를 쿠키 세션으로 전환 → authenticated + 재직 직원
-  조건 정책 → anon GRANT 회수 → RLS 꺼진 13개 켜기), 2~3 세션.**
-  🔴 **함정 — `authenticated`는 화주포털 계정도 같이 쓴다.** 조건에 반드시
-  `exists (select 1 from staff_accounts where id = auth.uid() and status = 'active')`를
-  넣을 것. 🔴 **조사만 했고 정책은 하나도 안 바꿨다** — 잘못 조이면 관리자 화면 전체가
-  막힌다(원칙 2번). ⚠️ **지금은 노출량이 작다**(신청 6·계정 3·문의 1)**가 공개 후에는
-  계속 늘어난다** — 공개 전에 착수할지 사용자가 정할 것
+- ~~**19차: anon RLS 정리 ① — 관리자 질의를 직원 세션으로**~~ — **50차 세션에서 완료**
+  (PR #99, 상세는 위 50차 세션 기록 참고). 이후 세션이 알아야 할 것만 요약:
+  - 🔴 **아직 잠긴 것이 아니다.** anon 정책 19개가 그대로 열려 있고 `anon`은 여전히 47개
+    테이블 전부에 DML GRANT를 갖고 있다. **화면이 도는 것은 anon 정책 덕분이 아니라
+    새로 만든 직원 정책 덕분이다** — "이제 안전하다"고 오해하지 말 것
+  - 🔴 **①과 ②는 분리할 수 없다.** 지시서는 "정책이 열려 있으니 코드만 바꿔도 안 깨진다"고
+    했으나 **RLS 정책은 롤별로 갈린다**(anon 정책은 `TO anon`). 코드만 바꿨으면 관리자
+    화면이 조회·저장 모두 막혔다. 근거는 50차 기록 ①
+  - 🔴 **정책 조건은 `public.is_active_staff()`(security definer)** — `authenticated`를
+    화주포털이 같이 쓰기 때문에 재직 직원 확인이 필수이고, `staff_accounts`에도 RLS가
+    걸려 있어 그냥 서브쿼리로 쓰면 조용히 false가 된다
+  - 🔴 **`dispatch_extra_charges`에는 정책을 만들지 않았다** — 관리자 조회를 service_role
+    서버 API로 옮겼다. `authenticated`에 전체 SELECT를 되돌려주면 화주가 차주 지급액을
+    DB 수준에서 읽는다(16차 보호)
+  - ⚠️ **`customer_billing_batch_candidates`는 뷰라 GRANT로만 통제된다** — ③ 차수에서
+    `security_invoker` 전환 또는 서버 API 이전을 함께 정할 것
+- 🔴 **다음은 anon 정리 ②(정책 교체) + ④(RLS 꺼진 13개 켜기)다.** ③(GRANT 회수)이
+  마지막인 이유는 공개 사이트가 진짜 필요한 것이 `public_quote_requests`·
+  `customer_applications` **INSERT 둘뿐**이라, 앞의 둘을 끝낸 뒤 한 번에 회수하는 편이
+  안전하기 때문이다.
+  🔴 **②에서 anon 정책을 지우기 전에 "대체 정책이 이미 있는가"를 반드시 확인할 것** —
+  50차가 만든 `staff_all_*` 16개가 그 대체분이지만 **15개 테이블만 덮는다.**
+  🔴 **④ 대상 13개**(`activity_logs contacts drivers files individual_customer_addresses
+  individual_customers profiles rate_distance_tiers rate_surcharges
+  rate_vehicle_extra_fees rates sales_activities vehicles`)는 **RLS를 켜는 순간 정책이
+  없으면 전부 거부**가 되므로 **정책과 반드시 같은 파일에** 넣을 것.
+  🟢 **RLS를 psql에서 시험하는 법은 50차 마이그레이션에 그대로 있다** —
+  `set_config('request.jwt.claims', …)` + `set local role authenticated` 로 직원을
+  흉내내어 행수를 비교한다. ⚠️ **`set local`은 트랜잭션 안에서만 듣는다**
 - 🟢 **20차는 전부 끝났다**(3-4는 47차, 3-1·3-2·3-3은 48차. 운영 DB 반영까지 완료).
   ⚠️ **21·22차 화면 개편이 그 위에 올라간다** — 배송지 담당자·프리셋·`도크`를 쓰는 화면이
   아직 없는 것은 **의도된 상태**다.
-- 🔴 **다음 지시서는 19차(가산기준 조정)다. 17차에 들어온 새 실측 때문에
-  범위가 늘었다.** 원래 예고분은 파손주의 `30,000→15,000` · 장척/중량
+- ⏸️ **가산기준 조정은 미정 차수로 밀렸다**(2026-08-26, anon 정리를 먼저 하기로 확정).
+  **17차에 들어온 새 실측 때문에 범위가 늘어 있다.** 원래 예고분은 파손주의 `30,000→15,000` · 장척/중량
   `20%+80,000 → 15%+40,000` · 상차 시각 지정 신설(+8,000) · 5톤급 `base_fare` 재검토
   (실거래 42건에서 마진 중앙값 13.6%로 목표 미달)였고, **여기에 두 가지가 추가됐다**:
   - 🔴 **18톤 전 구간 ×0.89 조정 검토** — ⚠️ 46차 기록과 마이그레이션 주석은 이것을
@@ -4730,7 +4901,9 @@ Supabase에 저장하면 `timestamptz` 컬럼이 이를 UTC로 오인식해 실�
   (마이그레이션 실행 + 양쪽 폼 실사용, 결과는 위 43차 기록 참고).
   🔴 **`consents` 마이그레이션은 이미 운영 DB에 반영돼 있다 — 다시 실행하려 하지 말 것.**
   ⚠️ **롤백 경로만 여전히 미검증**이다(정상 흐름에서는 안 타는 길이라 재현되지 않는다).
-- 🔴 **랜딩 이미지 교체 — 사용자 작업이며 Go-Live 차단 항목**(37차·13차). 파일이 준비되면
+- ⏸️ **랜딩 이미지 교체 — 보류됨**(2026-08-26 사용자 결정: **랜딩페이지를 Claude Design에서
+  다시 잡은 뒤** 넣는다). 없어진 항목이 아니라 **순서가 뒤로 간 것**이며, 아래 규격은
+  재설계 뒤에도 그대로 참고할 것. 파일이 준비되면
   `lib/landingImages.ts`만 채우면 됨(컴포넌트에 경로를 직접 적지 말 것). 규격:
   히어로 870×716 / 운송 유형 456×304(모바일 없음) / 차량 4장 272×200·154×104 /
   선택 이유 아이콘 4종 64×64·48×48 / **운송관리 캡처 620×400·320×228**(제작 1240×800·640×456,
