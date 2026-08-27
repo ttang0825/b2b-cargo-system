@@ -22,6 +22,7 @@ import { localInputToISOString } from "@/lib/localDateTime";
 import { PORTAL_ORDER_THIRD_PARTY_CONSENT } from "@/lib/legalInfo";
 import { useListSearchSort, sortIndicator } from "@/lib/useListSearchSort";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
+import Pv2Select from "@/components/pv2/Pv2Select";
 import {
   loadPresets,
   savePreset,
@@ -629,28 +630,27 @@ export default function PortalRequestPage() {
           <span className="pv2-leg-title">{isFrom ? "출발지" : "도착지"}</span>
           <span className="pv2-leg-sub">{isFrom ? "상차지 정보 *" : "하차지 정보 *"}</span>
         </div>
-        <select
-          className="pv2-select pv2-select-load"
+        <Pv2Select
+          className="pv2-select-load"
           value=""
-          onChange={(e) => {
-            const found = list.find((l) => l.id === e.target.value);
+          onChange={(v) => {
+            const found = list.find((l) => l.id === v);
             if (found) applyLocation(side, found);
           }}
-          aria-label={isFrom ? "저장된 상차지 불러오기" : "저장된 하차지 불러오기"}
-        >
-          <option value="">
-            {list.length === 0
-              ? "저장된 배송지가 없습니다"
-              : isFrom
-              ? "저장된 상차지 불러오기"
-              : "저장된 하차지 불러오기"}
-          </option>
-          {list.map((l) => (
-            <option key={l.id} value={l.id}>
-              {locLabel(l)}
-            </option>
-          ))}
-        </select>
+          ariaLabel={isFrom ? "저장된 상차지 불러오기" : "저장된 하차지 불러오기"}
+          options={[
+            {
+              value: "",
+              label:
+                list.length === 0
+                  ? "저장된 배송지가 없습니다"
+                  : isFrom
+                  ? "저장된 상차지 불러오기"
+                  : "저장된 하차지 불러오기",
+            },
+            ...list.map((l) => ({ value: l.id, label: locLabel(l) })),
+          ]}
+        />
         <Pv2AddressField
           value={isFrom ? form.origin : form.destination}
           detailValue={isFrom ? form.originDetail : form.destinationDetail}
@@ -723,18 +723,15 @@ export default function PortalRequestPage() {
         <label className="pv2-field-label" htmlFor={`pv2-f-${key}`}>
           {label}
         </label>
-        <select
+        <Pv2Select
           id={`pv2-f-${key}`}
-          className="pv2-select"
           value={(form as any)[key] || ""}
-          onChange={(e) => setField(key as keyof typeof form, e.target.value)}
-        >
-          {options.map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => setField(key as keyof typeof form, v)}
+          ariaLabel={label}
+          /* 차량형태 21종처럼 긴 목록은 잘리고 스크롤된다 */
+          scroll={options.length > 12}
+          options={options.map((o) => ({ value: o, label: o }))}
+        />
       </div>
     );
   }
@@ -780,24 +777,25 @@ export default function PortalRequestPage() {
             </button>
           </div>
           <div className="pv2-load-slot" style={{ marginBottom: 16 }}>
-            <select
-              className="pv2-select pv2-select-load"
+            <Pv2Select
+              className="pv2-select-load"
               value=""
-              onChange={(e) => {
-                const found = cargoPresets.find((p) => p.id === e.target.value);
+              onChange={(v) => {
+                const found = cargoPresets.find((p) => p.id === v);
                 if (found) applyCargoPreset(found);
               }}
-              aria-label="자주 쓰는 화물 불러오기"
-            >
-              <option value="">
-                {cargoPresets.length === 0 ? "저장된 화물이 없습니다" : "자주 쓰는 화물 불러오기"}
-              </option>
-              {cargoPresets.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+              ariaLabel="자주 쓰는 화물 불러오기"
+              options={[
+                {
+                  value: "",
+                  label:
+                    cargoPresets.length === 0
+                      ? "저장된 화물이 없습니다"
+                      : "자주 쓰는 화물 불러오기",
+                },
+                ...cargoPresets.map((p) => ({ value: p.id, label: p.name })),
+              ]}
+            />
           </div>
           <div className="pv2-grid-4">
             {renderSelect("희망 톤수", "vehicle_type", VEHICLE_TYPES_ALL)}
@@ -921,44 +919,43 @@ export default function PortalRequestPage() {
             </button>
           </div>
           <div className="pv2-load-row">
-            <select
-              className="pv2-select pv2-select-load pv2-load-slot"
+            <Pv2Select
+              className="pv2-select-load"
+              wrapClassName="pv2-load-slot"
               value=""
-              onChange={(e) => {
-                const found = notePresets.find((p) => p.id === e.target.value);
+              onChange={(v) => {
+                const found = notePresets.find((p) => p.id === v);
                 if (found) setField("notes", found.payload?.notes || "");
               }}
-              aria-label="자주 쓰는 요청 불러오기"
-            >
-              <option value="">
-                {notePresets.length === 0 ? "저장된 요청이 없습니다" : "자주 쓰는 요청 불러오기"}
-              </option>
-              {notePresets.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+              ariaLabel="자주 쓰는 요청 불러오기"
+              options={[
+                {
+                  value: "",
+                  label:
+                    notePresets.length === 0
+                      ? "저장된 요청이 없습니다"
+                      : "자주 쓰는 요청 불러오기",
+                },
+                ...notePresets.map((p) => ({ value: p.id, label: p.name })),
+              ]}
+            />
             {/* 🔴 관리 화면에 요청 프리셋 목록이 없다(시안에 없음) — 여기에 삭제 수단이
                 없으면 잘못 저장한 프리셋을 지울 방법이 아예 없다. */}
             {notePresets.length > 0 && (
-              <select
-                className="pv2-select pv2-select-load"
+              <Pv2Select
+                className="pv2-select-load"
+                wrapStyle={{ flex: "0 0 92px" }}
                 value=""
-                onChange={(e) => {
-                  const found = notePresets.find((p) => p.id === e.target.value);
+                onChange={(v) => {
+                  const found = notePresets.find((p) => p.id === v);
                   if (found) handleDeleteNotePreset(found);
                 }}
-                aria-label="자주 쓰는 요청 삭제"
-                style={{ flex: "0 0 92px" }}
-              >
-                <option value="">삭제</option>
-                {notePresets.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
+                ariaLabel="자주 쓰는 요청 삭제"
+                options={[
+                  { value: "", label: "삭제" },
+                  ...notePresets.map((p) => ({ value: p.id, label: p.name })),
+                ]}
+              />
             )}
           </div>
           <textarea
@@ -1049,21 +1046,24 @@ export default function PortalRequestPage() {
                 onChange={(e) => setRequestSearch(e.target.value)}
                 style={{ flex: 1, minWidth: 180, fontSize: 13, padding: "8px 12px" }}
               />
-              <select
-                className="mobile-only"
+              <Pv2Select
+                wrapClassName="mobile-only"
+                wrapStyle={{ flex: "0 0 auto", width: "auto" }}
+                style={{ fontSize: 13, padding: "8px 12px" }}
                 value={`${requestSortKey}:${requestSortDir}`}
-                onChange={(e) => {
-                  const [key, dir] = e.target.value.split(":");
+                onChange={(v) => {
+                  const [key, dir] = v.split(":");
                   setRequestSortKey(key);
                   setRequestSortDir(dir as "asc" | "desc");
                 }}
-                style={{ fontSize: 13, padding: "8px 12px" }}
-              >
-                <option value="created_at:desc">최신 등록순</option>
-                <option value="requested_pickup_at:asc">상차 빠른순</option>
-                <option value="requested_pickup_at:desc">상차 늦은순</option>
-                <option value="status:asc">상태순</option>
-              </select>
+                ariaLabel="정렬 기준"
+                options={[
+                  { value: "created_at:desc", label: "최신 등록순" },
+                  { value: "requested_pickup_at:asc", label: "상차 빠른순" },
+                  { value: "requested_pickup_at:desc", label: "상차 늦은순" },
+                  { value: "status:asc", label: "상태순" },
+                ]}
+              />
             </div>
           </div>
         )}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import Pv2AddressField from "@/components/pv2/Pv2AddressField";
+import Pv2Select from "@/components/pv2/Pv2Select";
 import { VEHICLE_TYPES_ALL, formatPhoneNumber } from "@/lib/constants";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import { orderBodyTypes } from "@/lib/vehicleBodyTypes";
@@ -365,18 +366,12 @@ export default function PortalLocationsPage() {
           </div>
           <div className="pv2-manage-fields">
             <div className="pv2-manage-type-row">
-              <select
-                className="pv2-select"
+              <Pv2Select
                 value={nl.type}
-                onChange={(e) => setNl({ ...nl, type: e.target.value })}
-                aria-label="배송지 구분"
-              >
-                {LOCATION_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setNl({ ...nl, type: v })}
+                ariaLabel="배송지 구분"
+                options={LOCATION_TYPES.map((t) => ({ value: t, label: t }))}
+              />
               <input
                 className="pv2-input pv2-input-sm"
                 value={nl.name}
@@ -526,30 +521,19 @@ export default function PortalLocationsPage() {
               aria-label="화물 이름"
             />
             <div className="pv2-leg-2col">
-              <select
-                className="pv2-select"
+              <Pv2Select
                 value={nc.vehicle_type}
-                onChange={(e) => setNc({ ...nc, vehicle_type: e.target.value })}
-                aria-label="희망 톤수"
-              >
-                {VEHICLE_TYPES_ALL.map((v) => (
-                  <option key={v} value={v}>
-                    {v}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="pv2-select"
+                onChange={(v) => setNc({ ...nc, vehicle_type: v })}
+                ariaLabel="희망 톤수"
+                options={VEHICLE_TYPES_ALL.map((v) => ({ value: v, label: v }))}
+              />
+              <Pv2Select
                 value={nc.body_type}
-                onChange={(e) => setNc({ ...nc, body_type: e.target.value })}
-                aria-label="차량형태"
-              >
-                {orderBodyTypes(optionsOf("차량형태")).map((o) => (
-                  <option key={o} value={o}>
-                    {o}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setNc({ ...nc, body_type: v })}
+                ariaLabel="차량형태"
+                scroll
+                options={orderBodyTypes(optionsOf("차량형태")).map((o) => ({ value: o, label: o }))}
+              />
             </div>
             <input
               className="pv2-input pv2-input-sm"
@@ -562,53 +546,38 @@ export default function PortalLocationsPage() {
               <label className="pv2-field-label" htmlFor="pv2-nc-cond">
                 물품특성
               </label>
-              <select
+              <Pv2Select
                 id="pv2-nc-cond"
-                className="pv2-select"
                 value={nc.item_condition}
-                onChange={(e) => setNc({ ...nc, item_condition: e.target.value })}
-              >
-                {optionsOf("물품특성").map((o) => (
-                  <option key={o} value={o}>
-                    {o}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setNc({ ...nc, item_condition: v })}
+                ariaLabel="물품특성"
+                options={optionsOf("물품특성").map((o) => ({ value: o, label: o }))}
+              />
             </div>
             <div className="pv2-leg-2col">
               <div className="pv2-field">
                 <label className="pv2-field-label" htmlFor="pv2-nc-load">
                   상차조건
                 </label>
-                <select
+                <Pv2Select
                   id="pv2-nc-load"
-                  className="pv2-select"
                   value={nc.load_condition}
-                  onChange={(e) => setNc({ ...nc, load_condition: e.target.value })}
-                >
-                  {LOADING_METHOD_OPTIONS.map((o) => (
-                    <option key={o} value={o}>
-                      {o}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(v) => setNc({ ...nc, load_condition: v })}
+                  ariaLabel="상차조건"
+                  options={LOADING_METHOD_OPTIONS.map((o) => ({ value: o, label: o }))}
+                />
               </div>
               <div className="pv2-field">
                 <label className="pv2-field-label" htmlFor="pv2-nc-unload">
                   하차조건
                 </label>
-                <select
+                <Pv2Select
                   id="pv2-nc-unload"
-                  className="pv2-select"
                   value={nc.unload_condition}
-                  onChange={(e) => setNc({ ...nc, unload_condition: e.target.value })}
-                >
-                  {LOADING_METHOD_OPTIONS.map((o) => (
-                    <option key={o} value={o}>
-                      {o}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(v) => setNc({ ...nc, unload_condition: v })}
+                  ariaLabel="하차조건"
+                  options={LOADING_METHOD_OPTIONS.map((o) => ({ value: o, label: o }))}
+                />
               </div>
             </div>
             <button

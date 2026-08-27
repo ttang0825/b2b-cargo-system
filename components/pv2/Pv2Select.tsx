@@ -24,6 +24,7 @@ export default function Pv2Select({
   options,
   placeholder = "선택",
   className = "",
+  style,
   wrapClassName = "",
   wrapStyle,
   ariaLabel,
@@ -37,6 +38,7 @@ export default function Pv2Select({
   options: Pv2SelectOption[];
   placeholder?: string;
   className?: string;
+  style?: React.CSSProperties;
   /** 🔴 폭·flex 같은 **바깥 레이아웃**은 래퍼에 준다 — 트리거에 주면 팝오버가 어긋난다 */
   wrapClassName?: string;
   wrapStyle?: React.CSSProperties;
@@ -128,6 +130,7 @@ export default function Pv2Select({
         type="button"
         id={id}
         className={`pv2-select ${className}`.trim()}
+        style={style}
         onClick={() => (open ? setOpen(false) : openList())}
         onKeyDown={onKeyDown}
         disabled={disabled}
