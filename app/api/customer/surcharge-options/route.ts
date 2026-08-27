@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { createServiceClient } from "@/lib/supabaseServiceClient";
 
 // 21차 — 화주포털 발주요청 화면의 선택지 목록(차량형태·물품특성·운송시간·왕복/편도)을
 // 내려주는 서버 API.
@@ -24,9 +25,7 @@ export async function GET() {
     );
   }
 
-  const admin = createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+  const admin = createServiceClient(url, serviceKey);
 
   // 선택지 이름만. 금액 컬럼은 조회 자체를 하지 않는다.
   const { data, error } = await admin

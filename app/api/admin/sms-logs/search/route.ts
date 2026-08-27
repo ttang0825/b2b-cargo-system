@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { createServiceClient } from "@/lib/supabaseServiceClient";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
 
 // 문자 발송 이력 통합조회(`/admin/sms-logs`) 전용 조회 API.
@@ -35,9 +36,7 @@ export async function GET(req: Request) {
       { status: 500 }
     );
   }
-  const admin = createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+  const admin = createServiceClient(url, serviceKey);
 
   const { searchParams } = new URL(req.url);
   const from = searchParams.get("from"); // ISO, 기간 필터(없으면 전체)

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { type SupabaseClient } from "@supabase/supabase-js";
+import { createServiceClient } from "@/lib/supabaseServiceClient";
 import type { ConsentRecord } from "@/lib/consent";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
 import { applicationRejectedMessage } from "@/lib/sms/templates";
@@ -13,9 +14,7 @@ function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceKey) return null;
-  return createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+  return createServiceClient(url, serviceKey);
 }
 
 // 원본 행에 동의 기록을 붙인다.

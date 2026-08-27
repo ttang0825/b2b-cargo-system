@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { createServiceClient } from "@/lib/supabaseServiceClient";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
 
 // 요청 파라미터를 조건 없이 캐시하면 방금 발송한 이력이 재조회 시 안 보일 수 있음
@@ -10,9 +11,7 @@ function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceKey) return null;
-  return createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+  return createServiceClient(url, serviceKey);
 }
 
 // sms_logs는 개인 전화번호를 담고 있어 anon/authenticated 조회 정책을 아예 두지
