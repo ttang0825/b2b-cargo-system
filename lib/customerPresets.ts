@@ -75,6 +75,26 @@ export async function savePreset(
   return { error: error ? error.message : null };
 }
 
+/**
+ * 이름·payload 를 통째로 덮어쓴다(PR #103 리뷰 13번 — 수정 기능).
+ *
+ * 🔴 **`company_id`·`preset_type` 은 건드리지 않는다** — 남의 회사로 옮기거나 종류를
+ *    바꾸는 경로를 만들지 않기 위해서다. RLS 정책이 조회·저장 양쪽에 걸려 있어 남의
+ *    회사 프리셋은 애초에 `eq(id)` 로도 안 잡히지만, 보내지 않는 편이 확실하다.
+ */
+export async function updatePreset(
+  supabase: SupabaseClient,
+  presetId: string,
+  name: string,
+  payload: Record<string, unknown>
+): Promise<{ error: string | null }> {
+  const { error } = await supabase
+    .from("customer_presets")
+    .update({ name: name.trim(), payload })
+    .eq("id", presetId);
+  return { error: error ? error.message : null };
+}
+
 export async function deletePreset(
   supabase: SupabaseClient,
   presetId: string

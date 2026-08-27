@@ -3651,6 +3651,20 @@ tbody tr:hover {
   background: #b4423a;
   color: #fff;
 }
+/* 저장·수정처럼 파괴적이지 않은 확인은 빨강이 아니라 검정이다 —
+   빨강은 삭제 전용으로 남긴다(PR #103 리뷰 2·9·13번). */
+.pv2-modal-confirm-dark {
+  background: var(--pv2-selected-bg);
+}
+.pv2-modal-confirm:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.pv2-modal-input {
+  margin-top: 14px;
+  width: 100%;
+  box-sizing: border-box;
+}
 
 /* 포털 전용 주소검색 버튼 — 시안 bg #EBEAE7 · radius 12px · padding 0 14px */
 .pv2-addr-btn {
@@ -3785,4 +3799,92 @@ tbody tr:hover {
   margin-bottom: 12px;
   align-items: center;
   flex-wrap: wrap;
+}
+
+/* 적재구분 라디오 — 발주 요청 ② 블록(PR #103 리뷰 6번) */
+.pv2-radio-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.pv2-radio {
+  flex: 1 1 200px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 2px;
+  border: 1px solid var(--pv2-border);
+  border-radius: var(--pv2-r-sm);
+  background: var(--pv2-input-bg);
+  padding: 12px 14px;
+  cursor: pointer;
+}
+.pv2-radio.is-on {
+  border-color: var(--pv2-selected-bg);
+  background: var(--pv2-yellow-soft);
+}
+.pv2-radio input {
+  grid-row: span 2;
+  margin: 0;
+  accent-color: var(--pv2-selected-bg);
+  width: 16px;
+  height: 16px;
+}
+.pv2-radio-label {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--pv2-text);
+}
+.pv2-radio-desc {
+  font-size: 12.5px;
+  color: var(--pv2-text-2);
+  word-break: keep-all;
+}
+
+/* 저장된 배송지·화물 수정(PR #103 리뷰 13번) — 삭제 옆에 나란히 선다.
+   🔴 `margin-left:auto` 는 이 버튼이 갖는다(둘 중 먼저 오는 쪽) — 삭제에만 두면
+   수정 버튼이 이름에 딱 붙어 버린다. */
+.pv2-btn-edit {
+  margin-left: auto;
+  flex: none;
+  border: none;
+  background: var(--pv2-input-bg);
+  color: var(--pv2-text-2);
+  border-radius: var(--pv2-r-badge);
+  padding: 6px 12px;
+  font-size: 13.5px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.pv2-btn-edit:hover {
+  background: var(--pv2-border);
+}
+.pv2-btn-edit + .pv2-btn-del {
+  margin-left: 0;
+}
+/* 수정 취소 — 저장 버튼 바로 아래의 보조 동작 */
+.pv2-btn-ghost {
+  border: 1px solid var(--pv2-border);
+  background: var(--pv2-surface);
+  color: var(--pv2-text-2);
+  border-radius: 9px;
+  padding: 10px;
+  font-size: 14.5px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  margin-top: 6px;
+}
+/* 🔴 폼 **바로 아래** 에러 — 페이지 맨 위 배너만 있으면 스크롤해 내려온 화주에게는
+   실패가 아무 일도 없는 것처럼 보인다(PR #103 리뷰 11번). */
+.pv2-form-error {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: #fdf3f2;
+  color: #b4423a;
+  font-size: 13.5px;
+  line-height: 1.5;
+  word-break: keep-all;
 }

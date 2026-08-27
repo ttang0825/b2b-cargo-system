@@ -8,6 +8,7 @@ import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import {
   loadPresets,
   savePreset,
+  updatePreset,
   deletePreset,
   cargoPresetSummary,
   type CargoPresetPayload,
@@ -57,6 +58,12 @@ export default function PortalLocationsPage() {
     notes: "",
   });
   const [savingLoc, setSavingLoc] = useState(false);
+  // 🔴 수정 기능(PR #103 리뷰 13번) — 같은 폼이 "추가"와 "수정"을 겸한다. 수정 전용 폼을
+  //   따로 만들면 필드가 하나 늘 때마다 두 곳을 고쳐야 해서 조용히 어긋난다.
+  const [editingLocId, setEditingLocId] = useState<string | null>(null);
+  // 🔴 폼 바로 아래에 뜨는 에러 — 페이지 맨 위 배너만 있으면 폼까지 스크롤해 내려온
+  //   화주에게는 **아무 일도 안 일어난 것처럼 보인다**(PR #103 리뷰 11번의 원인).
+  const [locFormError, setLocFormError] = useState<string | null>(null);
 
   // 새 화물 프리셋
   const [nc, setNc] = useState({
@@ -69,6 +76,8 @@ export default function PortalLocationsPage() {
     unload_condition: LOADING_METHOD_OPTIONS[0] as string,
   });
   const [savingCargo, setSavingCargo] = useState(false);
+  const [editingCargoId, setEditingCargoId] = useState<string | null>(null);
+  const [cargoFormError, setCargoFormError] = useState<string | null>(null);
 
   function optionsOf(category: string) {
     return surcharges.filter((s) => s.category === category).map((s) => s.option_name);
@@ -136,13 +145,58 @@ export default function PortalLocationsPage() {
     init();
   }, []);
 
-  async function handleAddLocation() {
-    if (!companyId || !nl.name.trim() || !nl.address.trim()) return;
+  const EMPTY_LOC = {
+    type: "상차지",
+    name: "",
+    address: "",
+    detail: "",
+    sido: "",
+    sigungu: "",
+    contactName: "",
+    contactPhone: "",
+    notes: "",
+  };
+
+  function startEditLocation(l: Location) {
+    setLocFormError(null);
+    setEditingLocId(l.id);
+    setNl({
+      type: l.location_type || "상차지",
+      name: l.location_name || "",
+      address: l.address || "",
+      detail: l.address_detail || "",
+      sido: l.sido || "",
+      sigungu: l.sigungu || "",
+      contactName: l.contact_name || "",
+      contactPhone: l.contact_phone || "",
+      notes: l.notes || "",
+    });
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function cancelEditLocation() {
+    setEditingLocId(null);
+    setLocFormError(null);
+    setNl(EMPTY_LOC);
+  }
+
+  async function handleSubmitLocation() {
+    if (!companyId) return;
+    // 🔴 **버튼을 조용히 비활성으로 두지 말 것**(PR #103 리뷰 11번). 25차에는 이름·주소가
+    //   둘 다 차야 눌리는 `disabled` 버튼이었는데, 필수 표시가 **placeholder 안에만** 있어서
+    //   글자를 치는 순간 사라졌다 — 이름을 비운 채 주소만 넣은 화주에게는 "눌러도 아무
+    //   반응이 없는 버튼"으로 보였다. 이제 항상 누를 수 있고, 모자라면 이유를 말해준다.
+    if (!nl.address.trim()) {
+      setLocFormError("주소를 입력해주세요. 주소만 있으면 저장할 수 있습니다.");
+      return;
+    }
     setSavingLoc(true);
     setError(null);
-    const { error: insertError } = await supabase.from("customer_locations").insert({
-      company_id: companyId,
-      location_name: nl.name.trim(),
+    setLocFormError(null);
+    // ⚠️ 이름을 안 적으면 주소를 이름으로 쓴다 — 목록 카드도 같은 폴백을 쓰고 있어
+    //   비어 보이지 않는다(20차 이전 12행이 이미 그 상태다).
+    const payload = {
+      location_name: nl.name.trim() || nl.address.trim(),
       location_type: nl.type,
       address: nl.address.trim(),
       address_detail: nl.detail.trim() || null,
@@ -151,30 +205,60 @@ export default function PortalLocationsPage() {
       notes: nl.notes.trim() || null,
       sido: nl.sido || null,
       sigungu: nl.sigungu || null,
-    });
+    };
+    const { error: saveError } = editingLocId
+      ? await supabase.from("customer_locations").update(payload).eq("id", editingLocId)
+      : await supabase.from("customer_locations").insert({ company_id: companyId, ...payload });
     setSavingLoc(false);
-    if (insertError) {
-      setError(insertError.message);
+    if (saveError) {
+      // 🔴 위쪽 배너가 아니라 **버튼 바로 아래**에 띄운다 — 화면을 스크롤해 내려온
+      //   상태에서는 위 배너가 보이지 않아 실패가 침묵처럼 느껴진다.
+      setLocFormError(saveError.message);
       return;
     }
-    setNl({
-      type: nl.type,
-      name: "",
-      address: "",
-      detail: "",
-      sido: "",
-      sigungu: "",
-      contactName: "",
-      contactPhone: "",
-      notes: "",
-    });
+    setEditingLocId(null);
+    setNl({ ...EMPTY_LOC, type: nl.type });
     loadLocations(companyId);
   }
 
-  async function handleAddCargo() {
-    if (!companyId || !nc.name.trim()) return;
+  function startEditCargo(c: CustomerPreset<CargoPresetPayload>) {
+    setCargoFormError(null);
+    setEditingCargoId(c.id);
+    setNc({
+      name: c.name,
+      vehicle_type: c.payload?.vehicle_type || (VEHICLE_TYPES_ALL[0] as string),
+      body_type: c.payload?.body_type || "",
+      item: c.payload?.item || "",
+      item_condition: c.payload?.item_condition || "",
+      load_condition: c.payload?.load_condition || (LOADING_METHOD_OPTIONS[0] as string),
+      unload_condition: c.payload?.unload_condition || (LOADING_METHOD_OPTIONS[0] as string),
+    });
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function cancelEditCargo() {
+    setEditingCargoId(null);
+    setCargoFormError(null);
+    setNc({
+      name: "",
+      vehicle_type: VEHICLE_TYPES_ALL[0] as string,
+      body_type: optionsOf("차량형태")[0] || "",
+      item: "",
+      item_condition: optionsOf("물품특성")[0] || "",
+      load_condition: LOADING_METHOD_OPTIONS[0] as string,
+      unload_condition: LOADING_METHOD_OPTIONS[0] as string,
+    });
+  }
+
+  async function handleSubmitCargo() {
+    if (!companyId) return;
+    if (!nc.name.trim()) {
+      setCargoFormError("화물 이름을 입력해주세요. 발주 요청에서 이 이름으로 불러옵니다.");
+      return;
+    }
     setSavingCargo(true);
     setError(null);
+    setCargoFormError(null);
     const payload: CargoPresetPayload = {
       vehicle_type: nc.vehicle_type || undefined,
       body_type: nc.body_type || undefined,
@@ -183,18 +267,21 @@ export default function PortalLocationsPage() {
       load_condition: nc.load_condition || undefined,
       unload_condition: nc.unload_condition || undefined,
     };
-    const { error: saveError } = await savePreset(
-      supabase,
-      companyId,
-      "cargo",
-      nc.name,
-      payload as Record<string, unknown>
-    );
+    const { error: saveError } = editingCargoId
+      ? await updatePreset(supabase, editingCargoId, nc.name, payload as Record<string, unknown>)
+      : await savePreset(
+          supabase,
+          companyId,
+          "cargo",
+          nc.name,
+          payload as Record<string, unknown>
+        );
     setSavingCargo(false);
     if (saveError) {
-      setError(saveError);
+      setCargoFormError(saveError);
       return;
     }
+    setEditingCargoId(null);
     setNc((prev) => ({ ...prev, name: "", item: "" }));
     loadCargos(companyId);
   }
@@ -244,7 +331,9 @@ export default function PortalLocationsPage() {
       {/* ── 배송지 ───────────────────────────────────────── */}
       <div className="pv2-manage-row">
         <div className="pv2-manage-form">
-          <div className="pv2-manage-form-title">새 배송지 추가</div>
+          <div className="pv2-manage-form-title">
+            {editingLocId ? "배송지 수정" : "새 배송지 추가"}
+          </div>
           <div className="pv2-manage-fields">
             <div className="pv2-manage-type-row">
               <select
@@ -275,7 +364,7 @@ export default function PortalLocationsPage() {
               }
               onDetailChange={(detail) => setNl((prev) => ({ ...prev, detail }))}
               placeholder="주소검색 또는 직접 입력 *"
-              detailPlaceholder="상세주소 (선택)"
+              detailPlaceholder="상세주소 (동/층/호수, 창고 위치 등)"
               inputClassName="pv2-input pv2-input-sm"
             />
             <div className="pv2-leg-2col">
@@ -302,14 +391,22 @@ export default function PortalLocationsPage() {
               placeholder="특이사항 (예: 지게차 상차 가능, 야간 하차 불가)"
               aria-label="특이사항"
             />
+            {/* 🔴 `disabled` 로 막지 않는다 — 왜 안 눌리는지 알 수 없어 "아무 반응이 없다"로
+                느껴진다(PR #103 리뷰 11번). 저장 중일 때만 잠근다. */}
             <button
               type="button"
               className="pv2-btn-dark"
-              onClick={handleAddLocation}
-              disabled={savingLoc || !nl.name.trim() || !nl.address.trim()}
+              onClick={handleSubmitLocation}
+              disabled={savingLoc}
             >
-              {savingLoc ? "추가 중..." : "추가"}
+              {savingLoc ? "저장 중..." : editingLocId ? "수정 저장" : "추가"}
             </button>
+            {editingLocId && (
+              <button type="button" className="pv2-btn-ghost" onClick={cancelEditLocation}>
+                수정 취소
+              </button>
+            )}
+            {locFormError && <div className="pv2-form-error">{locFormError}</div>}
           </div>
         </div>
 
@@ -349,6 +446,13 @@ export default function PortalLocationsPage() {
                     <span className="pv2-saved-name">{l.location_name || l.address || "이름 없음"}</span>
                     <button
                       type="button"
+                      className="pv2-btn-edit"
+                      onClick={() => startEditLocation(l)}
+                    >
+                      수정
+                    </button>
+                    <button
+                      type="button"
                       className="pv2-btn-del"
                       onClick={() =>
                         setPendingDelete({
@@ -381,7 +485,9 @@ export default function PortalLocationsPage() {
       {/* ── 화물 프리셋 ──────────────────────────────────── */}
       <div className="pv2-manage-row">
         <div className="pv2-manage-form">
-          <div className="pv2-manage-form-title">새 화물 추가</div>
+          <div className="pv2-manage-form-title">
+            {editingCargoId ? "화물 수정" : "새 화물 추가"}
+          </div>
           <div className="pv2-manage-fields">
             <input
               className="pv2-input pv2-input-sm"
@@ -420,7 +526,7 @@ export default function PortalLocationsPage() {
               className="pv2-input pv2-input-sm"
               value={nc.item}
               onChange={(e) => setNc({ ...nc, item: e.target.value })}
-              placeholder="품목 (예: 택배박스 20개)"
+              placeholder="예: 파렛트 2p / 박스 40개, 중량 800kg"
               aria-label="품목"
             />
             <div className="pv2-field">
@@ -479,11 +585,17 @@ export default function PortalLocationsPage() {
             <button
               type="button"
               className="pv2-btn-dark"
-              onClick={handleAddCargo}
-              disabled={savingCargo || !nc.name.trim()}
+              onClick={handleSubmitCargo}
+              disabled={savingCargo}
             >
-              {savingCargo ? "추가 중..." : "추가"}
+              {savingCargo ? "저장 중..." : editingCargoId ? "수정 저장" : "추가"}
             </button>
+            {editingCargoId && (
+              <button type="button" className="pv2-btn-ghost" onClick={cancelEditCargo}>
+                수정 취소
+              </button>
+            )}
+            {cargoFormError && <div className="pv2-form-error">{cargoFormError}</div>}
           </div>
         </div>
 
@@ -515,6 +627,13 @@ export default function PortalLocationsPage() {
                     <div className="pv2-saved-head pv2-saved-head-tight">
                       <span className="pv2-type-badge pv2-type-cargo">화물</span>
                       <span className="pv2-saved-name">{c.name}</span>
+                      <button
+                        type="button"
+                        className="pv2-btn-edit"
+                        onClick={() => startEditCargo(c)}
+                      >
+                        수정
+                      </button>
                       <button
                         type="button"
                         className="pv2-btn-del"
