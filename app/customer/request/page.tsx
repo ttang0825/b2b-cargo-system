@@ -15,7 +15,7 @@ import Pv2AddressField from "@/components/pv2/Pv2AddressField";
 import Pv2DateTimeField from "@/components/pv2/Pv2DateTimeField";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import { localInputToISOString } from "@/lib/localDateTime";
-import { PORTAL_ORDER_THIRD_PARTY_CONSENT } from "@/lib/legalInfo";
+import { PORTAL_ORDER_THIRD_PARTY_CONSENT, LEGAL_EFFECTIVE_DATE } from "@/lib/legalInfo";
 import { useListSearchSort, sortIndicator } from "@/lib/useListSearchSort";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import {
@@ -128,6 +128,24 @@ export default function PortalRequestPage() {
     requested_dropoff_at: "",
     notes: "",
   });
+
+  // 🔴 **희망 상차 일시의 하한** — 원칙 6번 위반을 고치는 자리다.
+  //   `app/admin/quotes/page.tsx` 와 `app/quote/page.tsx` 는 하한을 걸어뒀는데
+  //   **이 화면만 빠져 있어서 화주가 과거 날짜로 발주할 수 있었다**(23차 조사 §10-2).
+  //
+  //   하한은 `max(오늘, 약관 시행일)` 이다. 🔴 **날짜를 하드코딩하지 말 것** —
+  //   시행일 **전** 날짜로 접수하면 그 건에 적용될 약관이 존재하지 않는다.
+  //   `LEGAL_EFFECTIVE_DATE` 에서 파생시켜 두면 시행일이 바뀔 때 같이 따라온다.
+  const pickupRange = (() => {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const toStr = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const today = toStr(new Date());
+    const minDate = today > LEGAL_EFFECTIVE_DATE ? today : LEGAL_EFFECTIVE_DATE;
+    // 상한은 하한 + 30일 — 너무 먼 미래는 운임·차량 사정이 달라져 확정할 수 없다
+    const end = new Date(`${minDate}T00:00:00`);
+    end.setDate(end.getDate() + 30);
+    return { min: `${minDate}T00:00`, max: toStr(end), minDate };
+  })();
 
   // 거리 정보가 없는 화면이라, 상차 후 고정 2시간 이후로만 하차일시를 선택하게 함
   const minDropoffDateTime = (() => {
@@ -397,6 +415,18 @@ export default function PortalRequestPage() {
     }
     if (!companyId) {
       setError("계정 정보를 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.");
+      return;
+    }
+    // 🔴 화면의 `min`/`max` 만으로는 부족하다 — 콘솔에서 값을 직접 넣으면 우회된다
+    //   (원칙 25번). 제출 직전에 한 번 더 막는다.
+    if (form.requested_pickup_at && form.requested_pickup_at < pickupRange.min) {
+      setError(
+        `희망 상차 일시는 ${pickupRange.minDate} 이후로 선택해주세요. 그 이전 날짜는 접수할 수 없습니다.`
+      );
+      return;
+    }
+    if (form.requested_pickup_at && form.requested_pickup_at.slice(0, 10) > pickupRange.max) {
+      setError(`희망 상차 일시는 ${pickupRange.max} 까지 선택할 수 있습니다.`);
       return;
     }
     if (form.requested_pickup_at && form.requested_dropoff_at) {
@@ -790,12 +820,15 @@ export default function PortalRequestPage() {
               label="희망 상차 일시"
               value={form.requested_pickup_at}
               onChange={(v) => setField("requested_pickup_at", v)}
+              minDateTime={pickupRange.min}
+              maxDate={pickupRange.max}
             />
             <Pv2DateTimeField
               label="희망 하차 일시"
               value={form.requested_dropoff_at}
               onChange={(v) => setField("requested_dropoff_at", v)}
               minDateTime={minDropoffDateTime}
+              maxDate={pickupRange.max}
               hint="상차 +2시간 이후"
             />
             {renderSelect("운송시간", "운송시간", optionsOf("운송시간"))}
