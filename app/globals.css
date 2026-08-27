@@ -3139,9 +3139,12 @@ tbody tr:hover {
   align-items: center;
   justify-content: center;
 }
+/* ⚠️ `keep-all` 이 없으면 390px 에서 "운송 구간 · 현 / 장 정보" 처럼 어절 중간에서
+   끊긴다(37차 기록). 폰트를 CDN 에서 받아와 폭이 달라지므로 <br /> 로 고정하지 말 것. */
 .pv2-form-block-title {
   font-size: 16.5px;
   font-weight: 700;
+  word-break: keep-all;
 }
 /* 블록 우상단 보조 버튼(바꾸기·저장) */
 .pv2-block-action {
