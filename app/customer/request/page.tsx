@@ -13,9 +13,10 @@ import { VEHICLE_TYPES_ALL, formatPhoneNumber } from "@/lib/constants";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import Pv2AddressField from "@/components/pv2/Pv2AddressField";
 import Pv2DateTimeField from "@/components/pv2/Pv2DateTimeField";
+import Pv2PromptModal from "@/components/pv2/Pv2PromptModal";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import { localInputToISOString } from "@/lib/localDateTime";
-import { PORTAL_ORDER_THIRD_PARTY_CONSENT, LEGAL_EFFECTIVE_DATE } from "@/lib/legalInfo";
+import { PORTAL_ORDER_THIRD_PARTY_CONSENT } from "@/lib/legalInfo";
 import { useListSearchSort, sortIndicator } from "@/lib/useListSearchSort";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import {
@@ -70,6 +71,12 @@ export default function PortalRequestPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [presetMsg, setPresetMsg] = useState<string | null>(null);
+  // 프리셋 이름 입력 팝업 — window.prompt 대체(PR #103 리뷰 2·9번)
+  const [namePrompt, setNamePrompt] = useState<{ kind: "cargo" | "note"; initial: string } | null>(
+    null
+  );
+  const [pendingNoteDelete, setPendingNoteDelete] =
+    useState<CustomerPreset<RequestPresetPayload> | null>(null);
   // 🔴 제3자 제공 동의(20차). `form`과 분리된 별도 state라 **서버로 명시적으로 함께 보내야**
   // 한다 — 14차 전의 `/quote`가 정확히 이 값을 안 보내서 동의가 저장되지 않고 있었다.
   const [thirdPartyAgreed, setThirdPartyAgreed] = useState(false);
@@ -121,6 +128,9 @@ export default function PortalRequestPage() {
     물품특성: "",
     운송시간: "",
     "왕복/편도": "",
+    // 🔴 적재구분 — 시안에 없지만 PR #103 리뷰 6번에서 확정. `quotes`/`orders` 는
+    //   4차부터 이 값을 갖고 있었는데 화주가 고를 자리가 없어 담당자가 매번 되물었다.
+    loading_type: "exclusive" as "exclusive" | "mixable",
     waitingMinutes: "",
     waypointCount: "",
     item: "",
@@ -133,25 +143,31 @@ export default function PortalRequestPage() {
   //   `app/admin/quotes/page.tsx` 와 `app/quote/page.tsx` 는 하한을 걸어뒀는데
   //   **이 화면만 빠져 있어서 화주가 과거 날짜로 발주할 수 있었다**(23차 조사 §10-2).
   //
-  //   하한은 `max(오늘, 약관 시행일)` 이다. 🔴 **날짜를 하드코딩하지 말 것** —
-  //   시행일 **전** 날짜로 접수하면 그 건에 적용될 약관이 존재하지 않는다.
-  //   `LEGAL_EFFECTIVE_DATE` 에서 파생시켜 두면 시행일이 바뀔 때 같이 따라온다.
   const pickupRange = (() => {
     const pad = (n: number) => String(n).padStart(2, "0");
-    const toStr = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-    const today = toStr(new Date());
-    const minDate = today > LEGAL_EFFECTIVE_DATE ? today : LEGAL_EFFECTIVE_DATE;
-    // 상한은 하한 + 30일 — 너무 먼 미래는 운임·차량 사정이 달라져 확정할 수 없다
+    const now = new Date();
+    const toDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const minDate = toDate(now);
+    // 🔴 하한은 **오늘 날짜·현재 시각**이다(PR #103 리뷰 7번에서 확정).
+    //   25차에는 `max(오늘, LEGAL_EFFECTIVE_DATE)` 였는데, 시행일까지 기다리면 그 전에는
+    //   화주가 발주 자체를 못 넣는다(「오늘」·「내일」 칩이 둘 다 비활성이었다).
+    //   ⚠️ 시행일 전 접수 건에는 적용될 약관이 아직 없다 — 그 건은 담당자가 확인한다.
+    //   ⚠️ 브라우저 로컬 시각을 그대로 쓴다. 화주는 한국에서 접속하므로 KST 다.
+    const minTime = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    // 상한은 오늘 + 30일 — 너무 먼 미래는 운임·차량 사정이 달라져 확정할 수 없다
     const end = new Date(`${minDate}T00:00:00`);
     end.setDate(end.getDate() + 30);
-    return { min: `${minDate}T00:00`, max: toStr(end), minDate };
+    return { min: `${minDate}T${minTime}`, max: toDate(end), minDate };
   })();
 
-  // 거리 정보가 없는 화면이라, 상차 후 고정 2시간 이후로만 하차일시를 선택하게 함
+  // 거리 정보가 없는 화면이라, 상차 후 고정 30분 이후로만 하차일시를 선택하게 함
+  // 🔴 25차에는 2시간이었다 — PR #103 리뷰 8번에서 30분으로 확정. 시내 단거리는
+  //    2시간을 강제하면 실제 도착 시각보다 한참 뒤로만 적을 수 있었다.
+  const DROPOFF_MIN_GAP_MIN = 30;
   const minDropoffDateTime = (() => {
     if (!form.requested_pickup_at) return undefined;
     const d = new Date(form.requested_pickup_at);
-    d.setHours(d.getHours() + 2);
+    d.setMinutes(d.getMinutes() + DROPOFF_MIN_GAP_MIN);
     const pad = (n: number) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
       d.getMinutes()
@@ -341,10 +357,9 @@ export default function PortalRequestPage() {
     }));
   }
 
-  async function handleSaveCargoPreset() {
+  async function saveCargoPresetAs(name: string) {
     if (!companyId) return;
-    const name = window.prompt("이 화물을 어떤 이름으로 저장할까요?", form.item || "자주 쓰는 화물");
-    if (!name || !name.trim()) return;
+    setNamePrompt(null);
     const payload: CargoPresetPayload = {
       vehicle_type: form.vehicle_type || undefined,
       body_type: form.차량형태 || undefined,
@@ -368,10 +383,9 @@ export default function PortalRequestPage() {
     loadPresetLists(companyId);
   }
 
-  async function handleSaveNotePreset() {
+  async function saveNotePresetAs(name: string) {
     if (!companyId || !form.notes.trim()) return;
-    const name = window.prompt("이 요청을 어떤 이름으로 저장할까요?", form.notes.slice(0, 20));
-    if (!name || !name.trim()) return;
+    setNamePrompt(null);
     const { error: saveError } = await savePreset(supabase, companyId, "request", name, {
       notes: form.notes.trim(),
     });
@@ -387,7 +401,14 @@ export default function PortalRequestPage() {
    *   잘못 저장한 프리셋을 영영 지울 방법이 없다. */
   async function handleDeleteNotePreset(preset: CustomerPreset<RequestPresetPayload>) {
     if (!companyId) return;
-    if (!window.confirm(`자주 쓰는 요청 「${preset.name}」을(를) 삭제할까요?`)) return;
+    // 🔴 `window.confirm` 을 쓰지 않는다 — 저장 팝업과 모양이 갈린다(PR #103 리뷰 2·9번)
+    setPendingNoteDelete(preset);
+  }
+
+  async function confirmDeleteNotePreset() {
+    const preset = pendingNoteDelete;
+    if (!companyId || !preset) return;
+    setPendingNoteDelete(null);
     const { error: delError } = await deletePreset(supabase, preset.id);
     if (delError) {
       setError(delError);
@@ -401,12 +422,10 @@ export default function PortalRequestPage() {
       setError("출발지와 도착지를 입력해주세요.");
       return;
     }
-    if (!form.origin_contact_phone.trim()) {
-      setError("상차지 담당자 연락처를 입력해주세요.");
-      return;
-    }
-    if (!form.destination_contact_phone.trim()) {
-      setError("하차지 담당자 연락처를 입력해주세요.");
+    // 🔴 품목은 **필수**다(PR #103 리뷰) — 무엇을 싣는지 모르면 차급·차량형태를 못 정해
+    //   담당자가 반드시 되물어야 한다. 연락처는 반대로 선택이다(위 주석 참고).
+    if (!form.item.trim()) {
+      setError("품목을 입력해주세요. 무엇을 싣는지 알아야 차량을 정할 수 있습니다.");
       return;
     }
     if (!thirdPartyAgreed) {
@@ -432,8 +451,8 @@ export default function PortalRequestPage() {
     if (form.requested_pickup_at && form.requested_dropoff_at) {
       const diffMs =
         new Date(form.requested_dropoff_at).getTime() - new Date(form.requested_pickup_at).getTime();
-      if (diffMs < 2 * 60 * 60 * 1000) {
-        setError("희망 하차 일시는 상차 후 최소 2시간 이후로 설정해주세요.");
+      if (diffMs < DROPOFF_MIN_GAP_MIN * 60 * 1000) {
+        setError(`희망 하차 일시는 상차 후 최소 ${DROPOFF_MIN_GAP_MIN}분 이후로 설정해주세요.`);
         return;
       }
     }
@@ -486,6 +505,7 @@ export default function PortalRequestPage() {
           waiting_minutes: form.waitingMinutes ? Number(form.waitingMinutes) : null,
           waypoint_count: form.waypointCount ? Number(form.waypointCount) : null,
           item: form.item || null,
+          loading_type: form.loading_type,
           requested_pickup_at: localInputToISOString(form.requested_pickup_at),
           requested_dropoff_at: localInputToISOString(form.requested_dropoff_at),
           notes: form.notes || null,
@@ -626,6 +646,7 @@ export default function PortalRequestPage() {
             )
           }
           onDetailChange={(v) => setField(isFrom ? "originDetail" : "destinationDetail", v)}
+          placeholder={isFrom ? "출발지 주소 검색 또는 직접 입력 *" : "도착지 주소 검색 또는 직접 입력 *"}
           detailPlaceholder={
             isFrom ? "상세주소 (동/층/호수, 창고 위치 등)" : "상세주소 (동/층/호수, 하차장 위치 등)"
           }
@@ -638,7 +659,7 @@ export default function PortalRequestPage() {
             onChange={(e) =>
               setField(isFrom ? "origin_company_name" : "destination_company_name", e.target.value)
             }
-            placeholder="현장 상호 (선택)"
+            placeholder="현장 상호"
             aria-label={isFrom ? "상차지 현장 상호" : "하차지 현장 상호"}
           />
           <input
@@ -647,12 +668,14 @@ export default function PortalRequestPage() {
             onChange={(e) =>
               setField(isFrom ? "origin_contact_name" : "destination_contact_name", e.target.value)
             }
-            placeholder="담당자명 (선택)"
+            placeholder="담당자명"
             aria-label={isFrom ? "상차지 담당자명" : "하차지 담당자명"}
           />
         </div>
-        {/* 🔴 담당자 연락처는 **필수**다 — 현장에서 연락이 안 되면 배차가 멈춘다.
-            그리고 제3자 개인정보라 아래 동의가 반드시 함께 있어야 한다(47차). */}
+        {/* ⚠️ 담당자 연락처는 **선택**이다(PR #103 리뷰에서 확정) — 필수로 두면 화주가
+            현장 담당자를 모를 때 발주 자체를 못 넣는다. 담당자가 전화로 확인한다.
+            🔴 **`(선택)` 글자를 붙이지 말 것** — 그 글자를 보면 적을 수 있는 정보도 안 적는다.
+            🔴 값이 들어오면 **제3자 개인정보**이므로 아래 동의는 그대로 필요하다(47차). */}
         <input
           className="pv2-input pv2-input-sm"
           value={isFrom ? form.origin_contact_phone : form.destination_contact_phone}
@@ -662,7 +685,7 @@ export default function PortalRequestPage() {
               formatPhoneNumber(e.target.value)
             )
           }
-          placeholder="담당자 연락처 * (010-0000-0000)"
+          placeholder="담당자 연락처 (010-0000-0000)"
           aria-label={isFrom ? "상차지 담당자 연락처" : "하차지 담당자 연락처"}
         />
         <label className="pv2-check">
@@ -736,7 +759,7 @@ export default function PortalRequestPage() {
           <div className="pv2-form-block-head">
             <span className="pv2-step-num">2</span>
             <span className="pv2-form-block-title">화물 · 차량</span>
-            <button type="button" className="pv2-block-action" onClick={handleSaveCargoPreset}>
+            <button type="button" className="pv2-block-action" onClick={() => setNamePrompt({ kind: "cargo", initial: form.item.trim() || "자주 쓰는 화물" })}>
               자주 쓰는 화물로 저장
             </button>
           </div>
@@ -760,6 +783,31 @@ export default function PortalRequestPage() {
               ))}
             </select>
           </div>
+          {/* 🔴 독차/혼적가능 — 혼적가능이면 담당자가 할인 조건을 붙여 견적을 낸다(6차 세션).
+              값은 `quotes`/`orders` 와 같은 `exclusive`/`mixable` 문자열이다. 라벨만 바꾸지 말 것. */}
+          <div className="pv2-field" style={{ marginBottom: 16 }}>
+            <span className="pv2-field-label">적재구분</span>
+            <div className="pv2-radio-row">
+              {(
+                [
+                  { v: "exclusive", label: "독차", desc: "이 화물만 단독 운송" },
+                  { v: "mixable", label: "혼적가능", desc: "다른 화물과 함께 실어도 됨" },
+                ] as const
+              ).map((o) => (
+                <label key={o.v} className={`pv2-radio${form.loading_type === o.v ? " is-on" : ""}`}>
+                  <input
+                    type="radio"
+                    name="pv2-loading-type"
+                    value={o.v}
+                    checked={form.loading_type === o.v}
+                    onChange={() => setForm((prev) => ({ ...prev, loading_type: o.v }))}
+                  />
+                  <span className="pv2-radio-label">{o.label}</span>
+                  <span className="pv2-radio-desc">{o.desc}</span>
+                </label>
+              ))}
+            </div>
+          </div>
           <div className="pv2-grid-4">
             {renderSelect("희망 톤수", "vehicle_type", VEHICLE_TYPES_ALL)}
             {renderSelect("차량형태", "차량형태", optionsOf("차량형태"))}
@@ -778,7 +826,7 @@ export default function PortalRequestPage() {
                 inputMode="numeric"
                 value={form.waitingMinutes}
                 onChange={(e) => setField("waitingMinutes", e.target.value.replace(/[^0-9]/g, ""))}
-                placeholder="무료 30분 초과분만 가산"
+                placeholder="무료 20분 초과분만 가산"
               />
             </div>
             <div className="pv2-field">
@@ -797,14 +845,14 @@ export default function PortalRequestPage() {
           </div>
           <div className="pv2-field" style={{ marginTop: 14 }}>
             <label className="pv2-field-label" htmlFor="pv2-f-item">
-              품목
+              품목 *
             </label>
             <input
               id="pv2-f-item"
               className="pv2-input"
               value={form.item}
               onChange={(e) => setField("item", e.target.value)}
-              placeholder="운송할 물품을 입력하세요 (예: 택배박스 20개)"
+              placeholder="예: 파렛트 2p / 박스 40개, 중량 800kg"
             />
           </div>
         </div>
@@ -829,7 +877,7 @@ export default function PortalRequestPage() {
               onChange={(v) => setField("requested_dropoff_at", v)}
               minDateTime={minDropoffDateTime}
               maxDate={pickupRange.max}
-              hint="상차 +2시간 이후"
+              hint={`상차 +${DROPOFF_MIN_GAP_MIN}분 이후`}
             />
             {renderSelect("운송시간", "운송시간", optionsOf("운송시간"))}
           </div>
@@ -843,7 +891,7 @@ export default function PortalRequestPage() {
             <button
               type="button"
               className="pv2-block-action"
-              onClick={handleSaveNotePreset}
+              onClick={() => setNamePrompt({ kind: "note", initial: form.notes.trim().slice(0, 20) })}
               disabled={!form.notes.trim()}
             >
               현재 요청 저장
@@ -1133,6 +1181,55 @@ export default function PortalRequestPage() {
           </>
         )}
       </div>
+
+      {namePrompt && (
+        <Pv2PromptModal
+          title={namePrompt.kind === "cargo" ? "자주 쓰는 화물로 저장" : "자주 쓰는 요청으로 저장"}
+          desc={
+            namePrompt.kind === "cargo"
+              ? "지금 입력한 톤수·차량형태·품목·상하차조건을 이름 하나로 저장합니다. 다음 발주에서 그 이름으로 한 번에 불러올 수 있습니다."
+              : "지금 입력한 요청사항을 이름 하나로 저장합니다. 다음 발주에서 그 이름으로 한 번에 불러올 수 있습니다."
+          }
+          defaultValue={namePrompt.initial}
+          placeholder={namePrompt.kind === "cargo" ? "예: 가산 파렛트 2p" : "예: 야간 하차 안내"}
+          onConfirm={(name) =>
+            namePrompt.kind === "cargo" ? saveCargoPresetAs(name) : saveNotePresetAs(name)
+          }
+          onCancel={() => setNamePrompt(null)}
+        />
+      )}
+
+      {pendingNoteDelete && (
+        <div
+          className="pv2-modal-dim"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pv2-note-del-title"
+          onClick={() => setPendingNoteDelete(null)}
+        >
+          <div className="pv2-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="pv2-modal-title" id="pv2-note-del-title">
+              자주 쓰는 요청을 삭제할까요?
+            </div>
+            <div className="pv2-modal-desc">
+              「{pendingNoteDelete.name}」을(를) 목록에서 지웁니다. 이미 보낸 발주 요청에는 영향이
+              없습니다.
+            </div>
+            <div className="pv2-modal-actions">
+              <button
+                type="button"
+                className="pv2-modal-cancel"
+                onClick={() => setPendingNoteDelete(null)}
+              >
+                취소
+              </button>
+              <button type="button" className="pv2-modal-confirm" onClick={confirmDeleteNotePreset}>
+                삭제
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

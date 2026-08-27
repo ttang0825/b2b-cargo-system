@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import { notifyBadgeRefresh } from "@/lib/notifyBadgeRefresh";
 import { getCurrentStaffRole } from "@/lib/currentStaff";
+import MixableBadge from "@/components/MixableBadge";
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   대기중: { bg: "#fff1e2", text: "#d9730d" },
@@ -32,7 +33,7 @@ export default function PortalRequestsPage() {
     const { data, error } = await supabase
       .from("portal_order_requests")
       .select(
-        "id,company_id,origin,destination,vehicle_type,body_type,item,requested_pickup_at,requested_dropoff_at,notes,status,staff_note,quote_id,created_at,companies(name)"
+        "id,company_id,origin,destination,vehicle_type,body_type,loading_type,item,requested_pickup_at,requested_dropoff_at,notes,status,staff_note,quote_id,created_at,companies(name)"
       )
       .order("created_at", { ascending: false })
       .limit(100);
@@ -205,6 +206,13 @@ export default function PortalRequestsPage() {
                   </td>
                   <td className="cell-nowrap">
                     {[r.vehicle_type, r.body_type].filter(Boolean).join(" ") || "-"}
+                    {/* 🔴 화주가 발주 요청에서 고른 적재구분(PR #103 리뷰 6번) — 이게 안 보이면
+                        견적 전환 때 혼적 할인을 붙여야 하는지 담당자가 알 수 없다. */}
+                    {r.loading_type === "mixable" && (
+                      <div style={{ marginTop: 3 }}>
+                        <MixableBadge />
+                      </div>
+                    )}
                   </td>
                   <td className="cell-nowrap">
                     <span className="num">

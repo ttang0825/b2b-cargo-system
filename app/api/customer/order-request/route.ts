@@ -30,6 +30,7 @@ type Body = {
   origin_company_name?: string | null;
   origin_contact_name?: string | null;
   origin_contact_phone?: string | null;
+  loading_type?: string | null;
   destination_company_name?: string | null;
   destination_contact_name?: string | null;
   destination_contact_phone?: string | null;
@@ -93,9 +94,13 @@ export async function POST(req: Request) {
   if (!(body.origin || "").trim() || !(body.destination || "").trim()) {
     return NextResponse.json({ error: "출발지와 도착지를 입력해주세요." }, { status: 400 });
   }
-  if (!originContactPhone || !destinationContactPhone) {
+  // ⚠️ 담당자 연락처는 **선택**이다(PR #103 리뷰 1번) — 25차에는 필수였는데, 화주가
+  //    현장 담당자를 모르면 발주 자체를 못 넣었다. 값이 없으면 담당자가 전화로 확인한다.
+  // 🔴 **동의(`agreed`) 게이트는 그대로 둔다** — 값이 하나라도 들어오면 제3자 개인정보이고,
+  //    처리방침 제4조가 "발주 시점에 별도 동의를 받은 후에만"이라고 약속하고 있다(47차).
+  if (!(body.item || "").trim()) {
     return NextResponse.json(
-      { error: "상·하차지 담당자 연락처를 입력해주세요." },
+      { error: "품목을 입력해주세요. 무엇을 싣는지 알아야 차량을 정할 수 있습니다." },
       { status: 400 }
     );
   }
@@ -106,9 +111,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { data: inserted, error: insertError } = await admin
-    .from("portal_order_requests")
-    .insert({
+  const basePayload: Record<string, unknown> = {
       company_id: account.company_id,
       requested_by: account.id,
       origin: body.origin,
@@ -137,10 +140,26 @@ export async function POST(req: Request) {
       requested_dropoff_at: body.requested_dropoff_at || null,
       notes: body.notes || null,
       status: "대기중",
-    })
-    // 🔴 `.select("id")`가 있어야 동의 기록을 붙일 id를 받는다. 지우지 말 것.
-    .select("id")
-    .single();
+  };
+
+  // 🔴 `.select("id")`가 있어야 동의 기록을 붙일 id를 받는다. 지우지 말 것.
+  async function insertRequest(payload: Record<string, unknown>) {
+    return admin.from("portal_order_requests").insert(payload).select("id").single();
+  }
+
+  // 🔴 `loading_type` 은 마이그레이션(`2026-08-27_portal_request_loading_type.sql`)이
+  //    아직 반영되지 않은 배포본에서는 존재하지 않는다 — 코드가 먼저 배포되는 구간이
+  //    반드시 생긴다. 그 구간에서 **발주 접수 전체가 막히면 안 되므로**, 컬럼 없음
+  //    (Postgres 42703)이면 그 값만 빼고 한 번 더 시도한다(35차 `sms_logs.sender_phone`
+  //    과 같은 방식). 마이그레이션이 반영된 뒤에는 첫 시도가 항상 성공한다.
+  const loadingType = body.loading_type === "mixable" ? "mixable" : "exclusive";
+  let { data: inserted, error: insertError } = await insertRequest({
+    ...basePayload,
+    loading_type: loadingType,
+  });
+  if (insertError && /loading_type/.test(insertError.message || "")) {
+    ({ data: inserted, error: insertError } = await insertRequest(basePayload));
+  }
 
   if (insertError || !inserted) {
     return NextResponse.json(
