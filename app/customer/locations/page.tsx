@@ -127,7 +127,9 @@ export default function PortalLocationsPage() {
     // 열 수 없다, 28차 비공개 확정). 선택지 이름만 서버 API 로 받는다.
     let list: Surcharge[] = [];
     try {
-      const res = await fetch("/api/customer/surcharge-options");
+      // 🔴 브라우저·Next 캐시를 타지 않게 한다 — 서버 쪽 캐시는
+      //   `lib/supabaseServiceClient.ts` 가 막지만, 여기도 같이 꺼야 완전하다.
+      const res = await fetch("/api/customer/surcharge-options", { cache: "no-store" });
       const json = await res.json();
       if (res.ok) list = (json.data || []) as Surcharge[];
     } catch {

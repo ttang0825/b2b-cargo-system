@@ -3247,6 +3247,58 @@ tbody tr:hover {
   min-width: 190px;
 }
 
+/* 적재구분 — 고르는 방식(버튼)은 유지하되 칸 폭을 `.pv2-grid-4` 한 칸과 같게 맞춘다.
+   🔴 `calc((100% - 48px) / 4)` 는 4열 그리드의 gap 16px x 3 을 뺀 값이다 —
+      그리드의 열 수나 gap 을 바꾸면 이 식도 같이 고칠 것(어긋나면 눈에 바로 띈다).
+   🔴 높이는 `.pv2-select` 와 같은 padding/font-size 를 써서 맞춘다 — 값을 바꾸면
+      위 그리드와 아래위로 어긋나 보인다. */
+.pv2-choice-row {
+  display: flex;
+  gap: 16px;
+}
+.pv2-choice {
+  width: calc((100% - 48px) / 4);
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--pv2-border);
+  border-radius: var(--pv2-r-sm);
+  background: var(--pv2-surface);
+  padding: 10px 12px;
+  font-size: 15px;
+  font-family: inherit;
+  font-weight: 500;
+  color: var(--pv2-text-2);
+  cursor: pointer;
+  text-align: center;
+}
+.pv2-choice:hover {
+  background: var(--pv2-hover-card);
+}
+.pv2-choice.is-on {
+  border-color: var(--pv2-text);
+  background: var(--pv2-selected-bg);
+  color: var(--pv2-selected-text);
+  font-weight: 700;
+}
+.pv2-choice:focus-visible {
+  outline: 2px solid var(--pv2-yellow);
+  outline-offset: -1px;
+}
+@media (max-width: 900px) {
+  .pv2-choice {
+    width: calc((100% - 16px) / 2);
+  }
+}
+@media (max-width: 480px) {
+  .pv2-choice-row {
+    gap: 12px;
+  }
+  .pv2-choice {
+    flex: 1 1 0;
+    width: auto;
+  }
+}
+
 /* ① 운송 구간 — 2열 + 가운데 화살표 원 */
 .pv2-swap-grid {
   display: grid;

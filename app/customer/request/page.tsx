@@ -40,6 +40,14 @@ const REQUEST_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
 
 const SINGLE_SELECT_CATEGORIES = ["차량형태", "물품특성", "운송시간", "왕복/편도"];
 
+// 🔴 적재구분 선택지. 값(`exclusive`/`mixable`)은 `quotes`·`orders`·
+//   `portal_order_requests` 가 공유하는 저장값이고, 라벨은 화면 표시용이다.
+//   **라벨을 값으로 쓰지 말 것** — 4차부터 저장돼 온 기존 행과 어긋난다.
+const LOADING_TYPE_CHOICES = [
+  { value: "exclusive" as const, label: "독차" },
+  { value: "mixable" as const, label: "혼적가능" },
+];
+
 type SavedLocation = {
   id: string;
   address: string | null;
@@ -222,7 +230,9 @@ export default function PortalRequestPage() {
     // 있어 화주에게 열 수 없다, 28차 비공개 확정). 선택지 이름만 서버 API 로 받는다.
     let list: Surcharge[] = [];
     try {
-      const res = await fetch("/api/customer/surcharge-options");
+      // 🔴 브라우저·Next 캐시를 타지 않게 한다 — 서버 쪽 캐시는
+      //   `lib/supabaseServiceClient.ts` 가 막지만, 여기도 같이 꺼야 완전하다.
+      const res = await fetch("/api/customer/surcharge-options", { cache: "no-store" });
       const json = await res.json();
       if (res.ok) list = (json.data || []) as Surcharge[];
     } catch {
@@ -790,29 +800,6 @@ export default function PortalRequestPage() {
             </select>
           </div>
           <div className="pv2-grid-4">
-            {/* 🔴 적재구분 — 25차에는 큰 라디오 두 장이었는데 블록 안에서 너무 부각돼
-                레이아웃이 어긋났다(PR #103 리뷰). 다른 항목과 **같은 칸 크기**로 맞춘다.
-                🔴 값은 `quotes`/`orders` 와 같은 `exclusive`/`mixable` 문자열이다 —
-                화면 라벨(독차/혼적가능)을 그대로 저장하지 말 것. */}
-            <div className="pv2-field">
-              <label className="pv2-field-label" htmlFor="pv2-f-loading-type">
-                적재구분
-              </label>
-              <select
-                id="pv2-f-loading-type"
-                className="pv2-select"
-                value={form.loading_type}
-                onChange={(e) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    loading_type: e.target.value as "exclusive" | "mixable",
-                  }))
-                }
-              >
-                <option value="exclusive">독차</option>
-                <option value="mixable">혼적가능</option>
-              </select>
-            </div>
             {renderSelect("희망 톤수", "vehicle_type", VEHICLE_TYPES_ALL)}
             {renderSelect("차량형태", "차량형태", orderBodyTypes(optionsOf("차량형태")))}
             {renderSelect("물품특성", "물품특성", optionsOf("물품특성"))}
@@ -845,6 +832,32 @@ export default function PortalRequestPage() {
                 onChange={(e) => setField("waypointCount", e.target.value.replace(/[^0-9]/g, ""))}
                 placeholder="0"
               />
+            </div>
+          </div>
+          {/* 🔴 적재구분 — 두 번 옮겼다. 25차엔 블록 맨 위의 **큰 라디오 두 장**이었는데
+              "너무 부각된다"는 지적(PR #103 리뷰)에 드롭다운으로 줄였더니, 이번엔
+              "전처럼 항목을 고르는 방식으로 두되 칸 크기만 맞춰 달라"는 요청이 왔다.
+              그래서 **고르는 방식은 되살리고 칸 폭만 위 그리드 한 칸과 같게** 했다
+              (`.pv2-choice` 폭 = `(100% - 48px) / 4`, 높이는 `.pv2-select` 와 동일).
+              🔴 위치는 8개 그리드와 품목 **사이**다 — 그리드 안으로 되돌리면
+              칸이 9개가 되어 4열 배치가 한 줄 더 생긴다.
+              🔴 값은 `quotes`/`orders` 와 같은 `exclusive`/`mixable` 문자열이다 —
+              화면 라벨(독차/혼적가능)을 그대로 저장하지 말 것. */}
+          <div className="pv2-field" style={{ marginTop: 14 }}>
+            <span className="pv2-field-label">적재구분</span>
+            <div className="pv2-choice-row" role="radiogroup" aria-label="적재구분">
+              {LOADING_TYPE_CHOICES.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={form.loading_type === opt.value}
+                  className={`pv2-choice${form.loading_type === opt.value ? " is-on" : ""}`}
+                  onClick={() => setForm((prev) => ({ ...prev, loading_type: opt.value }))}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
           </div>
           <div className="pv2-field" style={{ marginTop: 14 }}>
