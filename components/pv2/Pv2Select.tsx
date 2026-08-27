@@ -32,6 +32,7 @@ export default function Pv2Select({
   disabled = false,
   /** 시간 목록처럼 긴 목록 — 340px 에서 잘리고 얇은 스크롤바가 붙는다 */
   scroll = false,
+  emptyLabel,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -46,6 +47,13 @@ export default function Pv2Select({
   id?: string;
   disabled?: boolean;
   scroll?: boolean;
+  /**
+   * 목록이 하나도 없을 때 팝오버에 띄울 한 줄.
+   * 🔴 **이 안내를 `options` 의 첫 항목으로 넣지 말 것**(리뷰 ④·⑤) — 그러면 목록이
+   *    있을 때도 트리거와 똑같은 글이 맨 위에 한 번 더 나온다. 시안의 불러오기 목록에는
+   *    **저장된 것만** 들어 있고 안내 문구는 트리거에만 있다.
+   */
+  emptyLabel?: string;
 }) {
   const uid = useId();
   const { open, setOpen, openPop, wrapRef } = usePv2Popover(uid);
@@ -153,6 +161,9 @@ export default function Pv2Select({
           aria-label={ariaLabel}
           ref={listRef}
         >
+          {options.length === 0 && (
+            <div className="pv2-pop-empty">{emptyLabel || "항목이 없습니다"}</div>
+          )}
           {options.map((o, i) => (
             <button
               key={`${o.value}-${i}`}

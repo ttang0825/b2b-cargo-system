@@ -3317,11 +3317,19 @@ tbody tr:hover {
    🔴 클래스가 아니라 요소 선택자다 — 포털 안에는 공유 컴포넌트(주소검색 등)가
       쓰는 `.pv2-*` 아닌 입력이 섞여 있어서, 클래스로만 걸면 그것들만 옛 포커스로 남는다.
       `.portal-v2` 안으로 범위를 좁혔으므로 관리자에는 닿지 않는다. */
-.portal-v2 input:focus,
+.portal-v2 input:not([type="checkbox"]):not([type="radio"]):focus,
 .portal-v2 select:focus,
 .portal-v2 textarea:focus {
   outline: none;
   box-shadow: 0 0 0 3px rgba(255, 216, 51, 0.3);
+}
+/* 🔴 **체크박스·라디오는 제외한다**(리뷰 ②) — 글로우가 그 요소의 네모 박스를 따라가서
+   17px 원형 라디오 옆에 **옅은 노란 사각형**이 생긴다. 대신 키보드 포커스에만
+   동그란 링을 준다(마우스로 고를 때는 안 뜨고, Tab 으로 올 때만 뜬다). */
+.portal-v2 input[type="checkbox"]:focus-visible,
+.portal-v2 input[type="radio"]:focus-visible {
+  outline: 2px solid var(--pv2-yellow);
+  outline-offset: 2px;
 }
 .pv2-field {
   display: flex;
@@ -3363,7 +3371,77 @@ tbody tr:hover {
 .pv2-select-load:hover {
   background: var(--pv2-hover-grey);
 }
+/* 접수 결과 배너 — 시안은 제출 버튼과 안내문을 **이것으로 갈아치운다**(리뷰 ⑦).
+   `background:#FFF9D6 · border 1px #EBEAE7 · radius 14px · padding 18px 24px · gap 16px` */
+.pv2-sent {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--pv2-yellow-soft);
+  border: 1px solid var(--pv2-border);
+  border-radius: 14px;
+  padding: 18px 24px;
+  flex-wrap: wrap;
+}
+.pv2-sent-mark {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--pv2-yellow);
+  color: var(--pv2-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15.5px;
+  font-weight: 700;
+}
+.pv2-sent-text {
+  flex: 1;
+  min-width: 200px;
+  font-size: 15px;
+  color: var(--pv2-text);
+  font-weight: 600;
+}
+.pv2-sent-go {
+  flex: none;
+  /* `<a>` 라 기본 밑줄이 생긴다 — 시안은 버튼이라 밑줄이 없다 */
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  border: none;
+  cursor: pointer;
+  background: var(--pv2-selected-bg);
+  color: var(--pv2-selected-text);
+  font-size: 14.5px;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 10px 16px;
+  border-radius: 9px;
+}
+.pv2-sent-go:hover {
+  background: #000;
+}
+.pv2-sent-new {
+  flex: none;
+  border: 1px solid #e5d9a8;
+  background: var(--pv2-surface);
+  color: var(--pv2-yellow-text);
+  font-size: 14.5px;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 10px 16px;
+  border-radius: 9px;
+  cursor: pointer;
+}
 .pv2-load-slot {
+  width: calc((100% - 48px) / 4);
+  min-width: 190px;
+}
+/* 🔴 **특성도를 두 칸으로 올려 둔다**(리뷰 ④) — `.pv2-selectwrap` 이 `width:100%` 라
+   같은 특성도(0,0,1,0)에서는 **선언 순서**가 승부를 갈라 불러오기 버튼이 블록 전체
+   폭으로 늘어났다. 26차 함정과 같은 종류이니 순서로 풀지 말 것. */
+.pv2-selectwrap.pv2-load-slot {
   width: calc((100% - 48px) / 4);
   min-width: 190px;
 }
@@ -3390,9 +3468,10 @@ tbody tr:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.pv2-select-value.is-placeholder {
-  color: var(--pv2-text-4);
-}
+/* ⚠️ **트리거 라벨을 흐리게 하지 말 것**(리뷰 ①·③) — 시안은 값이 비어 있어도
+   `#1A1A1A` 로 그린다. `날짜 선택`·`시간 선택`·`저장된 …불러오기`·`자주 쓰는 …` 는
+   빈 값 안내가 아니라 **그 버튼의 이름**이라, 회색으로 두면 비활성처럼 보인다.
+   `.is-placeholder` 는 클래스만 남겨 둔다(값 유무를 나중에 다르게 쓰고 싶을 때를 위해). */
 /* 🔴 화살표는 글자다(시안 소스) — 아이콘으로 바꾸지 말 것 */
 .pv2-select-arrow {
   flex: none;
@@ -3452,6 +3531,12 @@ tbody tr:hover {
   color: var(--pv2-text-4);
   cursor: default;
   background: none;
+}
+/* 목록이 하나도 없을 때 — 빈 팝오버가 뜨면 고장난 것처럼 보인다 */
+.pv2-pop-empty {
+  padding: 9px 14px;
+  font-size: 14.5px;
+  color: var(--pv2-text-3);
 }
 /* 달력 — 🔴 `<input type="date">` 대신 직접 그린다(지적 8·9번).
    폭 252px 고정 · z-index 11(드롭다운 10보다 위) */
