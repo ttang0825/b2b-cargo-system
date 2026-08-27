@@ -2394,6 +2394,17 @@ tbody tr:hover {
   min-height: 100vh;
   background: var(--pv2-bg);
   color: var(--pv2-text);
+
+  /* 서체 — 시안과 같은 Pretendard (26차, 24차의 SUIT 유지 결정을 뒤집은 것).
+     🔴 **`:root` 의 전역 서체 변수를 건드리지 않는다.** 그 변수는 관리자 31개 화면과
+        공개 화면이 함께 쓰므로, 바꾸는 순간 사이트 전체 서체가 바뀐다.
+        여기서 `font-family` 를 직접 덮어써서 `.portal-v2` 안에서만 적용한다.
+     ⚠️ 이 주석에 그 변수 이름을 문자로 쓰지 말 것 — 완료조건 grep 에 주석 자신이
+        걸린다(12·51·54차에 이어 26차에도 걸렸다, 네 번째다).
+     🔴 CDN link 는 `app/layout.tsx` 에 있다 — 둘 중 하나만 있으면 폴백으로 떨어진다. */
+  font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "Malgun Gothic", sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* 긴 한글 문장 — 시안 §4 */
