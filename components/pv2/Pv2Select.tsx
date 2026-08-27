@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePv2Popover } from "./pv2Popover";
 
 // 화주 운송관리 포털 전용 드롭다운 — 26차
 //
@@ -10,19 +10,11 @@ import { usePathname } from "next/navigation";
 // 그리는 것이라 항목 높이·모서리·hover 색을 CSS 로 바꿀 수 없다 — 그래서 트리거만
 // 시안 모양으로 맞추고 목록은 옛 모양으로 남아 있었고, 그것이 지적 5·6·7번이다.
 //
-// 🔴 **열림은 한 번에 하나다.** 한 화면에 드롭다운이 십수 개라, 각자 상태를 들고 있으면
-//    여러 개가 동시에 펼쳐져 서로를 덮는다. 모듈 수준 구독으로 "내가 열리면 나머지는
-//    닫는다"를 강제한다(Provider 를 두지 않은 것은 호출부가 화면 곳곳에 흩어져 있어서다).
+// 🔴 **열림은 한 번에 하나다** — 달력과 같은 레지스트리를 쓴다(`pv2Popover.ts`).
 //
 // 🔴 **접근성은 우리가 직접 넣어야 한다** — 네이티브를 버리면 브라우저가 주던
 //    키보드 조작·역할이 통째로 사라진다. `role="listbox"`/`aria-expanded`/
 //    ↑↓·Enter·Esc·Home·End 를 여기서 구현한다. 지우지 말 것.
-
-type Listener = (openId: string | null) => void;
-const listeners = new Set<Listener>();
-function broadcastOpen(id: string | null) {
-  listeners.forEach((fn) => fn(id));
-}
 
 export type Pv2SelectOption = { value: string; label: string; disabled?: boolean };
 
@@ -54,41 +46,13 @@ export default function Pv2Select({
   scroll?: boolean;
 }) {
   const uid = useId();
-  const pathname = usePathname();
-  const [open, setOpen] = useState(false);
+  const { open, setOpen, openPop, wrapRef } = usePv2Popover(uid);
   const [active, setActive] = useState(-1);
-  const wrapRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   const selectedIndex = options.findIndex((o) => o.value === value);
   const label = selectedIndex >= 0 ? options[selectedIndex].label : placeholder;
   const isPlaceholder = selectedIndex < 0 || !options[selectedIndex].value;
-
-  // 다른 드롭다운이 열리면 나는 닫힌다
-  useEffect(() => {
-    const fn: Listener = (openId) => {
-      if (openId !== uid) setOpen(false);
-    };
-    listeners.add(fn);
-    return () => {
-      listeners.delete(fn);
-    };
-  }, [uid]);
-
-  // 🔴 화면을 옮기면 전부 닫는다 — 포털은 클라이언트 전환이라 컴포넌트가 살아남을 수 있다
-  useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
-
-  // 바깥 클릭 (원칙 20번과 같은 방식)
-  useEffect(() => {
-    if (!open) return;
-    function onDocDown(e: MouseEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", onDocDown);
-    return () => document.removeEventListener("mousedown", onDocDown);
-  }, [open]);
 
   // 열릴 때 선택된 항목을 활성으로 두고 보이는 자리로 스크롤한다
   useEffect(() => {
@@ -104,8 +68,7 @@ export default function Pv2Select({
 
   function openList() {
     if (disabled) return;
-    broadcastOpen(uid);
-    setOpen(true);
+    openPop();
   }
 
   function choose(i: number) {

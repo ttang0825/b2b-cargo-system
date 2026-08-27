@@ -3453,6 +3453,101 @@ tbody tr:hover {
   cursor: default;
   background: none;
 }
+/* 달력 — 🔴 `<input type="date">` 대신 직접 그린다(지적 8·9번).
+   폭 252px 고정 · z-index 11(드롭다운 10보다 위) */
+.pv2-cal {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  width: 252px;
+  background: var(--pv2-surface);
+  border: 1px solid var(--pv2-border);
+  border-radius: 14px;
+  box-shadow: 0 4px 12px rgba(26, 26, 26, 0.08);
+  padding: 12px;
+  z-index: 11;
+  box-sizing: border-box;
+}
+.pv2-cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.pv2-cal-nav {
+  border: none;
+  background: var(--pv2-input-bg);
+  border-radius: 8px;
+  padding: 4px 9px;
+  font-size: 13.5px;
+  font-family: inherit;
+  color: var(--pv2-text);
+  cursor: pointer;
+}
+/* 🔴 갈 수 없는 달의 버튼은 숨기지 말고 흐리게 둔다 — 사라지면 칸이 움직인다 */
+.pv2-cal-nav:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.pv2-cal-title {
+  font-size: 14.5px;
+  font-weight: 700;
+}
+.pv2-cal-week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  margin-bottom: 2px;
+}
+.pv2-cal-wd {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 0;
+  color: var(--pv2-text-3);
+}
+.pv2-cal-wd.is-sun {
+  color: #c05b54;
+}
+.pv2-cal-wd.is-sat {
+  color: #4c6fbf;
+}
+.pv2-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.pv2-cal-day {
+  border: none;
+  background: transparent;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 13.5px;
+  font-family: inherit;
+  color: var(--pv2-text);
+  padding: 0;
+  cursor: pointer;
+}
+.pv2-cal-day:hover {
+  background: var(--pv2-hover-grey);
+}
+.pv2-cal-day.is-sel {
+  background: var(--pv2-yellow);
+  color: var(--pv2-text);
+  font-weight: 800;
+}
+/* 🔴 범위 밖은 숨기지 않고 흐리게 두고 클릭만 막는다(시안) —
+   없애면 그 달에 고를 수 있는 날이 몇 개인지 화주가 가늠하지 못한다 */
+.pv2-cal-day.is-out {
+  color: var(--pv2-border);
+  cursor: default;
+}
+.pv2-cal-day.is-out:hover {
+  background: transparent;
+}
+.pv2-cal-day.is-blank {
+  color: transparent;
+}
 
 /* 적재구분 — 작은 원형 라디오 + 라벨. 칸 폭은 `.pv2-grid-4` 한 칸과 같게 맞춘다.
    🔴 `calc((100% - 48px) / 4)` 는 4열 그리드의 gap 16px x 3 을 뺀 값이다 —
@@ -3959,33 +4054,41 @@ tbody tr:hover {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-height: 26px;
   flex-wrap: wrap;
 }
+/* 오늘·내일 칩 — 시안은 **테두리 없는 회색 알약**이다(지적 10번).
+   흰 배경 + 테두리 + 반경 8px 이던 것을 시안 값으로 맞췄다. */
 .pv2-chip {
-  border: 1px solid var(--pv2-border);
-  background: var(--pv2-surface);
-  border-radius: var(--pv2-r-badge);
-  padding: 5px 12px;
-  font-size: 13.5px;
+  border: none;
+  background: var(--pv2-input-bg);
+  border-radius: var(--pv2-r-pill);
+  padding: 4px 11px;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--pv2-text-2);
+  color: var(--pv2-text);
   font-family: inherit;
   cursor: pointer;
 }
 .pv2-chip:hover:not(:disabled) {
   background: var(--pv2-hover-grey);
 }
+/* ⚠️ 시안에는 칩의 선택 상태가 없다 — 우리는 지금 고른 날짜가 오늘/내일이면 표시해준다.
+   달력의 선택된 날과 같은 옐로를 써서 시안의 어휘 안에 머문다(검정 알약은 이 크기에서
+   너무 무겁다). */
 .pv2-chip-on {
-  background: var(--pv2-selected-bg);
-  border-color: var(--pv2-selected-bg);
-  color: var(--pv2-selected-text);
+  background: var(--pv2-yellow);
+  color: var(--pv2-text);
+  font-weight: 800;
 }
+/* 🔴 범위 밖이면 `disabled` 다 — 칩이 하한을 우회하는 구멍을 막는 장치(25차 ⑩) */
 .pv2-chip:disabled {
   opacity: 0.4;
   cursor: default;
 }
 .pv2-dt-hint {
-  font-size: 13px;
+  margin-left: 4px;
+  font-size: 12.5px;
   color: var(--pv2-text-3);
 }
 
