@@ -3020,6 +3020,89 @@ tbody tr:hover {
   color: var(--pv2-text-3);
 }
 
+/* 공지 최근 5건 목록 (PR #103 리뷰).
+   🔴 기존 `.pv2-notice` 는 가로 한 줄짜리 레이아웃이라 목록에 맞지 않는다.
+      **그 규칙을 고치지 않고** 목록용 클래스를 따로 뒀다 — `.pv2-notice` 는
+      공지가 하나도 없을 때의 빈 상태가 그대로 쓴다(24차 모양 유지). */
+.pv2-notices {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 18px 24px;
+}
+.pv2-notices-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pv2-notices-head .pv2-btn-ghost {
+  margin-left: auto;
+}
+.pv2-notices-count {
+  flex: none;
+  border-radius: 999px;
+  background: var(--pv2-yellow);
+  color: var(--pv2-text);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 9px;
+  line-height: 1.4;
+}
+.pv2-notices-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pv2-notices-row + .pv2-notices-row {
+  border-top: 1px solid var(--pv2-border);
+}
+.pv2-notices-link {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 0;
+  color: inherit;
+  text-decoration: none;
+  min-width: 0;
+}
+.pv2-notices-link:hover .pv2-notices-title {
+  text-decoration: underline;
+}
+.pv2-notices-new {
+  flex: none;
+  border-radius: 5px;
+  background: var(--pv2-selected-bg);
+  color: var(--pv2-selected-text);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  padding: 2px 5px;
+}
+.pv2-notices-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 14.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pv2-notices-date {
+  flex: none;
+  font-size: 12.5px;
+  color: var(--pv2-text-3);
+}
+@media (max-width: 640px) {
+  .pv2-notices {
+    padding: 16px 18px;
+  }
+  /* 🔴 머리줄이 좁아지면 「전체 보기」가 밀려나므로 줄바꿈을 허용한다 */
+  .pv2-notices-head {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+}
+
 @media (max-width: 1023px) {
   .pv2-home-top {
     grid-template-columns: 1fr;
