@@ -3367,6 +3367,92 @@ tbody tr:hover {
   width: calc((100% - 48px) / 4);
   min-width: 190px;
 }
+/* 드롭다운 트리거 내부 — 값 + ▼ (26차, `<button>` 으로 바뀌면서 필요해졌다) */
+.pv2-selectwrap {
+  position: relative;
+  min-width: 0;
+  width: 100%;
+}
+.pv2-select {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+}
+.pv2-select:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.pv2-select-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pv2-select-value.is-placeholder {
+  color: var(--pv2-text-4);
+}
+/* 🔴 화살표는 글자다(시안 소스) — 아이콘으로 바꾸지 말 것 */
+.pv2-select-arrow {
+  flex: none;
+  font-size: 12px;
+  color: var(--pv2-text-3);
+  line-height: 1;
+}
+/* 팝오버 — 🔴 반경 14px 이다(카드 12px 과 다르다, 지적 6번) */
+.pv2-pop {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: var(--pv2-surface);
+  border: 1px solid var(--pv2-border);
+  border-radius: 14px;
+  box-shadow: 0 4px 12px rgba(26, 26, 26, 0.08);
+  padding: 6px 0;
+  overflow: hidden;
+  z-index: 10;
+  box-sizing: border-box;
+}
+/* 시간 목록처럼 긴 것 — 얇은 스크롤바 */
+.pv2-pop-scroll {
+  max-height: 340px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--pv2-border) transparent;
+}
+.pv2-pop-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.pv2-pop-scroll::-webkit-scrollbar-thumb {
+  background: var(--pv2-border);
+  border-radius: 99px;
+}
+.pv2-pop-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  border-radius: 0;
+  padding: 9px 14px;
+  font-size: 14.5px;
+  font-family: inherit;
+  color: var(--pv2-text);
+  cursor: pointer;
+}
+/* 🔴 hover 는 옅은 노랑이다(지적 7번) — 회색으로 되돌리지 말 것 */
+.pv2-pop-item:hover,
+.pv2-pop-item.is-active {
+  background: var(--pv2-hover-grey);
+}
+.pv2-pop-item:disabled {
+  color: var(--pv2-text-4);
+  cursor: default;
+  background: none;
+}
 
 /* 적재구분 — 작은 원형 라디오 + 라벨. 칸 폭은 `.pv2-grid-4` 한 칸과 같게 맞춘다.
    🔴 `calc((100% - 48px) / 4)` 는 4열 그리드의 gap 16px x 3 을 뺀 값이다 —
