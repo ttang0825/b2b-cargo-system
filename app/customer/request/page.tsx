@@ -813,7 +813,7 @@ export default function PortalRequestPage() {
               </label>
               <input
                 id="pv2-f-wait"
-                className="pv2-input pv2-input-sm"
+                className="pv2-input pv2-input-grid"
                 inputMode="numeric"
                 value={form.waitingMinutes}
                 onChange={(e) => setField("waitingMinutes", e.target.value.replace(/[^0-9]/g, ""))}
@@ -826,7 +826,7 @@ export default function PortalRequestPage() {
               </label>
               <input
                 id="pv2-f-way"
-                className="pv2-input pv2-input-sm"
+                className="pv2-input pv2-input-grid"
                 inputMode="numeric"
                 value={form.waypointCount}
                 onChange={(e) => setField("waypointCount", e.target.value.replace(/[^0-9]/g, ""))}

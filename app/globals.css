@@ -3272,7 +3272,16 @@ tbody tr:hover {
   cursor: default;
 }
 
-/* 입력 공통 — 시안 border 1px #EBEAE7 · radius 12px */
+/* 입력 공통 — 시안 border 1px #EBEAE7 · radius 12px
+   🔴 **시안 `README.md` §4 의 "입력 배경 #F4F3EF · 테두리 #E3E1DC" 는 틀렸다** —
+      소스는 `background:#fff` · `border:1px solid #EBEAE7` 다. README 가 실제와
+      어긋나는 네 번째 곳이다(앞의 셋은 24차 지시서 0-4).
+   🔴 **크기가 하나가 아니다 — 발주 폼에만 세 종류가 있다**(시안 소스 실측).
+        11px 13px / 15px    주소 · 상세주소 · 품목            → `.pv2-input`
+        10px 11px / 14.5px  현장 상호 · 담당자명 · 연락처      → `.pv2-input-sm`
+        10px 11px / 15px    8칸 그리드(대기시간 · 경유지 수)   → `.pv2-input-grid`
+      ⚠️ 지시서 §3-3 이 적은 한 벌(10px 11px / 15px)은 이 셋 중 **그리드 칸**이다.
+         셋을 하나로 합치면 주소칸이 작아지고 담당자칸이 커진다. */
 .pv2-input,
 .pv2-textarea {
   width: 100%;
@@ -3285,10 +3294,15 @@ tbody tr:hover {
   font-family: inherit;
   color: var(--pv2-text);
   min-width: 0;
+  transition: box-shadow 0.12s ease, border-color 0.12s ease;
 }
 .pv2-input-sm {
   padding: 10px 11px;
   font-size: 14.5px;
+}
+.pv2-input-grid {
+  padding: 10px 11px;
+  font-size: 15px;
 }
 .pv2-textarea {
   resize: vertical;
@@ -3297,11 +3311,17 @@ tbody tr:hover {
 .pv2-textarea::placeholder {
   color: var(--pv2-text-4);
 }
-.pv2-input:focus,
-.pv2-textarea:focus,
-.pv2-select:focus {
-  outline: 2px solid var(--pv2-yellow);
-  outline-offset: -1px;
+/* 포커스 — 시안은 `outline:none` + 옐로 글로우다(지적 4번).
+   🔴 **테두리 색을 바꾸지 말 것** — 시안은 테두리를 그대로 두고 바깥에 3px 글로우만
+      얹는다. 테두리를 바꾸면 글자 폭이 그대로여도 칸이 움직이는 것처럼 보인다.
+   🔴 클래스가 아니라 요소 선택자다 — 포털 안에는 공유 컴포넌트(주소검색 등)가
+      쓰는 `.pv2-*` 아닌 입력이 섞여 있어서, 클래스로만 걸면 그것들만 옛 포커스로 남는다.
+      `.portal-v2` 안으로 범위를 좁혔으므로 관리자에는 닿지 않는다. */
+.portal-v2 input:focus,
+.portal-v2 select:focus,
+.portal-v2 textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(255, 216, 51, 0.3);
 }
 .pv2-field {
   display: flex;
@@ -3327,6 +3347,7 @@ tbody tr:hover {
   color: var(--pv2-text);
   cursor: pointer;
   min-width: 0;
+  transition: box-shadow 0.12s ease;
 }
 .pv2-select:hover {
   background: var(--pv2-hover-card);
