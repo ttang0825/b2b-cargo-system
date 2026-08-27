@@ -2379,6 +2379,10 @@ tbody tr:hover {
   /* 입력 */
   --pv2-input-bg: #f4f3ef;
   --pv2-input-border: #e3e1dc;
+  /* 아이콘 — 트럭 dots 처럼 실루엣에 뚫는 구멍의 색이다(26차).
+     🔴 구멍은 "그 자리의 배경색"이어야 한다. 값을 고정색으로 박으면 한쪽에서 사라진다.
+        사이드바 선택 상태는 배경이 #1a1a1a, 모바일 탭바는 #ffffff 라 서로 반대다. */
+  --pv2-icon-knockout: var(--pv2-selected-bg);
   /* 반경 */
   --pv2-r-card: 20px;
   --pv2-r-mid: 16px;
@@ -2792,6 +2796,8 @@ tbody tr:hover {
   .pv2-tab-icon {
     display: inline-flex;
     color: var(--pv2-icon);
+    /* 🔴 탭바는 흰 배경 위 검정 실루엣이라 구멍이 사이드바와 정반대다 */
+    --pv2-icon-knockout: var(--pv2-surface);
   }
   /* 🔴 선택 표시는 아이콘 채움 + 텍스트 진해짐만. 표시선·배경 없음 (시안 §7) */
   .pv2-tab-active {

@@ -368,7 +368,7 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
               className={active ? "pv2-tab pv2-tab-active" : "pv2-tab"}
             >
               <span className="pv2-tab-icon" style={{ position: "relative" }}>
-                <PortalIcon name={tab.icon} selected={active} size={26} />
+                <PortalIcon name={tab.icon} selected={active} size={26} variant="tabbar" />
                 {count > 0 && (
                   <span
                     aria-hidden="true"
@@ -397,7 +397,7 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
           className={sheetOpen ? "pv2-tab pv2-tab-active" : "pv2-tab"}
         >
           <span className="pv2-tab-icon" style={{ position: "relative" }}>
-            <PortalIcon name="menu" selected={sheetOpen} size={26} />
+            <PortalIcon name="menu" selected={sheetOpen} size={26} variant="tabbar" />
             {allBadgeTotal > 0 && (
               <span
                 aria-hidden="true"

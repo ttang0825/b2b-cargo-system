@@ -14,11 +14,23 @@
 //   3. 트럭 채움의 짐칸–캡 사이 틈(1×9.2)은 어두운 배경에서 획이 두꺼워 보이는 것을
 //      보정하는 장치다. 지우지 말 것.
 //
-// ⚠️ **원본 4개(invoices·stats·locations·profile)의 채움 버전은 실제로는 채움이 아니라
-// `stroke="#FFFFFF"` 로 하드코딩된 흰 획이었다.** 그대로 쓰면 흰 배경인 **모바일 탭바에서
-// 보이지 않는다.** 번들 README 는 "전부 currentColor 로 치환돼 있다"고 적었으나 이 넷이
-// 빠져 있어 24차에서 `currentColor` 로 바꿨다 — 사이드바(흰색)와 탭바(검정) 양쪽에서
-// 의도대로 보인다. **다시 `#FFFFFF` 로 되돌리지 말 것.**
+// ⚠️ **24차 기록을 26차에 정정했다 — 그 넷은 애초에 채움 버전이 없는 것이 맞다.**
+// 시안 소스의 `FILL` 객체에 있는 것은 `home`·`request`·`quotes`·`dispatch`·`all`
+// **다섯뿐**이고, `invoices`·`stats`·`locations`·`profile` 은 선택 시 **흰 획**
+// (`stroke:#FFFFFF` · `fill:none` · width 1.5)이다.
+// 24차가 *"흰 배경 탭바에서 안 보인다"* 며 걱정한 상황은 **일어나지 않는다** — 그 넷은
+// **모바일 탭바에 없다.** 탭바는 `홈·발주·견적·운송·전체` 다섯뿐이고 그 다섯은 전부
+// 채움 버전이 있다. 넷이 선택되는 곳은 사이드바뿐이고 거기 배경은 `#1A1A1A` 다.
+// 🟢 그래서 `currentColor` 로 두는 것이 결과적으로 맞다 — 사이드바 선택 상태의 부모
+//    color 가 `#FFFFFF` 라 시안과 같은 값으로 해석된다(실측 확인).
+//
+// 🔴 **진짜 버그는 트럭 dots 였다(26차, 사용자 지적 2번).**
+//    dots 는 실루엣에 **뚫는 구멍**이라 **언제나 "배경색"** 이어야 하는데
+//    `currentColor`(= 실루엣 색)로 두어서 구멍이 실루엣과 같은 색이 되어 사라졌다.
+//      사이드바  배경 #1A1A1A · 실루엣 #FFFFFF · dots **#1A1A1A**
+//      탭바      배경 #FFFFFF · 실루엣 #1A1A1A · dots **#FFFFFF**
+//    그래서 dots 만 `var(--pv2-icon-knockout)` 으로 뽑았다(맥락별 배경색).
+//    🔴 **`#1A1A1A` 로 하드코딩하지 말 것** — 그러면 이번엔 탭바에서 사라진다.
 //
 // 크기: 데스크톱 사이드바 21px · 모바일 하단 탭바 26px. viewBox 는 전부 `0 0 24 24`.
 
@@ -40,6 +52,10 @@ type PathSpec = {
   fill?: string;
   stroke?: string;
   strokeLinejoin?: "miter" | "round";
+  /** 실루엣에 뚫는 구멍 — `--pv2-icon-knockout`(맥락별 배경색)으로 칠한다 */
+  knockout?: boolean;
+  /** 사이드바에서만 그린다(시안 `TRUCK_DOTS(true/false)`) */
+  sidebarOnly?: boolean;
 };
 type IconSpec = { fill: string; stroke: string; strokeWidth?: number; paths: PathSpec[] };
 
@@ -74,7 +90,11 @@ const ICONS: Record<PortalIconName, { line: IconSpec; fill: IconSpec }> = {
     ] },
     fill: { fill: "currentColor", stroke: "none", strokeWidth: 1.5, paths: [
       { d: "M2.1 6.4a1.8 1.8 0 0 1 1.8-1.8h7.5a1.8 1.8 0 0 1 1.8 1.8v11.7H3.9a1.8 1.8 0 0 1-1.8-1.8zM13.2 7.5h4.1c.6 0 1.1.2 1.4.7l2.2 2.8c.3.3.4.7.4 1.1v6h-8.1zM4 17.4a3 3 0 1 1 6 0 3 3 0 0 1-6 0M13.6 17.4a3 3 0 1 1 6 0 3 3 0 0 1-6 0", fillRule: "nonzero" },
-      { d: "M8 17.4a1 1 0 1 1-2 0 1 1 0 1 1 2 0M17.6 17.4a1 1 0 1 1-2 0 1 1 0 1 1 2 0M14.6 9.1h2.7l1.9 2.7h-4.6zM12.7 8.2h1v9.2h-1z", fill: "currentColor", stroke: "none", strokeLinejoin: "miter" },
+      // 🔴 dots 는 배경색이다(위 주석). 마지막 조각 `M12.7 8.2h1v9.2h-1z` 은 짐칸–캡 틈이고
+      //    **시안은 사이드바에서만 그린다**(`TRUCK_DOTS(true)`) — 탭바는 `false` 라 없다.
+      //    그래서 `knockout` 표시를 달아 렌더러가 맥락에 따라 잘라낸다.
+      { d: "M8 17.4a1 1 0 1 1-2 0 1 1 0 1 1 2 0M17.6 17.4a1 1 0 1 1-2 0 1 1 0 1 1 2 0M14.6 9.1h2.7l1.9 2.7h-4.6z", stroke: "none", strokeLinejoin: "miter", knockout: true },
+      { d: "M12.7 8.2h1v9.2h-1z", stroke: "none", strokeLinejoin: "miter", knockout: true, sidebarOnly: true },
     ] },
   },
   invoices: {
@@ -125,12 +145,21 @@ export default function PortalIcon({
   name,
   selected = false,
   size = 21,
+  variant = "sidebar",
 }: {
   name: PortalIconName;
   selected?: boolean;
   size?: number;
+  /**
+   * 🔴 시안은 두 자리의 획 굵기가 다르다 — 사이드바는 선택 1.5 / 비선택 1.4 인데
+   * 탭바는 **둘 다 1.4** 다. 그리고 트럭의 짐칸–캡 틈은 사이드바에만 있다
+   * (`TRUCK_DOTS(true/false)`). 그 둘을 가르는 것이 이 prop 이다.
+   */
+  variant?: "sidebar" | "tabbar";
 }) {
   const spec = selected ? ICONS[name].fill : ICONS[name].line;
+  const tabbar = variant === "tabbar";
+  const paths = tabbar ? spec.paths.filter((p) => !p.sidebarOnly) : spec.paths;
   return (
     <svg
       width={size}
@@ -138,19 +167,19 @@ export default function PortalIcon({
       viewBox="0 0 24 24"
       fill={spec.fill}
       stroke={spec.stroke}
-      strokeWidth={spec.strokeWidth}
+      strokeWidth={tabbar ? 1.4 : spec.strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
       focusable="false"
     >
-      {spec.paths.map((p, i) => (
+      {paths.map((p, i) => (
         <path
           key={i}
           d={p.d}
           fillRule={p.fillRule}
           strokeWidth={p.strokeWidth}
-          fill={p.fill}
+          fill={p.knockout ? "var(--pv2-icon-knockout)" : p.fill}
           stroke={p.stroke}
           strokeLinejoin={p.strokeLinejoin}
         />
