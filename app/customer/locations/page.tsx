@@ -5,6 +5,7 @@ import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import Pv2AddressField from "@/components/pv2/Pv2AddressField";
 import { VEHICLE_TYPES_ALL, formatPhoneNumber } from "@/lib/constants";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
+import { orderBodyTypes } from "@/lib/vehicleBodyTypes";
 import {
   loadPresets,
   savePreset,
@@ -112,7 +113,10 @@ export default function PortalLocationsPage() {
     setSurcharges(list);
     setNc((prev) => ({
       ...prev,
-      body_type: prev.body_type || list.find((s) => s.category === "차량형태")?.option_name || "",
+      body_type:
+        prev.body_type ||
+        orderBodyTypes(list.filter((s) => s.category === "차량형태").map((s) => s.option_name))[0] ||
+        "",
       item_condition:
         prev.item_condition || list.find((s) => s.category === "물품특성")?.option_name || "",
     }));
@@ -242,7 +246,7 @@ export default function PortalLocationsPage() {
     setNc({
       name: "",
       vehicle_type: VEHICLE_TYPES_ALL[0] as string,
-      body_type: optionsOf("차량형태")[0] || "",
+      body_type: orderBodyTypes(optionsOf("차량형태"))[0] || "",
       item: "",
       item_condition: optionsOf("물품특성")[0] || "",
       load_condition: LOADING_METHOD_OPTIONS[0] as string,
@@ -515,7 +519,7 @@ export default function PortalLocationsPage() {
                 onChange={(e) => setNc({ ...nc, body_type: e.target.value })}
                 aria-label="차량형태"
               >
-                {optionsOf("차량형태").map((o) => (
+                {orderBodyTypes(optionsOf("차량형태")).map((o) => (
                   <option key={o} value={o}>
                     {o}
                   </option>

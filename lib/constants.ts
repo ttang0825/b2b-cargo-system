@@ -119,20 +119,14 @@ export const VEHICLE_TYPES_PUBLIC = [
   "5톤 플러스/축",
 ];
 
-// 차량 형태 (차주관리와 동일한 목록)
-export const BODY_TYPES = [
-  "카고",
-  "탑차",
-  "윙바디",
-  "냉장탑",
-  "냉동탑",
-  "리프트",
-  "크레인",
-  "렉카",
-  "트레일러",
-  "사다리차",
-  "기타/협의",
-];
+// 차량 형태 — 🔴 **정의처가 `lib/vehicleBodyTypes.ts` 로 옮겨졌다**(PR #103 리뷰 3번).
+//
+// 이 이름은 차주 보유차량·화주 CRM 추천차량이 쓰던 것이라 그대로 두되, 값은 정본에서
+// 파생시킨다. 🔴 **여기에 배열을 다시 적지 말 것** — 그 순간 견적 선택지와 갈라진다.
+//
+// ⚠️ 견적 선택지(`/customer/request`·`/admin/quotes`)는 이 배열이 아니라
+//    `rate_surcharges` 의 `차량형태` 행을 읽는다. 둘은 일부러 다르다 — 사유는 정의처 참고.
+export { DRIVER_BODY_TYPES as BODY_TYPES } from "./vehicleBodyTypes";
 
 // 화주 등급
 export const GRADE_OPTIONS = ["S", "A", "B", "C", "D", "휴면"];

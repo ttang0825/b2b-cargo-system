@@ -11,6 +11,9 @@ import { VEHICLE_TYPES_ALL, formatPhoneNumber } from "@/lib/constants";
 //   장비 수배 필요)은 현장 준비가 갈리고, 라벨을 바꾸면 견적 계산이 `option_name`
 //   문자열 완전일치로 매칭한 뒤 못 찾고 `continue` 해서 **예외도 경고도 없이 가산이 빠진다**.
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
+// 🔴 차량형태 선택지는 DB(`rate_surcharges`)가 정본이고, **표시 순서만** 코드가 정한다.
+//    DB 에만 있고 코드에 없는 옵션은 버리지 않고 맨 뒤에 붙인다(정의처 주석 참고).
+import { orderBodyTypes } from "@/lib/vehicleBodyTypes";
 import Pv2AddressField from "@/components/pv2/Pv2AddressField";
 import Pv2DateTimeField from "@/components/pv2/Pv2DateTimeField";
 import Pv2PromptModal from "@/components/pv2/Pv2PromptModal";
@@ -810,7 +813,7 @@ export default function PortalRequestPage() {
           </div>
           <div className="pv2-grid-4">
             {renderSelect("희망 톤수", "vehicle_type", VEHICLE_TYPES_ALL)}
-            {renderSelect("차량형태", "차량형태", optionsOf("차량형태"))}
+            {renderSelect("차량형태", "차량형태", orderBodyTypes(optionsOf("차량형태")))}
             {renderSelect("물품특성", "물품특성", optionsOf("물품특성"))}
             {renderSelect("왕복/편도", "왕복/편도", optionsOf("왕복/편도"))}
             {/* 🔴 8종 그대로 — 시안 6종으로 합치지 말 것(파일 머리 주석 참고) */}

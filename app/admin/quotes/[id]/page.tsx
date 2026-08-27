@@ -29,6 +29,9 @@ import SmsConfirmModal, { SmsPreview } from "@/components/SmsConfirmModal";
 import ConflictWarning from "@/components/ConflictWarning";
 import CollectionMethodInput, { CollectionMethodValue } from "@/components/CollectionMethodInput";
 import { getSettlementDisplayLabel, getPaymentConditionLabel, mapToLegacySettlementType } from "@/lib/settlementLabels";
+// 🔴 차량형태 선택지는 DB(`rate_surcharges`)가 정본이고 **표시 순서만** 코드가 정한다.
+//    모르는 옵션은 버리지 않고 맨 뒤에 붙인다(`lib/vehicleBodyTypes.ts` 참고).
+import { orderBodyTypes } from "@/lib/vehicleBodyTypes";
 
 const STATUS_OPTIONS = ["상담중", "견적제출", "수주", "보류", "실패"];
 
@@ -811,13 +814,13 @@ export default function QuoteDetailPage() {
                 value={editForm.차량형태}
                 onChange={(e) => setEditForm({ ...editForm, 차량형태: e.target.value })}
               >
-                {surcharges
-                  .filter((s) => s.category === "차량형태")
-                  .map((o) => (
-                    <option key={o.option_name} value={o.option_name}>
-                      {o.option_name}
-                    </option>
-                  ))}
+                {orderBodyTypes(
+                  surcharges.filter((s) => s.category === "차량형태").map((s) => s.option_name)
+                ).map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
               </select>
             </div>
             <div className="field">

@@ -22,6 +22,9 @@ import PickupDropoffContactFields, {
 import { getLatestMixedLoadingDiscountSettings } from "@/lib/mixedLoadingDiscountSettings";
 import { localInputToISOString, toLocalDateTimeInput } from "@/lib/localDateTime";
 import { applyMixedDiscount } from "@/lib/settlementCalc";
+// 🔴 차량형태 선택지는 DB(`rate_surcharges`)가 정본이고 **표시 순서만** 코드가 정한다.
+//    모르는 옵션은 버리지 않고 맨 뒤에 붙인다(`lib/vehicleBodyTypes.ts` 참고).
+import { orderBodyTypes } from "@/lib/vehicleBodyTypes";
 
 // .field input 전역 CSS(width:100%, padding, border-radius 등)가 텍스트
 // 입력창 기준이라 체크박스/라디오에 그대로 적용되면 뭉개져 보임 — 명시적으로
@@ -1364,13 +1367,13 @@ function QuotesPageInner() {
                   value={form.차량형태}
                   onChange={(e) => setForm({ ...form, 차량형태: e.target.value })}
                 >
-                  {surcharges
-                    .filter((s) => s.category === "차량형태")
-                    .map((o) => (
-                      <option key={o.option_name} value={o.option_name}>
-                        {o.option_name}
-                      </option>
-                    ))}
+                  {orderBodyTypes(
+                    surcharges.filter((s) => s.category === "차량형태").map((s) => s.option_name)
+                  ).map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
