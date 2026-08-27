@@ -3082,3 +3082,592 @@ tbody tr:hover {
     -webkit-line-clamp: 2;
   }
 }
+
+/* ── 포털 v2 폼·관리 화면 (25차) ────────────────────────────
+   🔴 전부 `.pv2-*` 전용 클래스다. 전역 클래스(`.card`·`.field`·`.btn` 등)를
+   덮어쓰지 않는다 — 관리자 화면 31개가 같이 쓰기 때문이다(23차 실측).
+   공유 컴포넌트(AddressSearch·DateTimePicker)는 내부를 고치지 않고
+   이 스코프 안에서 **스타일만** 덮는다. 포털 밖 4~6개 파일에 영향이 없다. */
+
+/* 페이지 머리 — 🔴 홈(.pv2-h1 34px/800)과 다르다. 시안 발주·배송지는 28px/700 */
+.pv2-page-head {
+  margin-bottom: 28px;
+}
+.pv2-page-head-tight {
+  margin-bottom: 24px;
+}
+.pv2-page-title {
+  margin: 0 0 6px;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.pv2-page-desc {
+  margin: 0;
+  font-size: 15.5px;
+  color: var(--pv2-text-3);
+  line-height: 1.6;
+}
+
+/* 블록 카드 — 시안 radius 20px · padding 24px 28px · 블록 간 16px */
+.pv2-form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.pv2-form-block {
+  background: var(--pv2-surface);
+  border-radius: var(--pv2-r-card);
+  padding: 24px 28px;
+}
+.pv2-form-block-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.pv2-step-num {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--pv2-yellow);
+  color: var(--pv2-text);
+  font-size: 13.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pv2-form-block-title {
+  font-size: 16.5px;
+  font-weight: 700;
+}
+/* 블록 우상단 보조 버튼(바꾸기·저장) */
+.pv2-block-action {
+  margin-left: auto;
+  flex: none;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: var(--pv2-input-bg);
+  border-radius: var(--pv2-r-pill);
+  padding: 7px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pv2-text);
+  font-family: inherit;
+  cursor: pointer;
+}
+.pv2-block-action:hover {
+  background: var(--pv2-hover-grey);
+}
+.pv2-block-action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* 입력 공통 — 시안 border 1px #EBEAE7 · radius 12px */
+.pv2-input,
+.pv2-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--pv2-border);
+  border-radius: var(--pv2-r-sm);
+  background: var(--pv2-surface);
+  padding: 11px 13px;
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--pv2-text);
+  min-width: 0;
+}
+.pv2-input-sm {
+  padding: 10px 11px;
+  font-size: 14.5px;
+}
+.pv2-textarea {
+  resize: vertical;
+}
+.pv2-input::placeholder,
+.pv2-textarea::placeholder {
+  color: var(--pv2-text-4);
+}
+.pv2-input:focus,
+.pv2-textarea:focus,
+.pv2-select:focus {
+  outline: 2px solid var(--pv2-yellow);
+  outline-offset: -1px;
+}
+.pv2-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+.pv2-field-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pv2-text-2);
+}
+/* 드롭다운 — 네이티브 select 를 쓰되 시안 모양으로 */
+.pv2-select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--pv2-border);
+  border-radius: var(--pv2-r-sm);
+  background: var(--pv2-surface);
+  padding: 10px 12px;
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--pv2-text);
+  cursor: pointer;
+  min-width: 0;
+}
+.pv2-select:hover {
+  background: var(--pv2-hover-card);
+}
+/* 회색 배경 드롭다운 — 불러오기 자리(시안 #F4F3EF + border #E3E1DC) */
+.pv2-select-load {
+  background: var(--pv2-input-bg);
+  border-color: var(--pv2-input-border);
+  padding: 11px 13px;
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.pv2-select-load:hover {
+  background: var(--pv2-hover-grey);
+}
+.pv2-load-slot {
+  width: calc((100% - 48px) / 4);
+  min-width: 190px;
+}
+
+/* ① 운송 구간 — 2열 + 가운데 화살표 원 */
+.pv2-swap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+  position: relative;
+}
+.pv2-swap-mark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--pv2-selected-bg);
+  color: var(--pv2-yellow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 23.5px;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 2px 8px rgba(26, 26, 26, 0.25);
+  pointer-events: none;
+}
+/* 2열이 1열로 접히면 화살표를 아래 방향으로 — 시안 모바일과 같다 */
+@media (max-width: 700px) {
+  .pv2-swap-mark {
+    display: none;
+  }
+}
+.pv2-leg {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--pv2-input-bg);
+  border: 1px solid var(--pv2-border);
+  border-radius: var(--pv2-r-mid);
+  padding: 20px;
+}
+.pv2-leg-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.pv2-leg-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.pv2-leg-dot-from {
+  background: var(--pv2-yellow);
+}
+.pv2-leg-dot-to {
+  background: var(--pv2-selected-bg);
+}
+.pv2-leg-title {
+  font-size: 18.5px;
+  font-weight: 800;
+}
+.pv2-leg-sub {
+  font-size: 13.5px;
+  color: var(--pv2-text-3);
+}
+.pv2-leg-2col {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.pv2-check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14px;
+  color: var(--pv2-text-3);
+  cursor: pointer;
+}
+.pv2-check input {
+  accent-color: var(--pv2-selected-bg);
+  flex: none;
+}
+
+/* ② 화물·차량 — 4열 그리드 */
+.pv2-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px 16px;
+}
+@media (max-width: 900px) {
+  .pv2-grid-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .pv2-load-slot {
+    width: 100%;
+    min-width: 0;
+  }
+}
+@media (max-width: 480px) {
+  .pv2-grid-4 {
+    grid-template-columns: 1fr;
+  }
+}
+/* ③ 일정 — 2열 */
+.pv2-grid-sched {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px 24px;
+  align-items: start;
+}
+
+/* 제출 버튼 */
+.pv2-submit-wrap {
+  padding: 12px 0 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.pv2-submit {
+  border: none;
+  cursor: pointer;
+  background: var(--pv2-yellow);
+  color: var(--pv2-text);
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  padding: 22px 68px;
+  border-radius: var(--pv2-r-mid);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: inherit;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.pv2-submit:hover:not(:disabled) {
+  background: #f2cb22;
+  transform: translateY(-2px);
+}
+.pv2-submit:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.pv2-submit-note {
+  font-size: 14px;
+  color: var(--pv2-text-3);
+  text-align: center;
+  line-height: 1.6;
+  word-break: keep-all;
+}
+@media (max-width: 560px) {
+  .pv2-submit {
+    width: 100%;
+    justify-content: center;
+    padding: 18px 24px;
+    font-size: 18px;
+  }
+  .pv2-form-block {
+    padding: 20px 18px;
+  }
+}
+
+/* 배송지·화물 관리 — 폼(좌) + 목록(우) 이 좁아지면 세로로 쌓인다 */
+.pv2-manage-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  align-items: flex-start;
+  margin-bottom: 28px;
+}
+.pv2-manage-form {
+  order: 1;
+  flex: 1 1 300px;
+  min-width: 0;
+  box-sizing: border-box;
+  background: var(--pv2-surface);
+  border-radius: var(--pv2-r-card);
+  padding: 24px 28px;
+}
+.pv2-manage-list {
+  order: 2;
+  flex: 3 1 420px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pv2-manage-form-title {
+  font-size: 15.5px;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+.pv2-manage-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pv2-manage-type-row {
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  gap: 8px;
+}
+.pv2-list-title {
+  font-size: 15.5px;
+  font-weight: 700;
+}
+.pv2-list-title-sub {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--pv2-text-3);
+  margin-left: 4px;
+}
+.pv2-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+/* 검정 알약 「추가」 */
+.pv2-btn-dark {
+  margin-top: 4px;
+  border: none;
+  cursor: pointer;
+  background: var(--pv2-selected-bg);
+  color: var(--pv2-selected-text);
+  font-size: 15.5px;
+  font-weight: 600;
+  padding: 12px;
+  border-radius: 9px;
+  font-family: inherit;
+}
+.pv2-btn-dark:hover:not(:disabled) {
+  background: #000;
+}
+.pv2-btn-dark:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* 저장 카드 (배송지 · 화물) */
+.pv2-saved-card {
+  background: var(--pv2-surface);
+  border-radius: var(--pv2-r-card);
+  padding: 18px 22px;
+}
+.pv2-saved-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.pv2-saved-head-tight {
+  margin-bottom: 6px;
+}
+.pv2-saved-name {
+  font-size: 16px;
+  font-weight: 700;
+  word-break: keep-all;
+}
+.pv2-type-badge {
+  flex: none;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 6px;
+  padding: 3px 9px;
+}
+.pv2-type-pickup {
+  color: var(--pv2-yellow-text);
+  background: var(--pv2-yellow-soft);
+}
+.pv2-type-dropoff {
+  color: var(--pv2-text);
+  background: var(--pv2-border);
+}
+.pv2-type-cargo {
+  color: var(--pv2-text-2);
+  background: var(--pv2-input-bg);
+}
+.pv2-btn-del {
+  margin-left: auto;
+  flex: none;
+  border: none;
+  background: #fdf3f2;
+  color: #b4423a;
+  border-radius: var(--pv2-r-badge);
+  padding: 6px 12px;
+  font-size: 13.5px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.pv2-btn-del:hover {
+  background: #fae7e5;
+}
+.pv2-saved-addr {
+  font-size: 14.5px;
+  color: var(--pv2-text);
+  line-height: 1.5;
+}
+.pv2-saved-meta {
+  display: flex;
+  gap: 14px;
+  margin-top: 8px;
+  font-size: 14px;
+  color: var(--pv2-text-3);
+  flex-wrap: wrap;
+}
+.pv2-saved-line {
+  font-size: 14px;
+  color: var(--pv2-text-3);
+}
+.pv2-saved-line-sm {
+  font-size: 13.5px;
+  color: var(--pv2-text-3);
+  margin-top: 3px;
+}
+.pv2-note-chip {
+  margin-top: 10px;
+  font-size: 13.5px;
+  color: var(--pv2-yellow-text);
+  background: var(--pv2-yellow-soft);
+  border-radius: var(--pv2-r-badge);
+  padding: 7px 11px;
+  display: inline-block;
+}
+.pv2-card-empty {
+  grid-column: 1 / -1;
+  background: var(--pv2-surface);
+  border-radius: var(--pv2-r-card);
+  padding: 44px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+.pv2-card-empty-title {
+  font-size: 15.5px;
+  font-weight: 700;
+}
+.pv2-card-empty-desc {
+  font-size: 13.5px;
+  color: var(--pv2-text-3);
+  line-height: 1.6;
+  word-break: keep-all;
+}
+
+/* 삭제 확인 모달 */
+.pv2-modal-dim {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 26, 26, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 300;
+}
+.pv2-modal {
+  background: var(--pv2-surface);
+  border-radius: var(--pv2-r-card);
+  padding: 26px 28px;
+  max-width: 380px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.pv2-modal-title {
+  font-size: 17px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+.pv2-modal-desc {
+  font-size: 14.5px;
+  color: var(--pv2-text-2);
+  line-height: 1.6;
+  word-break: keep-all;
+}
+.pv2-modal-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 20px;
+}
+.pv2-modal-actions button {
+  flex: 1;
+  border-radius: var(--pv2-r-sm);
+  padding: 11px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+.pv2-modal-cancel {
+  border: 1px solid var(--pv2-border);
+  background: var(--pv2-surface);
+  color: var(--pv2-text-2);
+}
+.pv2-modal-confirm {
+  border: none;
+  background: #b4423a;
+  color: #fff;
+}
+
+/* 포털 전용 주소검색 버튼 — 시안 bg #EBEAE7 · radius 12px · padding 0 14px */
+.pv2-addr-btn {
+  flex: none;
+  border: none;
+  background: var(--pv2-border);
+  border-radius: var(--pv2-r-sm);
+  padding: 0 14px;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--pv2-text);
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s ease;
+}
+.pv2-addr-btn:hover:not(:disabled) {
+  background: #dddbd6;
+}
+.pv2-addr-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
