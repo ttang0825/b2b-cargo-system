@@ -43,19 +43,28 @@ export type CustomerPreset<P = Record<string, unknown>> = {
 
 const SELECT_COLS = "id,name,preset_type,payload,created_at";
 
+/**
+ * 🔴 **`error` 를 삼키지 않는다.** 조회가 실패하면 `data` 가 null 이라 조용히 빈 목록이
+ *    되고, 화면은 "저장된 것이 없습니다" 를 보여준다 — **저장은 됐는데 안 나타나는**
+ *    상태가 되어 사용자에게는 "눌러도 아무 반응이 없다" 로 보인다(PR #103 리뷰 11번에서
+ *    `customer_locations` 가 실제로 이 상태였다). 호출부가 반드시 `error` 를 볼 것.
+ *
+ * ⚠️ `.order("created_at")` 은 여기서는 유지한다 — `customer_presets` 는 20차에 이
+ *    컬럼과 함께 만들어졌고 마이그레이션에 정의가 있다(`customer_locations` 와 다르다).
+ */
 export async function loadPresets<P = Record<string, unknown>>(
   supabase: SupabaseClient,
   companyId: string,
   presetType: PresetType
-): Promise<CustomerPreset<P>[]> {
-  const { data } = await supabase
+): Promise<{ rows: CustomerPreset<P>[]; error: string | null }> {
+  const { data, error } = await supabase
     .from("customer_presets")
     .select(SELECT_COLS)
     .eq("company_id", companyId)
     .eq("preset_type", presetType)
     .order("created_at", { ascending: false })
     .limit(50);
-  return (data || []) as CustomerPreset<P>[];
+  return { rows: (data || []) as CustomerPreset<P>[], error: error ? error.message : null };
 }
 
 export async function savePreset(

@@ -3801,46 +3801,6 @@ tbody tr:hover {
   flex-wrap: wrap;
 }
 
-/* 적재구분 라디오 — 발주 요청 ② 블록(PR #103 리뷰 6번) */
-.pv2-radio-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-.pv2-radio {
-  flex: 1 1 200px;
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  column-gap: 8px;
-  row-gap: 2px;
-  border: 1px solid var(--pv2-border);
-  border-radius: var(--pv2-r-sm);
-  background: var(--pv2-input-bg);
-  padding: 12px 14px;
-  cursor: pointer;
-}
-.pv2-radio.is-on {
-  border-color: var(--pv2-selected-bg);
-  background: var(--pv2-yellow-soft);
-}
-.pv2-radio input {
-  grid-row: span 2;
-  margin: 0;
-  accent-color: var(--pv2-selected-bg);
-  width: 16px;
-  height: 16px;
-}
-.pv2-radio-label {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--pv2-text);
-}
-.pv2-radio-desc {
-  font-size: 12.5px;
-  color: var(--pv2-text-2);
-  word-break: keep-all;
-}
 
 /* 저장된 배송지·화물 수정(PR #103 리뷰 13번) — 삭제 옆에 나란히 선다.
    🔴 `margin-left:auto` 는 이 버튼이 갖는다(둘 중 먼저 오는 쪽) — 삭제에만 두면

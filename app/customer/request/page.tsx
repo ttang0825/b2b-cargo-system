@@ -210,8 +210,11 @@ export default function PortalRequestPage() {
       loadPresets<CargoPresetPayload>(supabase, cid, "cargo"),
       loadPresets<RequestPresetPayload>(supabase, cid, "request"),
     ]);
-    setCargoPresets(cargo);
-    setNotePresets(note);
+    // 🔴 실패를 삼키지 않는다 — 조용히 빈 목록이 되면 "저장했는데 안 나타난다" 가 된다
+    const loadError = cargo.error || note.error;
+    if (loadError) setError(`저장된 프리셋을 불러오지 못했습니다: ${loadError}`);
+    setCargoPresets(cargo.rows);
+    setNotePresets(note.rows);
   }
 
   async function loadSurcharges() {
@@ -786,32 +789,30 @@ export default function PortalRequestPage() {
               ))}
             </select>
           </div>
-          {/* 🔴 독차/혼적가능 — 혼적가능이면 담당자가 할인 조건을 붙여 견적을 낸다(6차 세션).
-              값은 `quotes`/`orders` 와 같은 `exclusive`/`mixable` 문자열이다. 라벨만 바꾸지 말 것. */}
-          <div className="pv2-field" style={{ marginBottom: 16 }}>
-            <span className="pv2-field-label">적재구분</span>
-            <div className="pv2-radio-row">
-              {(
-                [
-                  { v: "exclusive", label: "독차", desc: "이 화물만 단독 운송" },
-                  { v: "mixable", label: "혼적가능", desc: "다른 화물과 함께 실어도 됨" },
-                ] as const
-              ).map((o) => (
-                <label key={o.v} className={`pv2-radio${form.loading_type === o.v ? " is-on" : ""}`}>
-                  <input
-                    type="radio"
-                    name="pv2-loading-type"
-                    value={o.v}
-                    checked={form.loading_type === o.v}
-                    onChange={() => setForm((prev) => ({ ...prev, loading_type: o.v }))}
-                  />
-                  <span className="pv2-radio-label">{o.label}</span>
-                  <span className="pv2-radio-desc">{o.desc}</span>
-                </label>
-              ))}
-            </div>
-          </div>
           <div className="pv2-grid-4">
+            {/* 🔴 적재구분 — 25차에는 큰 라디오 두 장이었는데 블록 안에서 너무 부각돼
+                레이아웃이 어긋났다(PR #103 리뷰). 다른 항목과 **같은 칸 크기**로 맞춘다.
+                🔴 값은 `quotes`/`orders` 와 같은 `exclusive`/`mixable` 문자열이다 —
+                화면 라벨(독차/혼적가능)을 그대로 저장하지 말 것. */}
+            <div className="pv2-field">
+              <label className="pv2-field-label" htmlFor="pv2-f-loading-type">
+                적재구분
+              </label>
+              <select
+                id="pv2-f-loading-type"
+                className="pv2-select"
+                value={form.loading_type}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    loading_type: e.target.value as "exclusive" | "mixable",
+                  }))
+                }
+              >
+                <option value="exclusive">독차</option>
+                <option value="mixable">혼적가능</option>
+              </select>
+            </div>
             {renderSelect("희망 톤수", "vehicle_type", VEHICLE_TYPES_ALL)}
             {renderSelect("차량형태", "차량형태", orderBodyTypes(optionsOf("차량형태")))}
             {renderSelect("물품특성", "물품특성", optionsOf("물품특성"))}

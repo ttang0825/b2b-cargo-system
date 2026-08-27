@@ -84,19 +84,42 @@ export default function PortalLocationsPage() {
     return surcharges.filter((s) => s.category === category).map((s) => s.option_name);
   }
 
+  // 🔴 **`error` 를 삼키지 말 것.** 25차에는 `const { data } = ...` 로 error 를 버렸는데,
+  //    조회가 실패하면 `data` 가 null 이라 조용히 빈 목록이 되고 화면은 "저장된 배송지가
+  //    없습니다" 를 보여준다. **저장은 성공했는데 목록에 안 나타나는** 상태가 되고,
+  //    화주 입장에서는 "추가를 눌러도 아무 반응이 없다" 로 보인다(PR #103 리뷰 11번).
+  //
+  // 🔴 **`.order("created_at")` 을 다시 붙이지 말 것.** `customer_locations` 를 읽는
+  //    다른 4곳(`admin/companies/[id]` · `admin/quotes` · `customer/request` · 삭제)은
+  //    전부 `order` 절이 없다. 이 화면만 붙였고 이 화면만 목록이 비었다.
+  //    정렬이 필요하면 아래처럼 **불러온 뒤 코드에서** 한다 — 컬럼 이름에 기대지 않는다.
   async function loadLocations(cid: string) {
-    const { data } = await supabase
+    const { data, error: loadError } = await supabase
       .from("customer_locations")
       .select(
         "id,address,address_detail,location_name,location_type,contact_name,contact_phone,notes,sido,sigungu"
       )
-      .eq("company_id", cid)
-      .order("created_at", { ascending: false });
-    setLocations((data || []) as Location[]);
+      .eq("company_id", cid);
+    if (loadError) {
+      setError(`저장된 배송지를 불러오지 못했습니다: ${loadError.message}`);
+      return;
+    }
+    // 상차지 먼저, 그 안에서는 이름순 — 카드가 종류별로 모여 보인다
+    const rows = ((data || []) as Location[]).slice().sort((a, b) => {
+      const t = (l: Location) => (l.location_type === "하차지" ? 1 : 0);
+      if (t(a) !== t(b)) return t(a) - t(b);
+      return (a.location_name || a.address || "").localeCompare(b.location_name || b.address || "");
+    });
+    setLocations(rows);
   }
 
   async function loadCargos(cid: string) {
-    setCargos(await loadPresets<CargoPresetPayload>(supabase, cid, "cargo"));
+    const { rows, error: loadError } = await loadPresets<CargoPresetPayload>(supabase, cid, "cargo");
+    if (loadError) {
+      setError(`저장된 화물을 불러오지 못했습니다: ${loadError}`);
+      return;
+    }
+    setCargos(rows);
   }
 
   async function loadSurcharges() {
