@@ -149,7 +149,7 @@ select string_agg(column_name, ', ' order by ordinal_position) as 컬럼
  where table_schema = 'public' and table_name = 'customer_locations';
 
 \echo ''
-\echo '=== ⑧-d3 차량형태 선택지 (PR #103 리뷰 3번 — 20종이어야) =='
+\echo '=== ⑧-d3 차량형태 선택지 (PR #103 리뷰 — 21종이어야, 차종무관 포함) =='
 select count(*) as 행수,
        count(*) filter (where rate_pct is null or flat_amount is null) as null_0이어야
   from rate_surcharges where category = '차량형태';
