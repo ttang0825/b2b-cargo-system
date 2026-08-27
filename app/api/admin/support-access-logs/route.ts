@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { createServiceClient } from "@/lib/supabaseServiceClient";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
 
 export const dynamic = "force-dynamic";
@@ -19,9 +20,7 @@ export async function GET() {
     );
   }
 
-  const admin = createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+  const admin = createServiceClient(url, serviceKey);
 
   const { data, error } = await admin
     .from("support_access_logs")

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import { getDispatchStatusColor } from "@/lib/dispatchStatusColors";
 import { calcInclusiveAmount } from "@/lib/vat";
+import { getLastSeen } from "@/lib/portalNotifications";
 
 function won(n: number | null | undefined) {
   if (!n) return "-";
@@ -19,6 +20,15 @@ function shortDateTime(v: string | null | undefined) {
     day: "2-digit",
     hour: "numeric",
     minute: "2-digit",
+  });
+}
+
+function shortDate(v: string | null | undefined) {
+  if (!v) return "-";
+  return new Date(v).toLocaleDateString("ko-KR", {
+    year: "2-digit",
+    month: "2-digit",
+    day: "2-digit",
   });
 }
 
@@ -77,7 +87,13 @@ export default function CustomerHomePage() {
   const [pendingQuotes, setPendingQuotes] = useState<QuoteRow[]>([]);
   const [unpaidInvoices, setUnpaidInvoices] = useState<InvoiceRow[]>([]);
   const [activeDispatches, setActiveDispatches] = useState<DispatchRow[]>([]);
-  const [latestAnnouncement, setLatestAnnouncement] = useState<AnnouncementRow | null>(null);
+  // 🔴 공지는 최근 5건까지 보여준다(PR #103 리뷰). 25차까지는 1건이었다.
+  const [announcements, setAnnouncements] = useState<AnnouncementRow[]>([]);
+  // 안 읽은 공지 수. 🔴 사이드바 배지와 **같은 규칙**이어야 한다 —
+  //   `created_at > 마지막 확인 시각`(기록이 없으면 전부 안 읽음).
+  //   두 곳이 어긋나면 "사이드바엔 2인데 홈엔 5" 같은 상태가 된다.
+  const [unreadNotices, setUnreadNotices] = useState(0);
+  const [noticeLastSeen, setNoticeLastSeen] = useState<string | null>(null);
 
   async function load() {
     const {
@@ -92,7 +108,13 @@ export default function CustomerHomePage() {
       setCompanyName((account?.companies as any)?.name || "");
     }
 
-    const [quotesRes, invoicesRes, dispatchesRes, announcementRes] = await Promise.all([
+    // 🔴 홈에서는 "확인함"으로 기록하지 **않는다** — 기록하면 홈을 열어본 것만으로
+    //   배지가 사라져서, 화주가 어느 글이 새 글인지 끝내 못 본다.
+    //   기록은 `/customer/announcements` 를 실제로 열었을 때만 한다.
+    const lastSeen = getLastSeen("announcements");
+    setNoticeLastSeen(lastSeen);
+
+    const [quotesRes, invoicesRes, dispatchesRes, announcementRes, unreadRes] = await Promise.all([
       // 「응답 확인하기」 — 화주가 지금 볼 것이 있는 견적(담당자가 견적을 제출한 건)
       supabase
         .from("quotes")
@@ -119,13 +141,20 @@ export default function CustomerHomePage() {
         .from("announcements")
         .select("id,title,content,created_at")
         .order("created_at", { ascending: false })
-        .limit(1),
+        .limit(5),
+      // 안 읽은 공지 수는 목록 5건과 따로 센다 — 6건 이상 밀려 있을 수 있어서
+      // 불러온 5건으로 세면 실제보다 적게 나온다.
+      supabase
+        .from("announcements")
+        .select("id", { count: "exact", head: true })
+        .gt("created_at", lastSeen || "1970-01-01T00:00:00.000Z"),
     ]);
 
     setPendingQuotes((quotesRes.data as QuoteRow[]) || []);
     setUnpaidInvoices((invoicesRes.data as unknown as InvoiceRow[]) || []);
     setActiveDispatches((dispatchesRes.data as unknown as DispatchRow[]) || []);
-    setLatestAnnouncement(((announcementRes.data as AnnouncementRow[]) || [])[0] || null);
+    setAnnouncements((announcementRes.data as AnnouncementRow[]) || []);
+    setUnreadNotices(unreadRes.count || 0);
     setLoading(false);
   }
 
@@ -282,31 +311,52 @@ export default function CustomerHomePage() {
 
       {/* ④ 공지사항 — 🔴 캘린더·공지사항이 메뉴에서 빠졌으므로 이 블록이 공지의 유일한
           진입로다. 지우면 /customer/announcements 는 주소를 직접 쳐야만 갈 수 있게 된다. */}
-      <section className="pv2-card pv2-block pv2-notice" aria-labelledby="pv2-notice-title">
-        <span className="pv2-section-title" id="pv2-notice-title">
-          공지사항
-        </span>
-        {latestAnnouncement ? (
-          <>
-            <div className="pv2-notice-body">
-              <div className="pv2-notice-title">{latestAnnouncement.title}</div>
-              {latestAnnouncement.content && (
-                <div className="pv2-notice-desc">{latestAnnouncement.content}</div>
-              )}
-            </div>
+      {announcements.length > 0 ? (
+        <section className="pv2-card pv2-block pv2-notices" aria-labelledby="pv2-notice-title">
+          <div className="pv2-notices-head">
+            <span className="pv2-section-title" id="pv2-notice-title">
+              공지사항
+            </span>
+            {/* 🔴 안 읽은 수는 사이드바 배지와 같은 규칙이다(위 주석 참고).
+                0 이면 아예 그리지 않는다 — "안 읽음 0" 은 알림이 아니라 잡음이다. */}
+            {unreadNotices > 0 && (
+              <span className="pv2-notices-count">안 읽음 {unreadNotices}</span>
+            )}
             <Link href="/customer/announcements" className="pv2-btn-ghost">
               전체 공지사항 보기 <ArrowRight size={15} />
             </Link>
-          </>
-        ) : (
-          <>
-            <span className="pv2-notice-empty">등록된 공지사항이 없습니다.</span>
-            <Link href="/customer/announcements" className="pv2-btn-ghost">
-              전체 공지사항 보기 <ArrowRight size={15} />
-            </Link>
-          </>
-        )}
-      </section>
+          </div>
+          <ul className="pv2-notices-list">
+            {announcements.map((a) => {
+              // 마지막 확인 기록이 없으면 전부 새 글로 본다(공지 페이지와 같은 판정)
+              const isNew = !noticeLastSeen || new Date(a.created_at) > new Date(noticeLastSeen);
+              return (
+                <li key={a.id} className="pv2-notices-row">
+                  <Link href="/customer/announcements" className="pv2-notices-link">
+                    {isNew && (
+                      <span className="pv2-notices-new" aria-label="안 읽은 공지">
+                        NEW
+                      </span>
+                    )}
+                    <span className="pv2-notices-title">{a.title}</span>
+                    <span className="pv2-notices-date">{shortDate(a.created_at)}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : (
+        <section className="pv2-card pv2-block pv2-notice" aria-labelledby="pv2-notice-title">
+          <span className="pv2-section-title" id="pv2-notice-title">
+            공지사항
+          </span>
+          <span className="pv2-notice-empty">등록된 공지사항이 없습니다.</span>
+          <Link href="/customer/announcements" className="pv2-btn-ghost">
+            전체 공지사항 보기 <ArrowRight size={15} />
+          </Link>
+        </section>
+      )}
     </>
   );
 }

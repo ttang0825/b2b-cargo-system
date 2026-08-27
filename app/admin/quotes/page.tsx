@@ -22,6 +22,9 @@ import PickupDropoffContactFields, {
 import { getLatestMixedLoadingDiscountSettings } from "@/lib/mixedLoadingDiscountSettings";
 import { localInputToISOString, toLocalDateTimeInput } from "@/lib/localDateTime";
 import { applyMixedDiscount } from "@/lib/settlementCalc";
+// 🔴 차량형태 선택지는 DB(`rate_surcharges`)가 정본이고 **표시 순서만** 코드가 정한다.
+//    모르는 옵션은 버리지 않고 맨 뒤에 붙인다(`lib/vehicleBodyTypes.ts` 참고).
+import { orderBodyTypes } from "@/lib/vehicleBodyTypes";
 
 // .field input 전역 CSS(width:100%, padding, border-radius 등)가 텍스트
 // 입력창 기준이라 체크박스/라디오에 그대로 적용되면 뭉개져 보임 — 명시적으로
@@ -245,7 +248,7 @@ function QuotesPageInner() {
       const { data: reqData } = await supabase
         .from("portal_order_requests")
         .select(
-          "id,company_id,origin,origin_sido,origin_sigungu,destination,destination_sido,destination_sigungu,origin_company_name,origin_contact_name,origin_contact_phone,destination_company_name,destination_contact_name,destination_contact_phone,vehicle_type,body_type,item,load_condition,unload_condition,item_condition,transport_time,urgency,trip_type,waiting_minutes,waypoint_count,requested_pickup_at,requested_dropoff_at,notes,companies(id,name,phone,address,status)"
+          "id,company_id,origin,origin_sido,origin_sigungu,destination,destination_sido,destination_sigungu,origin_company_name,origin_contact_name,origin_contact_phone,destination_company_name,destination_contact_name,destination_contact_phone,vehicle_type,body_type,item,load_condition,unload_condition,item_condition,transport_time,urgency,trip_type,loading_type,waiting_minutes,waypoint_count,requested_pickup_at,requested_dropoff_at,notes,companies(id,name,phone,address,status)"
         )
         .eq("id", fromRequestId)
         .single();
@@ -281,6 +284,9 @@ function QuotesPageInner() {
         waypointCount:
           reqData.waypoint_count != null ? String(reqData.waypoint_count) : prev.waypointCount,
         item: reqData.item || "",
+        // 🔴 화주가 발주 요청에서 고른 적재구분을 그대로 이어받는다(PR #103 리뷰 6번).
+        //   빠뜨리면 화주가 "혼적가능"을 골라도 견적이 독차로 계산돼 할인이 사라진다.
+        loading_type: ((reqData as any).loading_type as "exclusive" | "mixable") || prev.loading_type,
         requested_pickup_at: reqData.requested_pickup_at
           ? toLocalDateTimeInput(reqData.requested_pickup_at)
           : prev.requested_pickup_at,
@@ -500,7 +506,11 @@ function QuotesPageInner() {
     const extra = extraFees.find((e) => e.vehicle_type === form.vehicle_type);
     let waitingExtra = 0;
     const waitingMin = Number(form.waitingMinutes) || 0;
-    const freeMin = extra?.free_waiting_minutes ?? 30;
+    // 🔴 폴백 20분 — `rate_vehicle_extra_fees` 에 그 차급 행이 없을 때만 쓰인다.
+    //   무료 대기시간은 DB 값이 정본이고(담당자가 `/admin/rates` 에서 바꾼다), 이 숫자는
+    //   행이 통째로 빠진 비정상 상황의 안전값이다. 2026-08-27 에 30 → 20 으로 맞췄다
+    //   (PR #103 리뷰 4번 + `migrations/2026-08-27_free_wait_20min.sql`).
+    const freeMin = extra?.free_waiting_minutes ?? 20;
     if (extra?.waiting_fee_per_unit && waitingMin > freeMin) {
       const units = Math.ceil((waitingMin - freeMin) / 30);
       waitingExtra = units * extra.waiting_fee_per_unit;
@@ -1357,13 +1367,13 @@ function QuotesPageInner() {
                   value={form.차량형태}
                   onChange={(e) => setForm({ ...form, 차량형태: e.target.value })}
                 >
-                  {surcharges
-                    .filter((s) => s.category === "차량형태")
-                    .map((o) => (
-                      <option key={o.option_name} value={o.option_name}>
-                        {o.option_name}
-                      </option>
-                    ))}
+                  {orderBodyTypes(
+                    surcharges.filter((s) => s.category === "차량형태").map((s) => s.option_name)
+                  ).map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -1529,7 +1539,7 @@ function QuotesPageInner() {
                   onChange={(e) =>
                     setForm({ ...form, waitingMinutes: e.target.value })
                   }
-                  placeholder="무료 30분 초과분만 가산"
+                  placeholder="무료 20분 초과분만 가산"
                 />
               </div>
               <div className="field">

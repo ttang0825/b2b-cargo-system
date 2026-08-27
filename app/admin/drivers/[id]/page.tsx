@@ -7,19 +7,10 @@ import { supabase } from "@/lib/supabaseClient";
 import { REGIONS, formatPhoneNumber, VEHICLE_TYPES_ALL } from "@/lib/constants";
 import MultiSelectTags from "@/components/MultiSelectTags";
 import { getCurrentStaffRole } from "@/lib/currentStaff";
-const BODY_TYPES = [
-  "카고",
-  "탑차",
-  "윙바디",
-  "냉장탑",
-  "냉동탑",
-  "리프트",
-  "크레인",
-  "렉카",
-  "트레일러",
-  "사다리차",
-  "기타/협의",
-];
+// 🔴 로컬 재정의를 없앴다 — 정본은 `lib/vehicleBodyTypes.ts` 하나뿐이다(PR #103 리뷰 3번).
+//    사본을 두면 차종을 늘릴 때 이 화면에서만 안 보이는 사고가 난다(46차가 톤수에서 겪은 것).
+import { DRIVER_BODY_TYPES as BODY_TYPES } from "@/lib/vehicleBodyTypes";
+
 
 function Field({ label, value }: { label: string; value: any }) {
   if (value === null || value === undefined || value === "") return null;

@@ -139,6 +139,30 @@ select
 from information_schema.columns where table_name = 'customer_locations';
 
 \echo ''
+\echo '=== ⑧-d2 🔴 customer_locations 전체 컬럼 (PR #103 리뷰) =='
+--   🔴 왜 전체 목록인가. 25차가 이 표를 `.order("created_at")` 으로 조회했다가
+--      **목록이 통째로 비는 버그**를 냈다(저장은 되는데 카드에 안 나타남).
+--      다른 4곳은 order 절이 없어 멀쩡했고 이 화면만 걸렸다.
+--      컬럼 이름을 짐작해서 쿼리를 쓰지 않도록 실제 목록을 남겨둔다.
+select string_agg(column_name, ', ' order by ordinal_position) as 컬럼
+  from information_schema.columns
+ where table_schema = 'public' and table_name = 'customer_locations';
+
+\echo ''
+\echo '=== ⑧-d3 차량형태 선택지 (PR #103 리뷰 — 21종이어야, 차종무관 포함) =='
+select count(*) as 행수,
+       count(*) filter (where rate_pct is null or flat_amount is null) as null_0이어야
+  from rate_surcharges where category = '차량형태';
+select option_name, rate_pct, flat_amount
+  from rate_surcharges where category = '차량형태'
+ order by rate_pct, flat_amount, option_name;
+
+\echo ''
+\echo '=== ⑧-d4 무료 대기시간 (PR #103 리뷰 4번 — 전 차급 20분이어야) =='
+select free_waiting_minutes as 무료_대기분, count(*) as 차급수
+  from rate_vehicle_extra_fees group by 1 order by 1;
+
+\echo ''
 \echo '=== ⑧-e customer_presets (20차) =========================='
 select
   (select count(*) from pg_class
