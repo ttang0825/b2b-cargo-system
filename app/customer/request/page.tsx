@@ -834,29 +834,35 @@ export default function PortalRequestPage() {
               />
             </div>
           </div>
-          {/* 🔴 적재구분 — 두 번 옮겼다. 25차엔 블록 맨 위의 **큰 라디오 두 장**이었는데
-              "너무 부각된다"는 지적(PR #103 리뷰)에 드롭다운으로 줄였더니, 이번엔
-              "전처럼 항목을 고르는 방식으로 두되 칸 크기만 맞춰 달라"는 요청이 왔다.
-              그래서 **고르는 방식은 되살리고 칸 폭만 위 그리드 한 칸과 같게** 했다
-              (`.pv2-choice` 폭 = `(100% - 48px) / 4`, 높이는 `.pv2-select` 와 동일).
+          {/* 🔴 적재구분 — 세 번 옮겼다. 되돌리기 전에 이 기록을 볼 것.
+                25차      블록 맨 위의 **큰 라디오 두 장**(설명문까지 딸린 카드)
+                리뷰 ②    "너무 부각된다" → 드롭다운
+                리뷰 ⑦    "전처럼 고르는 방식으로, 칸 크기는 다른 항목과 같게" → 버튼 2개
+                리뷰 ⑧    "전처럼 **작은 원형에 체크**하는 방식이 더 좋다" → **지금 이것**
+              그래서 `<input type="radio">` 를 되살리되 **카드·설명문은 넣지 않았다** —
+              25차가 부각돼 보였던 원인이 원형 자체가 아니라 그 카드였기 때문이다.
               🔴 위치는 8개 그리드와 품목 **사이**다 — 그리드 안으로 되돌리면
               칸이 9개가 되어 4열 배치가 한 줄 더 생긴다.
+              🔴 칸 폭은 여전히 그리드 한 칸이라 위 열과 세로로 맞는다.
               🔴 값은 `quotes`/`orders` 와 같은 `exclusive`/`mixable` 문자열이다 —
               화면 라벨(독차/혼적가능)을 그대로 저장하지 말 것. */}
           <div className="pv2-field" style={{ marginTop: 14 }}>
             <span className="pv2-field-label">적재구분</span>
-            <div className="pv2-choice-row" role="radiogroup" aria-label="적재구분">
+            <div className="pv2-choice-row">
               {LOADING_TYPE_CHOICES.map((opt) => (
-                <button
+                <label
                   key={opt.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={form.loading_type === opt.value}
                   className={`pv2-choice${form.loading_type === opt.value ? " is-on" : ""}`}
-                  onClick={() => setForm((prev) => ({ ...prev, loading_type: opt.value }))}
                 >
-                  {opt.label}
-                </button>
+                  <input
+                    type="radio"
+                    name="pv2-loading-type"
+                    value={opt.value}
+                    checked={form.loading_type === opt.value}
+                    onChange={() => setForm((prev) => ({ ...prev, loading_type: opt.value }))}
+                  />
+                  <span>{opt.label}</span>
+                </label>
               ))}
             </div>
           </div>
