@@ -22,6 +22,7 @@ import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import { localInputToISOString } from "@/lib/localDateTime";
 import { PORTAL_ORDER_THIRD_PARTY_CONSENT } from "@/lib/legalInfo";
 import Pv2Select from "@/components/pv2/Pv2Select";
+import { CUSTOMER_COLLECTION_AXIS_LABEL } from "@/lib/settlementLabels";
 import {
   loadPresets,
   savePreset,
@@ -55,8 +56,12 @@ const LOADING_TYPE_CHOICES = [
  *    없는 질문이 된다. 🔴 나중에 "축이 하나 빠졌다"며 더하지 말 것.
  */
 const COLLECTION_METHOD_CHOICES = [
-  { value: "broker" as const, label: "주선사 정산" },
-  { value: "driver_direct" as const, label: "선착불" },
+  // 🔴 **화주가 보는 말**이다(5라운드 확정) — 담당자 화면의 「주선사 정산」/「선착불」과
+  //   일부러 다르다(27차 ④ 상태 라벨과 같은 구조). 값은 그대로 `broker`/`driver_direct` 다.
+  //   🔴 라벨은 `lib/settlementLabels.ts` 의 `getCustomerCollectionMethodLabel()` 과
+  //   **반드시 같은 문자열**이어야 한다 — 폼과 견적서가 다른 말을 쓰면 안 된다.
+  { value: "broker" as const, label: "위캐리 수금" },
+  { value: "driver_direct" as const, label: "선착불(차주 직접수금)" },
 ];
 
 /**
@@ -123,6 +128,8 @@ export default function PortalRequestPage() {
   // 🔴 제3자 제공 동의(20차). `form`과 분리된 별도 state라 **서버로 명시적으로 함께 보내야**
   // 한다 — 14차 전의 `/quote`가 정확히 이 값을 안 보내서 동의가 저장되지 않고 있었다.
   const [thirdPartyAgreed, setThirdPartyAgreed] = useState(false);
+  /** 제3자 제공 동의의 **세부 4항목**만 접는다(5라운드) — 고지·거부권 문장은 항상 보인다 */
+  const [consentOpen, setConsentOpen] = useState(false);
   const [saveOrigin, setSaveOrigin] = useState(false);
   const [saveDestination, setSaveDestination] = useState(false);
   const [form, setForm] = useState({
@@ -750,10 +757,52 @@ export default function PortalRequestPage() {
           </div>
         </div>
 
-        {/* ② 화물 · 차량 */}
+        {/* ② 일정 */}
         <div className="pv2-form-block">
           <div className="pv2-form-block-head">
             <span className="pv2-step-num">2</span>
+            <span className="pv2-form-block-title">일정</span>
+          </div>
+          <div className="pv2-grid-sched">
+            <Pv2DateTimeField
+              label="희망 상차 일시"
+              value={form.requested_pickup_at}
+              onChange={setPickupAt}
+              minDateTime={pickupRange.min}
+              maxDate={pickupRange.max}
+              nowChip
+              nowSelected={pickupNow}
+              onNowChange={setPickupNow}
+              hint={pickupNow ? "지금 바로 상차 — 시간은 접수 시각으로 들어갑니다" : undefined}
+            />
+            <Pv2DateTimeField
+              label="희망 하차 일시"
+              value={form.requested_dropoff_at}
+              onChange={(v) => setField("requested_dropoff_at", v)}
+              minDateTime={minDropoffDateTime}
+              maxDate={pickupRange.max}
+              arrivalChips
+              arrivalValue={dropoffArrival}
+              onArrivalChange={setDropoffArrival}
+              pickupDate={form.requested_pickup_at.slice(0, 10)}
+              hint={
+                dropoffArrival
+                  ? dropoffArrival === "same_day"
+                    ? "당착 — 상차 당일 도착, 시각은 무관합니다"
+                    : "내착 — 상차 다음 날 도착, 시각은 무관합니다"
+                  : `상차 +${DROPOFF_MIN_GAP_MIN}분 이후`
+              }
+            />
+            {renderSelect("운송시간", "운송시간", optionsOf("운송시간"))}
+          </div>
+        </div>
+
+        {/* ③ 화물 · 차량 — 🔴 5라운드에 ②↔③ 순서를 바꿨다(사용자 확정).
+            상차 일시를 먼저 정해야 어떤 차가 잡히는지 이야기가 되기 때문이다.
+            🔴 되돌리려면 블록 두 개를 통째로 옮기고 번호 배지도 같이 고칠 것. */}
+        <div className="pv2-form-block">
+          <div className="pv2-form-block-head">
+            <span className="pv2-step-num">3</span>
             <span className="pv2-form-block-title">화물 · 차량</span>
             <button type="button" className="pv2-block-action" onClick={() => setNamePrompt({ kind: "cargo", initial: form.item.trim() || "자주 쓰는 화물" })}>
               자주 쓰는 화물로 저장
@@ -848,7 +897,7 @@ export default function PortalRequestPage() {
                 🔴 화면 라벨(주선사 정산/선착불)을 저장값으로 쓰지 말 것 — 값은
                    `broker`/`driver_direct` 다. */}
           <div className="pv2-field" style={{ marginTop: 14 }}>
-            <span className="pv2-field-label">정산방식</span>
+            <span className="pv2-field-label">{CUSTOMER_COLLECTION_AXIS_LABEL}</span>
             <div className="pv2-choice-row">
               {COLLECTION_METHOD_CHOICES.map((opt) => (
                 <label
@@ -918,46 +967,6 @@ export default function PortalRequestPage() {
           </div>
         </div>
 
-        {/* ③ 일정 */}
-        <div className="pv2-form-block">
-          <div className="pv2-form-block-head">
-            <span className="pv2-step-num">3</span>
-            <span className="pv2-form-block-title">일정</span>
-          </div>
-          <div className="pv2-grid-sched">
-            <Pv2DateTimeField
-              label="희망 상차 일시"
-              value={form.requested_pickup_at}
-              onChange={setPickupAt}
-              minDateTime={pickupRange.min}
-              maxDate={pickupRange.max}
-              nowChip
-              nowSelected={pickupNow}
-              onNowChange={setPickupNow}
-              hint={pickupNow ? "지금 바로 상차 — 시간은 접수 시각으로 들어갑니다" : undefined}
-            />
-            <Pv2DateTimeField
-              label="희망 하차 일시"
-              value={form.requested_dropoff_at}
-              onChange={(v) => setField("requested_dropoff_at", v)}
-              minDateTime={minDropoffDateTime}
-              maxDate={pickupRange.max}
-              arrivalChips
-              arrivalValue={dropoffArrival}
-              onArrivalChange={setDropoffArrival}
-              pickupDate={form.requested_pickup_at.slice(0, 10)}
-              hint={
-                dropoffArrival
-                  ? dropoffArrival === "same_day"
-                    ? "당착 — 상차 당일 도착, 시각은 무관합니다"
-                    : "내착 — 상차 다음 날 도착, 시각은 무관합니다"
-                  : `상차 +${DROPOFF_MIN_GAP_MIN}분 이후`
-              }
-            />
-            {renderSelect("운송시간", "운송시간", optionsOf("운송시간"))}
-          </div>
-        </div>
-
         {/* ④ 요청사항 */}
         <div className="pv2-form-block">
           <div className="pv2-form-block-head">
@@ -1008,13 +1017,33 @@ export default function PortalRequestPage() {
             ⚠️ 문구를 여기 직접 적지 말 것 — `lib/legalInfo.ts`가 유일 정의처다. */}
         <div className="pv2-form-block pv2-consent">
           <div className="pv2-consent-title">{PORTAL_ORDER_THIRD_PARTY_CONSENT.title}</div>
+          {/* 🔴 **접힌 상태에서도 이 두 줄은 반드시 보여야 한다**(5라운드에 세부만 접었다).
+              개인정보보호법 제15조 2항이 고지와 **거부권 안내**를 요구하므로, 무엇을 왜
+              제공하는지(intro)와 거부권(refusal)까지 접으면 동의 자체가 부실해진다.
+              접는 것은 **제공받는 자·목적·항목·기간 4항목과 확인 문장**뿐이다.
+              🔴 「자세히 보기」 안으로 intro·refusal 을 옮기지 말 것. */}
           <p className="pv2-consent-p">{PORTAL_ORDER_THIRD_PARTY_CONSENT.intro}</p>
-          <ul className="pv2-consent-list">
-            {PORTAL_ORDER_THIRD_PARTY_CONSENT.items.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-          <p className="pv2-consent-p">{PORTAL_ORDER_THIRD_PARTY_CONSENT.confirm}</p>
+          <button
+            type="button"
+            className="pv2-consent-more"
+            aria-expanded={consentOpen}
+            onClick={() => setConsentOpen((v) => !v)}
+          >
+            {consentOpen ? "자세히 접기" : "자세히 보기"}
+            <span className={`pv2-consent-caret${consentOpen ? " is-open" : ""}`} aria-hidden="true">
+              ▼
+            </span>
+          </button>
+          {consentOpen && (
+            <div className="pv2-consent-detail">
+              <ul className="pv2-consent-list">
+                {PORTAL_ORDER_THIRD_PARTY_CONSENT.items.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+              <p className="pv2-consent-p">{PORTAL_ORDER_THIRD_PARTY_CONSENT.confirm}</p>
+            </div>
+          )}
           <p className="pv2-consent-p">{PORTAL_ORDER_THIRD_PARTY_CONSENT.refusal}</p>
           <label className="pv2-consent-check">
             <input

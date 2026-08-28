@@ -19,7 +19,7 @@ import { COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
 import { calcVatAmount, calcInclusiveAmount } from "@/lib/vat";
 import { downloadQuoteExcel } from "@/lib/quoteExcel";
 import { quoteStatusStyle } from "@/lib/quoteStatusLabels";
-import { getQuoteSettlementLine } from "@/lib/settlementLabels";
+import { getQuoteSettlementLine, CUSTOMER_COLLECTION_AXIS_LABEL } from "@/lib/settlementLabels";
 import MixableBadge from "@/components/MixableBadge";
 import Pv2PrintModal from "@/components/pv2/Pv2PrintModal";
 import { formatPhoneNumber } from "@/lib/constants";
@@ -156,6 +156,8 @@ export default function CustomerQuoteDetailPage() {
   const vat = supply ? calcVatAmount(supply) : null;
   const grand = supply ? calcInclusiveAmount(supply) : null;
   // 🔴 네 산출물(이 화면·PDF 2종·엑셀)이 같은 함수로 만든 같은 문구를 쓴다
+  /** 🔴 선착불이면 입금 계좌를 그리지 않는다(5라운드) */
+  const isDriverDirect = (quote as any).collection_method === "driver_direct";
   const settlementLine = getQuoteSettlementLine(
     (quote as any).collection_method,
     (quote as any).billing_cycle,
@@ -297,7 +299,11 @@ export default function CustomerQuoteDetailPage() {
               부가세 별도 금액이 보이고 화면에서는 안 보였다(31차 "쌍으로 움직인다"와
               같은 결의 어긋남이다). 🔴 print 2종을 고치면 이 줄도 같이 볼 것. */}
           <div className="pv2-qd-row pv2-qd-row-sub">
-            <span className="pv2-qd-k">공급가액 (부가세 별도)</span>
+            {/* 🔴 「(부가세 별도)」는 합계의 「(부가세 포함)」과 같이 회색이다 —
+                별도 `<span>` 이라야 CSS 가 그것만 회색으로 만들 수 있다. 지우지 말 것. */}
+            <span className="pv2-qd-k">
+              공급가액 <span>(부가세 별도)</span>
+            </span>
             <span className="pv2-qd-v-right">{priceless ? "협의 중" : money(supply)}</span>
           </div>
           <div className="pv2-qd-row">
@@ -319,13 +325,17 @@ export default function CustomerQuoteDetailPage() {
             🔴 값이 없으면 블록 자체를 그리지 않는다(입금 계좌와 같은 규칙). */}
         {settlementLine && (
           <div className="pv2-qd-settle">
-            <div className="pv2-qd-bank-label">정산방식</div>
+            <div className="pv2-qd-bank-label">{CUSTOMER_COLLECTION_AXIS_LABEL}</div>
             <div className="pv2-qd-settle-v">{settlementLine}</div>
           </div>
         )}
 
-        {/* 🔴 값이 비면 블록 자체를 그리지 않는다 — 위 100px 여백만 남으면 규격이 무너진다 */}
-        {hasBankAccount() && (
+        {/* 🔴 값이 비면 블록 자체를 그리지 않는다 — 위 100px 여백만 남으면 규격이 무너진다.
+            🔴 **선착불이면 그리지 않는다**(5라운드 확정) — 화주가 차주에게 직접 지급하므로
+               입금할 계좌가 없다. *"주선수수료는 화주가 주는 경우는 없다"* 는 확답을 받았다.
+               🔴 4라운드에는 "주선수수료가 그 계좌로 청구될 수 있다"며 남겨뒀던 것이니
+               되돌리지 말 것. print 2종도 같은 조건이다(31차 쌍 규칙). */}
+        {hasBankAccount() && !isDriverDirect && (
           <div className="pv2-qd-bank">
             <div style={{ flex: "none" }}>
               <div className="pv2-qd-bank-label">입금 계좌</div>

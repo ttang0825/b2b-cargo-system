@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { exportDocumentToExcel, sanitizeFilename, type DocRow } from "@/lib/exportExcel";
 import { calcVatAmount, calcInclusiveAmount } from "@/lib/vat";
-import { getQuoteSettlementLine } from "@/lib/settlementLabels";
+import { getQuoteSettlementLine, CUSTOMER_COLLECTION_AXIS_LABEL } from "@/lib/settlementLabels";
 
 // 견적서 엑셀 출력. 관리자 화면과 운송관리(화주포털) 화면이 **같은 함수를 공유**하므로
 // 두 곳에서 받은 파일의 내용이 갈리지 않는다.
@@ -153,7 +153,7 @@ export function buildQuoteDocRows({ quote, items }: QuoteExcelData): DocRow[] {
     (quote as any).direct_collection_point
   );
   if (settlementLine) {
-    rows.push({ kind: "text", label: "정산방식", value: settlementLine });
+    rows.push({ kind: "text", label: CUSTOMER_COLLECTION_AXIS_LABEL, value: settlementLine });
   }
 
   if (quote.notes) {

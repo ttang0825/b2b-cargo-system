@@ -18,7 +18,7 @@ import {
   isQuoteConfirmed,
   REJECTED_REQUEST_STYLE,
 } from "@/lib/quoteStatusLabels";
-import { getQuoteSettlementLine } from "@/lib/settlementLabels";
+import { getQuoteSettlementLine, CUSTOMER_COLLECTION_AXIS_LABEL } from "@/lib/settlementLabels";
 import { shortAddress } from "@/lib/shortAddress";
 import { COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
 
@@ -541,7 +541,7 @@ export default function CustomerQuotesPage() {
                             없고, 빈 「-」 칸이 늘면 그리드 한 줄이 더 생긴다 */}
                         {settlementLine && (
                           <div className="pv2-qkv">
-                            <span className="pv2-qk">정산방식</span>
+                            <span className="pv2-qk">{CUSTOMER_COLLECTION_AXIS_LABEL}</span>
                             <span className="pv2-qv">{settlementLine}</span>
                           </div>
                         )}

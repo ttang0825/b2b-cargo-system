@@ -5,7 +5,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import { COMPANY_INFO, COMPANY_BANK_ACCOUNT, hasBankAccount } from "@/lib/companyInfo";
 import { calcVatAmount, calcInclusiveAmount } from "@/lib/vat";
-import { getQuoteSettlementLine } from "@/lib/settlementLabels";
+import { getQuoteSettlementLine, CUSTOMER_COLLECTION_AXIS_LABEL } from "@/lib/settlementLabels";
 import CompanyNameMark from "@/components/CompanyNameMark";
 
 type QuoteItem = { id: string; item_name: string | null; amount: number | null };
@@ -109,6 +109,8 @@ export default function CustomerQuotePrintPage() {
   const validUntil = new Date(quote.created_at);
 
   // 🔴 네 산출물(견적서 상세·PDF 2종·엑셀)이 같은 함수로 만든 같은 문구를 쓴다
+  /** 🔴 선착불이면 입금 계좌를 그리지 않는다(5라운드 확정) */
+  const isDriverDirect = (quote as any).collection_method === "driver_direct";
   const settlementLine = getQuoteSettlementLine(
     (quote as any).collection_method,
     (quote as any).billing_cycle,
@@ -280,8 +282,13 @@ export default function CustomerQuotePrintPage() {
               marginTop: 8,
             }}
           >
-            <span style={{ fontSize: 13.5, color: "#555" }}>공급가액 (부가세 별도)</span>
-            <span className="num" style={{ fontSize: 14, fontWeight: 600 }}>
+            {/* 🔴 「(부가세 별도)」는 합계의 「(부가세 포함)」과 같이 회색이고, 라벨은
+                한 줄로 고정한다. 금액은 다른 행보다 크고 굵되 **총 견적금액(22px)보다는
+                작다**(5라운드 확정). 🔴 화면 상세와 같은 위계다 — 한쪽만 고치지 말 것. */}
+            <span style={{ fontSize: 13.5, color: "#191f28", fontWeight: 700, whiteSpace: "nowrap" }}>
+              공급가액 <span style={{ fontWeight: 500, color: "#888" }}>(부가세 별도)</span>
+            </span>
+            <span className="num" style={{ fontSize: 17, fontWeight: 800 }}>
               {won(quote.final_amount)}
             </span>
           </div>
@@ -337,17 +344,19 @@ export default function CustomerQuotePrintPage() {
                   marginBottom: 6,
                 }}
               >
-                정산방식
+                {CUSTOMER_COLLECTION_AXIS_LABEL}
               </div>
               <div style={{ fontSize: 13.5, fontWeight: 600 }}>{settlementLine}</div>
             </div>
           )}
 
           {/* 🔴 값이 비면 블록 자체가 안 나온다 — 위 여백만 남으면 규격이 무너진다.
+              🔴 **선착불이면 그리지 않는다**(5라운드 확정) — 화주가 차주에게 직접 지급하므로
+                 입금할 계좌가 없다. 4라운드에 남겨뒀던 것을 확답 받고 없앤 것이니 되돌리지 말 것.
               시안은 합계 아래 100px 여백 뒤에 이 블록을 놓는데, 여기는 A4 인쇄물이라
               같은 비율로 두면 특이사항·안내 문구가 다음 장으로 밀린다. 인쇄 문서
               크기에 맞춰 40px 로 뒀다(화면 상세는 시안대로 100px 이다). */}
-          {hasBankAccount() && (
+          {hasBankAccount() && !isDriverDirect && (
             <div style={{ marginTop: 40 }}>
               <div
                 style={{

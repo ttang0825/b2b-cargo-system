@@ -4230,6 +4230,32 @@ tbody tr:hover {
   margin: 0 0 6px;
   padding-left: 18px;
 }
+/* 「자세히 보기」 — 세부 4항목만 접는다(5라운드). 🔴 고지·거부권 문장은 접지 않는다 */
+.pv2-consent-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 2px 0 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: var(--pv2-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.pv2-consent-caret {
+  font-size: 9px;
+  transition: transform 0.15s ease;
+}
+.pv2-consent-caret.is-open {
+  transform: rotate(180deg);
+}
+.pv2-consent-detail {
+  margin-bottom: 6px;
+}
 .pv2-consent-check {
   display: flex;
   align-items: flex-start;
@@ -5112,13 +5138,31 @@ tbody tr:hover {
   font-weight: 800;
 }
 /* 🔴 합계 아래 여백 100px — 시안 실측. 입금 계좌가 이 뒤에 온다 */
-/* 🔴 공급가액 줄 — 견적서 PDF 와 같은 자리에 같은 모양으로 둔다(줄 단위 정합) */
-.pv2-qd-row-sub {
+/* 🔴 공급가액 줄 — 견적서 PDF 와 같은 자리에 같은 모양으로 둔다(줄 단위 정합).
+   5라운드 확정 세 가지:
+   ① **라벨이 한 줄이어야 한다** — 기본 라벨 칸이 132px 고정이라 「공급가액 (부가세 별도)」가
+      두 줄로 접혔다. 🔴 **두 클래스로 특성도를 올려서** 칸 폭을 내용에 맞춘다(원칙 58번,
+      순서로 고치면 다음에 누가 정렬할 때 되돌아간다).
+   ② **「(부가세 별도)」는 회색** — 합계의 「(부가세 포함)」과 같은 취급이다.
+   ③ **금액을 다른 행보다 크고 굵게, 그러나 총 견적금액보다는 작게**(21px < 34px). */
+.pv2-qd-row.pv2-qd-row-sub {
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
   border-top: 1px solid var(--pv2-border);
   font-weight: 700;
 }
 .pv2-qd-row-sub .pv2-qd-k {
   color: var(--pv2-text);
+  white-space: nowrap;
+}
+.pv2-qd-row-sub .pv2-qd-k span {
+  font-weight: 500;
+  color: var(--pv2-text-3);
+}
+.pv2-qd-row-sub .pv2-qd-v-right {
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: -0.012em;
 }
 .pv2-qd-total {
   border-top: 2px solid var(--pv2-text);
@@ -5268,6 +5312,10 @@ tbody tr:hover {
   }
   .pv2-qd-total-amount {
     font-size: 21px;
+  }
+  /* 🔴 모바일에서도 총 견적금액(21px)보다 작아야 한다 */
+  .pv2-qd-row-sub .pv2-qd-v-right {
+    font-size: 16px;
   }
   .pv2-qd-bank {
     border-top: 1px solid var(--pv2-border);
