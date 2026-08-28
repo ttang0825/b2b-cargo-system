@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { COMPANY_INFO } from "@/lib/companyInfo";
+import { COMPANY_INFO, COMPANY_BANK_ACCOUNT, hasBankAccount } from "@/lib/companyInfo";
+import { calcVatAmount, calcInclusiveAmount } from "@/lib/vat";
 import CompanyNameMark from "@/components/CompanyNameMark";
 
 type QuoteItem = { id: string; item_name: string | null; amount: number | null };
@@ -283,6 +284,40 @@ export default function QuotePrintPage() {
           </tbody>
         </table>
 
+        {/* 🔴 부가세 행 — 27차에 넣었다. 그전까지 PDF 에는 「합계 (VAT 별도)」 한 줄뿐이라
+            같은 견적을 엑셀로 받으면 부가세가 나오고 PDF 로 받으면 안 나왔다.
+            31차가 금지한 상태("두 산출물은 쌍으로 움직인다")가 이미 발생해 있었다.
+            🔴 `lib/quoteExcel.ts` 는 이미 맞으니 건드리지 말 것. */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "baseline",
+            padding: "10px 0",
+            borderTop: "1px solid #e5e8eb",
+            marginTop: 8,
+          }}
+        >
+          <span style={{ fontSize: 13.5, color: "#555" }}>공급가액 (부가세 별도)</span>
+          <span className="num" style={{ fontSize: 14, fontWeight: 600 }}>
+            {won(quote.final_amount)}
+          </span>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "baseline",
+            padding: "10px 0",
+          }}
+        >
+          <span style={{ fontSize: 13.5, color: "#555" }}>부가세 (10%)</span>
+          <span className="num" style={{ fontSize: 14, fontWeight: 600 }}>
+            {quote.final_amount === null || quote.final_amount === undefined
+              ? "-"
+              : won(calcVatAmount(quote.final_amount))}
+          </span>
+        </div>
         <div
           style={{
             display: "flex",
@@ -290,19 +325,42 @@ export default function QuotePrintPage() {
             alignItems: "baseline",
             padding: "16px 0",
             borderTop: "2px solid #191f28",
-            marginTop: 8,
           }}
         >
-          <span style={{ fontSize: 15, fontWeight: 700 }}>합계 (VAT 별도)</span>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>
+            총 견적금액 <span style={{ fontWeight: 500, color: "#888" }}>(부가세 포함)</span>
+          </span>
           <span className="num" style={{ fontSize: 22, fontWeight: 800 }}>
-            {won(quote.final_amount)}
+            {quote.final_amount === null || quote.final_amount === undefined
+              ? "-"
+              : won(calcInclusiveAmount(quote.final_amount))}
           </span>
         </div>
 
-        {COMPANY_INFO.bankAccount && (
-          <p style={{ fontSize: 12, color: "#888", marginTop: 8 }}>
-            입금계좌: {COMPANY_INFO.bankAccount}
-          </p>
+        {/* 🔴 값이 비면 블록 자체가 안 나온다 — 위 여백만 남으면 규격이 무너진다.
+            시안은 합계 아래 100px 여백 뒤에 이 블록을 놓는데, 여기는 A4 인쇄물이라
+            같은 비율로 두면 특이사항·안내 문구가 다음 장으로 밀린다. 인쇄 문서
+            크기에 맞춰 40px 로 뒀다(화면 상세는 시안대로 100px 이다). */}
+        {hasBankAccount() && (
+          <div style={{ marginTop: 40 }}>
+            <div
+              style={{
+                fontSize: 11.5,
+                fontWeight: 700,
+                color: "#888",
+                letterSpacing: "0.08em",
+                marginBottom: 6,
+              }}
+            >
+              입금 계좌
+            </div>
+            <div className="num" style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.6 }}>
+              {COMPANY_BANK_ACCOUNT.bank} {COMPANY_BANK_ACCOUNT.number}
+            </div>
+            <div style={{ fontSize: 12.5, color: "#555", marginTop: 2 }}>
+              예금주 {COMPANY_BANK_ACCOUNT.holder}
+            </div>
+          </div>
         )}
 
         {quote.notes && (
@@ -318,7 +376,7 @@ export default function QuotePrintPage() {
           · 본 견적서는 상기 조건 기준이며, 실제 상하차 조건 및 대기시간에 따라 금액이
           변동될 수 있습니다.
           <br />
-          · 부가가치세(VAT)는 별도이며, 세금계산서는 정산 시 발행됩니다.
+          · 상단 금액은 공급가액이며, 총 견적금액은 부가세를 포함한 금액입니다. 세금계산서는 정산 시 발행됩니다.
         </p>
       </div>
     </main>
