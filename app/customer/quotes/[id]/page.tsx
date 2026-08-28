@@ -20,6 +20,7 @@ import { calcVatAmount, calcInclusiveAmount } from "@/lib/vat";
 import { downloadQuoteExcel } from "@/lib/quoteExcel";
 import { quoteStatusStyle } from "@/lib/quoteStatusLabels";
 import MixableBadge from "@/components/MixableBadge";
+import { formatPhoneNumber } from "@/lib/constants";
 
 type QuoteItem = { id: string; item_name: string | null; amount: number | null };
 
@@ -231,7 +232,8 @@ export default function CustomerQuoteDetailPage() {
             <div className="pv2-qd-party-sub">
               {me.name && <>담당 {me.name}</>}
               {me.name && me.phone && <br />}
-              {me.phone}
+              {/* 🔴 저장은 숫자만이라 그대로 그리면 01012345678 로 찍힌다(원칙 35번) */}
+              {me.phone && formatPhoneNumber(me.phone)}
             </div>
           </div>
         </div>

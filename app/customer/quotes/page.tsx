@@ -234,7 +234,9 @@ export default function CustomerQuotesPage() {
         {/* 🔴 네이티브 select 를 쓰지 않는다(원칙 57번) — 26차가 포털에서 걷어낸 것이다.
             시안에는 정렬 컨트롤이 없지만 현행 기능이라 없애지 않고 부품만 바꿨다. */}
         <Pv2Select
-          wrapStyle={{ flex: "none", minWidth: 168 }}
+          // 🔴 `.pv2-selectwrap` 이 `width:100%` 라 그대로 두면 필터 줄에서 한 줄을
+          //    통째로 차지하며 아래로 밀린다(26차 ④ 와 같은 지점). 폭은 래퍼에 준다.
+          wrapStyle={{ flex: "none", width: "auto", minWidth: 168 }}
           value={`${sortKey}:${sortDir}`}
           onChange={(v) => {
             const [key, dir] = v.split(":");
