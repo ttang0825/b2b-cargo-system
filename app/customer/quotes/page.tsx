@@ -55,20 +55,24 @@ const PERIOD_CHIPS: { value: DatePreset; label: string }[] = [
 ];
 
 /**
- * 🔴 반려된 발주 요청을 견적 목록에 섞는다(27차, 사용자 확정 2026-08-28).
+ * 🔴 견적 전 「발주 요청」도 이 목록에 섞는다(27차, 사용자 확정 2026-08-28).
  *
  * 26차가 「내 요청 내역」을 지우면서 반려 건을 볼 곳이 사라졌다. 승인된 건은 견적으로
  * 전환돼 이 목록에 이미 있지만, 반려된 건은 문자 말고는 확인할 화면이 없었다.
  * 화주는 사이드바 배지만 보고 무엇이 반려됐는지 모른다.
  *
- * 🔴 **승인된 발주 요청은 넣지 않는다** — 이미 견적으로 전환돼 있어 같은 건이 두 번
- *    보인다. `대기중` 도 넣지 않는다(아직 아무 일도 일어나지 않은 것이다).
+ * 🔴 **`대기중` 도 넣는다**(리뷰 확정 2026-08-28) — 화주가 발주 요청을 보내면 **그 순간**
+ *    이 목록에 「상담 중」으로 떠야 한다. 안 그러면 담당자가 견적을 저장하기 전까지 화주
+ *    화면에 아무것도 없어서 "요청이 접수되긴 한 건가" 하고 다시 문의한다.
+ * 🔴 **`승인됨` 은 넣지 않는다** — 담당자가 견적을 저장하는 순간 요청이 `승인됨` 이 되고
+ *    (`app/admin/quotes/page.tsx` 가 `status='승인됨'` + `quote_id` 를 함께 쓴다) 같은 건이
+ *    **견적으로** 이 목록에 뜬다. 넣으면 같은 건이 두 번 보인다.
  * 🔴 **반려 사유(`staff_note`)를 반드시 보여준다** — 사유 없이 "반려"만 뜨면 화주가
  *    다시 문의한다. 그러면 이 화면을 만든 이유가 없어진다.
  */
 type Row =
   | { kind: "quote"; id: string; created_at: string; sortAmount: number | null; data: any }
-  | { kind: "rejected"; id: string; created_at: string; sortAmount: number | null; data: any };
+  | { kind: "request"; id: string; created_at: string; sortAmount: number | null; data: any };
 
 type QuoteItem = { id: string; item_name: string | null; amount: number | null };
 
@@ -85,7 +89,7 @@ const APPROVABLE_STATUS = "견적제출";
 export default function CustomerQuotesPage() {
   const router = useRouter();
   const [quotes, setQuotes] = useState<any[]>([]);
-  const [rejected, setRejected] = useState<any[]>([]);
+  const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<DatePreset>("all");
   // 🔴 한 번에 하나만 펼친다 — 여러 장이 동시에 열리면 카드가 화면을 넘어가
@@ -177,8 +181,8 @@ export default function CustomerQuotesPage() {
         sortAmount: q.final_amount ?? null,
         data: q,
       })),
-      ...rejected.map((r) => ({
-        kind: "rejected" as const,
+      ...requests.map((r) => ({
+        kind: "request" as const,
         id: r.id,
         created_at: r.created_at,
         // 금액이 없는 건이라 금액 정렬에서는 항상 뒤로 간다
@@ -186,7 +190,7 @@ export default function CustomerQuotesPage() {
         data: r,
       })),
     ],
-    [quotes, rejected]
+    [quotes, requests]
   );
 
   const periodFiltered = useMemo(() => {
@@ -234,18 +238,18 @@ export default function CustomerQuotesPage() {
     if (error) setPageError(`견적을 불러오지 못했습니다: ${error.message}`);
     setQuotes(data || []);
 
-    // 🔴 반려된 발주 요청만 가져온다 — `승인됨` 은 이미 견적으로 전환돼 위 목록에
-    //    있어서 넣으면 같은 건이 두 번 보이고, `대기중` 은 아직 결과가 없다.
+    // 🔴 `대기중`(=「상담 중」)과 `반려` 만 가져온다 — `승인됨` 은 이미 견적으로 전환돼
+    //    위 목록에 있어서 넣으면 같은 건이 두 번 보인다.
     //    ⚠️ 이 표에는 status CHECK 제약이 없다(실측) — 값은 코드가 쓰는 문자열이다.
     const { data: rej, error: rErr } = await supabase
       .from("portal_order_requests")
       .select(
         "id,origin,destination,vehicle_type,body_type,item,item_condition,trip_type,load_condition,unload_condition,transport_time,waiting_minutes,waypoint_count,requested_pickup_at,requested_dropoff_at,notes,staff_note,status,created_at"
       )
-      .eq("status", "반려")
+      .in("status", ["대기중", "반려"])
       .limit(100);
-    if (rErr) setPageError(`반려된 요청을 불러오지 못했습니다: ${rErr.message}`);
-    setRejected(rej || []);
+    if (rErr) setPageError(`발주 요청을 불러오지 못했습니다: ${rErr.message}`);
+    setRequests(rej || []);
 
     setLoading(false);
   }
@@ -351,13 +355,19 @@ export default function CustomerQuotesPage() {
             const q = row.data;
             const key = `${row.kind}-${row.id}`;
             const open = openKey === key;
-            const isRejected = row.kind === "rejected";
-            const st = isRejected ? REJECTED_REQUEST_STYLE : quoteStatusStyle(q.status);
+            // 견적 전 발주 요청 — `대기중` 은 「상담 중」, `반려` 는 「접수 반려」
+            const isRequest = row.kind === "request";
+            const isRejected = isRequest && q.status === "반려";
+            const st = isRequest
+              ? isRejected
+                ? REJECTED_REQUEST_STYLE
+                : quoteStatusStyle("상담중")
+              : quoteStatusStyle(q.status);
             const opts = q.selected_options || {};
 
             // 반려 건(`portal_order_requests`)은 flat 컬럼이고 견적은 `selected_options`
             // jsonb 다 — 같은 화면에 그리려면 여기서 한 모양으로 맞춰야 한다.
-            const cargo = isRejected
+            const cargo = isRequest
               ? {
                   vehicle: [q.vehicle_type, q.body_type].filter(Boolean).join(" · "),
                   condition: q.item_condition,
@@ -380,7 +390,7 @@ export default function CustomerQuotesPage() {
                 };
 
             const items = itemsByQuote[row.id] || [];
-            const supply: number | null = isRejected ? null : (q.final_amount ?? null);
+            const supply: number | null = isRequest ? null : (q.final_amount ?? null);
             const priceless = !supply;
 
             return (
@@ -393,9 +403,9 @@ export default function CustomerQuotesPage() {
                   <span className="pv2-qdate pv2-qdate-m">{dateLabel(row.created_at)}</span>
                   <div className="pv2-qbody">
                     <div className="pv2-qtop">
-                      <span className="pv2-qno">{isRejected ? "발주 요청" : q.quote_no}</span>
+                      <span className="pv2-qno">{isRequest ? "발주 요청" : q.quote_no}</span>
                       <span className="pv2-qdate pv2-qdate-d">{dateLabel(row.created_at)}</span>
-                      {!isRejected && q.loading_type === "mixable" && <MixableBadge />}
+                      {!isRequest && q.loading_type === "mixable" && <MixableBadge />}
                     </div>
                     <div className="pv2-qroute">
                       {shortAddress(q.origin) || "-"} <span className="pv2-qarrow">→</span>{" "}
@@ -412,7 +422,7 @@ export default function CustomerQuotesPage() {
                     )}
                   </div>
                   <div className="pv2-qright">
-                    {!isRejected && (
+                    {!isRequest && (
                       <div className="pv2-qprice-wrap">
                         {priceless ? (
                           // 🔴 금액이 없으면 라벨도 없다 — 「견적 금액」이라 써두고 값이
@@ -426,7 +436,7 @@ export default function CustomerQuotesPage() {
                         )}
                       </div>
                     )}
-                    {!isRejected && q.status === APPROVABLE_STATUS && !priceless && (
+                    {!isRequest && q.status === APPROVABLE_STATUS && !priceless && (
                       <button
                         type="button"
                         className="pv2-qapprove"
@@ -537,8 +547,8 @@ export default function CustomerQuotesPage() {
                       </div>
                     </section>
 
-                    {/* 🔴 반려 건에는 운임 내역·견적서 버튼이 없다 — 견적이 나온 적이 없다 */}
-                    {!isRejected && (
+                    {/* 🔴 견적 전 발주 요청에는 운임 내역·견적서 버튼이 없다 */}
+                    {!isRequest && (
                       <section className="pv2-qsec">
                         <div className="pv2-qsec-title">운임 내역</div>
                         <div className="pv2-qfare">
@@ -570,7 +580,7 @@ export default function CustomerQuotesPage() {
                       </section>
                     )}
 
-                    {!isRejected && (
+                    {!isRequest && (
                       <div className="pv2-qfoot">
                         {/* 🔴 「운송 확정」일 때만 — 그 전에는 배차 자체가 없어 빈 화면이다 */}
                         {isQuoteConfirmed(q.status) && (

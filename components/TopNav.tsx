@@ -10,7 +10,11 @@ import { onBadgeRefresh } from "@/lib/notifyBadgeRefresh";
 import { getCurrentStaffInfo, onCurrentStaffChange, clearCurrentStaffCache } from "@/lib/currentStaff";
 import NavCountBadge from "@/components/NavCountBadge";
 
-type NavItem = { href: string; label: string; key?: "applications" | "publicQuotes" | "portalRequests" };
+type NavItem = {
+  href: string;
+  label: string;
+  key?: "applications" | "publicQuotes" | "portalRequests" | "approvedQuotes";
+};
 type NavGroup = { label: string; items: NavItem[] };
 
 const NAV_GROUPS: NavGroup[] = [
@@ -35,7 +39,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "운송 운영",
     items: [
       { href: "/admin/rates", label: "운임기준표" },
-      { href: "/admin/quotes", label: "견적 관리" },
+      { href: "/admin/quotes", label: "견적 관리", key: "approvedQuotes" },
       { href: "/admin/orders", label: "운송오더" },
       { href: "/admin/drivers", label: "차주 관리" },
       { href: "/admin/dispatches", label: "배차 관리" },
@@ -141,7 +145,12 @@ function TopNavInner() {
   const searchParams = useSearchParams();
   const fromCustomers = searchParams.get("from") === "customers";
   const router = useRouter();
-  const [counts, setCounts] = useState({ portalRequests: 0, publicQuotes: 0, applications: 0 });
+  const [counts, setCounts] = useState({
+    portalRequests: 0,
+    publicQuotes: 0,
+    applications: 0,
+    approvedQuotes: 0,
+  });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -173,6 +182,41 @@ function TopNavInner() {
         .select("id", { count: "exact", head: true })
         .eq("status", "대기중");
       setCounts((prev) => ({ ...prev, portalRequests: count || 0 }));
+    }
+    // 🔴 화주가 「견적 승인」을 누르면 견적이 `수주` 로 바뀐다(27차 리뷰). 담당자에게는
+    //    **그 뒤에 할 일(운송오더 생성)이 남았다는 것**이 알림이어야 한다.
+    //    그래서 「수주인데 아직 운송오더가 없는 건」을 센다 — 담당자가 오더를 만들면
+    //    배지가 저절로 사라진다.
+    //    ⚠️ 담당자가 손으로 `수주` 로 바꾼 건도 같이 세어진다. 지금은 "누가 바꿨는지"를
+    //       DB 에 남기지 않기 때문이고(컬럼이 필요하다 — 28차 조사 항목), 어느 쪽이든
+    //       "오더를 만들어야 하는 건"이라 담당자가 할 일로는 똑같이 맞다.
+    //    🔴 실패하면 0 으로 둔다 — 배지 하나 때문에 상단메뉴가 통째로 깨지면 안 된다.
+    async function loadApprovedQuotes() {
+      try {
+        const { data: won } = await supabase
+          .from("quotes")
+          .select("id")
+          .eq("status", "수주")
+          .limit(300);
+        if (!won || won.length === 0) {
+          setCounts((prev) => ({ ...prev, approvedQuotes: 0 }));
+          return;
+        }
+        const { data: ordered } = await supabase
+          .from("orders")
+          .select("quote_id")
+          .in(
+            "quote_id",
+            won.map((q) => q.id)
+          );
+        const has = new Set((ordered || []).map((o: any) => o.quote_id));
+        setCounts((prev) => ({
+          ...prev,
+          approvedQuotes: won.filter((q) => !has.has(q.id)).length,
+        }));
+      } catch {
+        setCounts((prev) => ({ ...prev, approvedQuotes: 0 }));
+      }
     }
     async function loadPublicQuotes() {
       try {
@@ -206,6 +250,7 @@ function TopNavInner() {
     loadPortalRequests();
     loadPublicQuotes();
     loadApplications();
+    loadApprovedQuotes();
 
     // 공개문의·화주신청은 anon으로 직접 실시간 구독이 안 되는 테이블이라 15초마다 조용히 재조회
     const pollInterval = setInterval(() => {
@@ -216,6 +261,10 @@ function TopNavInner() {
     const channel = supabase
       .channel("topnav_portal_requests")
       .on("postgres_changes", { event: "*", schema: "public", table: "portal_order_requests" }, () => loadPortalRequests())
+      // 화주가 견적을 승인하면 `quotes` 가, 담당자가 오더를 만들면 `orders` 가 바뀐다 —
+      // 둘 다 이 배지의 입력이라 같이 구독한다.
+      .on("postgres_changes", { event: "*", schema: "public", table: "quotes" }, () => loadApprovedQuotes())
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => loadApprovedQuotes())
       .subscribe();
 
     // 관리자가 화주신청/공개문의를 방금 처리했으면 15초를 기다리지 않고 바로 배지 재조회
@@ -223,6 +272,7 @@ function TopNavInner() {
       loadPublicQuotes();
       loadApplications();
       loadPortalRequests();
+      loadApprovedQuotes();
     });
 
     return () => {

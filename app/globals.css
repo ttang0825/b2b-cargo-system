@@ -4986,6 +4986,14 @@ tbody tr:hover {
   font-weight: 800;
 }
 /* 🔴 합계 아래 여백 100px — 시안 실측. 입금 계좌가 이 뒤에 온다 */
+/* 🔴 공급가액 줄 — 견적서 PDF 와 같은 자리에 같은 모양으로 둔다(줄 단위 정합) */
+.pv2-qd-row-sub {
+  border-top: 1px solid var(--pv2-border);
+  font-weight: 700;
+}
+.pv2-qd-row-sub .pv2-qd-k {
+  color: var(--pv2-text);
+}
 .pv2-qd-total {
   border-top: 2px solid var(--pv2-text);
   padding: 22px 4px 0;

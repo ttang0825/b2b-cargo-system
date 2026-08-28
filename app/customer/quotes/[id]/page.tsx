@@ -274,8 +274,16 @@ export default function CustomerQuoteDetailPage() {
               <span className="pv2-qd-v-right">{money(it.amount)}</span>
             </div>
           ))}
+          {/* 🔴 「공급가액 (부가세 별도)」 줄 — 견적서 PDF 와 **줄 단위로 같아야 한다**.
+              27차 리뷰 전까지 이 줄이 상세에만 없어서, 같은 견적을 PDF 로 받으면
+              부가세 별도 금액이 보이고 화면에서는 안 보였다(31차 "쌍으로 움직인다"와
+              같은 결의 어긋남이다). 🔴 print 2종을 고치면 이 줄도 같이 볼 것. */}
+          <div className="pv2-qd-row pv2-qd-row-sub">
+            <span className="pv2-qd-k">공급가액 (부가세 별도)</span>
+            <span className="pv2-qd-v-right">{priceless ? "협의 중" : money(supply)}</span>
+          </div>
           <div className="pv2-qd-row">
-            <span className="pv2-qd-k">부가세</span>
+            <span className="pv2-qd-k">부가세 (10%)</span>
             <span className="pv2-qd-v-right">{vat === null ? "-" : money(vat)}</span>
           </div>
         </div>
