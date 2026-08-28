@@ -13,8 +13,13 @@ import { useListSearchSort } from "@/lib/useListSearchSort";
 import { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import { calcInclusiveAmount } from "@/lib/vat";
 import { downloadQuoteExcel } from "@/lib/quoteExcel";
-import { quoteStatusStyle, isQuoteConfirmed } from "@/lib/quoteStatusLabels";
+import {
+  quoteStatusStyle,
+  isQuoteConfirmed,
+  REJECTED_REQUEST_STYLE,
+} from "@/lib/quoteStatusLabels";
 import { shortAddress } from "@/lib/shortAddress";
+import { COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
 
 /**
  * 🔴 금액이 아직 없는 견적은 「협의 중」으로 보여준다(시안 실측).
@@ -46,6 +51,22 @@ const PERIOD_CHIPS: { value: DatePreset; label: string }[] = [
   { value: "all", label: "전체" },
 ];
 
+/**
+ * 🔴 반려된 발주 요청을 견적 목록에 섞는다(27차, 사용자 확정 2026-08-28).
+ *
+ * 26차가 「내 요청 내역」을 지우면서 반려 건을 볼 곳이 사라졌다. 승인된 건은 견적으로
+ * 전환돼 이 목록에 이미 있지만, 반려된 건은 문자 말고는 확인할 화면이 없었다.
+ * 화주는 사이드바 배지만 보고 무엇이 반려됐는지 모른다.
+ *
+ * 🔴 **승인된 발주 요청은 넣지 않는다** — 이미 견적으로 전환돼 있어 같은 건이 두 번
+ *    보인다. `대기중` 도 넣지 않는다(아직 아무 일도 일어나지 않은 것이다).
+ * 🔴 **반려 사유(`staff_note`)를 반드시 보여준다** — 사유 없이 "반려"만 뜨면 화주가
+ *    다시 문의한다. 그러면 이 화면을 만든 이유가 없어진다.
+ */
+type Row =
+  | { kind: "quote"; id: string; created_at: string; sortAmount: number | null; data: any }
+  | { kind: "rejected"; id: string; created_at: string; sortAmount: number | null; data: any };
+
 const SORT_OPTIONS = [
   { value: "created_at:desc", label: "견적일 최신순" },
   { value: "created_at:asc", label: "견적일 오래된순" },
@@ -56,6 +77,7 @@ const SORT_OPTIONS = [
 export default function CustomerQuotesPage() {
   const router = useRouter();
   const [quotes, setQuotes] = useState<any[]>([]);
+  const [rejected, setRejected] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<DatePreset>("all");
   // 엑셀 생성 중인 견적 id(버튼 중복 클릭 방지)
@@ -74,11 +96,34 @@ export default function CustomerQuotesPage() {
     }
   }
 
+  // 견적과 반려된 발주 요청을 한 목록으로 합친다 — 화주에게는 둘 다 "내가 보낸 건의
+  // 결과"라 따로 두면 어디를 봐야 하는지 또 갈린다.
+  const allRows: Row[] = useMemo(
+    () => [
+      ...quotes.map((q) => ({
+        kind: "quote" as const,
+        id: q.id,
+        created_at: q.created_at,
+        sortAmount: q.final_amount ?? null,
+        data: q,
+      })),
+      ...rejected.map((r) => ({
+        kind: "rejected" as const,
+        id: r.id,
+        created_at: r.created_at,
+        // 금액이 없는 건이라 금액 정렬에서는 항상 뒤로 간다
+        sortAmount: null,
+        data: r,
+      })),
+    ],
+    [quotes, rejected]
+  );
+
   const periodFiltered = useMemo(() => {
     const { from } = getDateRange(period);
-    if (!from) return quotes;
-    return quotes.filter((q) => q.created_at && q.created_at >= from);
-  }, [quotes, period]);
+    if (!from) return allRows;
+    return allRows.filter((r) => r.created_at && r.created_at >= from);
+  }, [allRows, period]);
 
   const {
     search,
@@ -87,14 +132,20 @@ export default function CustomerQuotesPage() {
     setSortKey,
     sortDir,
     setSortDir,
-    result: visibleQuotes,
-  } = useListSearchSort(
+    result: visibleRows,
+  } = useListSearchSort<Row>(
     periodFiltered,
     // 🔴 시안 실측 — 견적번호 · 구간 · 품목이 검색 대상이다
-    (q) => [q.quote_no, q.origin, q.destination, q.item, q.vehicle_type],
+    (r) => [
+      r.kind === "quote" ? r.data.quote_no : "발주 요청",
+      r.data.origin,
+      r.data.destination,
+      r.data.item,
+      r.data.vehicle_type,
+    ],
     {
-      created_at: (q) => q.created_at,
-      final_amount: (q) => q.final_amount,
+      created_at: (r) => r.created_at,
+      final_amount: (r) => r.sortAmount,
     },
     "created_at",
     "desc"
@@ -112,6 +163,20 @@ export default function CustomerQuotesPage() {
       .limit(100);
     if (error) setExcelError(`견적을 불러오지 못했습니다: ${error.message}`);
     setQuotes(data || []);
+
+    // 🔴 반려된 발주 요청만 가져온다 — `승인됨` 은 이미 견적으로 전환돼 위 목록에
+    //    있어서 넣으면 같은 건이 두 번 보이고, `대기중` 은 아직 결과가 없다.
+    //    ⚠️ 이 표에는 status CHECK 제약이 없다(실측) — 값은 코드가 쓰는 문자열이다.
+    const { data: rej, error: rErr } = await supabase
+      .from("portal_order_requests")
+      .select(
+        "id,origin,destination,vehicle_type,body_type,item,notes,staff_note,status,created_at"
+      )
+      .eq("status", "반려")
+      .limit(100);
+    if (rErr) setExcelError(`반려된 요청을 불러오지 못했습니다: ${rErr.message}`);
+    setRejected(rej || []);
+
     setLoading(false);
   }
 
@@ -121,6 +186,13 @@ export default function CustomerQuotesPage() {
     const channel = supabase
       .channel("customer_quotes_list")
       .on("postgres_changes", { event: "*", schema: "public", table: "quotes" }, () => load())
+      // 반려 건도 이 목록에 섞이므로 같이 구독한다 — 안 하면 담당자가 반려한 뒤에도
+      // 새로고침 전까지 화주 화면에 안 나타난다.
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "portal_order_requests" },
+        () => load()
+      )
       .subscribe();
 
     return () => {
@@ -183,7 +255,7 @@ export default function CustomerQuotesPage() {
 
       {loading ? (
         <div className="pv2-empty">불러오는 중...</div>
-      ) : visibleQuotes.length === 0 ? (
+      ) : visibleRows.length === 0 ? (
         <div className="pv2-card-empty">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -193,25 +265,29 @@ export default function CustomerQuotesPage() {
             style={{ width: 106 }}
           />
           <div className="pv2-card-empty-title">
-            {quotes.length === 0 ? "아직 받은 견적이 없습니다" : "조건에 맞는 견적이 없습니다"}
+            {allRows.length === 0 ? "아직 받은 견적이 없습니다" : "조건에 맞는 견적이 없습니다"}
           </div>
           <div className="pv2-card-empty-desc">
-            {quotes.length === 0
+            {allRows.length === 0
               ? "발주 요청을 보내시면 담당자가 확인 후 견적을 보내드립니다."
               : "기간이나 검색어를 바꿔보세요."}
           </div>
         </div>
       ) : (
         <div className="pv2-qlist">
-          {visibleQuotes.map((q) => {
-            const st = quoteStatusStyle(q.status);
+          {visibleRows.map((row) => {
+            const q = row.data;
+            const isRejected = row.kind === "rejected";
+            const st = isRejected ? REJECTED_REQUEST_STYLE : quoteStatusStyle(q.status);
             const opts = q.selected_options || {};
-            const meta = [q.vehicle_type, opts["차량형태"], opts["왕복/편도"], q.item]
-              .filter(Boolean)
-              .join(" · ");
+            const meta = isRejected
+              ? [q.vehicle_type, q.body_type, q.item].filter(Boolean).join(" · ")
+              : [q.vehicle_type, opts["차량형태"], opts["왕복/편도"], q.item]
+                  .filter(Boolean)
+                  .join(" · ");
 
             return (
-              <div key={q.id} className="pv2-qcard">
+              <div key={`${row.kind}-${row.id}`} className="pv2-qcard">
                 {/* ⚠️ 배지는 하나만 그린다. 시안 모바일은 배지와 견적번호가 한 줄인데,
                     둘이 서로 다른 부모에 있어 CSS 로는 합칠 수 없다 — 배지를 두 번
                     그리면 원칙 13번(양쪽 관리)의 사고가 난다. 모바일에서는 배지가
@@ -221,9 +297,9 @@ export default function CustomerQuotesPage() {
                 </span>
                 <div className="pv2-qbody">
                   <div className="pv2-qtop">
-                    <span className="pv2-qno">{q.quote_no}</span>
-                    <span className="pv2-qdate">{dateLabel(q.created_at)}</span>
-                    {q.loading_type === "mixable" && <MixableBadge />}
+                    <span className="pv2-qno">{isRejected ? "발주 요청" : q.quote_no}</span>
+                    <span className="pv2-qdate">{dateLabel(row.created_at)}</span>
+                    {!isRejected && q.loading_type === "mixable" && <MixableBadge />}
                   </div>
                   <div className="pv2-qroute">
                     {shortAddress(q.origin) || "-"} <span className="pv2-qarrow">→</span>{" "}
@@ -233,8 +309,17 @@ export default function CustomerQuotesPage() {
                     {q.origin || "-"} → {q.destination || "-"}
                   </div>
                   {meta && <div className="pv2-qmeta">{meta}</div>}
+                  {/* 🔴 사유 없이 "반려"만 뜨면 화주가 다시 문의한다 — 이 화면을 만든
+                      이유가 없어진다. 담당자가 사유를 안 적었으면 그렇다고 말해준다. */}
+                  {isRejected && (
+                    <div className="pv2-qreason">
+                      {q.staff_note
+                        ? `반려 사유 · ${q.staff_note}`
+                        : `반려 사유가 기재되지 않았습니다. 고객센터(${COMPANY_SUPPORT_PHONE})로 문의해주세요.`}
+                    </div>
+                  )}
                   {/* 🔴 「운송 확정」일 때만 — 그 전에는 배차 자체가 없어서 눌러도 빈 화면이다 */}
-                  {isQuoteConfirmed(q.status) && (
+                  {!isRejected && isQuoteConfirmed(q.status) && (
                     <button
                       type="button"
                       className="pv2-qgo"
@@ -244,44 +329,52 @@ export default function CustomerQuotesPage() {
                     </button>
                   )}
                 </div>
-                <div className="pv2-qright">
-                  <div>
-                    <div className="pv2-qprice">{priceLabel(q.final_amount)}</div>
-                    <div className="pv2-qvat">{vatLabel(q.final_amount)}</div>
+                {/* 🔴 반려 건은 금액 자리를 비운다 — 견적이 나온 적이 없다.
+                    견적서 버튼도 없다(내려받을 견적서 자체가 없다). */}
+                {!isRejected && (
+                  <div className="pv2-qright">
+                    <div>
+                      <div className="pv2-qprice">{priceLabel(q.final_amount)}</div>
+                      <div className="pv2-qvat">{vatLabel(q.final_amount)}</div>
+                    </div>
+                    <div className="pv2-qacts">
+                      <span className="pv2-qdl-wrap">
+                        <span className="pv2-qdl-label">견적서</span>
+                        <button
+                          type="button"
+                          className="pv2-qdl"
+                          title="PDF 다운로드"
+                          aria-label="견적서 PDF 다운로드"
+                          onClick={() => window.open(`/customer/quotes/${q.id}/print`, "_blank")}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src="/portal/pdf-icon.svg" alt="" style={{ width: 17, height: 17 }} />
+                        </button>
+                        {/* 엑셀은 새 탭 없이 그 자리에서 내려받는다. 조회는 로그인 세션으로
+                            하므로 RLS 가 본인 회사 견적만 내려준다 — 다른 회사 id 를 넣어도
+                            조회 자체가 실패한다. */}
+                        <button
+                          type="button"
+                          className="pv2-qdl"
+                          title="엑셀 다운로드"
+                          aria-label="견적서 엑셀 다운로드"
+                          disabled={excelBusyId === q.id}
+                          onClick={() => handleExcel(q.id)}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src="/portal/excel-icon.svg"
+                            alt=""
+                            style={{ width: 17, height: 17 }}
+                          />
+                        </button>
+                      </span>
+                      <Link className="pv2-qopen" href={`/customer/quotes/${q.id}`}>
+                        상세 보기
+                      </Link>
+                    </div>
                   </div>
-                  <div className="pv2-qacts">
-                    <span className="pv2-qdl-wrap">
-                      <span className="pv2-qdl-label">견적서</span>
-                      <button
-                        type="button"
-                        className="pv2-qdl"
-                        title="PDF 다운로드"
-                        aria-label="견적서 PDF 다운로드"
-                        onClick={() => window.open(`/customer/quotes/${q.id}/print`, "_blank")}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src="/portal/pdf-icon.svg" alt="" style={{ width: 17, height: 17 }} />
-                      </button>
-                      {/* 엑셀은 새 탭 없이 그 자리에서 내려받는다. 조회는 로그인 세션으로
-                          하므로 RLS 가 본인 회사 견적만 내려준다 — 다른 회사 id 를 넣어도
-                          조회 자체가 실패한다. */}
-                      <button
-                        type="button"
-                        className="pv2-qdl"
-                        title="엑셀 다운로드"
-                        aria-label="견적서 엑셀 다운로드"
-                        disabled={excelBusyId === q.id}
-                        onClick={() => handleExcel(q.id)}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src="/portal/excel-icon.svg" alt="" style={{ width: 17, height: 17 }} />
-                      </button>
-                    </span>
-                    <Link className="pv2-qopen" href={`/customer/quotes/${q.id}`}>
-                      상세 보기
-                    </Link>
-                  </div>
-                </div>
+                )}
               </div>
             );
           })}
