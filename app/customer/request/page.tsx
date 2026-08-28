@@ -1017,15 +1017,19 @@ export default function PortalRequestPage() {
             ⚠️ 문구를 여기 직접 적지 말 것 — `lib/legalInfo.ts`가 유일 정의처다. */}
         <div className="pv2-form-block pv2-consent">
           <div className="pv2-consent-title">{PORTAL_ORDER_THIRD_PARTY_CONSENT.title}</div>
-          {/* 🔴 **접힌 상태에서 남는 것은 고지 문장(intro)과 체크박스 두 개뿐이다.**
-              5라운드에는 거부권 안내(refusal)도 밖에 뒀는데 **6라운드에 사용자가 그것도
-              접으라고 확정**했다 — 접는 것이지 없애는 것이 아니고, 「자세히 보기」가
-              체크박스 바로 위에 있어 한 번 눌러 볼 수 있다.
-              🔴 **`intro` 는 접지 말 것** — 무엇을 왜 제공하는지까지 감추면 체크박스만
-              남아 동의를 구하는 문장이 화면에서 사라진다.
+          {/* 🔴 **접힌 상태에 남는 것은 제목 · 「자세히 보기」 · 체크박스 셋뿐이다.**
+              5라운드에 세부 4항목과 확인 문장을 접었고, 6라운드에 거부권 안내(refusal),
+              7라운드에 고지 문장(intro)까지 접으라고 사용자가 차례로 확정했다.
+              🔴 **세 라운드 모두 "접는 것이지 없애는 것이 아니다"** — 문구는 하나도 지우지
+              않았고 「자세히 보기」가 체크박스 바로 위에 있다. 옛 라운드 기록(「intro 는
+              접지 말 것」)을 근거로 되돌리지 말 것.
+              🔴 **그래서 제목이 유일하게 남는 설명이다.** `title` 이
+              「[필수] 상·하차지 담당자 정보 제3자 제공 동의」라서 접힌 화면에서도 무엇에
+              동의하는지가 읽히고, 체크박스의 「위 제3자 제공에」가 그 제목을 가리킨다.
+              **제목을 짧게 줄이거나 접음 안으로 넣지 말 것** — 그러면 접힌 화면에
+              체크박스만 남아 동의를 구하는 문장이 통째로 사라진다.
               ⚠️ 개인정보보호법 제15조 2항이 고지와 거부권 안내를 요구한다 — 접어도
               화면에 있긴 하지만 **문구 자체가 변호사 검토 대상이다**(47차 이후 계속). */}
-          <p className="pv2-consent-p">{PORTAL_ORDER_THIRD_PARTY_CONSENT.intro}</p>
           <button
             type="button"
             className="pv2-consent-more"
@@ -1039,6 +1043,7 @@ export default function PortalRequestPage() {
           </button>
           {consentOpen && (
             <div className="pv2-consent-detail">
+              <p className="pv2-consent-p">{PORTAL_ORDER_THIRD_PARTY_CONSENT.intro}</p>
               <ul className="pv2-consent-list">
                 {PORTAL_ORDER_THIRD_PARTY_CONSENT.items.map((line) => (
                   <li key={line}>{line}</li>
