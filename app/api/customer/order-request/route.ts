@@ -31,6 +31,10 @@ type Body = {
   origin_contact_name?: string | null;
   origin_contact_phone?: string | null;
   loading_type?: string | null;
+  // 27차 리뷰 4라운드 — 값은 `quotes`/`orders` 와 같은 문자열이다(라벨을 보내지 말 것)
+  collection_method?: string | null;
+  direct_collection_point?: string | null;
+  dropoff_arrival_type?: string | null;
   destination_company_name?: string | null;
   destination_contact_name?: string | null;
   destination_contact_phone?: string | null;
@@ -153,10 +157,48 @@ export async function POST(req: Request) {
   //    (Postgres 42703)이면 그 값만 빼고 한 번 더 시도한다(35차 `sms_logs.sender_phone`
   //    과 같은 방식). 마이그레이션이 반영된 뒤에는 첫 시도가 항상 성공한다.
   const loadingType = body.loading_type === "mixable" ? "mixable" : "exclusive";
+
+  // 🔴 **정산방식·도착구분도 서버에서 다시 검증한다**(원칙 25번) — 화면이 라디오로만
+  //    막으면 콘솔에서 아무 문자열이나 보낼 수 있고, 그러면 담당자 화면과
+  //    `quotes` 로의 승계가 통째로 깨진다. 허용값이 아니면 **조용히 null 로 떨어뜨린다**
+  //    (400 으로 막으면 배포 간극에서 접수 자체가 실패한다).
+  // 🔴 **지급조건은 선착불일 때만 남긴다** — 주선사 정산에는 그 개념이 없다
+  //    (`components/CollectionMethodInput.tsx` 가 관리자 화면에서 쓰는 규칙과 같다).
+  const collectionMethod =
+    body.collection_method === "broker" || body.collection_method === "driver_direct"
+      ? body.collection_method
+      : null;
+  const directCollectionPoint =
+    collectionMethod === "driver_direct" &&
+    ["pickup", "dropoff", "undecided"].includes(body.direct_collection_point)
+      ? body.direct_collection_point
+      : null;
+  const dropoffArrivalType =
+    body.dropoff_arrival_type === "same_day" || body.dropoff_arrival_type === "next_day"
+      ? body.dropoff_arrival_type
+      : null;
+
+  const settlementPayload = {
+    collection_method: collectionMethod,
+    direct_collection_point: directCollectionPoint,
+    dropoff_arrival_type: dropoffArrivalType,
+  };
+
+  // 🔴 컬럼이 아직 없는 배포본을 위한 단계적 후퇴 — 위 `loading_type` 주석과 같은 이유다.
+  //    ① 전부 → ② 정산방식 3개만 빼고 → ③ `loading_type` 까지 빼고.
+  //    🔴 **발주 접수 전체가 막히는 것보다 그 값만 빠지는 편이 낫다.**
+  const SETTLEMENT_COLS = /collection_method|direct_collection_point|dropoff_arrival_type/;
   let { data: inserted, error: insertError } = await insertRequest({
     ...basePayload,
     loading_type: loadingType,
+    ...settlementPayload,
   });
+  if (insertError && SETTLEMENT_COLS.test(insertError.message || "")) {
+    ({ data: inserted, error: insertError } = await insertRequest({
+      ...basePayload,
+      loading_type: loadingType,
+    }));
+  }
   if (insertError && /loading_type/.test(insertError.message || "")) {
     ({ data: inserted, error: insertError } = await insertRequest(basePayload));
   }

@@ -3684,6 +3684,31 @@ tbody tr:hover {
   }
 }
 
+/* 지급조건 — 선착불을 고르면 정산방식 아래에 한 줄 더 나온다(27차 리뷰 4라운드).
+   🔴 `.pv2-choice` 는 폭이 그리드 1/4 로 고정이라 「선불(상차지 지급)」 같은 긴 라벨이
+      잘린다. **두 클래스로 특성도를 올려서** 내용 폭으로 되돌린다 — 순서로 고치면
+      다음에 누가 규칙을 정렬할 때 조용히 되돌아간다(원칙 58번). */
+.pv2-subchoice {
+  margin-top: 4px;
+  padding-left: 2px;
+}
+.pv2-subchoice-label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--pv2-text-3);
+  margin-bottom: 2px;
+}
+.pv2-choice-row.pv2-choice-row-auto {
+  flex-wrap: wrap;
+}
+.pv2-choice.pv2-choice-auto {
+  width: auto;
+  flex: none;
+  padding: 6px 2px;
+  font-size: 14px;
+}
+
 /* ① 운송 구간 — 2열 + 가운데 화살표 원 */
 .pv2-swap-grid {
   display: grid;
