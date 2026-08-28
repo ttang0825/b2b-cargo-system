@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { COMPANY_INFO, COMPANY_BANK_ACCOUNT, hasBankAccount } from "@/lib/companyInfo";
 import { calcVatAmount, calcInclusiveAmount } from "@/lib/vat";
+import { getQuoteSettlementLine } from "@/lib/settlementLabels";
 import CompanyNameMark from "@/components/CompanyNameMark";
 
 type QuoteItem = { id: string; item_name: string | null; amount: number | null };
@@ -117,6 +118,13 @@ export default function QuotePrintPage() {
 
   const validUntil = new Date(quote.created_at);
   validUntil.setDate(validUntil.getDate() + 7);
+
+  // 🔴 네 산출물(견적서 상세·PDF 2종·엑셀)이 같은 함수로 만든 같은 문구를 쓴다
+  const settlementLine = getQuoteSettlementLine(
+    (quote as any).collection_method,
+    (quote as any).billing_cycle,
+    (quote as any).direct_collection_point
+  );
 
   const optionEntries = quote.selected_options
     ? Object.entries(quote.selected_options).filter(
@@ -340,6 +348,29 @@ export default function QuotePrintPage() {
               : won(calcInclusiveAmount(quote.final_amount))}
           </span>
         </div>
+
+        {/* 🔴 정산방식 (27차 리뷰 4라운드) — 「이 금액을 어떻게 정산하는가」라
+            합계와 입금 계좌 **사이**가 자리다.
+            🔴 문구는 `getQuoteSettlementLine()` 한 곳에서 만든다 — 견적서 상세·
+               PDF 2종·엑셀 네 곳이 각자 조합하면 조용히 어긋난다(31차 쌍 규칙).
+            🔴 값이 없으면 블록 자체를 그리지 않는다(입금 계좌와 같은 규칙) —
+               빈 라벨만 남으면 규격이 무너진다. */}
+        {settlementLine && (
+          <div style={{ marginTop: 24 }}>
+            <div
+              style={{
+                fontSize: 11.5,
+                fontWeight: 700,
+                color: "#888",
+                letterSpacing: "0.08em",
+                marginBottom: 6,
+              }}
+            >
+              정산방식
+            </div>
+            <div style={{ fontSize: 13.5, fontWeight: 600 }}>{settlementLine}</div>
+          </div>
+        )}
 
         {/* 🔴 값이 비면 블록 자체가 안 나온다 — 위 여백만 남으면 규격이 무너진다.
             시안은 합계 아래 100px 여백 뒤에 이 블록을 놓는데, 여기는 A4 인쇄물이라

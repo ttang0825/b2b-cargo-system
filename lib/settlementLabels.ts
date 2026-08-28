@@ -27,6 +27,28 @@ export function getPaymentConditionLabel(
   return null;
 }
 
+/**
+ * 🔴 견적서에 한 줄로 찍는 정산방식 문구 (27차 리뷰 4라운드).
+ *
+ *    **견적서 상세 · PDF 2종 · 엑셀 네 산출물이 이 함수 하나를 쓴다.** 각자 조합하면
+ *    조용히 어긋난다 — 31차가 "PDF 와 엑셀은 쌍으로 움직인다"고 못박은 지점이고,
+ *    53차가 부가세 행에서 실제로 어긋나 있는 것을 발견했다.
+ *
+ * ⚠️ 값이 없으면 `null` 을 돌려준다 — 호출부는 **블록 자체를 그리지 않아야 한다**
+ *    (입금 계좌와 같은 규칙, 27차 ⑦). 빈 라벨만 남으면 규격이 무너진다.
+ */
+export function getQuoteSettlementLine(
+  collectionMethod: string | null | undefined,
+  billingCycle: string | null | undefined,
+  directCollectionPoint: string | null | undefined
+): string | null {
+  if (!collectionMethod) return null;
+  const base = getSettlementDisplayLabel(collectionMethod, billingCycle);
+  if (base === "-") return null;
+  const condition = getPaymentConditionLabel(directCollectionPoint);
+  return condition ? `${base} · ${condition}` : base;
+}
+
 export const NETWORK_SETTLEMENT_TYPE_LABELS: Record<NetworkSettlementType, string> = {
   none: "해당 없음",
   fee_auto: "수수료 자동정산",

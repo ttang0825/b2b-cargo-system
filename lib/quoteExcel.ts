@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { exportDocumentToExcel, sanitizeFilename, type DocRow } from "@/lib/exportExcel";
 import { calcVatAmount, calcInclusiveAmount } from "@/lib/vat";
+import { getQuoteSettlementLine } from "@/lib/settlementLabels";
 
 // 견적서 엑셀 출력. 관리자 화면과 운송관리(화주포털) 화면이 **같은 함수를 공유**하므로
 // 두 곳에서 받은 파일의 내용이 갈리지 않는다.
@@ -51,7 +52,7 @@ export async function fetchQuoteForExcel(
   const { data: quote, error } = await client
     .from("quotes")
     .select(
-      "id,quote_no,origin,destination,distance_km,vehicle_type,item,base_fare,discount_amount,final_amount,created_at,notes,requested_pickup_at,requested_dropoff_at,selected_options,guest_name,companies(name)"
+      "id,quote_no,origin,destination,distance_km,vehicle_type,item,base_fare,discount_amount,final_amount,created_at,notes,requested_pickup_at,requested_dropoff_at,collection_method,billing_cycle,direct_collection_point,selected_options,guest_name,companies(name)"
     )
     .eq("id", quoteId)
     .single();
@@ -142,6 +143,18 @@ export function buildQuoteDocRows({ quote, items }: QuoteExcelData): DocRow[] {
   rows.push({ kind: "money", label: "공급가액 (부가세 별도)", value: supply });
   rows.push({ kind: "money", label: "부가세 (10%)", value: calcVatAmount(supply) });
   rows.push({ kind: "money", label: "합계 (부가세 포함)", value: calcInclusiveAmount(supply) });
+
+  // 🔴 정산방식 (27차 리뷰 4라운드) — 견적서 상세·PDF 2종과 **같은 자리·같은 문구**다.
+  //    문구는 `getQuoteSettlementLine()` 한 곳에서 만든다(31차 쌍 규칙).
+  //    🔴 값이 없으면 행 자체를 넣지 않는다 — 라벨만 남은 빈 행이 생기면 안 된다.
+  const settlementLine = getQuoteSettlementLine(
+    (quote as any).collection_method,
+    (quote as any).billing_cycle,
+    (quote as any).direct_collection_point
+  );
+  if (settlementLine) {
+    rows.push({ kind: "text", label: "정산방식", value: settlementLine });
+  }
 
   if (quote.notes) {
     rows.push({ kind: "blank" });

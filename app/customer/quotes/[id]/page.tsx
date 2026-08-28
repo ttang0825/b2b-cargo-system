@@ -19,6 +19,7 @@ import { COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
 import { calcVatAmount, calcInclusiveAmount } from "@/lib/vat";
 import { downloadQuoteExcel } from "@/lib/quoteExcel";
 import { quoteStatusStyle } from "@/lib/quoteStatusLabels";
+import { getQuoteSettlementLine } from "@/lib/settlementLabels";
 import MixableBadge from "@/components/MixableBadge";
 import Pv2PrintModal from "@/components/pv2/Pv2PrintModal";
 import { formatPhoneNumber } from "@/lib/constants";
@@ -83,7 +84,7 @@ export default function CustomerQuoteDetailPage() {
       const { data, error: qErr } = await supabase
         .from("quotes")
         .select(
-          "id,quote_no,origin,destination,vehicle_type,item,base_fare,final_amount,status,loading_type,selected_options,created_at,companies(id,name)"
+          "id,quote_no,origin,destination,vehicle_type,item,base_fare,final_amount,status,loading_type,collection_method,billing_cycle,direct_collection_point,selected_options,created_at,companies(id,name)"
         )
         .eq("id", id)
         .single();
@@ -154,6 +155,12 @@ export default function CustomerQuoteDetailPage() {
   // 🔴 금액이 없으면 부가세·총액도 계산하지 않는다 — 0원으로 찍으면 확정 금액처럼 보인다
   const vat = supply ? calcVatAmount(supply) : null;
   const grand = supply ? calcInclusiveAmount(supply) : null;
+  // 🔴 네 산출물(이 화면·PDF 2종·엑셀)이 같은 함수로 만든 같은 문구를 쓴다
+  const settlementLine = getQuoteSettlementLine(
+    (quote as any).collection_method,
+    (quote as any).billing_cycle,
+    (quote as any).direct_collection_point
+  );
   const priceless = !supply;
 
   return (
@@ -305,6 +312,17 @@ export default function CustomerQuoteDetailPage() {
           </span>
           <span className="pv2-qd-total-amount">{grand === null ? "협의 중" : money(grand)}</span>
         </div>
+
+        {/* 🔴 정산방식 (27차 리뷰 4라운드) — 합계와 입금 계좌 **사이**가 자리다.
+            🔴 문구는 `getQuoteSettlementLine()` 한 곳에서 만든다 — 이 화면과 PDF 2종·
+               엑셀이 각자 조합하면 조용히 어긋난다(31차 쌍 규칙, 위 「공급가액」 줄과 같은 결).
+            🔴 값이 없으면 블록 자체를 그리지 않는다(입금 계좌와 같은 규칙). */}
+        {settlementLine && (
+          <div className="pv2-qd-settle">
+            <div className="pv2-qd-bank-label">정산방식</div>
+            <div className="pv2-qd-settle-v">{settlementLine}</div>
+          </div>
+        )}
 
         {/* 🔴 값이 비면 블록 자체를 그리지 않는다 — 위 100px 여백만 남으면 규격이 무너진다 */}
         {hasBankAccount() && (

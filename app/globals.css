@@ -5143,6 +5143,16 @@ tbody tr:hover {
   font-weight: 800;
   letter-spacing: -0.015em;
 }
+/* 정산방식 — 합계와 입금 계좌 사이(27차 리뷰 4라운드).
+   라벨은 입금 계좌와 같은 것을 쓰고 값만 따로 둔다. */
+.pv2-qd-settle {
+  margin-bottom: 28px;
+}
+.pv2-qd-settle-v {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.6;
+}
 .pv2-qd-bank {
   display: flex;
   align-items: flex-end;
