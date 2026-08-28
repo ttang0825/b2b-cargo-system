@@ -2379,6 +2379,10 @@ tbody tr:hover {
   /* 입력 */
   --pv2-input-bg: #f4f3ef;
   --pv2-input-border: #e3e1dc;
+  /* 아이콘 — 트럭 dots 처럼 실루엣에 뚫는 구멍의 색이다(26차).
+     🔴 구멍은 "그 자리의 배경색"이어야 한다. 값을 고정색으로 박으면 한쪽에서 사라진다.
+        사이드바 선택 상태는 배경이 #1a1a1a, 모바일 탭바는 #ffffff 라 서로 반대다. */
+  --pv2-icon-knockout: var(--pv2-selected-bg);
   /* 반경 */
   --pv2-r-card: 20px;
   --pv2-r-mid: 16px;
@@ -2394,6 +2398,17 @@ tbody tr:hover {
   min-height: 100vh;
   background: var(--pv2-bg);
   color: var(--pv2-text);
+
+  /* 서체 — 시안과 같은 Pretendard (26차, 24차의 SUIT 유지 결정을 뒤집은 것).
+     🔴 **`:root` 의 전역 서체 변수를 건드리지 않는다.** 그 변수는 관리자 31개 화면과
+        공개 화면이 함께 쓰므로, 바꾸는 순간 사이트 전체 서체가 바뀐다.
+        여기서 `font-family` 를 직접 덮어써서 `.portal-v2` 안에서만 적용한다.
+     ⚠️ 이 주석에 그 변수 이름을 문자로 쓰지 말 것 — 완료조건 grep 에 주석 자신이
+        걸린다(12·51·54차에 이어 26차에도 걸렸다, 네 번째다).
+     🔴 CDN link 는 `app/layout.tsx` 에 있다 — 둘 중 하나만 있으면 폴백으로 떨어진다. */
+  font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "Malgun Gothic", sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* 긴 한글 문장 — 시안 §4 */
@@ -2781,6 +2796,8 @@ tbody tr:hover {
   .pv2-tab-icon {
     display: inline-flex;
     color: var(--pv2-icon);
+    /* 🔴 탭바는 흰 배경 위 검정 실루엣이라 구멍이 사이드바와 정반대다 */
+    --pv2-icon-knockout: var(--pv2-surface);
   }
   /* 🔴 선택 표시는 아이콘 채움 + 텍스트 진해짐만. 표시선·배경 없음 (시안 §7) */
   .pv2-tab-active {
@@ -3255,7 +3272,16 @@ tbody tr:hover {
   cursor: default;
 }
 
-/* 입력 공통 — 시안 border 1px #EBEAE7 · radius 12px */
+/* 입력 공통 — 시안 border 1px #EBEAE7 · radius 12px
+   🔴 **시안 `README.md` §4 의 "입력 배경 #F4F3EF · 테두리 #E3E1DC" 는 틀렸다** —
+      소스는 `background:#fff` · `border:1px solid #EBEAE7` 다. README 가 실제와
+      어긋나는 네 번째 곳이다(앞의 셋은 24차 지시서 0-4).
+   🔴 **크기가 하나가 아니다 — 발주 폼에만 세 종류가 있다**(시안 소스 실측).
+        11px 13px / 15px    주소 · 상세주소 · 품목            → `.pv2-input`
+        10px 11px / 14.5px  현장 상호 · 담당자명 · 연락처      → `.pv2-input-sm`
+        10px 11px / 15px    8칸 그리드(대기시간 · 경유지 수)   → `.pv2-input-grid`
+      ⚠️ 지시서 §3-3 이 적은 한 벌(10px 11px / 15px)은 이 셋 중 **그리드 칸**이다.
+         셋을 하나로 합치면 주소칸이 작아지고 담당자칸이 커진다. */
 .pv2-input,
 .pv2-textarea {
   width: 100%;
@@ -3268,10 +3294,15 @@ tbody tr:hover {
   font-family: inherit;
   color: var(--pv2-text);
   min-width: 0;
+  transition: box-shadow 0.12s ease, border-color 0.12s ease;
 }
 .pv2-input-sm {
   padding: 10px 11px;
   font-size: 14.5px;
+}
+.pv2-input-grid {
+  padding: 10px 11px;
+  font-size: 15px;
 }
 .pv2-textarea {
   resize: vertical;
@@ -3280,11 +3311,25 @@ tbody tr:hover {
 .pv2-textarea::placeholder {
   color: var(--pv2-text-4);
 }
-.pv2-input:focus,
-.pv2-textarea:focus,
-.pv2-select:focus {
+/* 포커스 — 시안은 `outline:none` + 옐로 글로우다(지적 4번).
+   🔴 **테두리 색을 바꾸지 말 것** — 시안은 테두리를 그대로 두고 바깥에 3px 글로우만
+      얹는다. 테두리를 바꾸면 글자 폭이 그대로여도 칸이 움직이는 것처럼 보인다.
+   🔴 클래스가 아니라 요소 선택자다 — 포털 안에는 공유 컴포넌트(주소검색 등)가
+      쓰는 `.pv2-*` 아닌 입력이 섞여 있어서, 클래스로만 걸면 그것들만 옛 포커스로 남는다.
+      `.portal-v2` 안으로 범위를 좁혔으므로 관리자에는 닿지 않는다. */
+.portal-v2 input:not([type="checkbox"]):not([type="radio"]):focus,
+.portal-v2 select:focus,
+.portal-v2 textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(255, 216, 51, 0.3);
+}
+/* 🔴 **체크박스·라디오는 제외한다**(리뷰 ②) — 글로우가 그 요소의 네모 박스를 따라가서
+   17px 원형 라디오 옆에 **옅은 노란 사각형**이 생긴다. 대신 키보드 포커스에만
+   동그란 링을 준다(마우스로 고를 때는 안 뜨고, Tab 으로 올 때만 뜬다). */
+.portal-v2 input[type="checkbox"]:focus-visible,
+.portal-v2 input[type="radio"]:focus-visible {
   outline: 2px solid var(--pv2-yellow);
-  outline-offset: -1px;
+  outline-offset: 2px;
 }
 .pv2-field {
   display: flex;
@@ -3310,6 +3355,7 @@ tbody tr:hover {
   color: var(--pv2-text);
   cursor: pointer;
   min-width: 0;
+  transition: box-shadow 0.12s ease;
 }
 .pv2-select:hover {
   background: var(--pv2-hover-card);
@@ -3325,9 +3371,267 @@ tbody tr:hover {
 .pv2-select-load:hover {
   background: var(--pv2-hover-grey);
 }
+/* 접수 결과 배너 — 시안은 제출 버튼과 안내문을 **이것으로 갈아치운다**(리뷰 ⑦).
+   `background:#FFF9D6 · border 1px #EBEAE7 · radius 14px · padding 18px 24px · gap 16px` */
+.pv2-sent {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--pv2-yellow-soft);
+  border: 1px solid var(--pv2-border);
+  border-radius: 14px;
+  padding: 18px 24px;
+  flex-wrap: wrap;
+}
+.pv2-sent-mark {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--pv2-yellow);
+  color: var(--pv2-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15.5px;
+  font-weight: 700;
+}
+.pv2-sent-text {
+  flex: 1;
+  min-width: 200px;
+  font-size: 15px;
+  color: var(--pv2-text);
+  font-weight: 600;
+}
+.pv2-sent-go {
+  flex: none;
+  /* `<a>` 라 기본 밑줄이 생긴다 — 시안은 버튼이라 밑줄이 없다 */
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  border: none;
+  cursor: pointer;
+  background: var(--pv2-selected-bg);
+  color: var(--pv2-selected-text);
+  font-size: 14.5px;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 10px 16px;
+  border-radius: 9px;
+}
+.pv2-sent-go:hover {
+  background: #000;
+}
+.pv2-sent-new {
+  flex: none;
+  border: 1px solid #e5d9a8;
+  background: var(--pv2-surface);
+  color: var(--pv2-yellow-text);
+  font-size: 14.5px;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 10px 16px;
+  border-radius: 9px;
+  cursor: pointer;
+}
 .pv2-load-slot {
   width: calc((100% - 48px) / 4);
   min-width: 190px;
+}
+/* 🔴 **특성도를 두 칸으로 올려 둔다**(리뷰 ④) — `.pv2-selectwrap` 이 `width:100%` 라
+   같은 특성도(0,0,1,0)에서는 **선언 순서**가 승부를 갈라 불러오기 버튼이 블록 전체
+   폭으로 늘어났다. 26차 함정과 같은 종류이니 순서로 풀지 말 것. */
+.pv2-selectwrap.pv2-load-slot {
+  width: calc((100% - 48px) / 4);
+  min-width: 190px;
+}
+/* 드롭다운 트리거 내부 — 값 + ▼ (26차, `<button>` 으로 바뀌면서 필요해졌다) */
+.pv2-selectwrap {
+  position: relative;
+  min-width: 0;
+  width: 100%;
+}
+.pv2-select {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+}
+.pv2-select:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.pv2-select-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* ⚠️ **트리거 라벨을 흐리게 하지 말 것**(리뷰 ①·③) — 시안은 값이 비어 있어도
+   `#1A1A1A` 로 그린다. `날짜 선택`·`시간 선택`·`저장된 …불러오기`·`자주 쓰는 …` 는
+   빈 값 안내가 아니라 **그 버튼의 이름**이라, 회색으로 두면 비활성처럼 보인다.
+   `.is-placeholder` 는 클래스만 남겨 둔다(값 유무를 나중에 다르게 쓰고 싶을 때를 위해). */
+/* 🔴 화살표는 글자다(시안 소스) — 아이콘으로 바꾸지 말 것 */
+.pv2-select-arrow {
+  flex: none;
+  font-size: 12px;
+  color: var(--pv2-text-3);
+  line-height: 1;
+}
+/* 팝오버 — 🔴 반경 14px 이다(카드 12px 과 다르다, 지적 6번) */
+.pv2-pop {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: var(--pv2-surface);
+  border: 1px solid var(--pv2-border);
+  border-radius: 14px;
+  box-shadow: 0 4px 12px rgba(26, 26, 26, 0.08);
+  padding: 6px 0;
+  overflow: hidden;
+  z-index: 10;
+  box-sizing: border-box;
+}
+/* 시간 목록처럼 긴 것 — 얇은 스크롤바 */
+.pv2-pop-scroll {
+  max-height: 340px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--pv2-border) transparent;
+}
+.pv2-pop-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.pv2-pop-scroll::-webkit-scrollbar-thumb {
+  background: var(--pv2-border);
+  border-radius: 99px;
+}
+.pv2-pop-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  border-radius: 0;
+  padding: 9px 14px;
+  font-size: 14.5px;
+  font-family: inherit;
+  color: var(--pv2-text);
+  cursor: pointer;
+}
+/* 🔴 hover 는 옅은 노랑이다(지적 7번) — 회색으로 되돌리지 말 것 */
+.pv2-pop-item:hover,
+.pv2-pop-item.is-active {
+  background: var(--pv2-hover-grey);
+}
+.pv2-pop-item:disabled {
+  color: var(--pv2-text-4);
+  cursor: default;
+  background: none;
+}
+/* 목록이 하나도 없을 때 — 빈 팝오버가 뜨면 고장난 것처럼 보인다 */
+.pv2-pop-empty {
+  padding: 9px 14px;
+  font-size: 14.5px;
+  color: var(--pv2-text-3);
+}
+/* 달력 — 🔴 `<input type="date">` 대신 직접 그린다(지적 8·9번).
+   폭 252px 고정 · z-index 11(드롭다운 10보다 위) */
+.pv2-cal {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  width: 252px;
+  background: var(--pv2-surface);
+  border: 1px solid var(--pv2-border);
+  border-radius: 14px;
+  box-shadow: 0 4px 12px rgba(26, 26, 26, 0.08);
+  padding: 12px;
+  z-index: 11;
+  box-sizing: border-box;
+}
+.pv2-cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.pv2-cal-nav {
+  border: none;
+  background: var(--pv2-input-bg);
+  border-radius: 8px;
+  padding: 4px 9px;
+  font-size: 13.5px;
+  font-family: inherit;
+  color: var(--pv2-text);
+  cursor: pointer;
+}
+/* 🔴 갈 수 없는 달의 버튼은 숨기지 말고 흐리게 둔다 — 사라지면 칸이 움직인다 */
+.pv2-cal-nav:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.pv2-cal-title {
+  font-size: 14.5px;
+  font-weight: 700;
+}
+.pv2-cal-week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  margin-bottom: 2px;
+}
+.pv2-cal-wd {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 0;
+  color: var(--pv2-text-3);
+}
+.pv2-cal-wd.is-sun {
+  color: #c05b54;
+}
+.pv2-cal-wd.is-sat {
+  color: #4c6fbf;
+}
+.pv2-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.pv2-cal-day {
+  border: none;
+  background: transparent;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 13.5px;
+  font-family: inherit;
+  color: var(--pv2-text);
+  padding: 0;
+  cursor: pointer;
+}
+.pv2-cal-day:hover {
+  background: var(--pv2-hover-grey);
+}
+.pv2-cal-day.is-sel {
+  background: var(--pv2-yellow);
+  color: var(--pv2-text);
+  font-weight: 800;
+}
+/* 🔴 범위 밖은 숨기지 않고 흐리게 두고 클릭만 막는다(시안) —
+   없애면 그 달에 고를 수 있는 날이 몇 개인지 화주가 가늠하지 못한다 */
+.pv2-cal-day.is-out {
+  color: var(--pv2-border);
+  cursor: default;
+}
+.pv2-cal-day.is-out:hover {
+  background: transparent;
+}
+.pv2-cal-day.is-blank {
+  color: transparent;
 }
 
 /* 적재구분 — 작은 원형 라디오 + 라벨. 칸 폭은 `.pv2-grid-4` 한 칸과 같게 맞춘다.
@@ -3658,7 +3962,8 @@ tbody tr:hover {
   color: var(--pv2-text);
   background: var(--pv2-border);
 }
-.pv2-type-cargo {
+.pv2-type-cargo,
+.pv2-type-note {
   color: var(--pv2-text-2);
   background: var(--pv2-input-bg);
 }
@@ -3698,6 +4003,14 @@ tbody tr:hover {
   font-size: 13.5px;
   color: var(--pv2-text-3);
   margin-top: 3px;
+}
+/* 요청 프리셋 카드 본문 — 화주가 적은 줄바꿈을 그대로 살린다 */
+.pv2-saved-note {
+  font-size: 14px;
+  color: var(--pv2-text-3);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 .pv2-note-chip {
   margin-top: 10px;
@@ -3835,33 +4148,41 @@ tbody tr:hover {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-height: 26px;
   flex-wrap: wrap;
 }
+/* 오늘·내일 칩 — 시안은 **테두리 없는 회색 알약**이다(지적 10번).
+   흰 배경 + 테두리 + 반경 8px 이던 것을 시안 값으로 맞췄다. */
 .pv2-chip {
-  border: 1px solid var(--pv2-border);
-  background: var(--pv2-surface);
-  border-radius: var(--pv2-r-badge);
-  padding: 5px 12px;
-  font-size: 13.5px;
+  border: none;
+  background: var(--pv2-input-bg);
+  border-radius: var(--pv2-r-pill);
+  padding: 4px 11px;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--pv2-text-2);
+  color: var(--pv2-text);
   font-family: inherit;
   cursor: pointer;
 }
 .pv2-chip:hover:not(:disabled) {
   background: var(--pv2-hover-grey);
 }
+/* ⚠️ 시안에는 칩의 선택 상태가 없다 — 우리는 지금 고른 날짜가 오늘/내일이면 표시해준다.
+   달력의 선택된 날과 같은 옐로를 써서 시안의 어휘 안에 머문다(검정 알약은 이 크기에서
+   너무 무겁다). */
 .pv2-chip-on {
-  background: var(--pv2-selected-bg);
-  border-color: var(--pv2-selected-bg);
-  color: var(--pv2-selected-text);
+  background: var(--pv2-yellow);
+  color: var(--pv2-text);
+  font-weight: 800;
 }
+/* 🔴 범위 밖이면 `disabled` 다 — 칩이 하한을 우회하는 구멍을 막는 장치(25차 ⑩) */
 .pv2-chip:disabled {
   opacity: 0.4;
   cursor: default;
 }
 .pv2-dt-hint {
-  font-size: 13px;
+  margin-left: 4px;
+  font-size: 12.5px;
   color: var(--pv2-text-3);
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 // 🔴 희망 톤수는 배열 그대로다(22차 이후 11종). 로그인한 화주만 보는 화면이라
 //   공개 화면의 금지 표현 기준(32차·12차)이 적용되지 않는다 — 사용자 결정 2026-08-26.
@@ -20,12 +21,10 @@ import Pv2PromptModal from "@/components/pv2/Pv2PromptModal";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import { localInputToISOString } from "@/lib/localDateTime";
 import { PORTAL_ORDER_THIRD_PARTY_CONSENT } from "@/lib/legalInfo";
-import { useListSearchSort, sortIndicator } from "@/lib/useListSearchSort";
-import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
+import Pv2Select from "@/components/pv2/Pv2Select";
 import {
   loadPresets,
   savePreset,
-  deletePreset,
   sanitizeCargoPayload,
   type CargoPresetPayload,
   type RequestPresetPayload,
@@ -72,7 +71,6 @@ const EMPTY_LEG_CONTACT = {
 
 export default function PortalRequestPage() {
   const [companyId, setCompanyId] = useState<string | null>(null);
-  const [requests, setRequests] = useState<any[]>([]);
   const [savedLocations, setSavedLocations] = useState<SavedLocation[]>([]);
   const [surcharges, setSurcharges] = useState<Surcharge[]>([]);
   const [cargoPresets, setCargoPresets] = useState<CustomerPreset<CargoPresetPayload>[]>([]);
@@ -86,42 +84,11 @@ export default function PortalRequestPage() {
   const [namePrompt, setNamePrompt] = useState<{ kind: "cargo" | "note"; initial: string } | null>(
     null
   );
-  const [pendingNoteDelete, setPendingNoteDelete] =
-    useState<CustomerPreset<RequestPresetPayload> | null>(null);
   // 🔴 제3자 제공 동의(20차). `form`과 분리된 별도 state라 **서버로 명시적으로 함께 보내야**
   // 한다 — 14차 전의 `/quote`가 정확히 이 값을 안 보내서 동의가 저장되지 않고 있었다.
   const [thirdPartyAgreed, setThirdPartyAgreed] = useState(false);
   const [saveOrigin, setSaveOrigin] = useState(false);
   const [saveDestination, setSaveDestination] = useState(false);
-  const [period, setPeriod] = useState<DatePreset>("all");
-
-  const periodFilteredRequests = useMemo(() => {
-    const { from } = getDateRange(period);
-    if (!from) return requests;
-    return requests.filter((r) => r.created_at && r.created_at >= from);
-  }, [requests, period]);
-
-  const {
-    search: requestSearch,
-    setSearch: setRequestSearch,
-    sortKey: requestSortKey,
-    setSortKey: setRequestSortKey,
-    sortDir: requestSortDir,
-    setSortDir: setRequestSortDir,
-    toggleSort: toggleRequestSort,
-    result: visibleRequests,
-  } = useListSearchSort(
-    periodFilteredRequests,
-    (r) => [r.origin, r.destination, r.vehicle_type, r.body_type, r.status],
-    {
-      created_at: (r) => r.created_at,
-      requested_pickup_at: (r) => r.requested_pickup_at,
-      status: (r) => r.status,
-    },
-    "created_at",
-    "desc"
-  );
-
   const [form, setForm] = useState({
     origin: "",
     originDetail: "",
@@ -187,18 +154,6 @@ export default function PortalRequestPage() {
 
   function optionsOf(category: string) {
     return surcharges.filter((s) => s.category === category).map((s) => s.option_name);
-  }
-
-  async function loadRequests(cid: string) {
-    const { data } = await supabase
-      .from("portal_order_requests")
-      .select(
-        "id,origin,destination,vehicle_type,body_type,item,notes,requested_pickup_at,requested_dropoff_at,status,staff_note,quote_id,created_at,quotes(quote_no,status,final_amount)"
-      )
-      .eq("company_id", cid)
-      .order("created_at", { ascending: false })
-      .limit(30);
-    setRequests(data || []);
   }
 
   async function loadSavedLocations(cid: string) {
@@ -277,7 +232,6 @@ export default function PortalRequestPage() {
         }
 
         await Promise.all([
-          loadRequests(account.company_id),
           loadSavedLocations(account.company_id),
           loadPresetLists(account.company_id),
           loadSurcharges(),
@@ -287,19 +241,10 @@ export default function PortalRequestPage() {
     }
     init();
 
-    const channel = supabase
-      .channel("portal_requests_customer")
-      .on("postgres_changes", { event: "*", schema: "public", table: "portal_order_requests" }, () => {
-        setCompanyId((cid) => {
-          if (cid) loadRequests(cid);
-          return cid;
-        });
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    // ⚠️ **`portal_order_requests` Realtime 구독을 없앴다** — 이 화면이 더 이상 요청
+    //    목록을 그리지 않아서 이벤트를 받아도 할 일이 없다(리뷰 ⑥).
+    //    🔴 **사이드바 「발주 요청」 배지는 그대로 동작한다** — 그 구독과 카운트는
+    //       `CustomerPortalShell` 에 따로 있고, 이 화면에 들어오면 확인 처리도 거기서 한다.
   }, []);
 
   function setField(key: keyof typeof form, value: string) {
@@ -413,25 +358,6 @@ export default function PortalRequestPage() {
     loadPresetLists(companyId);
   }
 
-  /** 🔴 요청 프리셋은 관리 화면에 목록이 없다(시안에 없음) — 여기서 지울 수 없으면
-   *   잘못 저장한 프리셋을 영영 지울 방법이 없다. */
-  async function handleDeleteNotePreset(preset: CustomerPreset<RequestPresetPayload>) {
-    if (!companyId) return;
-    // 🔴 `window.confirm` 을 쓰지 않는다 — 저장 팝업과 모양이 갈린다(PR #103 리뷰 2·9번)
-    setPendingNoteDelete(preset);
-  }
-
-  async function confirmDeleteNotePreset() {
-    const preset = pendingNoteDelete;
-    if (!companyId || !preset) return;
-    setPendingNoteDelete(null);
-    const { error: delError } = await deletePreset(supabase, preset.id);
-    if (delError) {
-      setError(delError);
-      return;
-    }
-    loadPresetLists(companyId);
-  }
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.origin.trim() || !form.destination.trim()) {
@@ -597,17 +523,6 @@ export default function PortalRequestPage() {
       waitingMinutes: "",
       waypointCount: "",
     }));
-    loadRequests(companyId);
-  }
-
-  async function handleDeleteRequest(id: string) {
-    if (!window.confirm("이 요청을 삭제하시겠습니까?")) return;
-    const { error: deleteError } = await supabase.from("portal_order_requests").delete().eq("id", id);
-    if (deleteError) {
-      setError(deleteError.message);
-      return;
-    }
-    if (companyId) loadRequests(companyId);
   }
 
 
@@ -629,28 +544,20 @@ export default function PortalRequestPage() {
           <span className="pv2-leg-title">{isFrom ? "출발지" : "도착지"}</span>
           <span className="pv2-leg-sub">{isFrom ? "상차지 정보 *" : "하차지 정보 *"}</span>
         </div>
-        <select
-          className="pv2-select pv2-select-load"
+        <Pv2Select
+          className="pv2-select-load"
           value=""
-          onChange={(e) => {
-            const found = list.find((l) => l.id === e.target.value);
+          onChange={(v) => {
+            const found = list.find((l) => l.id === v);
             if (found) applyLocation(side, found);
           }}
-          aria-label={isFrom ? "저장된 상차지 불러오기" : "저장된 하차지 불러오기"}
-        >
-          <option value="">
-            {list.length === 0
-              ? "저장된 배송지가 없습니다"
-              : isFrom
-              ? "저장된 상차지 불러오기"
-              : "저장된 하차지 불러오기"}
-          </option>
-          {list.map((l) => (
-            <option key={l.id} value={l.id}>
-              {locLabel(l)}
-            </option>
-          ))}
-        </select>
+          ariaLabel={isFrom ? "저장된 상차지 불러오기" : "저장된 하차지 불러오기"}
+          /* 🔴 안내 문구는 **트리거에만** 둔다 — 목록 첫 줄에 또 넣으면 같은 글이
+             두 번 보인다(리뷰 ④). 저장된 배송지만 목록에 들어간다. */
+          placeholder={isFrom ? "저장된 상차지 불러오기" : "저장된 하차지 불러오기"}
+          emptyLabel="저장된 배송지가 없습니다"
+          options={list.map((l) => ({ value: l.id, label: locLabel(l) }))}
+        />
         <Pv2AddressField
           value={isFrom ? form.origin : form.destination}
           detailValue={isFrom ? form.originDetail : form.destinationDetail}
@@ -723,18 +630,15 @@ export default function PortalRequestPage() {
         <label className="pv2-field-label" htmlFor={`pv2-f-${key}`}>
           {label}
         </label>
-        <select
+        <Pv2Select
           id={`pv2-f-${key}`}
-          className="pv2-select"
           value={(form as any)[key] || ""}
-          onChange={(e) => setField(key as keyof typeof form, e.target.value)}
-        >
-          {options.map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => setField(key as keyof typeof form, v)}
+          ariaLabel={label}
+          /* 차량형태 21종처럼 긴 목록은 잘리고 스크롤된다 */
+          scroll={options.length > 12}
+          options={options.map((o) => ({ value: o, label: o }))}
+        />
       </div>
     );
   }
@@ -780,24 +684,18 @@ export default function PortalRequestPage() {
             </button>
           </div>
           <div className="pv2-load-slot" style={{ marginBottom: 16 }}>
-            <select
-              className="pv2-select pv2-select-load"
+            <Pv2Select
+              className="pv2-select-load"
               value=""
-              onChange={(e) => {
-                const found = cargoPresets.find((p) => p.id === e.target.value);
+              onChange={(v) => {
+                const found = cargoPresets.find((p) => p.id === v);
                 if (found) applyCargoPreset(found);
               }}
-              aria-label="자주 쓰는 화물 불러오기"
-            >
-              <option value="">
-                {cargoPresets.length === 0 ? "저장된 화물이 없습니다" : "자주 쓰는 화물 불러오기"}
-              </option>
-              {cargoPresets.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+              ariaLabel="자주 쓰는 화물 불러오기"
+              placeholder="자주 쓰는 화물 불러오기"
+              emptyLabel="저장된 화물이 없습니다"
+              options={cargoPresets.map((p) => ({ value: p.id, label: p.name }))}
+            />
           </div>
           <div className="pv2-grid-4">
             {renderSelect("희망 톤수", "vehicle_type", VEHICLE_TYPES_ALL)}
@@ -813,7 +711,7 @@ export default function PortalRequestPage() {
               </label>
               <input
                 id="pv2-f-wait"
-                className="pv2-input pv2-input-sm"
+                className="pv2-input pv2-input-grid"
                 inputMode="numeric"
                 value={form.waitingMinutes}
                 onChange={(e) => setField("waitingMinutes", e.target.value.replace(/[^0-9]/g, ""))}
@@ -826,7 +724,7 @@ export default function PortalRequestPage() {
               </label>
               <input
                 id="pv2-f-way"
-                className="pv2-input pv2-input-sm"
+                className="pv2-input pv2-input-grid"
                 inputMode="numeric"
                 value={form.waypointCount}
                 onChange={(e) => setField("waypointCount", e.target.value.replace(/[^0-9]/g, ""))}
@@ -920,46 +818,24 @@ export default function PortalRequestPage() {
               현재 요청 저장
             </button>
           </div>
+          {/* 🔴 여기에 「요청사항 삭제」 드롭다운을 다시 만들지 말 것(PR #104 리뷰 3라운드).
+              프리셋 관리(추가·수정·삭제)는 **배송지·화물 관리 화면 한 곳**으로 모았다 —
+              배송지·화물과 관리 방식이 갈리면 화주가 어디서 지우는지 매번 헷갈린다.
+              이 화면에는 "불러오기"와 "현재 요청 저장"만 남는다. */}
           <div className="pv2-load-row">
-            <select
-              className="pv2-select pv2-select-load pv2-load-slot"
+            <Pv2Select
+              className="pv2-select-load"
+              wrapClassName="pv2-load-slot"
               value=""
-              onChange={(e) => {
-                const found = notePresets.find((p) => p.id === e.target.value);
+              onChange={(v) => {
+                const found = notePresets.find((p) => p.id === v);
                 if (found) setField("notes", found.payload?.notes || "");
               }}
-              aria-label="자주 쓰는 요청 불러오기"
-            >
-              <option value="">
-                {notePresets.length === 0 ? "저장된 요청이 없습니다" : "자주 쓰는 요청 불러오기"}
-              </option>
-              {notePresets.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-            {/* 🔴 관리 화면에 요청 프리셋 목록이 없다(시안에 없음) — 여기에 삭제 수단이
-                없으면 잘못 저장한 프리셋을 지울 방법이 아예 없다. */}
-            {notePresets.length > 0 && (
-              <select
-                className="pv2-select pv2-select-load"
-                value=""
-                onChange={(e) => {
-                  const found = notePresets.find((p) => p.id === e.target.value);
-                  if (found) handleDeleteNotePreset(found);
-                }}
-                aria-label="자주 쓰는 요청 삭제"
-                style={{ flex: "0 0 92px" }}
-              >
-                <option value="">삭제</option>
-                {notePresets.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            )}
+              ariaLabel="자주 쓰는 요청 불러오기"
+              placeholder="자주 쓰는 요청 불러오기"
+              emptyLabel="저장된 요청이 없습니다"
+              options={notePresets.map((p) => ({ value: p.id, label: p.name }))}
+            />
           </div>
           <textarea
             className="pv2-textarea"
@@ -997,213 +873,53 @@ export default function PortalRequestPage() {
         </div>
 
         {error && <div className="pv2-alert pv2-alert-error">{error}</div>}
-        {success && (
-          <div className="pv2-alert pv2-alert-ok">
-            요청이 접수되었습니다. 담당자 확인 후 연락드리겠습니다.
-          </div>
-        )}
         {presetMsg && (
           <div className="pv2-alert pv2-alert-ok" onClick={() => setPresetMsg(null)}>
             {presetMsg}
           </div>
         )}
 
-        <div className="pv2-submit-wrap">
-          <button className="pv2-submit" type="submit" disabled={saving}>
-            {saving ? "요청 중..." : "운송 요청 보내기"}
-            <svg
-              width="19"
-              height="19"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M4 12h15M13 6l6 6-6 6" />
-            </svg>
-          </button>
-          <div className="pv2-submit-note">
-            요청 후 담당자가 운임을 확정하면 문자와 견적 확인 화면으로 안내됩니다.
-          </div>
-        </div>
-      </form>
-      {/* 🔴 「내 요청 내역」은 시안에 없지만 **현행 기능이라 남긴다**(지시서 3-1-e).
-          검색·정렬·기간 프리셋은 11차(51차 세션)에 넣은 것이며 화주가 실제로 쓴다. */}
-      <div className="pv2-card pv2-request-list" style={{ overflowX: "auto", marginTop: 28 }}>
-        <div className="pv2-block-head">
-          내 요청 내역
-        </div>
-        {requests.length > 0 && (
-          <div style={{ padding: "0 20px", marginTop: 16 }}>
-            <div style={{ marginBottom: 10 }}>
-              <DateRangeFilter value={period} onChange={setPeriod} />
+        {/* 🔴 접수되면 **제출 버튼과 안내문을 이 배너로 갈아치운다**(시안 `sc-if sent`).
+            둘을 같이 두면 방금 보낸 사람이 한 번 더 누르게 된다. */}
+        {success ? (
+          <div className="pv2-sent" role="status">
+            <span className="pv2-sent-mark" aria-hidden="true">
+              ✓
+            </span>
+            <div className="pv2-sent-text">
+              발주 요청이 접수되었습니다. 담당자 확인 후 견적을 보내드립니다.
             </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-              <input
-                type="text"
-                placeholder="구간·차량·상태 검색"
-                value={requestSearch}
-                onChange={(e) => setRequestSearch(e.target.value)}
-                style={{ flex: 1, minWidth: 180, fontSize: 13, padding: "8px 12px" }}
-              />
-              <select
-                className="mobile-only"
-                value={`${requestSortKey}:${requestSortDir}`}
-                onChange={(e) => {
-                  const [key, dir] = e.target.value.split(":");
-                  setRequestSortKey(key);
-                  setRequestSortDir(dir as "asc" | "desc");
-                }}
-                style={{ fontSize: 13, padding: "8px 12px" }}
-              >
-                <option value="created_at:desc">최신 등록순</option>
-                <option value="requested_pickup_at:asc">상차 빠른순</option>
-                <option value="requested_pickup_at:desc">상차 늦은순</option>
-                <option value="status:asc">상태순</option>
-              </select>
-            </div>
+            <Link className="pv2-sent-go" href="/customer/quotes">
+              견적 확인 가기
+            </Link>
+            <button type="button" className="pv2-sent-new" onClick={() => setSuccess(false)}>
+              새 요청 작성
+            </button>
           </div>
-        )}
-        {loading ? (
-          <div className="empty-state">불러오는 중...</div>
-        ) : requests.length === 0 ? (
-          <div className="empty-state">아직 보낸 요청이 없습니다.</div>
-        ) : visibleRequests.length === 0 ? (
-          <div className="empty-state">검색 결과가 없습니다.</div>
         ) : (
-          <>
-            <table className="desktop-only" style={{ minWidth: 880 }}>
-              <thead>
-                <tr>
-                  <th>구간</th>
-                  <th>차량</th>
-                  <th style={{ cursor: "pointer" }} onClick={() => toggleRequestSort("requested_pickup_at")}>
-                    희망 상차일{sortIndicator(requestSortKey, "requested_pickup_at", requestSortDir)}
-                  </th>
-                  <th style={{ cursor: "pointer" }} onClick={() => toggleRequestSort("status")}>
-                    상태{sortIndicator(requestSortKey, "status", requestSortDir)}
-                  </th>
-                  <th>진행상황</th>
-                  <th>특이사항</th>
-                  <th>반려 사유</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleRequests.map((r) => (
-                  <tr key={r.id}>
-                    <td>{r.origin} → {r.destination}</td>
-                    <td className="cell-nowrap">{[r.vehicle_type, r.body_type].filter(Boolean).join(" ") || "-"}</td>
-                    <td className="cell-nowrap">
-                      <span className="num">
-                        {r.requested_pickup_at
-                          ? new Date(r.requested_pickup_at).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
-                          : "-"}
-                      </span>
-                    </td>
-                    <td className="cell-nowrap">
-                      <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 999, fontSize: 12, fontWeight: 600, background: (REQUEST_STATUS_COLORS[r.status] || {}).bg, color: (REQUEST_STATUS_COLORS[r.status] || {}).text }}>
-                        {r.status}
-                      </span>
-                    </td>
-                    <td className="cell-nowrap">
-                      {r.quotes ? (
-                        <>
-                          <span className="num">{r.quotes.quote_no}</span>
-                          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                            {r.quotes.status}
-                            {r.quotes.final_amount ? ` · ${Math.round(r.quotes.final_amount).toLocaleString("ko-KR")}원` : ""}
-                          </div>
-                        </>
-                      ) : (
-                        "-"
-                      )}
-                    </td>
-                    <td style={{ maxWidth: 160 }}>{r.notes || "-"}</td>
-                    <td style={{ maxWidth: 160 }}>{r.staff_note || "-"}</td>
-                    <td className="cell-nowrap">
-                      {r.status === "대기중" && (
-                        <button className="btn-danger" style={{ padding: "4px 10px", borderRadius: 6, fontSize: 11, cursor: "pointer" }} onClick={() => handleDeleteRequest(r.id)}>
-                          삭제
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            <div className="mobile-only">
-              {visibleRequests.map((r) => (
-                <div key={r.id} className="mobile-row-card">
-                  <div className="mobile-row-top">
-                    <span style={{ fontSize: 13, fontWeight: 700 }}>
-                      {r.origin} → {r.destination}
-                    </span>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        padding: "3px 10px",
-                        borderRadius: 999,
-                        fontSize: 11.5,
-                        fontWeight: 700,
-                        background: (REQUEST_STATUS_COLORS[r.status] || {}).bg,
-                        color: (REQUEST_STATUS_COLORS[r.status] || {}).text,
-                      }}
-                    >
-                      {r.status}
-                    </span>
-                  </div>
-                  <div className="mobile-row-line">
-                    <span className="mobile-row-label">차량</span>
-                    <span>{[r.vehicle_type, r.body_type].filter(Boolean).join(" ") || "-"}</span>
-                  </div>
-                  <div className="mobile-row-line">
-                    <span className="mobile-row-label">희망 상차일</span>
-                    <span className="num">
-                      {r.requested_pickup_at
-                        ? new Date(r.requested_pickup_at).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
-                        : "-"}
-                    </span>
-                  </div>
-                  {r.quotes && (
-                    <div className="mobile-row-line">
-                      <span className="mobile-row-label">진행상황</span>
-                      <span className="num">
-                        {r.quotes.quote_no} · {r.quotes.status}
-                      </span>
-                    </div>
-                  )}
-                  {r.notes && (
-                    <div className="mobile-row-line">
-                      <span className="mobile-row-label">특이사항</span>
-                      <span>{r.notes}</span>
-                    </div>
-                  )}
-                  {r.staff_note && (
-                    <div className="mobile-row-line">
-                      <span className="mobile-row-label">반려 사유</span>
-                      <span>{r.staff_note}</span>
-                    </div>
-                  )}
-                  {r.status === "대기중" && (
-                    <button
-                      className="btn-danger"
-                      style={{ marginTop: 8, padding: "5px 12px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
-                      onClick={() => handleDeleteRequest(r.id)}
-                    >
-                      삭제
-                    </button>
-                  )}
-                </div>
-              ))}
+          <div className="pv2-submit-wrap">
+            <button className="pv2-submit" type="submit" disabled={saving}>
+              {saving ? "요청 중..." : "운송 요청 보내기"}
+              <svg
+                width="19"
+                height="19"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M4 12h15M13 6l6 6-6 6" />
+              </svg>
+            </button>
+            <div className="pv2-submit-note">
+              요청 후 담당자가 운임을 확정하면 문자와 견적 확인 화면으로 안내됩니다.
             </div>
-          </>
+          </div>
         )}
-      </div>
+      </form>
 
       {namePrompt && (
         <Pv2PromptModal
@@ -1222,37 +938,6 @@ export default function PortalRequestPage() {
         />
       )}
 
-      {pendingNoteDelete && (
-        <div
-          className="pv2-modal-dim"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="pv2-note-del-title"
-          onClick={() => setPendingNoteDelete(null)}
-        >
-          <div className="pv2-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="pv2-modal-title" id="pv2-note-del-title">
-              자주 쓰는 요청을 삭제할까요?
-            </div>
-            <div className="pv2-modal-desc">
-              「{pendingNoteDelete.name}」을(를) 목록에서 지웁니다. 이미 보낸 발주 요청에는 영향이
-              없습니다.
-            </div>
-            <div className="pv2-modal-actions">
-              <button
-                type="button"
-                className="pv2-modal-cancel"
-                onClick={() => setPendingNoteDelete(null)}
-              >
-                취소
-              </button>
-              <button type="button" className="pv2-modal-confirm" onClick={confirmDeleteNotePreset}>
-                삭제
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }

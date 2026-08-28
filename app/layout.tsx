@@ -22,10 +22,19 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <head>
-        {/* 본문 - SUIT (한글+영문 자체 지원) */}
+        {/* 본문 - SUIT (한글+영문 자체 지원) — 관리자·공개 화면 */}
         <link
           rel="stylesheet"
           href="https://cdn.jsdelivr.net/gh/sun-typeface/SUIT@2/fonts/variable/woff2/SUIT-Variable.css"
+        />
+        {/* 화주 운송관리 포털 전용 — 시안이 쓰는 서체다(26차).
+            🔴 **dynamic subset 판이다.** 통짜 Variable 이 아니라 실제로 쓰는 글자만
+               내려받으므로 용량 부담이 작다. 파일명의 `-dynamic-subset` 을 지우지 말 것.
+            🔴 이 링크만 추가한다고 서체가 바뀌지는 않는다 — 적용은 `globals.css` 의
+               `.portal-v2` 스코프에서만 한다(전역 `--font-sans` 는 그대로 SUIT). */}
+        <link
+          rel="stylesheet"
+          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
         />
         {/* 타이틀/브랜드 포인트용 - Space Grotesk */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />

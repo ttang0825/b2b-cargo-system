@@ -1,5 +1,8 @@
 "use client";
 
+import Pv2DatePicker from "./Pv2DatePicker";
+import Pv2Select from "./Pv2Select";
+
 /**
  * 화주포털 v2 전용 날짜·시간 입력 — `[날짜] [시간]` + `[오늘][내일]` 칩.
  *
@@ -9,6 +12,10 @@
  *       `.btn-ghost` 전역 클래스와 인라인 style 을 쓴다 — 시안 모양으로 고치면
  *       `/quote`·`/admin/quotes`·`/admin/orders` 가 같이 바뀐다.
  *    ② **상한(`max`)을 지원하지 않는다.** 25차는 "시작일 + 30일" 상한이 필요하다.
+ *
+ * 🔴 **26차부터 네이티브 `<input type="date">`·`<select>` 를 쓰지 않는다.** 그 둘의
+ *    빈칸 문구("연도-월-일")와 펼친 목록·달력은 **브라우저·OS 가 그리는 것**이라 CSS 로
+ *    바꿀 수 없어서, 트리거만 시안 모양이고 속은 옛 모양으로 남아 있었다(지적 5~9번).
  *
  * ⚠️ 값 형식은 원본과 같은 `"YYYY-MM-DDTHH:mm"`(타임존 오프셋 없음)이다 —
  *    저장할 때는 반드시 `lib/localDateTime.ts` 의 `localInputToISOString()` 을
@@ -82,28 +89,24 @@ export default function Pv2DateTimeField({
     <div className="pv2-field">
       <label className="pv2-field-label">{label}</label>
       <div className="pv2-dt-row">
-        <input
-          className="pv2-input"
-          type="date"
+        <Pv2DatePicker
           value={datePart}
           min={minDatePart || undefined}
           max={maxDate || undefined}
-          onChange={(e) => applyDate(e.target.value)}
-          aria-label={`${label} 날짜`}
+          onChange={applyDate}
+          ariaLabel={`${label} 날짜`}
         />
-        <select
-          className="pv2-select"
+        <Pv2Select
           value={timePart}
-          onChange={(e) => applyTime(e.target.value)}
-          aria-label={`${label} 시간`}
-        >
-          <option value="">시간 선택</option>
-          {timeOptions.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
+          onChange={applyTime}
+          placeholder="시간 선택"
+          ariaLabel={`${label} 시간`}
+          scroll
+          options={[
+            { value: "", label: "시간 선택" },
+            ...timeOptions.map((t) => ({ value: t, label: t })),
+          ]}
+        />
       </div>
       <div className="pv2-dt-chips">
         <button

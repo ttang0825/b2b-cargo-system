@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import Pv2AddressField from "@/components/pv2/Pv2AddressField";
+import Pv2Select from "@/components/pv2/Pv2Select";
 import { VEHICLE_TYPES_ALL, formatPhoneNumber } from "@/lib/constants";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import { orderBodyTypes } from "@/lib/vehicleBodyTypes";
@@ -13,6 +14,7 @@ import {
   deletePreset,
   cargoPresetSummary,
   type CargoPresetPayload,
+  type RequestPresetPayload,
   type CustomerPreset,
 } from "@/lib/customerPresets";
 
@@ -33,7 +35,7 @@ type Location = {
   sigungu: string | null;
 };
 type Surcharge = { category: string; option_name: string };
-type PendingDelete = { kind: "location" | "cargo"; id: string; name: string };
+type PendingDelete = { kind: "location" | "cargo" | "note"; id: string; name: string };
 
 const LOCATION_TYPES = ["상차지", "하차지"];
 
@@ -41,6 +43,10 @@ export default function PortalLocationsPage() {
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [locations, setLocations] = useState<Location[]>([]);
   const [cargos, setCargos] = useState<CustomerPreset<CargoPresetPayload>[]>([]);
+  // 🔴 "자주 쓰는 요청" 프리셋(PR #104 리뷰 3라운드) — 25차에는 발주요청 화면 안에서만
+  //    지울 수 있었는데, 배송지·화물과 관리 방식이 갈려서 화주가 매번 헷갈렸다.
+  //    추가·수정·삭제를 이 화면 한 곳으로 모은다. 테이블은 같고 `preset_type` 만 다르다.
+  const [notes, setNotes] = useState<CustomerPreset<RequestPresetPayload>[]>([]);
   const [surcharges, setSurcharges] = useState<Surcharge[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -79,6 +85,12 @@ export default function PortalLocationsPage() {
   const [savingCargo, setSavingCargo] = useState(false);
   const [editingCargoId, setEditingCargoId] = useState<string | null>(null);
   const [cargoFormError, setCargoFormError] = useState<string | null>(null);
+
+  // 새 요청 프리셋
+  const [nr, setNr] = useState({ name: "", notes: "" });
+  const [savingNote, setSavingNote] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [noteFormError, setNoteFormError] = useState<string | null>(null);
 
   function optionsOf(category: string) {
     return surcharges.filter((s) => s.category === category).map((s) => s.option_name);
@@ -120,6 +132,19 @@ export default function PortalLocationsPage() {
       return;
     }
     setCargos(rows);
+  }
+
+  async function loadNotes(cid: string) {
+    const { rows, error: loadError } = await loadPresets<RequestPresetPayload>(
+      supabase,
+      cid,
+      "request"
+    );
+    if (loadError) {
+      setError(`저장된 요청을 불러오지 못했습니다: ${loadError}`);
+      return;
+    }
+    setNotes(rows);
   }
 
   async function loadSurcharges() {
@@ -166,6 +191,7 @@ export default function PortalLocationsPage() {
         await Promise.all([
           loadLocations(account.company_id),
           loadCargos(account.company_id),
+          loadNotes(account.company_id),
           loadSurcharges(),
         ]);
       }
@@ -315,6 +341,54 @@ export default function PortalLocationsPage() {
     loadCargos(companyId);
   }
 
+  function startEditNote(n: CustomerPreset<RequestPresetPayload>) {
+    setNoteFormError(null);
+    setEditingNoteId(n.id);
+    setNr({ name: n.name, notes: n.payload?.notes || "" });
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function cancelEditNote() {
+    setEditingNoteId(null);
+    setNoteFormError(null);
+    setNr({ name: "", notes: "" });
+  }
+
+  async function handleSubmitNote() {
+    if (!companyId) return;
+    // 🔴 배송지·화물과 같은 방식으로 막는다 — `disabled` 로 조용히 잠그지 않고, 모자라면
+    //    이유를 버튼 바로 아래에 말해준다(PR #103 리뷰 11번).
+    if (!nr.name.trim()) {
+      setNoteFormError("요청 이름을 입력해주세요. 발주 요청에서 이 이름으로 불러옵니다.");
+      return;
+    }
+    if (!nr.notes.trim()) {
+      setNoteFormError("요청 내용을 입력해주세요.");
+      return;
+    }
+    setSavingNote(true);
+    setError(null);
+    setNoteFormError(null);
+    const payload: RequestPresetPayload = { notes: nr.notes.trim() };
+    const { error: saveError } = editingNoteId
+      ? await updatePreset(supabase, editingNoteId, nr.name, payload as Record<string, unknown>)
+      : await savePreset(
+          supabase,
+          companyId,
+          "request",
+          nr.name,
+          payload as Record<string, unknown>
+        );
+    setSavingNote(false);
+    if (saveError) {
+      setNoteFormError(saveError);
+      return;
+    }
+    setEditingNoteId(null);
+    setNr({ name: "", notes: "" });
+    loadNotes(companyId);
+  }
+
   async function handleConfirmDelete() {
     if (!pendingDelete || !companyId) return;
     const target = pendingDelete;
@@ -330,14 +404,16 @@ export default function PortalLocationsPage() {
         return;
       }
       loadLocations(companyId);
-    } else {
-      const { error: delError } = await deletePreset(supabase, target.id);
-      if (delError) {
-        setError(delError);
-        return;
-      }
-      loadCargos(companyId);
+      return;
     }
+    // 화물·요청은 같은 표(`customer_presets`)라 삭제 방식이 같다 — 목록만 갈린다
+    const { error: delError } = await deletePreset(supabase, target.id);
+    if (delError) {
+      setError(delError);
+      return;
+    }
+    if (target.kind === "cargo") loadCargos(companyId);
+    else loadNotes(companyId);
   }
 
   if (loading) return <div className="pv2-empty">불러오는 중...</div>;
@@ -365,18 +441,12 @@ export default function PortalLocationsPage() {
           </div>
           <div className="pv2-manage-fields">
             <div className="pv2-manage-type-row">
-              <select
-                className="pv2-select"
+              <Pv2Select
                 value={nl.type}
-                onChange={(e) => setNl({ ...nl, type: e.target.value })}
-                aria-label="배송지 구분"
-              >
-                {LOCATION_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setNl({ ...nl, type: v })}
+                ariaLabel="배송지 구분"
+                options={LOCATION_TYPES.map((t) => ({ value: t, label: t }))}
+              />
               <input
                 className="pv2-input pv2-input-sm"
                 value={nl.name}
@@ -526,30 +596,19 @@ export default function PortalLocationsPage() {
               aria-label="화물 이름"
             />
             <div className="pv2-leg-2col">
-              <select
-                className="pv2-select"
+              <Pv2Select
                 value={nc.vehicle_type}
-                onChange={(e) => setNc({ ...nc, vehicle_type: e.target.value })}
-                aria-label="희망 톤수"
-              >
-                {VEHICLE_TYPES_ALL.map((v) => (
-                  <option key={v} value={v}>
-                    {v}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="pv2-select"
+                onChange={(v) => setNc({ ...nc, vehicle_type: v })}
+                ariaLabel="희망 톤수"
+                options={VEHICLE_TYPES_ALL.map((v) => ({ value: v, label: v }))}
+              />
+              <Pv2Select
                 value={nc.body_type}
-                onChange={(e) => setNc({ ...nc, body_type: e.target.value })}
-                aria-label="차량형태"
-              >
-                {orderBodyTypes(optionsOf("차량형태")).map((o) => (
-                  <option key={o} value={o}>
-                    {o}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setNc({ ...nc, body_type: v })}
+                ariaLabel="차량형태"
+                scroll
+                options={orderBodyTypes(optionsOf("차량형태")).map((o) => ({ value: o, label: o }))}
+              />
             </div>
             <input
               className="pv2-input pv2-input-sm"
@@ -562,53 +621,38 @@ export default function PortalLocationsPage() {
               <label className="pv2-field-label" htmlFor="pv2-nc-cond">
                 물품특성
               </label>
-              <select
+              <Pv2Select
                 id="pv2-nc-cond"
-                className="pv2-select"
                 value={nc.item_condition}
-                onChange={(e) => setNc({ ...nc, item_condition: e.target.value })}
-              >
-                {optionsOf("물품특성").map((o) => (
-                  <option key={o} value={o}>
-                    {o}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setNc({ ...nc, item_condition: v })}
+                ariaLabel="물품특성"
+                options={optionsOf("물품특성").map((o) => ({ value: o, label: o }))}
+              />
             </div>
             <div className="pv2-leg-2col">
               <div className="pv2-field">
                 <label className="pv2-field-label" htmlFor="pv2-nc-load">
                   상차조건
                 </label>
-                <select
+                <Pv2Select
                   id="pv2-nc-load"
-                  className="pv2-select"
                   value={nc.load_condition}
-                  onChange={(e) => setNc({ ...nc, load_condition: e.target.value })}
-                >
-                  {LOADING_METHOD_OPTIONS.map((o) => (
-                    <option key={o} value={o}>
-                      {o}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(v) => setNc({ ...nc, load_condition: v })}
+                  ariaLabel="상차조건"
+                  options={LOADING_METHOD_OPTIONS.map((o) => ({ value: o, label: o }))}
+                />
               </div>
               <div className="pv2-field">
                 <label className="pv2-field-label" htmlFor="pv2-nc-unload">
                   하차조건
                 </label>
-                <select
+                <Pv2Select
                   id="pv2-nc-unload"
-                  className="pv2-select"
                   value={nc.unload_condition}
-                  onChange={(e) => setNc({ ...nc, unload_condition: e.target.value })}
-                >
-                  {LOADING_METHOD_OPTIONS.map((o) => (
-                    <option key={o} value={o}>
-                      {o}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(v) => setNc({ ...nc, unload_condition: v })}
+                  ariaLabel="하차조건"
+                  options={LOADING_METHOD_OPTIONS.map((o) => ({ value: o, label: o }))}
+                />
               </div>
             </div>
             <button
@@ -681,6 +725,91 @@ export default function PortalLocationsPage() {
         </div>
       </div>
 
+      {/* ── 요청 프리셋 ──────────────────────────────────── */}
+      <div className="pv2-manage-row">
+        <div className="pv2-manage-form">
+          <div className="pv2-manage-form-title">
+            {editingNoteId ? "요청 수정" : "새 요청 추가"}
+          </div>
+          <div className="pv2-manage-fields">
+            <input
+              className="pv2-input pv2-input-sm"
+              value={nr.name}
+              onChange={(e) => setNr({ ...nr, name: e.target.value })}
+              placeholder="요청 이름 (예: 야간 하차 안내) *"
+              aria-label="요청 이름"
+            />
+            <textarea
+              className="pv2-textarea pv2-input-sm"
+              rows={4}
+              value={nr.notes}
+              onChange={(e) => setNr({ ...nr, notes: e.target.value })}
+              placeholder="상하차 조건 관련 요청, 기타 참고사항 *"
+              aria-label="요청 내용"
+            />
+            <button
+              type="button"
+              className="pv2-btn-dark"
+              onClick={handleSubmitNote}
+              disabled={savingNote}
+            >
+              {savingNote ? "저장 중..." : editingNoteId ? "수정 저장" : "추가"}
+            </button>
+            {editingNoteId && (
+              <button type="button" className="pv2-btn-ghost" onClick={cancelEditNote}>
+                수정 취소
+              </button>
+            )}
+            {noteFormError && <div className="pv2-form-error">{noteFormError}</div>}
+          </div>
+        </div>
+
+        <div className="pv2-manage-list">
+          <div className="pv2-list-title">
+            자주 쓰는 요청
+            <span className="pv2-list-title-sub">발주 요청 4단계에서 바로 불러올 수 있습니다</span>
+          </div>
+          <div className="pv2-card-grid">
+            {notes.length === 0 ? (
+              <div className="pv2-card-empty">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/portal/wecarry-eng-cropped.svg"
+                  alt=""
+                  className="pv2-empty-logo"
+                  style={{ width: 92 }}
+                />
+                <div className="pv2-card-empty-title">저장된 요청이 없습니다</div>
+                <div className="pv2-card-empty-desc">
+                  매번 같은 문구를 적고 있다면 등록해두고 한 번에 불러오세요.
+                </div>
+              </div>
+            ) : (
+              notes.map((n) => (
+                <div key={n.id} className="pv2-saved-card">
+                  <div className="pv2-saved-head pv2-saved-head-tight">
+                    <span className="pv2-type-badge pv2-type-note">요청</span>
+                    <span className="pv2-saved-name">{n.name}</span>
+                    <button type="button" className="pv2-btn-edit" onClick={() => startEditNote(n)}>
+                      수정
+                    </button>
+                    <button
+                      type="button"
+                      className="pv2-btn-del"
+                      onClick={() => setPendingDelete({ kind: "note", id: n.id, name: n.name })}
+                    >
+                      삭제
+                    </button>
+                  </div>
+                  {/* 줄바꿈을 그대로 살린다 — 화주가 적은 그대로 불러와지기 때문이다 */}
+                  <div className="pv2-saved-note">{n.payload?.notes || "-"}</div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* 🔴 삭제는 확인 모달을 거친다 — window.confirm 은 시안 톤과 맞지 않고
           모바일에서 시스템 대화상자가 갑자기 뜬다 */}
       {pendingDelete && (
@@ -693,7 +822,11 @@ export default function PortalLocationsPage() {
         >
           <div className="pv2-modal" onClick={(e) => e.stopPropagation()}>
             <div className="pv2-modal-title" id="pv2-del-title">
-              {pendingDelete.kind === "location" ? "배송지를 삭제할까요?" : "화물을 삭제할까요?"}
+              {pendingDelete.kind === "location"
+                ? "배송지를 삭제할까요?"
+                : pendingDelete.kind === "cargo"
+                  ? "화물을 삭제할까요?"
+                  : "자주 쓰는 요청을 삭제할까요?"}
             </div>
             <div className="pv2-modal-desc">
               「{pendingDelete.name}」을(를) 목록에서 지웁니다. 이미 보낸 발주 요청에는 영향이
