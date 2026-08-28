@@ -4302,3 +4302,276 @@ tbody tr:hover {
   line-height: 1.5;
   word-break: keep-all;
 }
+
+/* ── 견적 확인 목록 (27차) ───────────────────────────────────────────
+   🔴 값은 전부 시안 소스 실측이다. `.pv2-*` 스코프 안에만 둔다 —
+      전역 클래스를 건드리면 관리자 화면 31개가 같이 바뀐다(24차 확정). */
+.pv2-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.pv2-chipgroup {
+  display: flex;
+  gap: 6px;
+  background: var(--pv2-border);
+  border-radius: 99px;
+  padding: 4px;
+}
+.pv2-fchip {
+  border: none;
+  cursor: pointer;
+  border-radius: 99px;
+  padding: 7px 15px;
+  font-size: 14.5px;
+  font-family: inherit;
+  background: transparent;
+  color: var(--pv2-text-2);
+  font-weight: 400;
+  box-shadow: none;
+}
+.pv2-fchip:hover {
+  color: var(--pv2-text);
+}
+.pv2-fchip-on {
+  background: var(--pv2-surface);
+  color: var(--pv2-text);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.pv2-search {
+  flex: 1;
+  min-width: 220px;
+  border: 1px solid var(--pv2-border);
+  border-radius: 99px;
+  padding: 10px 18px;
+  font-size: 15px;
+  font-family: inherit;
+  background: var(--pv2-surface);
+  color: var(--pv2-text);
+}
+.pv2-qlist {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pv2-qcard {
+  background: var(--pv2-surface);
+  border: none;
+  border-radius: 20px;
+  padding: 20px 26px;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+.pv2-qcard:hover {
+  box-shadow: 0 4px 16px rgba(26, 26, 26, 0.07);
+}
+.pv2-qstatus {
+  flex: none;
+  font-size: 15.5px;
+  font-weight: 800;
+  border-radius: 11px;
+  padding: 14px 18px;
+  min-width: 72px;
+  text-align: center;
+  white-space: nowrap;
+}
+.pv2-qbody {
+  flex: 1;
+  min-width: 0;
+}
+.pv2-qtop {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.pv2-qno {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pv2-text-3);
+}
+.pv2-qdate {
+  font-size: 13.5px;
+  color: var(--pv2-text-4);
+}
+.pv2-qroute {
+  font-size: 16.5px;
+  font-weight: 700;
+  line-height: 1.4;
+  word-break: keep-all;
+}
+/* 🔴 화살표만 옐로다 — 구간 글자까지 물들이지 말 것 */
+.pv2-qarrow {
+  color: var(--pv2-yellow);
+}
+.pv2-qaddr {
+  font-size: 14px;
+  color: var(--pv2-text-3);
+  margin-top: 5px;
+  line-height: 1.5;
+}
+.pv2-qmeta {
+  font-size: 14px;
+  color: var(--pv2-text-3);
+  margin-top: 3px;
+}
+/* 반려 사유 — 사유 없이 "반려"만 뜨면 화주가 다시 문의한다 */
+.pv2-qreason {
+  font-size: 14px;
+  color: var(--pv2-text-2);
+  margin-top: 6px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.pv2-qgo {
+  margin-top: 8px;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--pv2-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  display: inline-block;
+}
+.pv2-qright {
+  text-align: right;
+  flex: none;
+}
+.pv2-qprice {
+  font-size: 21.5px;
+  font-weight: 700;
+}
+.pv2-qvat {
+  font-size: 13.5px;
+  color: var(--pv2-text-3);
+  margin-top: 2px;
+}
+.pv2-qacts {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  justify-content: flex-end;
+  align-items: center;
+}
+.pv2-qdl-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 2px;
+}
+.pv2-qdl-label {
+  font-size: 13.5px;
+  color: var(--pv2-text-3);
+  white-space: nowrap;
+}
+.pv2-qdl {
+  border: none;
+  background: var(--pv2-input-bg);
+  border-radius: 9px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--pv2-text-2);
+}
+.pv2-qdl:hover {
+  background: var(--pv2-yellow-soft);
+}
+.pv2-qdl:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.pv2-qopen {
+  border: none;
+  background: var(--pv2-text);
+  color: var(--pv2-surface);
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 13.5px;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+  display: inline-block;
+}
+.pv2-qopen:hover {
+  background: #000;
+}
+
+/* 모바일 — 시안은 세로 1단이고 배지가 견적번호와 한 줄에 온다 */
+@media (max-width: 700px) {
+  .pv2-qcard {
+    border-radius: 16px;
+    padding: 15px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .pv2-qstatus {
+    font-size: 13.5px;
+    border-radius: 9px;
+    padding: 6px 12px;
+    min-width: 0;
+    align-self: flex-start;
+  }
+  .pv2-qroute {
+    font-size: 14.5px;
+    line-height: 1.5;
+  }
+  .pv2-qaddr,
+  .pv2-qmeta,
+  .pv2-qreason {
+    font-size: 13px;
+  }
+  .pv2-qgo {
+    font-size: 13px;
+    text-align: left;
+  }
+  .pv2-qright {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    text-align: left;
+  }
+  .pv2-qprice {
+    font-size: 16.5px;
+  }
+  .pv2-qvat {
+    font-size: 12px;
+  }
+  .pv2-qacts {
+    margin-top: 0;
+    gap: 6px;
+  }
+  .pv2-qdl {
+    width: 34px;
+    height: 34px;
+  }
+  .pv2-qopen {
+    border-radius: 9px;
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+  .pv2-search {
+    min-width: 0;
+    width: 100%;
+    padding: 10px 15px;
+    font-size: 14px;
+  }
+}

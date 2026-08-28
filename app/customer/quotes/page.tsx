@@ -1,59 +1,62 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import MixableBadge from "@/components/MixableBadge";
+import Pv2Select from "@/components/pv2/Pv2Select";
 import { useListSearchSort } from "@/lib/useListSearchSort";
-import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
+// 🔴 `DateRangeFilter` 컴포넌트는 관리자 화면 여러 곳이 같이 쓴다 — 모양을 시안에
+//    맞추려고 그 컴포넌트를 고치면 관리자가 같이 바뀐다. 계산 함수만 가져다 쓰고
+//    칩은 이 화면에서 시안 모양으로 그린다.
+import { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import { calcInclusiveAmount } from "@/lib/vat";
 import { downloadQuoteExcel } from "@/lib/quoteExcel";
+import { quoteStatusStyle, isQuoteConfirmed } from "@/lib/quoteStatusLabels";
+import { shortAddress } from "@/lib/shortAddress";
 
-function won(n: number | null) {
-  if (!n) return "-";
+/**
+ * 🔴 금액이 아직 없는 견적은 「협의 중」으로 보여준다(시안 실측).
+ *    `-` 로 두면 화주는 "0원인가?" 하고 되묻는다 — 담당자가 아직 값을 안 넣은 것이다.
+ */
+function priceLabel(n: number | null) {
+  if (!n) return "협의 중";
   return Math.round(n).toLocaleString("ko-KR") + "원";
 }
 
-function wonVatIncluded(n: number | null) {
-  if (!n) return null;
-  return calcInclusiveAmount(n).toLocaleString("ko-KR") + "원";
+function vatLabel(n: number | null) {
+  if (!n) return "담당자 확인 중";
+  return `부가세 별도 (부가세 포함 ${calcInclusiveAmount(n).toLocaleString("ko-KR")}원)`;
 }
 
-function formatDateTime(v: string | null) {
-  if (!v) return null;
-  return new Date(v).toLocaleString("ko-KR", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
+function dateLabel(v: string | null) {
+  if (!v) return "";
+  return new Date(v).toLocaleDateString("ko-KR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
   });
 }
 
-const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  상담중: { bg: "#EFF6FF", text: "#3B82F6" },
-  견적제출: { bg: "#EDE9FE", text: "#7C3AED" },
-  수주: { bg: "#D1FAE5", text: "#059669" },
-  보류: { bg: "#FEF3C7", text: "#B45309" },
-  실패: { bg: "#FEE2E2", text: "#B91C1C" },
-};
+const PERIOD_CHIPS: { value: DatePreset; label: string }[] = [
+  { value: "today", label: "오늘" },
+  { value: "week", label: "이번주" },
+  { value: "month", label: "이번달" },
+  { value: "all", label: "전체" },
+];
 
-const OPTION_LABELS: Record<string, string> = {
-  톤수: "톤수",
-  차량형태: "차량형태",
-  상차조건: "상차조건",
-  하차조건: "하차조건",
-  물품특성: "물품특성",
-  운송시간: "운송시간",
-  긴급여부: "긴급여부",
-  "왕복/편도": "왕복/편도",
-  대기시간_분: "대기시간(분)",
-  경유지수: "경유지 수",
-};
+const SORT_OPTIONS = [
+  { value: "created_at:desc", label: "견적일 최신순" },
+  { value: "created_at:asc", label: "견적일 오래된순" },
+  { value: "final_amount:desc", label: "금액 높은순" },
+  { value: "final_amount:asc", label: "금액 낮은순" },
+];
 
 export default function CustomerQuotesPage() {
+  const router = useRouter();
   const [quotes, setQuotes] = useState<any[]>([]);
-  const [itemsByQuote, setItemsByQuote] = useState<Record<string, any[]>>({});
   const [loading, setLoading] = useState(true);
-  const [openId, setOpenId] = useState<string | null>(null);
   const [period, setPeriod] = useState<DatePreset>("all");
   // 엑셀 생성 중인 견적 id(버튼 중복 클릭 방지)
   const [excelBusyId, setExcelBusyId] = useState<string | null>(null);
@@ -87,7 +90,8 @@ export default function CustomerQuotesPage() {
     result: visibleQuotes,
   } = useListSearchSort(
     periodFiltered,
-    (q) => [q.quote_no, q.origin, q.destination, q.item],
+    // 🔴 시안 실측 — 견적번호 · 구간 · 품목이 검색 대상이다
+    (q) => [q.quote_no, q.origin, q.destination, q.item, q.vehicle_type],
     {
       created_at: (q) => q.created_at,
       final_amount: (q) => q.final_amount,
@@ -97,28 +101,17 @@ export default function CustomerQuotesPage() {
   );
 
   async function load() {
-    const { data } = await supabase
+    // 🔴 `error` 를 삼키지 않는다 — 조회가 실패하면 조용히 빈 목록이 되어 화주에게는
+    //    "견적이 없다" 로 보인다(원칙 55번, 25차에 실제로 겪은 사고).
+    const { data, error } = await supabase
       .from("quotes")
       .select(
-        "id,quote_no,origin,destination,distance_km,vehicle_type,item,base_fare,final_amount,status,selected_options,notes,requested_pickup_at,requested_dropoff_at,loading_type,created_at"
+        "id,quote_no,origin,destination,vehicle_type,item,final_amount,status,selected_options,loading_type,created_at"
       )
       .order("created_at", { ascending: false })
       .limit(100);
+    if (error) setExcelError(`견적을 불러오지 못했습니다: ${error.message}`);
     setQuotes(data || []);
-
-    const ids = (data || []).map((q) => q.id);
-    if (ids.length > 0) {
-      const { data: items } = await supabase
-        .from("quote_items")
-        .select("id,quote_id,item_name,amount")
-        .in("quote_id", ids);
-      const map: Record<string, any[]> = {};
-      (items || []).forEach((it) => {
-        if (!map[it.quote_id]) map[it.quote_id] = [];
-        map[it.quote_id].push(it);
-      });
-      setItemsByQuote(map);
-    }
     setLoading(false);
   }
 
@@ -136,251 +129,164 @@ export default function CustomerQuotesPage() {
   }, []);
 
   return (
-    <main className="container">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">견적 확인</h1>
-          <p className="page-desc">받으신 견적 내역입니다. 카드를 클릭하면 자세히 볼 수 있습니다. (부가세 별도)</p>
-        </div>
+    <>
+      <div className="pv2-page-head pv2-page-head-tight">
+        <h1 className="pv2-page-title">견적 확인</h1>
+        <p className="pv2-page-desc">
+          받으신 견적 내역입니다. 운송이 확정되면 배차·운송 조회에서 진행 상황을 볼 수 있습니다.
+          (부가세 별도)
+        </p>
       </div>
 
-      {quotes.length > 0 && (
-        <div style={{ marginBottom: 10 }}>
-          <DateRangeFilter value={period} onChange={setPeriod} />
+      <div className="pv2-filter-row">
+        <div className="pv2-chipgroup">
+          {PERIOD_CHIPS.map((c) => (
+            <button
+              key={c.value}
+              type="button"
+              className={`pv2-fchip${period === c.value ? " pv2-fchip-on" : ""}`}
+              onClick={() => setPeriod(c.value)}
+            >
+              {c.label}
+            </button>
+          ))}
         </div>
-      )}
+        <input
+          className="pv2-search"
+          type="text"
+          placeholder="견적번호 · 구간 · 품목 검색"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          aria-label="견적 검색"
+        />
+        {/* 🔴 네이티브 select 를 쓰지 않는다(원칙 57번) — 26차가 포털에서 걷어낸 것이다.
+            시안에는 정렬 컨트롤이 없지만 현행 기능이라 없애지 않고 부품만 바꿨다. */}
+        <Pv2Select
+          wrapStyle={{ flex: "none", minWidth: 168 }}
+          value={`${sortKey}:${sortDir}`}
+          onChange={(v) => {
+            const [key, dir] = v.split(":");
+            setSortKey(key);
+            setSortDir(dir as "asc" | "desc");
+          }}
+          ariaLabel="정렬 기준"
+          options={SORT_OPTIONS}
+        />
+      </div>
 
-      {quotes.length > 0 && (
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-          <input
-            type="text"
-            placeholder="견적번호·구간·품목 검색"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ flex: 1, minWidth: 180, fontSize: 13, padding: "8px 12px" }}
-          />
-          <select
-            value={`${sortKey}:${sortDir}`}
-            onChange={(e) => {
-              const [key, dir] = e.target.value.split(":");
-              setSortKey(key);
-              setSortDir(dir as "asc" | "desc");
-            }}
-            style={{ fontSize: 13, padding: "8px 12px" }}
-          >
-            <option value="created_at:desc">견적일 최신순</option>
-            <option value="created_at:asc">견적일 오래된순</option>
-            <option value="final_amount:desc">금액 높은순</option>
-            <option value="final_amount:asc">금액 낮은순</option>
-          </select>
-        </div>
-      )}
-
-      {/* 엑셀 생성 실패는 화면 전체를 덮지 않고 인라인 배너로만 알린다(원칙 33번) */}
+      {/* 실패는 화면 전체를 덮지 않고 인라인 배너로만 알린다(원칙 33번) */}
       {excelError && (
-        <div className="error-box" style={{ marginBottom: 14 }}>
+        <div className="pv2-alert pv2-alert-error" style={{ marginBottom: 14 }}>
           {excelError}
         </div>
       )}
 
       {loading ? (
-        <div className="empty-state">불러오는 중...</div>
-      ) : quotes.length === 0 ? (
-        <div className="card">
-          <div className="empty-state">아직 받은 견적이 없습니다.</div>
-        </div>
+        <div className="pv2-empty">불러오는 중...</div>
       ) : visibleQuotes.length === 0 ? (
-        <div className="card">
-          <div className="empty-state">검색 결과가 없습니다.</div>
+        <div className="pv2-card-empty">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/portal/wecarry-eng-cropped.svg"
+            alt=""
+            className="pv2-empty-logo"
+            style={{ width: 106 }}
+          />
+          <div className="pv2-card-empty-title">
+            {quotes.length === 0 ? "아직 받은 견적이 없습니다" : "조건에 맞는 견적이 없습니다"}
+          </div>
+          <div className="pv2-card-empty-desc">
+            {quotes.length === 0
+              ? "발주 요청을 보내시면 담당자가 확인 후 견적을 보내드립니다."
+              : "기간이나 검색어를 바꿔보세요."}
+          </div>
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div className="pv2-qlist">
           {visibleQuotes.map((q) => {
-            const isOpen = openId === q.id;
-            const statusColor = STATUS_COLORS[q.status] || { bg: "var(--bg)", text: "var(--text-muted)" };
-            const options = q.selected_options || {};
-            const items = itemsByQuote[q.id] || [];
-            const pickup = formatDateTime(q.requested_pickup_at);
-            const dropoff = formatDateTime(q.requested_dropoff_at);
+            const st = quoteStatusStyle(q.status);
+            const opts = q.selected_options || {};
+            const meta = [q.vehicle_type, opts["차량형태"], opts["왕복/편도"], q.item]
+              .filter(Boolean)
+              .join(" · ");
 
             return (
-              <div key={q.id} className="card" style={{ overflow: "hidden" }}>
-                <button
-                  type="button"
-                  onClick={() => setOpenId(isOpen ? null : q.id)}
-                  style={{
-                    width: "100%",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: 12,
-                    padding: "16px 20px",
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    textAlign: "left",
-                    flexWrap: "wrap",
-                  }}
-                >
+              <div key={q.id} className="pv2-qcard">
+                {/* ⚠️ 배지는 하나만 그린다. 시안 모바일은 배지와 견적번호가 한 줄인데,
+                    둘이 서로 다른 부모에 있어 CSS 로는 합칠 수 없다 — 배지를 두 번
+                    그리면 원칙 13번(양쪽 관리)의 사고가 난다. 모바일에서는 배지가
+                    윗줄에 따로 온다. */}
+                <span className="pv2-qstatus" style={{ color: st.color, background: st.bg }}>
+                  {st.label}
+                </span>
+                <div className="pv2-qbody">
+                  <div className="pv2-qtop">
+                    <span className="pv2-qno">{q.quote_no}</span>
+                    <span className="pv2-qdate">{dateLabel(q.created_at)}</span>
+                    {q.loading_type === "mixable" && <MixableBadge />}
+                  </div>
+                  <div className="pv2-qroute">
+                    {shortAddress(q.origin) || "-"} <span className="pv2-qarrow">→</span>{" "}
+                    {shortAddress(q.destination) || "-"}
+                  </div>
+                  <div className="pv2-qaddr">
+                    {q.origin || "-"} → {q.destination || "-"}
+                  </div>
+                  {meta && <div className="pv2-qmeta">{meta}</div>}
+                  {/* 🔴 「운송 확정」일 때만 — 그 전에는 배차 자체가 없어서 눌러도 빈 화면이다 */}
+                  {isQuoteConfirmed(q.status) && (
+                    <button
+                      type="button"
+                      className="pv2-qgo"
+                      onClick={() => router.push("/customer/dispatches")}
+                    >
+                      배차·운송 조회에서 진행 상황 보기 →
+                    </button>
+                  )}
+                </div>
+                <div className="pv2-qright">
                   <div>
-                    <div className="num" style={{ fontSize: 12.5, color: "var(--text-muted)", marginBottom: 3 }}>
-                      {q.quote_no}
-                    </div>
-                    <div style={{ fontSize: 14, fontWeight: 700 }}>
-                      {q.origin} → {q.destination}
-                    </div>
-                    {q.loading_type === "mixable" && (
-                      <div style={{ marginTop: 4 }}>
-                        <MixableBadge />
-                      </div>
-                    )}
+                    <div className="pv2-qprice">{priceLabel(q.final_amount)}</div>
+                    <div className="pv2-qvat">{vatLabel(q.final_amount)}</div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{ textAlign: "right" }}>
-                      <span className="num" style={{ fontSize: 16, fontWeight: 800 }}>{won(q.final_amount)}</span>
-                      {wonVatIncluded(q.final_amount) && (
-                        <div style={{ fontSize: 10.5, color: "var(--text-muted)" }}>
-                          (부가세 포함 {wonVatIncluded(q.final_amount)})
-                        </div>
-                      )}
-                    </div>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        padding: "3px 10px",
-                        borderRadius: 999,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        background: statusColor.bg,
-                        color: statusColor.text,
-                      }}
-                    >
-                      {q.status}
-                    </span>
-                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{isOpen ? "▲" : "▼"}</span>
-                  </div>
-                </button>
-
-                {isOpen && (
-                  <div style={{ padding: "0 20px 20px", borderTop: "1px solid var(--border)" }}>
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
-                        gap: 12,
-                        marginTop: 16,
-                        marginBottom: 16,
-                      }}
-                    >
-                      <div>
-                        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>거리</div>
-                        <div className="num" style={{ fontSize: 13 }}>{q.distance_km ? `${q.distance_km}km` : "-"}</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>톤수</div>
-                        <div style={{ fontSize: 13 }}>{q.vehicle_type || "-"}</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>품목</div>
-                        <div style={{ fontSize: 13 }}>{q.item || "-"}</div>
-                      </div>
-                      {Object.entries(options).map(([k, v]) => {
-                        if (v === null || v === undefined || v === "" || v === 0 || v === false) return null;
-                        if (!OPTION_LABELS[k]) return null;
-                        return (
-                          <div key={k}>
-                            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{OPTION_LABELS[k]}</div>
-                            <div style={{ fontSize: 13 }}>{String(v)}</div>
-                          </div>
-                        );
-                      })}
-                      {pickup && (
-                        <div>
-                          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>희망 상차일시</div>
-                          <div className="num" style={{ fontSize: 13 }}>{pickup}</div>
-                        </div>
-                      )}
-                      {dropoff && (
-                        <div>
-                          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>희망 하차일시</div>
-                          <div className="num" style={{ fontSize: 13 }}>{dropoff}</div>
-                        </div>
-                      )}
-                    </div>
-
-                    {q.notes && (
-                      <div style={{ marginBottom: 16 }}>
-                        <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>특이사항</div>
-                        <div style={{ fontSize: 13, whiteSpace: "pre-wrap" }}>{q.notes}</div>
-                      </div>
-                    )}
-
-                    <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14 }}>
-                      <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>견적 계산 내역</div>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 6 }}>
-                        <span style={{ color: "var(--text-muted)" }}>기본운임</span>
-                        <span className="num">{won(q.base_fare)}</span>
-                      </div>
-                      {items.map((it) => (
-                        <div key={it.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>
-                          <span>+ {it.item_name}</span>
-                          <span className="num">{won(it.amount)}</span>
-                        </div>
-                      ))}
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          fontWeight: 700,
-                          fontSize: 14,
-                          marginTop: 8,
-                          paddingTop: 8,
-                          borderTop: "1px solid var(--border)",
-                        }}
+                  <div className="pv2-qacts">
+                    <span className="pv2-qdl-wrap">
+                      <span className="pv2-qdl-label">견적서</span>
+                      <button
+                        type="button"
+                        className="pv2-qdl"
+                        title="PDF 다운로드"
+                        aria-label="견적서 PDF 다운로드"
+                        onClick={() => window.open(`/customer/quotes/${q.id}/print`, "_blank")}
                       >
-                        <span>최종 견적금액</span>
-                        <span className="num">{won(q.final_amount)}</span>
-                      </div>
-                      <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, marginBottom: 14 }}>
-                        부가세 별도
-                        {wonVatIncluded(q.final_amount) && (
-                          <> (부가세 포함 {wonVatIncluded(q.final_amount)})</>
-                        )}
-                      </p>
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <button
-                          className="btn"
-                          style={{ padding: "8px 16px", borderRadius: 8, fontSize: 12.5 }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            window.open(`/customer/quotes/${q.id}/print`, "_blank");
-                          }}
-                        >
-                          견적서 출력 (PDF)
-                        </button>
-                        {/* 엑셀은 새 탭 없이 그 자리에서 파일이 내려받아진다.
-                            조회는 로그인 세션(supabaseCustomer)으로 하므로 RLS가 본인 회사
-                            견적만 내려줌 — 다른 회사 견적 id를 넣어도 조회 자체가 실패함 */}
-                        <button
-                          className="btn btn-ghost"
-                          style={{ padding: "8px 16px", borderRadius: 8, fontSize: 12.5 }}
-                          disabled={excelBusyId === q.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleExcel(q.id);
-                          }}
-                        >
-                          {excelBusyId === q.id ? "생성 중..." : "견적서 출력 (Excel)"}
-                        </button>
-                      </div>
-                    </div>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src="/portal/pdf-icon.svg" alt="" style={{ width: 17, height: 17 }} />
+                      </button>
+                      {/* 엑셀은 새 탭 없이 그 자리에서 내려받는다. 조회는 로그인 세션으로
+                          하므로 RLS 가 본인 회사 견적만 내려준다 — 다른 회사 id 를 넣어도
+                          조회 자체가 실패한다. */}
+                      <button
+                        type="button"
+                        className="pv2-qdl"
+                        title="엑셀 다운로드"
+                        aria-label="견적서 엑셀 다운로드"
+                        disabled={excelBusyId === q.id}
+                        onClick={() => handleExcel(q.id)}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src="/portal/excel-icon.svg" alt="" style={{ width: 17, height: 17 }} />
+                      </button>
+                    </span>
+                    <Link className="pv2-qopen" href={`/customer/quotes/${q.id}`}>
+                      상세 보기
+                    </Link>
                   </div>
-                )}
+                </div>
               </div>
             );
           })}
         </div>
       )}
-    </main>
+    </>
   );
 }
