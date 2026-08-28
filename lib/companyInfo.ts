@@ -11,6 +11,28 @@
 // 🔴 긴 대시(—)나 괄호 묶음으로 되돌리지 말 것 — 2026-08-26 확정 형태다.
 export const COMPANY_INFO_NAME_PARTS = ["(주)디자인에그", "위캐리 운송"] as const;
 
+/**
+ * 입금 계좌 — 견적서(화면·PDF 2종)의 합계 아래에 그린다. 27차에 확정값이 들어왔다.
+ *
+ * 🔴 **값이 비면 블록 자체를 그리지 말 것.** 시안은 합계 아래에 100px 여백을 두고
+ *    그 뒤에 이 블록을 놓는데, 값만 비면 **여백만 남아 규격이 무너진다.**
+ *    `hasBankAccount()` 로 가드한 뒤 그릴 것.
+ *
+ * ⚠️ 아래 `COMPANY_INFO.bankAccount`(한 줄 평문)는 여기서 파생된다 — 같은 값을 두
+ *    군데 적지 말 것.
+ */
+export const COMPANY_BANK_ACCOUNT = {
+  bank: "국민은행",
+  number: "069101-04-228121",
+  holder: "(주)디자인에그",
+};
+
+export function hasBankAccount() {
+  return Boolean(
+    COMPANY_BANK_ACCOUNT.bank && COMPANY_BANK_ACCOUNT.number && COMPANY_BANK_ACCOUNT.holder
+  );
+}
+
 export const COMPANY_INFO = {
   // 🔴 법인명 / 브랜드명 형태이며 **어느 한쪽도 강조하지 않는다**(사용자 확정 2026-08-26).
   // 정본은 위 COMPANY_INFO_NAME_PARTS 이고 이 값은 그것을 이어 붙인 평문이다 —
@@ -30,7 +52,10 @@ export const COMPANY_INFO = {
   // ⚠️ 바꿀 때는 `lib/contactInfo.ts`의 COMPANY_SUPPORT_PHONE도 **같이** 볼 것
   phone: "1661-2403",
   email: "", // 선택 입력
-  bankAccount: "", // 선택: 입금계좌 안내가 필요하면 입력 (예: "국민은행 123-456-789012 (주)WeCarry운송")
+  // 위 COMPANY_BANK_ACCOUNT 에서 파생된 한 줄 평문 — 정본은 그쪽이다.
+  bankAccount: hasBankAccount()
+    ? `${COMPANY_BANK_ACCOUNT.bank} ${COMPANY_BANK_ACCOUNT.number} ${COMPANY_BANK_ACCOUNT.holder}`
+    : "",
 };
 
 // 위 COMPANY_INFO.phone이 아직 발급 전 자리표시자인지 나타내는 플래그.

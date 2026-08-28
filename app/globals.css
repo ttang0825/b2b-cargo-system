@@ -4575,3 +4575,343 @@ tbody tr:hover {
     font-size: 14px;
   }
 }
+
+/* ── 견적 상세 (27차 신규 라우트) ────────────────────────────────
+   시안 `09-quote-detail` 실측. 견적서 형식이라 `.pv2-card` 를 쓰지 않고
+   전용 문서 카드를 둔다. */
+.pv2-qd-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 auto 18px;
+  max-width: 1000px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0 4px;
+  flex-wrap: wrap;
+}
+.pv2-qd-back {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 16.5px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--pv2-text);
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+.pv2-qd-spacer {
+  margin-left: auto;
+}
+.pv2-qd-dl {
+  border: 1px solid var(--pv2-border);
+  background: var(--pv2-surface);
+  border-radius: 12px;
+  padding: 10px 18px;
+  font-size: 14.5px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--pv2-text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.pv2-qd-dl:hover {
+  background: #fffdf5;
+}
+.pv2-qd-dl:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.pv2-qd-doc {
+  background: var(--pv2-surface);
+  border: none;
+  border-radius: 24px;
+  padding: 56px 60px;
+  max-width: 880px;
+  margin: 0 auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+.pv2-qd-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+}
+.pv2-qd-title {
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: 0.3em;
+  line-height: 1.1;
+}
+.pv2-qd-tagline {
+  font-size: 15px;
+  color: var(--pv2-text-3);
+  margin-top: 10px;
+}
+.pv2-qd-headright {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+}
+.pv2-qd-status {
+  font-size: 15.5px;
+  font-weight: 800;
+  border-radius: 9px;
+  padding: 8px 16px;
+  margin-bottom: 5px;
+  white-space: nowrap;
+}
+.pv2-qd-kv {
+  font-size: 15px;
+  color: var(--pv2-text-2);
+}
+.pv2-qd-kv b {
+  color: var(--pv2-text);
+}
+.pv2-qd-rule {
+  height: 3px;
+  background: var(--pv2-text);
+  margin-bottom: 28px;
+}
+/* 🔴 회색 박스가 아니라 위아래 구분선이다 */
+.pv2-qd-parties {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 20px;
+  margin-bottom: 32px;
+  padding: 20px 0;
+  border-top: 1px solid var(--pv2-border);
+  border-bottom: 1px solid var(--pv2-border);
+}
+.pv2-qd-party-label {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--pv2-text-3);
+  letter-spacing: 0.08em;
+  margin-bottom: 10px;
+}
+.pv2-qd-party-name {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin-bottom: 8px;
+}
+.pv2-qd-party-sub {
+  font-size: 15px;
+  color: var(--pv2-text-2);
+  line-height: 1.75;
+}
+.pv2-qd-lead {
+  font-size: 16px;
+  color: var(--pv2-text);
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+.pv2-qd-table {
+  border-top: 2px solid var(--pv2-text);
+  margin-bottom: 20px;
+}
+.pv2-qd-row {
+  display: grid;
+  grid-template-columns: 132px 1fr;
+  gap: 16px;
+  padding: 16px 4px;
+  border-bottom: 1px solid var(--pv2-border);
+  font-size: 16px;
+}
+.pv2-qd-row:last-child {
+  border-bottom: none;
+}
+.pv2-qd-k {
+  color: var(--pv2-text-3);
+  font-weight: 600;
+}
+.pv2-qd-v {
+  line-height: 1.65;
+  font-weight: 600;
+}
+.pv2-qd-v-right {
+  text-align: right;
+  font-weight: 600;
+}
+.pv2-qd-down {
+  color: var(--pv2-yellow);
+  font-weight: 800;
+}
+/* 🔴 합계 아래 여백 100px — 시안 실측. 입금 계좌가 이 뒤에 온다 */
+.pv2-qd-total {
+  border-top: 2px solid var(--pv2-text);
+  padding: 22px 4px 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 100px;
+}
+.pv2-qd-total-label {
+  font-size: 17px;
+  font-weight: 700;
+}
+.pv2-qd-total-label span {
+  font-weight: 500;
+  color: var(--pv2-text-3);
+}
+.pv2-qd-total-amount {
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+.pv2-qd-bank {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.pv2-qd-bank-label {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--pv2-text-3);
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+.pv2-qd-bank-no {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.pv2-qd-bank-holder {
+  font-size: 15px;
+  color: var(--pv2-text-2);
+  margin-top: 3px;
+}
+.pv2-qd-bank-ask {
+  flex: 1;
+  min-width: 200px;
+  font-size: 14.5px;
+  color: var(--pv2-text-3);
+  line-height: 1.8;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* 모바일 — 시안은 같은 구성을 작은 크기로 그린다.
+   ⚠️ 입금 계좌와 「아래와 같이 견적합니다」는 모바일에도 **있다**(시안 소스 실측). */
+@media (max-width: 700px) {
+  .pv2-qd-actions {
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .pv2-qd-back {
+    font-size: 14.5px;
+  }
+  .pv2-qd-dl {
+    border-radius: 9px;
+    padding: 8px 10px;
+    font-size: 0;
+    gap: 0;
+  }
+  .pv2-qd-doc {
+    border-radius: 16px;
+    padding: 20px 18px;
+  }
+  .pv2-qd-head {
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .pv2-qd-title {
+    font-size: 21px;
+    letter-spacing: 0.24em;
+  }
+  .pv2-qd-tagline {
+    font-size: 12px;
+    margin-top: 6px;
+  }
+  .pv2-qd-status {
+    font-size: 12.5px;
+    padding: 6px 12px;
+  }
+  .pv2-qd-kv {
+    font-size: 12.5px;
+  }
+  .pv2-qd-rule {
+    height: 2px;
+    margin-bottom: 16px;
+  }
+  .pv2-qd-parties {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 18px;
+    padding: 14px 0;
+  }
+  .pv2-qd-party-label {
+    font-size: 11.5px;
+    margin-bottom: 6px;
+  }
+  .pv2-qd-party-name {
+    font-size: 14px;
+    margin-bottom: 5px;
+  }
+  .pv2-qd-party-sub {
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .pv2-qd-lead {
+    font-size: 13.5px;
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+  .pv2-qd-row {
+    grid-template-columns: 74px 1fr;
+    gap: 10px;
+    padding: 11px 0;
+    font-size: 13px;
+  }
+  .pv2-qd-total {
+    padding-top: 13px;
+    margin-bottom: 12px;
+  }
+  .pv2-qd-total-label {
+    font-size: 13.5px;
+  }
+  .pv2-qd-total-amount {
+    font-size: 21px;
+  }
+  .pv2-qd-bank {
+    border-top: 1px solid var(--pv2-border);
+    margin-top: 12px;
+    padding-top: 12px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 3px;
+  }
+  .pv2-qd-bank-label {
+    font-size: 11.5px;
+    letter-spacing: 0.06em;
+    margin-bottom: 0;
+  }
+  .pv2-qd-bank-no {
+    font-size: 13.5px;
+  }
+  .pv2-qd-bank-holder {
+    font-size: 12px;
+    margin-top: 0;
+  }
+  .pv2-qd-bank-ask {
+    font-size: 12px;
+    text-align: left;
+    margin-top: 5px;
+    min-width: 0;
+  }
+}
