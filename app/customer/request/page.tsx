@@ -16,12 +16,13 @@ import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 //    DB 에만 있고 코드에 없는 옵션은 버리지 않고 맨 뒤에 붙인다(정의처 주석 참고).
 import { orderBodyTypes } from "@/lib/vehicleBodyTypes";
 import Pv2AddressField from "@/components/pv2/Pv2AddressField";
-import Pv2DateTimeField from "@/components/pv2/Pv2DateTimeField";
+import Pv2DateTimeField, { ArrivalType } from "@/components/pv2/Pv2DateTimeField";
 import Pv2PromptModal from "@/components/pv2/Pv2PromptModal";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import { localInputToISOString } from "@/lib/localDateTime";
 import { PORTAL_ORDER_THIRD_PARTY_CONSENT } from "@/lib/legalInfo";
 import Pv2Select from "@/components/pv2/Pv2Select";
+import { CUSTOMER_COLLECTION_AXIS_LABEL } from "@/lib/settlementLabels";
 import {
   loadPresets,
   savePreset,
@@ -45,6 +46,36 @@ const SINGLE_SELECT_CATEGORIES = ["차량형태", "물품특성", "운송시간"
 const LOADING_TYPE_CHOICES = [
   { value: "exclusive" as const, label: "독차" },
   { value: "mixable" as const, label: "혼적가능" },
+];
+
+/**
+ * 🔴 정산방식 (27차 리뷰 4라운드) — **화주가 고르는 것은 이 둘뿐이다**(사용자 확정 A안).
+ *    관리자 화면(`components/CollectionMethodInput.tsx`)에는 청구주기(건별/월정산)
+ *    축이 하나 더 있지만 **여기에는 넣지 않는다** — 월정산 여부는 화주별 계약 사항
+ *    (`companies.billing_cutoff_day`)이라 담당자가 정하고, 화주에게 물으면 답할 수
+ *    없는 질문이 된다. 🔴 나중에 "축이 하나 빠졌다"며 더하지 말 것.
+ */
+const COLLECTION_METHOD_CHOICES = [
+  // 🔴 **화주가 보는 말**이다(5라운드 확정) — 담당자 화면의 「주선사 정산」/「선착불」과
+  //   일부러 다르다(27차 ④ 상태 라벨과 같은 구조). 값은 그대로 `broker`/`driver_direct` 다.
+  //   🔴 라벨은 `lib/settlementLabels.ts` 의 `getCustomerCollectionMethodLabel()` 과
+  //   **반드시 같은 문자열**이어야 한다 — 폼과 견적서가 다른 말을 쓰면 안 된다.
+  { value: "broker" as const, label: "위캐리 수금" },
+  { value: "driver_direct" as const, label: "선착불(차주 직접수금)" },
+];
+
+/**
+ * 🔴 당착·내착일 때 `requested_dropoff_at` 에 넣는 **자리 채움 시각**이다.
+ *    `components/pv2/Pv2DateTimeField.tsx` 의 같은 값과 반드시 일치해야 한다 —
+ *    상차일을 바꿀 때 이 화면이 하차 날짜를 다시 계산하기 때문이다.
+ */
+const ARRIVAL_FILLER_TIME = "23:59";
+
+/** 🔴 선착불일 때만 묻는다(C안) — 주선사 정산에는 지급조건이라는 개념이 없다 */
+const DIRECT_POINT_CHOICES = [
+  { value: "pickup" as const, label: "선불(상차지 지급)" },
+  { value: "dropoff" as const, label: "착불(하차지 지급)" },
+  { value: "undecided" as const, label: "협의중" },
 ];
 
 type SavedLocation = {
@@ -78,6 +109,16 @@ export default function PortalRequestPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 🔴 「지금」 상차 (27차 리뷰 3라운드) — 24시콜 오더와 같은 자리에 둔 칩이다.
+  //    켜져 있으면 날짜·시간 입력이 잠기고, **제출 직전에 그 순간으로 다시 맞춘다**
+  //    (폼을 오래 열어두면 눌렀던 시각이 이미 과거가 되어 하한 검증에 걸린다).
+  const [pickupNow, setPickupNow] = useState(false);
+  /**
+   * 🔴 「당착」·「내착」 (27차 리뷰 4라운드) — 24시콜 오더의 그것이다.
+   *    당착 = 상차 당일 도착 · 내착 = 다음 날 도착이며 **시각은 무관하다.**
+   *    이 state 가 값의 정본이고 `requested_dropoff_at` 에 들어가는 23:59 는 자리 채움이다.
+   */
+  const [dropoffArrival, setDropoffArrival] = useState<ArrivalType>(null);
   const [success, setSuccess] = useState(false);
   const [presetMsg, setPresetMsg] = useState<string | null>(null);
   // 프리셋 이름 입력 팝업 — window.prompt 대체(PR #103 리뷰 2·9번)
@@ -87,6 +128,8 @@ export default function PortalRequestPage() {
   // 🔴 제3자 제공 동의(20차). `form`과 분리된 별도 state라 **서버로 명시적으로 함께 보내야**
   // 한다 — 14차 전의 `/quote`가 정확히 이 값을 안 보내서 동의가 저장되지 않고 있었다.
   const [thirdPartyAgreed, setThirdPartyAgreed] = useState(false);
+  /** 제3자 제공 동의의 **세부 4항목**만 접는다(5라운드) — 고지·거부권 문장은 항상 보인다 */
+  const [consentOpen, setConsentOpen] = useState(false);
   const [saveOrigin, setSaveOrigin] = useState(false);
   const [saveDestination, setSaveDestination] = useState(false);
   const [form, setForm] = useState({
@@ -109,6 +152,11 @@ export default function PortalRequestPage() {
     // 🔴 적재구분 — 시안에 없지만 PR #103 리뷰 6번에서 확정. `quotes`/`orders` 는
     //   4차부터 이 값을 갖고 있었는데 화주가 고를 자리가 없어 담당자가 매번 되물었다.
     loading_type: "exclusive" as "exclusive" | "mixable",
+    // 🔴 정산방식 — 값은 `quotes`/`orders` 와 같은 문자열이다(라벨을 저장하지 말 것).
+    //   기본은 「주선사 정산」이다: WeCarry 가 수금·지급하는 것이 기본 거래 형태이고,
+    //   관리자 견적 등록 폼도 같은 값으로 시작한다(`app/admin/quotes/page.tsx`).
+    collection_method: "broker" as "broker" | "driver_direct",
+    direct_collection_point: null as "pickup" | "dropoff" | "undecided" | null,
     waitingMinutes: "",
     waypointCount: "",
     item: "",
@@ -137,6 +185,26 @@ export default function PortalRequestPage() {
     end.setDate(end.getDate() + 30);
     return { min: `${minDate}T${minTime}`, max: toDate(end), minDate };
   })();
+
+  /**
+   * 🔴 상차 일시가 바뀌면 당착·내착 날짜도 **같이 다시 계산한다.**
+   *    안 하면 화주가 당착을 고른 뒤 상차일을 미뤘을 때 하차일만 옛 날짜로 남아,
+   *    화면에는 「당착」이라 적혀 있는데 저장값은 상차 이전이 된다.
+   */
+  function setPickupAt(v: string) {
+    setForm((prev) => {
+      const next = { ...prev, requested_pickup_at: v };
+      if (dropoffArrival && v) {
+        const d = new Date(`${v.slice(0, 10)}T00:00`);
+        d.setDate(d.getDate() + (dropoffArrival === "next_day" ? 1 : 0));
+        const pad = (n: number) => String(n).padStart(2, "0");
+        next.requested_dropoff_at = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(
+          d.getDate()
+        )}T${ARRIVAL_FILLER_TIME}`;
+      }
+      return next;
+    });
+  }
 
   // 거리 정보가 없는 화면이라, 상차 후 고정 30분 이후로만 하차일시를 선택하게 함
   // 🔴 25차에는 2시간이었다 — PR #103 리뷰 8번에서 30분으로 확정. 시내 단거리는
@@ -390,7 +458,9 @@ export default function PortalRequestPage() {
       setError(`희망 상차 일시는 ${pickupRange.max} 까지 선택할 수 있습니다.`);
       return;
     }
-    if (form.requested_pickup_at && form.requested_dropoff_at) {
+    // 🔴 당착·내착은 **시각이 무관한 선택지**라 +30분 규칙을 적용하지 않는다 —
+    //    상차가 23:40 인 당착 건이 "상차 후 30분 이후"에 걸려 접수가 막힌다.
+    if (!dropoffArrival && form.requested_pickup_at && form.requested_dropoff_at) {
       const diffMs =
         new Date(form.requested_dropoff_at).getTime() - new Date(form.requested_pickup_at).getTime();
       if (diffMs < DROPOFF_MIN_GAP_MIN * 60 * 1000) {
@@ -448,7 +518,16 @@ export default function PortalRequestPage() {
           waypoint_count: form.waypointCount ? Number(form.waypointCount) : null,
           item: form.item || null,
           loading_type: form.loading_type,
-          requested_pickup_at: localInputToISOString(form.requested_pickup_at),
+          // 🔴 지급조건은 선착불일 때만 보낸다 — 서버도 같은 규칙으로 한 번 더 거른다
+          collection_method: form.collection_method,
+          direct_collection_point:
+            form.collection_method === "driver_direct" ? form.direct_collection_point : null,
+          dropoff_arrival_type: dropoffArrival,
+          // 🔴 「지금」이면 **제출하는 그 순간**으로 다시 맞춘다 — 칩을 누른 시각을
+          //    그대로 보내면 폼을 오래 열어둔 경우 과거 시각이 되어 하한에 걸린다.
+          requested_pickup_at: pickupNow
+            ? new Date().toISOString()
+            : localInputToISOString(form.requested_pickup_at),
           requested_dropoff_at: localInputToISOString(form.requested_dropoff_at),
           notes: form.notes || null,
           agreed: thirdPartyAgreed,
@@ -507,6 +586,10 @@ export default function PortalRequestPage() {
     setThirdPartyAgreed(false);
     setSaveOrigin(false);
     setSaveDestination(false);
+    // 「지금」도 건별이다 — 남겨두면 다음 건의 상차 시각이 조용히 접수 시각이 된다
+    setPickupNow(false);
+    // 🔴 당착·내착도 건별이다 — 남겨두면 하차일시를 비운 다음 건에 옛 도착구분이 붙는다
+    setDropoffArrival(null);
     setForm((prev) => ({
       ...prev,
       destination: "",
@@ -674,10 +757,52 @@ export default function PortalRequestPage() {
           </div>
         </div>
 
-        {/* ② 화물 · 차량 */}
+        {/* ② 일정 */}
         <div className="pv2-form-block">
           <div className="pv2-form-block-head">
             <span className="pv2-step-num">2</span>
+            <span className="pv2-form-block-title">일정</span>
+          </div>
+          <div className="pv2-grid-sched">
+            <Pv2DateTimeField
+              label="희망 상차 일시"
+              value={form.requested_pickup_at}
+              onChange={setPickupAt}
+              minDateTime={pickupRange.min}
+              maxDate={pickupRange.max}
+              nowChip
+              nowSelected={pickupNow}
+              onNowChange={setPickupNow}
+              hint={pickupNow ? "지금 바로 상차 — 시간은 접수 시각으로 들어갑니다" : undefined}
+            />
+            <Pv2DateTimeField
+              label="희망 하차 일시"
+              value={form.requested_dropoff_at}
+              onChange={(v) => setField("requested_dropoff_at", v)}
+              minDateTime={minDropoffDateTime}
+              maxDate={pickupRange.max}
+              arrivalChips
+              arrivalValue={dropoffArrival}
+              onArrivalChange={setDropoffArrival}
+              pickupDate={form.requested_pickup_at.slice(0, 10)}
+              hint={
+                dropoffArrival
+                  ? dropoffArrival === "same_day"
+                    ? "당착 — 상차 당일 도착, 시각은 무관합니다"
+                    : "내착 — 상차 다음 날 도착, 시각은 무관합니다"
+                  : `상차 +${DROPOFF_MIN_GAP_MIN}분 이후`
+              }
+            />
+            {renderSelect("운송시간", "운송시간", optionsOf("운송시간"))}
+          </div>
+        </div>
+
+        {/* ③ 화물 · 차량 — 🔴 5라운드에 ②↔③ 순서를 바꿨다(사용자 확정).
+            상차 일시를 먼저 정해야 어떤 차가 잡히는지 이야기가 되기 때문이다.
+            🔴 되돌리려면 블록 두 개를 통째로 옮기고 번호 배지도 같이 고칠 것. */}
+        <div className="pv2-form-block">
+          <div className="pv2-form-block-head">
+            <span className="pv2-step-num">3</span>
             <span className="pv2-form-block-title">화물 · 차량</span>
             <button type="button" className="pv2-block-action" onClick={() => setNamePrompt({ kind: "cargo", initial: form.item.trim() || "자주 쓰는 화물" })}>
               자주 쓰는 화물로 저장
@@ -764,6 +889,70 @@ export default function PortalRequestPage() {
               ))}
             </div>
           </div>
+          {/* 🔴 정산방식 (27차 리뷰 4라운드) — 13차에 `quotes`/`orders`/`dispatches`/
+                `invoices` 가 이 축을 갖게 됐는데 **화주가 고를 자리가 한 곳도 없었다.**
+                담당자가 발주 요청을 견적으로 옮길 때마다 되물어야 했다(적재구분과 같은 결).
+                🔴 자리는 적재구분 바로 아래다 — 둘 다 "운임이 아니라 거래 조건"이라
+                   같은 칩 줄로 묶어 두는 편이 훑기 쉽다.
+                🔴 화면 라벨(주선사 정산/선착불)을 저장값으로 쓰지 말 것 — 값은
+                   `broker`/`driver_direct` 다. */}
+          <div className="pv2-field" style={{ marginTop: 14 }}>
+            <span className="pv2-field-label">{CUSTOMER_COLLECTION_AXIS_LABEL}</span>
+            <div className="pv2-choice-row">
+              {COLLECTION_METHOD_CHOICES.map((opt) => (
+                <label
+                  key={opt.value}
+                  className={`pv2-choice${form.collection_method === opt.value ? " is-on" : ""}`}
+                >
+                  <input
+                    type="radio"
+                    name="pv2-collection-method"
+                    value={opt.value}
+                    checked={form.collection_method === opt.value}
+                    onChange={() =>
+                      setForm((prev) => ({
+                        ...prev,
+                        collection_method: opt.value,
+                        // 🔴 주선사 정산으로 돌아오면 지급조건을 **지운다** — 남겨두면
+                        //   개념이 없는 값이 저장되고, 마이그레이션 단언이 막는다.
+                        direct_collection_point:
+                          opt.value === "driver_direct"
+                            ? prev.direct_collection_point || "undecided"
+                            : null,
+                      }))
+                    }
+                  />
+                  <span>{opt.label}</span>
+                </label>
+              ))}
+            </div>
+            {form.collection_method === "driver_direct" && (
+              <div className="pv2-subchoice">
+                <span className="pv2-subchoice-label">지급조건</span>
+                <div className="pv2-choice-row pv2-choice-row-auto">
+                  {DIRECT_POINT_CHOICES.map((opt) => (
+                    <label
+                      key={opt.value}
+                      className={`pv2-choice pv2-choice-auto${
+                        form.direct_collection_point === opt.value ? " is-on" : ""
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="pv2-direct-point"
+                        value={opt.value}
+                        checked={form.direct_collection_point === opt.value}
+                        onChange={() =>
+                          setForm((prev) => ({ ...prev, direct_collection_point: opt.value }))
+                        }
+                      />
+                      <span>{opt.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
           <div className="pv2-field" style={{ marginTop: 14 }}>
             <label className="pv2-field-label" htmlFor="pv2-f-item">
               품목 *
@@ -775,32 +964,6 @@ export default function PortalRequestPage() {
               onChange={(e) => setField("item", e.target.value)}
               placeholder="예: 파렛트 2p / 박스 40개, 중량 800kg"
             />
-          </div>
-        </div>
-
-        {/* ③ 일정 */}
-        <div className="pv2-form-block">
-          <div className="pv2-form-block-head">
-            <span className="pv2-step-num">3</span>
-            <span className="pv2-form-block-title">일정</span>
-          </div>
-          <div className="pv2-grid-sched">
-            <Pv2DateTimeField
-              label="희망 상차 일시"
-              value={form.requested_pickup_at}
-              onChange={(v) => setField("requested_pickup_at", v)}
-              minDateTime={pickupRange.min}
-              maxDate={pickupRange.max}
-            />
-            <Pv2DateTimeField
-              label="희망 하차 일시"
-              value={form.requested_dropoff_at}
-              onChange={(v) => setField("requested_dropoff_at", v)}
-              minDateTime={minDropoffDateTime}
-              maxDate={pickupRange.max}
-              hint={`상차 +${DROPOFF_MIN_GAP_MIN}분 이후`}
-            />
-            {renderSelect("운송시간", "운송시간", optionsOf("운송시간"))}
           </div>
         </div>
 
@@ -854,14 +1017,42 @@ export default function PortalRequestPage() {
             ⚠️ 문구를 여기 직접 적지 말 것 — `lib/legalInfo.ts`가 유일 정의처다. */}
         <div className="pv2-form-block pv2-consent">
           <div className="pv2-consent-title">{PORTAL_ORDER_THIRD_PARTY_CONSENT.title}</div>
-          <p className="pv2-consent-p">{PORTAL_ORDER_THIRD_PARTY_CONSENT.intro}</p>
-          <ul className="pv2-consent-list">
-            {PORTAL_ORDER_THIRD_PARTY_CONSENT.items.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-          <p className="pv2-consent-p">{PORTAL_ORDER_THIRD_PARTY_CONSENT.confirm}</p>
-          <p className="pv2-consent-p">{PORTAL_ORDER_THIRD_PARTY_CONSENT.refusal}</p>
+          {/* 🔴 **접힌 상태에 남는 것은 제목 · 「자세히 보기」 · 체크박스 셋뿐이다.**
+              5라운드에 세부 4항목과 확인 문장을 접었고, 6라운드에 거부권 안내(refusal),
+              7라운드에 고지 문장(intro)까지 접으라고 사용자가 차례로 확정했다.
+              🔴 **세 라운드 모두 "접는 것이지 없애는 것이 아니다"** — 문구는 하나도 지우지
+              않았고 「자세히 보기」가 체크박스 바로 위에 있다. 옛 라운드 기록(「intro 는
+              접지 말 것」)을 근거로 되돌리지 말 것.
+              🔴 **그래서 제목이 유일하게 남는 설명이다.** `title` 이
+              「[필수] 상·하차지 담당자 정보 제3자 제공 동의」라서 접힌 화면에서도 무엇에
+              동의하는지가 읽히고, 체크박스의 「위 제3자 제공에」가 그 제목을 가리킨다.
+              **제목을 짧게 줄이거나 접음 안으로 넣지 말 것** — 그러면 접힌 화면에
+              체크박스만 남아 동의를 구하는 문장이 통째로 사라진다.
+              ⚠️ 개인정보보호법 제15조 2항이 고지와 거부권 안내를 요구한다 — 접어도
+              화면에 있긴 하지만 **문구 자체가 변호사 검토 대상이다**(47차 이후 계속). */}
+          <button
+            type="button"
+            className="pv2-consent-more"
+            aria-expanded={consentOpen}
+            onClick={() => setConsentOpen((v) => !v)}
+          >
+            {consentOpen ? "자세히 접기" : "자세히 보기"}
+            <span className={`pv2-consent-caret${consentOpen ? " is-open" : ""}`} aria-hidden="true">
+              ▼
+            </span>
+          </button>
+          {consentOpen && (
+            <div className="pv2-consent-detail">
+              <p className="pv2-consent-p">{PORTAL_ORDER_THIRD_PARTY_CONSENT.intro}</p>
+              <ul className="pv2-consent-list">
+                {PORTAL_ORDER_THIRD_PARTY_CONSENT.items.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+              <p className="pv2-consent-p">{PORTAL_ORDER_THIRD_PARTY_CONSENT.confirm}</p>
+              <p className="pv2-consent-p">{PORTAL_ORDER_THIRD_PARTY_CONSENT.refusal}</p>
+            </div>
+          )}
           <label className="pv2-consent-check">
             <input
               type="checkbox"

@@ -29,6 +29,17 @@ function toDateStr(d: Date) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+/** 당착 / 내착 — `portal_order_requests.dropoff_arrival_type` 과 같은 값이다 */
+export type ArrivalType = "same_day" | "next_day" | null;
+
+/**
+ * 🔴 당착·내착일 때 `requested_dropoff_at` 에 넣는 **자리 채움 시각**이다.
+ *    뜻(시각 무관)을 담는 것은 `dropoff_arrival_type` 이고 이 시각은 "그 날 안에"를
+ *    표현하는 하루의 끝일 뿐이다. 🔴 **00:00 으로 바꾸지 말 것** — 상차 +30분 하한을
+ *    밑돌아 검증에 걸리고, 그 날이 아니라 그 날 시작으로 읽힌다.
+ */
+const ARRIVAL_FILLER_TIME = "23:59";
+
 // 06:00 ~ 22:00, 30분 단위 — 원본 DateTimePicker 와 같은 목록
 const TIME_OPTIONS: string[] = [];
 for (let h = 6; h <= 22; h++) {
@@ -43,6 +54,13 @@ export default function Pv2DateTimeField({
   minDateTime,
   maxDate,
   hint,
+  nowChip = false,
+  nowSelected = false,
+  onNowChange,
+  arrivalChips = false,
+  arrivalValue = null,
+  onArrivalChange,
+  pickupDate,
 }: {
   label: string;
   value: string;
@@ -53,21 +71,71 @@ export default function Pv2DateTimeField({
   maxDate?: string;
   /** 제한 이유를 알려주는 짧은 안내 */
   hint?: string;
+  /**
+   * 🔴 「지금」 칩을 보여줄지 (27차 리뷰 3라운드 — 24시콜 오더와 같은 자리).
+   *    상차 일시에만 쓴다 — 하차에 「지금」은 뜻이 없다.
+   */
+  nowChip?: boolean;
+  /** 「지금」이 선택된 상태인가 — 이때 날짜·시간 입력을 잠근다 */
+  nowSelected?: boolean;
+  onNowChange?: (on: boolean) => void;
+  /**
+   * 🔴 「당착」·「내착」 칩을 보여줄지 (27차 리뷰 4라운드 — 24시콜 오더의 그것).
+   *    **하차 일시에만 쓴다.** 당착 = 상차 당일 도착 · 내착 = 다음 날 도착이며
+   *    **둘 다 시각은 무관하다**(사용자 확인 2026-08-28).
+   *    🔴 상차 날짜가 있어야 계산되므로 `pickupDate` 가 없으면 칩이 잠긴다.
+   */
+  arrivalChips?: boolean;
+  arrivalValue?: ArrivalType;
+  onArrivalChange?: (v: ArrivalType) => void;
+  /** 당착·내착의 기준이 되는 상차 날짜 ("YYYY-MM-DD") */
+  pickupDate?: string;
 }) {
   const [datePart, timePart] = value ? value.split("T") : ["", ""];
   const [minDatePart, minTimePart] = minDateTime ? minDateTime.split("T") : ["", ""];
 
+  // 날짜·시간을 직접 만지면 「지금」은 자동으로 풀린다 — 켜둔 채로 다른 시각을
+  // 고를 수 있으면 화면과 저장값이 어긋난다.
   function applyDate(d: string) {
+    onNowChange?.(false);
+    onArrivalChange?.(null);
     onChange(d ? `${d}T${timePart || "09:00"}` : "");
   }
   function applyTime(t: string) {
+    onNowChange?.(false);
+    onArrivalChange?.(null);
     onChange(datePart ? `${datePart}T${t}` : "");
   }
   function quickPick(daysFromToday: number) {
+    onNowChange?.(false);
+    onArrivalChange?.(null);
     const d = new Date();
     d.setDate(d.getDate() + daysFromToday);
     onChange(`${toDateStr(d)}T${timePart || "09:00"}`);
   }
+  /** 🔴 값은 **누른 그 시각**으로 채운다 — 제출 직전에 다시 지금으로 맞춘다(폼 쪽). */
+  function pickNow() {
+    const d = new Date();
+    onNowChange?.(true);
+    onArrivalChange?.(null);
+    onChange(`${toDateStr(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
+  }
+
+  /**
+   * 🔴 날짜는 **상차일에서 계산한다** — 화면이 "오늘"을 기준으로 잡으면 상차가 모레인
+   *    건의 당착이 오늘이 되어 하한 검증에 걸린다.
+   */
+  function pickArrival(kind: Exclude<ArrivalType, null>) {
+    if (!pickupDate) return;
+    const d = new Date(`${pickupDate}T00:00`);
+    d.setDate(d.getDate() + (kind === "next_day" ? 1 : 0));
+    onNowChange?.(false);
+    onArrivalChange?.(kind);
+    onChange(`${toDateStr(d)}T${ARRIVAL_FILLER_TIME}`);
+  }
+
+  /** 날짜·시간 입력이 잠기는 조건 — 「지금」이거나 당착·내착이거나 */
+  const locked = nowSelected || arrivalValue !== null;
 
   const today = toDateStr(new Date());
   const tomorrow = toDateStr(new Date(new Date().setDate(new Date().getDate() + 1)));
@@ -94,6 +162,7 @@ export default function Pv2DateTimeField({
           min={minDatePart || undefined}
           max={maxDate || undefined}
           onChange={applyDate}
+          disabled={locked}
           ariaLabel={`${label} 날짜`}
         />
         <Pv2Select
@@ -101,6 +170,7 @@ export default function Pv2DateTimeField({
           onChange={applyTime}
           placeholder="시간 선택"
           ariaLabel={`${label} 시간`}
+          disabled={locked}
           scroll
           options={[
             { value: "", label: "시간 선택" },
@@ -109,6 +179,37 @@ export default function Pv2DateTimeField({
         />
       </div>
       <div className="pv2-dt-chips">
+        {/* 🔴 「지금」이 「오늘」·「내일」 **앞**이다(24시콜 오더와 같은 순서, 리뷰 확정) */}
+        {nowChip && (
+          <button
+            type="button"
+            className={`pv2-chip${nowSelected ? " pv2-chip-on" : ""}`}
+            onClick={pickNow}
+          >
+            지금
+          </button>
+        )}
+        {/* 🔴 「당착」·「내착」이 「오늘」·「내일」 **앞**이다(「지금」과 같은 자리 규칙) */}
+        {arrivalChips && (
+          <>
+            <button
+              type="button"
+              className={`pv2-chip${arrivalValue === "same_day" ? " pv2-chip-on" : ""}`}
+              onClick={() => pickArrival("same_day")}
+              disabled={!pickupDate}
+            >
+              당착
+            </button>
+            <button
+              type="button"
+              className={`pv2-chip${arrivalValue === "next_day" ? " pv2-chip-on" : ""}`}
+              onClick={() => pickArrival("next_day")}
+              disabled={!pickupDate}
+            >
+              내착
+            </button>
+          </>
+        )}
         <button
           type="button"
           className={`pv2-chip${isToday ? " pv2-chip-on" : ""}`}

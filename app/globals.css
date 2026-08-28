@@ -3684,6 +3684,31 @@ tbody tr:hover {
   }
 }
 
+/* 지급조건 — 선착불을 고르면 정산방식 아래에 한 줄 더 나온다(27차 리뷰 4라운드).
+   🔴 `.pv2-choice` 는 폭이 그리드 1/4 로 고정이라 「선불(상차지 지급)」 같은 긴 라벨이
+      잘린다. **두 클래스로 특성도를 올려서** 내용 폭으로 되돌린다 — 순서로 고치면
+      다음에 누가 규칙을 정렬할 때 조용히 되돌아간다(원칙 58번). */
+.pv2-subchoice {
+  margin-top: 4px;
+  padding-left: 2px;
+}
+.pv2-subchoice-label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--pv2-text-3);
+  margin-bottom: 2px;
+}
+.pv2-choice-row.pv2-choice-row-auto {
+  flex-wrap: wrap;
+}
+.pv2-choice.pv2-choice-auto {
+  width: auto;
+  flex: none;
+  padding: 6px 2px;
+  font-size: 14px;
+}
+
 /* ① 운송 구간 — 2열 + 가운데 화살표 원 */
 .pv2-swap-grid {
   display: grid;
@@ -4205,6 +4230,35 @@ tbody tr:hover {
   margin: 0 0 6px;
   padding-left: 18px;
 }
+/* 「자세히 보기」 — 제목·토글·체크박스만 남기고 나머지를 전부 접는다.
+   5라운드에 세부 4항목+확인 문장, 6라운드에 거부권 안내, 7라운드에 고지 문장까지
+   차례로 접혔다(문구를 지운 것이 아니다). 🔴 제목은 접힌 화면에 유일하게 남는
+   설명이라 여기서 숨기지 말 것 — 숨기면 체크박스만 남는다. */
+.pv2-consent-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 2px 0 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: var(--pv2-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.pv2-consent-caret {
+  font-size: 9px;
+  transition: transform 0.15s ease;
+}
+.pv2-consent-caret.is-open {
+  transform: rotate(180deg);
+}
+.pv2-consent-detail {
+  margin-bottom: 6px;
+}
 .pv2-consent-check {
   display: flex;
   align-items: flex-start;
@@ -4301,4 +4355,995 @@ tbody tr:hover {
   font-size: 13.5px;
   line-height: 1.5;
   word-break: keep-all;
+}
+
+/* ── 견적 확인 목록 (27차) ───────────────────────────────────────────
+   🔴 값은 전부 시안 소스 실측이다. `.pv2-*` 스코프 안에만 둔다 —
+      전역 클래스를 건드리면 관리자 화면 31개가 같이 바뀐다(24차 확정). */
+.pv2-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.pv2-chipgroup {
+  display: flex;
+  gap: 6px;
+  background: var(--pv2-border);
+  border-radius: 99px;
+  padding: 4px;
+}
+.pv2-fchip {
+  border: none;
+  cursor: pointer;
+  border-radius: 99px;
+  padding: 7px 15px;
+  font-size: 14.5px;
+  font-family: inherit;
+  background: transparent;
+  color: var(--pv2-text-2);
+  font-weight: 400;
+  box-shadow: none;
+}
+.pv2-fchip:hover {
+  color: var(--pv2-text);
+}
+.pv2-fchip-on {
+  background: var(--pv2-surface);
+  color: var(--pv2-text);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.pv2-search {
+  flex: 1;
+  min-width: 220px;
+  border: 1px solid var(--pv2-border);
+  border-radius: 99px;
+  padding: 10px 18px;
+  font-size: 15px;
+  font-family: inherit;
+  background: var(--pv2-surface);
+  color: var(--pv2-text);
+}
+.pv2-qlist {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+/* 🔴 카드가 접힘 줄(`.pv2-qhead`)과 펼침(`.pv2-qexp`)을 **함께** 담는다.
+   펼침을 별도 카드로 빼지 말 것 — 시안은 한 카드가 아래로 자란다. */
+.pv2-qcard {
+  background: var(--pv2-surface);
+  border: none;
+  border-radius: 20px;
+  overflow: hidden;
+}
+.pv2-qcard:hover {
+  box-shadow: 0 4px 16px rgba(26, 26, 26, 0.07);
+}
+.pv2-qcard-open {
+  box-shadow: 0 4px 16px rgba(26, 26, 26, 0.07);
+}
+.pv2-qhead {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 20px 26px;
+}
+.pv2-qstatus {
+  flex: none;
+  font-size: 15.5px;
+  font-weight: 800;
+  border-radius: 11px;
+  padding: 14px 18px;
+  min-width: 72px;
+  text-align: center;
+  white-space: nowrap;
+}
+.pv2-qbody {
+  flex: 1;
+  min-width: 0;
+}
+.pv2-qtop {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+/* 🔴 시안은 **견적번호가 크고 구간이 작다** — 25차까지와 반대다. 되돌리지 말 것. */
+.pv2-qno {
+  font-size: 20.5px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--pv2-text);
+}
+.pv2-qdate {
+  font-size: 14px;
+  color: var(--pv2-text-4);
+}
+/* 모바일에서만 배지 옆에 온다(시안 실측) — 데스크탑에서는 견적번호 옆이다.
+   ⚠️ 같은 문자열을 두 자리에 그리는 것이라 값이 갈릴 일이 없다. 배지를 두 번
+   그리는 것과는 다르다(그쪽은 상태·색이 갈려 원칙 13번 사고가 난다). */
+.pv2-qdate-m {
+  display: none;
+}
+.pv2-qroute {
+  margin-top: 4px;
+  font-size: 15.5px;
+  font-weight: 600;
+  color: var(--pv2-text-2);
+  line-height: 1.45;
+  word-break: keep-all;
+}
+/* 🔴 화살표만 옐로다 — 구간 글자까지 물들이지 말 것 */
+.pv2-qarrow {
+  color: var(--pv2-yellow);
+}
+/* 반려 사유 — 사유 없이 "반려"만 뜨면 화주가 다시 문의한다 */
+.pv2-qreason {
+  margin-top: 6px;
+  font-size: 14px;
+  color: #b4423a;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: keep-all;
+}
+.pv2-qright {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.pv2-qprice-wrap {
+  text-align: right;
+}
+.pv2-qvat {
+  font-size: 13.5px;
+  color: var(--pv2-text-3);
+}
+.pv2-qprice {
+  font-size: 21.5px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin-top: 2px;
+}
+/* 금액이 아직 없는 건 — 라벨 없이 「협의 중」만 (시안 실측) */
+.pv2-qprice-soft {
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--pv2-text);
+}
+.pv2-qapprove {
+  flex: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  background: var(--pv2-yellow);
+  color: var(--pv2-text);
+  border-radius: var(--pv2-r-pill);
+  padding: 12px 20px;
+  font-size: 15px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.pv2-qapprove:hover {
+  background: #ffcf00;
+}
+.pv2-qapprove:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.pv2-qtoggle {
+  flex: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  background: var(--pv2-selected-bg);
+  color: var(--pv2-selected-text);
+  border-radius: var(--pv2-r-pill);
+  padding: 12px 20px;
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.pv2-qtoggle:hover {
+  background: var(--pv2-selected-hover);
+}
+/* 펼친 상태는 회색이다 — 검정으로 두면 「접기」가 주된 행동처럼 보인다(시안 실측) */
+.pv2-qtoggle-on {
+  background: var(--pv2-border);
+  color: var(--pv2-text-2);
+}
+.pv2-qtoggle-on:hover {
+  background: #e2e0db;
+}
+.pv2-qcaret {
+  font-size: 10px;
+  line-height: 1;
+}
+
+/* 펼침 — 🔴 구분선이 카드 폭을 가로지른다. 좌우 여백은 `.pv2-qexp` 가 아니라
+   각 구획이 갖는다(여백을 부모에 주면 선이 안쪽으로 들어와 시안과 달라진다). */
+.pv2-qexp {
+  padding: 0;
+}
+.pv2-qsec {
+  border-top: 1px solid var(--pv2-border);
+  padding: 18px 26px;
+}
+.pv2-qsec-title {
+  font-size: 15px;
+  font-weight: 800;
+  margin-bottom: 10px;
+}
+.pv2-qgrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 48px;
+  row-gap: 6px;
+}
+.pv2-qgrid-1 {
+  grid-template-columns: minmax(0, 1fr);
+}
+.pv2-qkv {
+  display: flex;
+  gap: 16px;
+  font-size: 14.5px;
+  line-height: 1.6;
+}
+.pv2-qk {
+  flex: none;
+  width: 78px;
+  color: var(--pv2-text-4);
+}
+.pv2-qv {
+  font-weight: 600;
+  word-break: keep-all;
+  min-width: 0;
+}
+/* 운임 내역 — 한 줄 그리드이고 합계만 오른쪽 끝이다(시안 실측).
+   🔴 합계 라벨은 「합계 (부가세 별도)」다 — 부가세 칸이 옆에 따로 있고
+      합계에는 포함되지 않는다. 라벨을 「부가세 포함」으로 바꾸지 말 것. */
+.pv2-qfare {
+  display: flex;
+  align-items: flex-end;
+  gap: 32px;
+}
+.pv2-qfare-i {
+  min-width: 0;
+}
+.pv2-qfare-k {
+  font-size: 13.5px;
+  color: var(--pv2-text-3);
+  white-space: nowrap;
+}
+.pv2-qfare-v {
+  font-size: 16px;
+  font-weight: 700;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+.pv2-qfare-total {
+  margin-left: auto;
+  text-align: right;
+  flex: none;
+}
+.pv2-qfare-total .pv2-qfare-v {
+  font-size: 21.5px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.pv2-qfoot {
+  border-top: 1px solid var(--pv2-border);
+  padding: 18px 26px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pv2-qfoot-link {
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--pv2-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.pv2-qfoot-sp {
+  flex: 1;
+}
+.pv2-qbtn {
+  border: 1px solid var(--pv2-border);
+  background: var(--pv2-surface);
+  color: var(--pv2-text);
+  border-radius: var(--pv2-r-sm);
+  padding: 9px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.pv2-qbtn:hover {
+  background: var(--pv2-hover-card);
+}
+.pv2-qbtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+/* 🔴 두 클래스로 특성도를 올린다(원칙 58번) — `.pv2-qbtn` 과 특성도가 같으면
+   선언 순서가 승부를 가르고, 모바일에서 `.pv2-qbtn { flex: 1 }` 이 뒤에 와서
+   `flex-basis: 100%` 를 조용히 되돌린다(실측으로 잡았다). */
+.pv2-qbtn.pv2-qbtn-dark {
+  border: none;
+  background: var(--pv2-selected-bg);
+  color: var(--pv2-selected-text);
+  font-weight: 700;
+  padding: 10px 18px;
+}
+.pv2-qbtn.pv2-qbtn-dark:hover {
+  background: var(--pv2-selected-hover);
+}
+
+/* 견적서 PDF 모달 — 🔴 새 탭 대신 포털 안에서 띄운다(27차 리뷰 3라운드).
+   print 라우트를 iframe 으로 담을 뿐이라 견적서 내용은 여전히 한 곳에만 있다. */
+.pv2-printmodal {
+  background: var(--pv2-surface);
+  border-radius: var(--pv2-r-card);
+  width: 100%;
+  max-width: 900px;
+  height: min(90vh, 1100px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.pv2-printmodal-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--pv2-border);
+}
+.pv2-printmodal-title {
+  font-size: 15px;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pv2-printmodal-sp {
+  flex: 1;
+}
+.pv2-printmodal-x {
+  flex: none;
+  border: none;
+  background: var(--pv2-input-bg);
+  color: var(--pv2-text-2);
+  border-radius: var(--pv2-r-sm);
+  width: 34px;
+  height: 34px;
+  cursor: pointer;
+  font-size: 15px;
+  font-family: inherit;
+}
+.pv2-printmodal-x:hover {
+  background: var(--pv2-border);
+}
+.pv2-printmodal-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  background: var(--pv2-bg);
+}
+.pv2-printmodal-frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+.pv2-printmodal-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--pv2-text-3);
+}
+@media (max-width: 700px) {
+  .pv2-printmodal {
+    max-width: 100%;
+    height: 92vh;
+    border-radius: var(--pv2-r-mid);
+  }
+  .pv2-printmodal-bar {
+    flex-wrap: wrap;
+    padding: 10px 12px;
+  }
+  .pv2-printmodal-title {
+    flex-basis: calc(100% - 42px);
+    font-size: 14px;
+  }
+  .pv2-printmodal-sp {
+    display: none;
+  }
+  .pv2-printmodal-bar .pv2-qbtn {
+    flex: 1;
+    justify-content: center;
+    padding: 9px;
+    font-size: 13.5px;
+  }
+  /* 🔴 두 클래스로 특성도를 올린다(원칙 58번) — 위 `.pv2-qbtn { flex: 1 }` 이
+     모바일 목록 규칙과 같은 특성도라 순서로는 못 이긴다. */
+  .pv2-printmodal-bar .pv2-qbtn.pv2-qbtn-dark {
+    flex: 1;
+    width: auto;
+    order: 0;
+    padding: 9px;
+    font-size: 13.5px;
+  }
+}
+
+/* 견적 승인 확인 모달 — `.pv2-modal-*` 을 그대로 쓰고 요약 상자만 더한다 */
+.pv2-qapv-box {
+  background: var(--pv2-bg);
+  border-radius: var(--pv2-r-sm);
+  padding: 14px 16px;
+  margin-top: 16px;
+}
+.pv2-qapv-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.pv2-qapv-k {
+  color: var(--pv2-text-3);
+  flex: none;
+}
+.pv2-qapv-v {
+  font-weight: 600;
+  text-align: right;
+  word-break: keep-all;
+}
+.pv2-qapv-rule {
+  border-top: 1px solid var(--pv2-border);
+  margin: 10px 0;
+}
+.pv2-qapv-amount {
+  font-size: 18px;
+  font-weight: 800;
+}
+/* 🔴 승인은 파괴적이지 않다 — 빨강(`.pv2-modal-confirm`)은 삭제 전용으로 남긴다 */
+.pv2-modal-confirm-yellow {
+  background: var(--pv2-yellow);
+  color: var(--pv2-text);
+}
+
+/* 모바일 — 시안은 세로 1단이고 배지와 날짜가 한 줄에 온다 */
+@media (max-width: 700px) {
+  .pv2-qcard {
+    border-radius: 16px;
+  }
+  .pv2-qhead {
+    flex-wrap: wrap;
+    padding: 15px;
+    gap: 8px;
+  }
+  .pv2-qstatus {
+    font-size: 13.5px;
+    border-radius: 9px;
+    padding: 6px 12px;
+    min-width: 0;
+  }
+  .pv2-qdate-d {
+    display: none;
+  }
+  .pv2-qdate-m {
+    display: inline;
+  }
+  .pv2-qbody,
+  .pv2-qright {
+    flex-basis: 100%;
+  }
+  .pv2-qno {
+    font-size: 19px;
+  }
+  .pv2-qroute {
+    font-size: 14.5px;
+    line-height: 1.5;
+  }
+  .pv2-qreason {
+    font-size: 13px;
+  }
+  .pv2-qright {
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .pv2-qprice-wrap {
+    text-align: left;
+  }
+  .pv2-qvat {
+    font-size: 12.5px;
+  }
+  .pv2-qprice {
+    font-size: 18.5px;
+  }
+  .pv2-qprice-soft {
+    font-size: 17px;
+  }
+  .pv2-qapprove,
+  .pv2-qtoggle {
+    padding: 9px 15px;
+    font-size: 14px;
+  }
+  .pv2-qsec {
+    padding: 15px;
+  }
+  .pv2-qgrid {
+    grid-template-columns: minmax(0, 1fr);
+    column-gap: 0;
+  }
+  .pv2-qkv {
+    font-size: 14px;
+  }
+  .pv2-qk {
+    width: 72px;
+  }
+  .pv2-qfare {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 16px;
+    align-items: start;
+  }
+  /* 🔴 합계는 한 줄을 통째로 쓰고 위에 구분선이 온다(시안 모바일 실측) */
+  .pv2-qfare-total {
+    grid-column: 1 / -1;
+    margin-left: 0;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    border-top: 1px solid var(--pv2-border);
+    padding-top: 12px;
+    text-align: left;
+  }
+  .pv2-qfare-total .pv2-qfare-k {
+    font-size: 14px;
+  }
+  .pv2-qfare-total .pv2-qfare-v {
+    font-size: 19px;
+    margin-top: 0;
+  }
+  .pv2-qfoot {
+    flex-wrap: wrap;
+    padding: 15px;
+    gap: 8px;
+  }
+  .pv2-qfoot-sp {
+    display: none;
+  }
+  .pv2-qfoot-link {
+    order: -2;
+    flex-basis: 100%;
+    text-align: left;
+    font-size: 13px;
+  }
+  /* 🔴 모바일은 「견적서 상세 보기」가 맨 위 전체 폭이고 PDF·엑셀이 아래 두 칸이다 */
+  .pv2-qbtn.pv2-qbtn-dark {
+    order: -1;
+    flex: none;
+    width: 100%;
+    justify-content: center;
+    padding: 13px;
+    font-size: 15px;
+  }
+  .pv2-qbtn {
+    flex: 1;
+    justify-content: center;
+    padding: 12px;
+  }
+  /* 🔴 `flex: 1` 이 `flex-basis: 0%` 라 `width: 100%` 만으로는 줄을 못 바꾼다 —
+     기간 칩과 한 줄에 눌려 들어가 검색창이 잘린다(실측으로 잡았다). */
+  .pv2-search {
+    flex: 1 0 100%;
+    min-width: 0;
+    padding: 10px 15px;
+    font-size: 14px;
+  }
+}
+
+/* ── 견적 상세 (27차 신규 라우트) ────────────────────────────────
+   시안 `09-quote-detail` 실측. 견적서 형식이라 `.pv2-card` 를 쓰지 않고
+   전용 문서 카드를 둔다. */
+.pv2-qd-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 auto 18px;
+  max-width: 1000px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0 4px;
+  flex-wrap: wrap;
+}
+.pv2-qd-back {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 16.5px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--pv2-text);
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+.pv2-qd-spacer {
+  margin-left: auto;
+}
+.pv2-qd-dl {
+  border: 1px solid var(--pv2-border);
+  background: var(--pv2-surface);
+  border-radius: 12px;
+  padding: 10px 18px;
+  font-size: 14.5px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--pv2-text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.pv2-qd-dl:hover {
+  background: #fffdf5;
+}
+.pv2-qd-dl:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.pv2-qd-doc {
+  background: var(--pv2-surface);
+  border: none;
+  border-radius: 24px;
+  padding: 56px 60px;
+  max-width: 880px;
+  margin: 0 auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+.pv2-qd-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+}
+.pv2-qd-title {
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: 0.3em;
+  line-height: 1.1;
+}
+.pv2-qd-tagline {
+  font-size: 15px;
+  color: var(--pv2-text-3);
+  margin-top: 10px;
+}
+.pv2-qd-headright {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+}
+.pv2-qd-status {
+  font-size: 15.5px;
+  font-weight: 800;
+  border-radius: 9px;
+  padding: 8px 16px;
+  margin-bottom: 5px;
+  white-space: nowrap;
+}
+.pv2-qd-kv {
+  font-size: 15px;
+  color: var(--pv2-text-2);
+}
+.pv2-qd-kv b {
+  color: var(--pv2-text);
+}
+.pv2-qd-rule {
+  height: 3px;
+  background: var(--pv2-text);
+  margin-bottom: 28px;
+}
+/* 🔴 회색 박스가 아니라 위아래 구분선이다 */
+.pv2-qd-parties {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 20px;
+  margin-bottom: 32px;
+  padding: 20px 0;
+  border-top: 1px solid var(--pv2-border);
+  border-bottom: 1px solid var(--pv2-border);
+}
+.pv2-qd-party-label {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--pv2-text-3);
+  letter-spacing: 0.08em;
+  margin-bottom: 10px;
+}
+.pv2-qd-party-name {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin-bottom: 8px;
+}
+.pv2-qd-party-sub {
+  font-size: 15px;
+  color: var(--pv2-text-2);
+  line-height: 1.75;
+}
+.pv2-qd-lead {
+  font-size: 16px;
+  color: var(--pv2-text);
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+.pv2-qd-table {
+  border-top: 2px solid var(--pv2-text);
+  margin-bottom: 20px;
+}
+.pv2-qd-row {
+  display: grid;
+  grid-template-columns: 132px 1fr;
+  gap: 16px;
+  padding: 16px 4px;
+  border-bottom: 1px solid var(--pv2-border);
+  font-size: 16px;
+}
+.pv2-qd-row:last-child {
+  border-bottom: none;
+}
+.pv2-qd-k {
+  color: var(--pv2-text-3);
+  font-weight: 600;
+}
+.pv2-qd-v {
+  line-height: 1.65;
+  font-weight: 600;
+}
+.pv2-qd-v-right {
+  text-align: right;
+  font-weight: 600;
+}
+.pv2-qd-down {
+  color: var(--pv2-yellow);
+  font-weight: 800;
+}
+/* 🔴 합계 아래 여백 100px — 시안 실측. 입금 계좌가 이 뒤에 온다 */
+/* 🔴 공급가액 줄 — 견적서 PDF 와 같은 자리에 같은 모양으로 둔다(줄 단위 정합).
+   5라운드 확정 세 가지:
+   ① **라벨이 한 줄이어야 한다** — 기본 라벨 칸이 132px 고정이라 「공급가액 (부가세 별도)」가
+      두 줄로 접혔다. 🔴 **두 클래스로 특성도를 올려서** 칸 폭을 내용에 맞춘다(원칙 58번,
+      순서로 고치면 다음에 누가 정렬할 때 되돌아간다).
+   ② **「(부가세 별도)」는 회색** — 합계의 「(부가세 포함)」과 같은 취급이다.
+   ③ **금액을 다른 행보다 크고 굵게, 그러나 총 견적금액보다는 작게**(21px < 34px). */
+.pv2-qd-row.pv2-qd-row-sub {
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  border-top: 1px solid var(--pv2-border);
+  font-weight: 700;
+}
+.pv2-qd-row-sub .pv2-qd-k {
+  color: var(--pv2-text);
+  white-space: nowrap;
+}
+.pv2-qd-row-sub .pv2-qd-k span {
+  font-weight: 500;
+  color: var(--pv2-text-3);
+}
+.pv2-qd-row-sub .pv2-qd-v-right {
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: -0.012em;
+}
+.pv2-qd-total {
+  border-top: 2px solid var(--pv2-text);
+  padding: 22px 4px 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 100px;
+}
+.pv2-qd-total-label {
+  font-size: 17px;
+  font-weight: 700;
+}
+.pv2-qd-total-label span {
+  font-weight: 500;
+  color: var(--pv2-text-3);
+}
+.pv2-qd-total-amount {
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+/* 정산방식 — 합계와 입금 계좌 사이(27차 리뷰 4라운드).
+   라벨은 입금 계좌와 같은 것을 쓰고 값만 따로 둔다. */
+.pv2-qd-settle {
+  margin-bottom: 28px;
+}
+.pv2-qd-settle-v {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.pv2-qd-bank {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.pv2-qd-bank-label {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--pv2-text-3);
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+.pv2-qd-bank-no {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.pv2-qd-bank-holder {
+  font-size: 15px;
+  color: var(--pv2-text-2);
+  margin-top: 3px;
+}
+.pv2-qd-bank-ask {
+  flex: 1;
+  min-width: 200px;
+  font-size: 14.5px;
+  color: var(--pv2-text-3);
+  line-height: 1.8;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* 모바일 — 시안은 같은 구성을 작은 크기로 그린다.
+   ⚠️ 입금 계좌와 「아래와 같이 견적합니다」는 모바일에도 **있다**(시안 소스 실측). */
+@media (max-width: 700px) {
+  .pv2-qd-actions {
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .pv2-qd-back {
+    font-size: 14.5px;
+  }
+  .pv2-qd-dl {
+    border-radius: 9px;
+    padding: 8px 10px;
+    font-size: 0;
+    gap: 0;
+  }
+  .pv2-qd-doc {
+    border-radius: 16px;
+    padding: 20px 18px;
+  }
+  .pv2-qd-head {
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .pv2-qd-title {
+    font-size: 21px;
+    letter-spacing: 0.24em;
+  }
+  .pv2-qd-tagline {
+    font-size: 12px;
+    margin-top: 6px;
+  }
+  .pv2-qd-status {
+    font-size: 12.5px;
+    padding: 6px 12px;
+  }
+  .pv2-qd-kv {
+    font-size: 12.5px;
+  }
+  .pv2-qd-rule {
+    height: 2px;
+    margin-bottom: 16px;
+  }
+  .pv2-qd-parties {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 18px;
+    padding: 14px 0;
+  }
+  .pv2-qd-party-label {
+    font-size: 11.5px;
+    margin-bottom: 6px;
+  }
+  .pv2-qd-party-name {
+    font-size: 14px;
+    margin-bottom: 5px;
+  }
+  .pv2-qd-party-sub {
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .pv2-qd-lead {
+    font-size: 13.5px;
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+  .pv2-qd-row {
+    grid-template-columns: 74px 1fr;
+    gap: 10px;
+    padding: 11px 0;
+    font-size: 13px;
+  }
+  .pv2-qd-total {
+    padding-top: 13px;
+    margin-bottom: 12px;
+  }
+  .pv2-qd-total-label {
+    font-size: 13.5px;
+  }
+  .pv2-qd-total-amount {
+    font-size: 21px;
+  }
+  /* 🔴 모바일에서도 총 견적금액(21px)보다 작아야 한다 */
+  .pv2-qd-row-sub .pv2-qd-v-right {
+    font-size: 16px;
+  }
+  .pv2-qd-bank {
+    border-top: 1px solid var(--pv2-border);
+    margin-top: 12px;
+    padding-top: 12px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 3px;
+  }
+  .pv2-qd-bank-label {
+    font-size: 11.5px;
+    letter-spacing: 0.06em;
+    margin-bottom: 0;
+  }
+  .pv2-qd-bank-no {
+    font-size: 13.5px;
+  }
+  .pv2-qd-bank-holder {
+    font-size: 12px;
+    margin-top: 0;
+  }
+  .pv2-qd-bank-ask {
+    font-size: 12px;
+    text-align: left;
+    margin-top: 5px;
+    min-width: 0;
+  }
 }
