@@ -43,6 +43,9 @@ export default function Pv2DateTimeField({
   minDateTime,
   maxDate,
   hint,
+  nowChip = false,
+  nowSelected = false,
+  onNowChange,
 }: {
   label: string;
   value: string;
@@ -53,20 +56,39 @@ export default function Pv2DateTimeField({
   maxDate?: string;
   /** 제한 이유를 알려주는 짧은 안내 */
   hint?: string;
+  /**
+   * 🔴 「지금」 칩을 보여줄지 (27차 리뷰 3라운드 — 24시콜 오더와 같은 자리).
+   *    상차 일시에만 쓴다 — 하차에 「지금」은 뜻이 없다.
+   */
+  nowChip?: boolean;
+  /** 「지금」이 선택된 상태인가 — 이때 날짜·시간 입력을 잠근다 */
+  nowSelected?: boolean;
+  onNowChange?: (on: boolean) => void;
 }) {
   const [datePart, timePart] = value ? value.split("T") : ["", ""];
   const [minDatePart, minTimePart] = minDateTime ? minDateTime.split("T") : ["", ""];
 
+  // 날짜·시간을 직접 만지면 「지금」은 자동으로 풀린다 — 켜둔 채로 다른 시각을
+  // 고를 수 있으면 화면과 저장값이 어긋난다.
   function applyDate(d: string) {
+    onNowChange?.(false);
     onChange(d ? `${d}T${timePart || "09:00"}` : "");
   }
   function applyTime(t: string) {
+    onNowChange?.(false);
     onChange(datePart ? `${datePart}T${t}` : "");
   }
   function quickPick(daysFromToday: number) {
+    onNowChange?.(false);
     const d = new Date();
     d.setDate(d.getDate() + daysFromToday);
     onChange(`${toDateStr(d)}T${timePart || "09:00"}`);
+  }
+  /** 🔴 값은 **누른 그 시각**으로 채운다 — 제출 직전에 다시 지금으로 맞춘다(폼 쪽). */
+  function pickNow() {
+    const d = new Date();
+    onNowChange?.(true);
+    onChange(`${toDateStr(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
   }
 
   const today = toDateStr(new Date());
@@ -94,6 +116,7 @@ export default function Pv2DateTimeField({
           min={minDatePart || undefined}
           max={maxDate || undefined}
           onChange={applyDate}
+          disabled={nowSelected}
           ariaLabel={`${label} 날짜`}
         />
         <Pv2Select
@@ -101,6 +124,7 @@ export default function Pv2DateTimeField({
           onChange={applyTime}
           placeholder="시간 선택"
           ariaLabel={`${label} 시간`}
+          disabled={nowSelected}
           scroll
           options={[
             { value: "", label: "시간 선택" },
@@ -109,6 +133,16 @@ export default function Pv2DateTimeField({
         />
       </div>
       <div className="pv2-dt-chips">
+        {/* 🔴 「지금」이 「오늘」·「내일」 **앞**이다(24시콜 오더와 같은 순서, 리뷰 확정) */}
+        {nowChip && (
+          <button
+            type="button"
+            className={`pv2-chip${nowSelected ? " pv2-chip-on" : ""}`}
+            onClick={pickNow}
+          >
+            지금
+          </button>
+        )}
         <button
           type="button"
           className={`pv2-chip${isToday ? " pv2-chip-on" : ""}`}

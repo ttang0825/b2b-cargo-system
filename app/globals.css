@@ -4642,6 +4642,107 @@ tbody tr:hover {
   background: var(--pv2-selected-hover);
 }
 
+/* 견적서 PDF 모달 — 🔴 새 탭 대신 포털 안에서 띄운다(27차 리뷰 3라운드).
+   print 라우트를 iframe 으로 담을 뿐이라 견적서 내용은 여전히 한 곳에만 있다. */
+.pv2-printmodal {
+  background: var(--pv2-surface);
+  border-radius: var(--pv2-r-card);
+  width: 100%;
+  max-width: 900px;
+  height: min(90vh, 1100px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.pv2-printmodal-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--pv2-border);
+}
+.pv2-printmodal-title {
+  font-size: 15px;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pv2-printmodal-sp {
+  flex: 1;
+}
+.pv2-printmodal-x {
+  flex: none;
+  border: none;
+  background: var(--pv2-input-bg);
+  color: var(--pv2-text-2);
+  border-radius: var(--pv2-r-sm);
+  width: 34px;
+  height: 34px;
+  cursor: pointer;
+  font-size: 15px;
+  font-family: inherit;
+}
+.pv2-printmodal-x:hover {
+  background: var(--pv2-border);
+}
+.pv2-printmodal-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  background: var(--pv2-bg);
+}
+.pv2-printmodal-frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+.pv2-printmodal-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--pv2-text-3);
+}
+@media (max-width: 700px) {
+  .pv2-printmodal {
+    max-width: 100%;
+    height: 92vh;
+    border-radius: var(--pv2-r-mid);
+  }
+  .pv2-printmodal-bar {
+    flex-wrap: wrap;
+    padding: 10px 12px;
+  }
+  .pv2-printmodal-title {
+    flex-basis: calc(100% - 42px);
+    font-size: 14px;
+  }
+  .pv2-printmodal-sp {
+    display: none;
+  }
+  .pv2-printmodal-bar .pv2-qbtn {
+    flex: 1;
+    justify-content: center;
+    padding: 9px;
+    font-size: 13.5px;
+  }
+  /* 🔴 두 클래스로 특성도를 올린다(원칙 58번) — 위 `.pv2-qbtn { flex: 1 }` 이
+     모바일 목록 규칙과 같은 특성도라 순서로는 못 이긴다. */
+  .pv2-printmodal-bar .pv2-qbtn.pv2-qbtn-dark {
+    flex: 1;
+    width: auto;
+    order: 0;
+    padding: 9px;
+    font-size: 13.5px;
+  }
+}
+
 /* 견적 승인 확인 모달 — `.pv2-modal-*` 을 그대로 쓰고 요약 상자만 더한다 */
 .pv2-qapv-box {
   background: var(--pv2-bg);

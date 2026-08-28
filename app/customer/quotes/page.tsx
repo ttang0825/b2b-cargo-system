@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import MixableBadge from "@/components/MixableBadge";
 import Pv2Select from "@/components/pv2/Pv2Select";
+import Pv2PrintModal from "@/components/pv2/Pv2PrintModal";
 import { useListSearchSort } from "@/lib/useListSearchSort";
 // 🔴 `DateRangeFilter` 컴포넌트는 관리자 화면 여러 곳이 같이 쓴다 — 모양을 시안에
 //    맞추려고 그 컴포넌트를 고치면 관리자가 같이 바뀐다. 계산 함수만 가져다 쓰고
@@ -103,6 +104,8 @@ export default function CustomerQuotesPage() {
   const [approveTarget, setApproveTarget] = useState<any | null>(null);
   const [approveBusy, setApproveBusy] = useState(false);
   const [approveError, setApproveError] = useState<string | null>(null);
+  // 견적서 PDF — 🔴 새 탭이 아니라 포털 안 모달로 띄운다(27차 리뷰 3라운드)
+  const [printTarget, setPrintTarget] = useState<{ id: string; no: string } | null>(null);
 
   async function handleExcel(quoteId: string) {
     setExcelBusyId(quoteId);
@@ -596,7 +599,9 @@ export default function CustomerQuotesPage() {
                         <button
                           type="button"
                           className="pv2-qbtn"
-                          onClick={() => window.open(`/customer/quotes/${q.id}/print`, "_blank")}
+                          onClick={() =>
+                            setPrintTarget({ id: q.id, no: q.quote_no || "견적서" })
+                          }
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src="/portal/pdf-icon.svg" alt="" style={{ width: 16, height: 16 }} />
@@ -633,6 +638,14 @@ export default function CustomerQuotesPage() {
             );
           })}
         </div>
+      )}
+
+      {printTarget && (
+        <Pv2PrintModal
+          src={`/customer/quotes/${printTarget.id}/print`}
+          title={`견적서 ${printTarget.no}`}
+          onClose={() => setPrintTarget(null)}
+        />
       )}
 
       {/* 견적 승인 확인 — 🔴 한 번 누르면 담당자가 배차를 시작한다. 확인 없이 바로

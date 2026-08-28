@@ -40,6 +40,7 @@ export default function Pv2DatePicker({
   className = "",
   wrapClassName = "",
   wrapStyle,
+  disabled = false,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -51,6 +52,8 @@ export default function Pv2DatePicker({
   className?: string;
   wrapClassName?: string;
   wrapStyle?: React.CSSProperties;
+  /** 「지금」처럼 값이 고정된 상태에서 잠근다 — `Pv2Select` 와 같은 prop 이름이다 */
+  disabled?: boolean;
 }) {
   const uid = useId();
   const { open, setOpen, openPop, wrapRef } = usePv2Popover(uid);
@@ -99,7 +102,11 @@ export default function Pv2DatePicker({
       <button
         type="button"
         className={`pv2-select ${className}`.trim()}
-        onClick={() => (open ? setOpen(false) : openPop())}
+        disabled={disabled}
+        onClick={() => {
+          if (disabled) return;
+          open ? setOpen(false) : openPop();
+        }}
         onKeyDown={(e) => {
           if (e.key === "Escape" && open) {
             e.stopPropagation();

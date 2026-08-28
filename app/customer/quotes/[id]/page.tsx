@@ -20,6 +20,7 @@ import { calcVatAmount, calcInclusiveAmount } from "@/lib/vat";
 import { downloadQuoteExcel } from "@/lib/quoteExcel";
 import { quoteStatusStyle } from "@/lib/quoteStatusLabels";
 import MixableBadge from "@/components/MixableBadge";
+import Pv2PrintModal from "@/components/pv2/Pv2PrintModal";
 import { formatPhoneNumber } from "@/lib/constants";
 
 type QuoteItem = { id: string; item_name: string | null; amount: number | null };
@@ -71,6 +72,8 @@ export default function CustomerQuoteDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [excelBusy, setExcelBusy] = useState(false);
+  // 🔴 새 탭이 아니라 포털 안 모달이다(27차 리뷰 3라운드)
+  const [printOpen, setPrintOpen] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -177,7 +180,7 @@ export default function CustomerQuoteDetailPage() {
         <button
           type="button"
           className="pv2-qd-dl"
-          onClick={() => window.open(`/customer/quotes/${quote.id}/print`, "_blank")}
+          onClick={() => setPrintOpen(true)}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/portal/pdf-icon.svg" alt="" style={{ width: 16, height: 16 }} />
@@ -194,6 +197,14 @@ export default function CustomerQuoteDetailPage() {
         <div className="pv2-alert pv2-alert-error" style={{ marginBottom: 14 }}>
           {error}
         </div>
+      )}
+
+      {printOpen && (
+        <Pv2PrintModal
+          src={`/customer/quotes/${quote.id}/print`}
+          title={`견적서 ${quote.quote_no || ""}`.trim()}
+          onClose={() => setPrintOpen(false)}
+        />
       )}
 
       <div className="pv2-qd-doc">

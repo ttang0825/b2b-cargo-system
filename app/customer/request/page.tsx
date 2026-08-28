@@ -78,6 +78,10 @@ export default function PortalRequestPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 🔴 「지금」 상차 (27차 리뷰 3라운드) — 24시콜 오더와 같은 자리에 둔 칩이다.
+  //    켜져 있으면 날짜·시간 입력이 잠기고, **제출 직전에 그 순간으로 다시 맞춘다**
+  //    (폼을 오래 열어두면 눌렀던 시각이 이미 과거가 되어 하한 검증에 걸린다).
+  const [pickupNow, setPickupNow] = useState(false);
   const [success, setSuccess] = useState(false);
   const [presetMsg, setPresetMsg] = useState<string | null>(null);
   // 프리셋 이름 입력 팝업 — window.prompt 대체(PR #103 리뷰 2·9번)
@@ -448,7 +452,11 @@ export default function PortalRequestPage() {
           waypoint_count: form.waypointCount ? Number(form.waypointCount) : null,
           item: form.item || null,
           loading_type: form.loading_type,
-          requested_pickup_at: localInputToISOString(form.requested_pickup_at),
+          // 🔴 「지금」이면 **제출하는 그 순간**으로 다시 맞춘다 — 칩을 누른 시각을
+          //    그대로 보내면 폼을 오래 열어둔 경우 과거 시각이 되어 하한에 걸린다.
+          requested_pickup_at: pickupNow
+            ? new Date().toISOString()
+            : localInputToISOString(form.requested_pickup_at),
           requested_dropoff_at: localInputToISOString(form.requested_dropoff_at),
           notes: form.notes || null,
           agreed: thirdPartyAgreed,
@@ -507,6 +515,8 @@ export default function PortalRequestPage() {
     setThirdPartyAgreed(false);
     setSaveOrigin(false);
     setSaveDestination(false);
+    // 「지금」도 건별이다 — 남겨두면 다음 건의 상차 시각이 조용히 접수 시각이 된다
+    setPickupNow(false);
     setForm((prev) => ({
       ...prev,
       destination: "",
@@ -791,6 +801,10 @@ export default function PortalRequestPage() {
               onChange={(v) => setField("requested_pickup_at", v)}
               minDateTime={pickupRange.min}
               maxDate={pickupRange.max}
+              nowChip
+              nowSelected={pickupNow}
+              onNowChange={setPickupNow}
+              hint={pickupNow ? "지금 바로 상차 — 시간은 접수 시각으로 들어갑니다" : undefined}
             />
             <Pv2DateTimeField
               label="희망 하차 일시"

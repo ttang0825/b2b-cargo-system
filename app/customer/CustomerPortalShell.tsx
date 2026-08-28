@@ -16,7 +16,7 @@ import { COMPANY_SUPPORT_PHONE, COMPANY_SUPPORT_HOURS } from "@/lib/contactInfo"
 
 const PUBLIC_PATHS = ["/customer/login", "/customer/support-verify"];
 
-type NotifyKey = "request" | "quotes" | "dispatches" | "invoices";
+type NotifyKey = "quotes" | "dispatches" | "invoices";
 
 type NavItem = { href: string; label: string; icon: PortalIconName; key?: NotifyKey };
 
@@ -32,7 +32,11 @@ type NavItem = { href: string; label: string; icon: PortalIconName; key?: Notify
 const NAV_GROUPS: NavItem[][] = [
   [{ href: "/customer", label: "홈", icon: "home" }],
   [
-    { href: "/customer/request", label: "발주 요청", icon: "request", key: "request" },
+    // 🔴 **「발주 요청」에는 배지를 달지 않는다**(27차 리뷰 3라운드 확정).
+    //    이 화면은 **폼 하나**다 — 26차가 「내 요청 내역」을 지웠고, 담당자가 무엇을
+    //    하든(승인·반려) 그 결과는 **「견적 확인」에** 뜬다(승인 → 견적, 반려 → 접수 반려,
+    //    대기중 → 상담 중). 여기에 배지를 달면 눌러도 볼 것이 없다.
+    { href: "/customer/request", label: "발주 요청", icon: "request" },
     { href: "/customer/quotes", label: "견적 확인", icon: "quotes", key: "quotes" },
     { href: "/customer/dispatches", label: "배차·운송 조회", icon: "dispatch", key: "dispatches" },
   ],
@@ -49,14 +53,13 @@ const NAV_GROUPS: NavItem[][] = [
 // 모바일 하단 탭 5개 — 마지막 "전체"는 화면 이동이 아니라 바텀시트 토글이다.
 const MOBILE_TABS: { href: string; label: string; icon: PortalIconName; key?: NotifyKey }[] = [
   { href: "/customer", label: "홈", icon: "home" },
-  { href: "/customer/request", label: "발주", icon: "request", key: "request" },
+  { href: "/customer/request", label: "발주", icon: "request" },
   { href: "/customer/quotes", label: "견적", icon: "quotes", key: "quotes" },
   { href: "/customer/dispatches", label: "운송", icon: "dispatch", key: "dispatches" },
 ];
 
 // pathname이 이 항목의 화면일 때 "확인함"으로 표시할 매핑
 const PATH_TO_NOTIFY_KEY: Record<string, NotifyKey | "announcements"> = {
-  "/customer/request": "request",
   "/customer/quotes": "quotes",
   "/customer/dispatches": "dispatches",
   "/customer/invoices": "invoices",
@@ -115,7 +118,6 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
   const [companyName, setCompanyName] = useState("");
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [counts, setCounts] = useState<Record<string, number>>({
-    request: 0,
     quotes: 0,
     dispatches: 0,
     invoices: 0,
@@ -124,10 +126,16 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
   const [sheetOpen, setSheetOpen] = useState(false);
   const sheetCloseRef = useRef<HTMLButtonElement>(null);
 
-  // 항목별 배지 개수를 다시 계산 — quotes/dispatches/invoices/announcements는
-  // "마지막 확인 시각 이후 변경된 행 수", 발주요청은 "대기중을 벗어났는데
-  // 아직 확인 안 한 건 수"(공지사항과 달리 화주 본인이 직접 등록도 하는
-  // 테이블이라 시각 비교만으로는 방금 등록한 대기중 건까지 안읽음으로 잡힘)
+  // 항목별 배지 개수를 다시 계산 — dispatches/invoices/announcements는
+  // "마지막 확인 시각 이후 변경된 행 수".
+  //
+  // 🔴 **「견적 확인」 배지는 두 가지를 합친다**(27차 리뷰 3라운드) —
+  //    ① 마지막 확인 시각 이후 바뀐 견적 수
+  //    ② **대기중을 벗어난(승인·반려) 발주 요청 중 아직 확인 안 한 건 수**
+  //    ②를 「발주 요청」이 아니라 여기서 세는 이유: 담당자 조치의 결과가 전부
+  //    이 화면에 뜨기 때문이다(승인 → 견적, 반려 → 접수 반려).
+  //    ⚠️ 발주 요청은 화주 본인이 직접 등록도 하는 테이블이라 시각 비교만으로는
+  //       방금 등록한 대기중 건까지 안읽음으로 잡힌다 — 그래서 id 집합을 쓴다.
   async function loadCounts(company: string | null) {
     const epoch = "1970-01-01T00:00:00.000Z";
     const [quotesRes, dispatchesRes, invoicesRes, announcementsRes, requestRes] = await Promise.all([
@@ -158,11 +166,10 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
     ).length;
 
     setCounts({
-      quotes: quotesRes.count || 0,
+      quotes: (quotesRes.count || 0) + requestUnread,
       dispatches: dispatchesRes.count || 0,
       invoices: invoicesRes.count || 0,
       announcements: announcementsRes.count || 0,
-      request: requestUnread,
     });
   }
 
@@ -205,15 +212,16 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
 
       // 이 화면에 들어왔으면 해당 항목은 "확인함"으로 기록
       const notifyKey = PATH_TO_NOTIFY_KEY[pathname || ""];
-      if (notifyKey === "request" && account.company_id) {
+      if (notifyKey) markSeen(notifyKey);
+      // 🔴 발주 요청의 결과(승인·반려)도 「견적 확인」에서 확인한 것으로 친다 —
+      //    그 결과가 뜨는 화면이 여기이기 때문이다.
+      if (notifyKey === "quotes" && account.company_id) {
         const { data: settled } = await supabase
           .from("portal_order_requests")
           .select("id")
           .eq("company_id", account.company_id)
           .neq("status", "대기중");
         acknowledgeRequestIds(((settled as { id: string }[]) || []).map((r) => r.id));
-      } else if (notifyKey) {
-        markSeen(notifyKey);
       }
 
       loadCounts(account.company_id || null);

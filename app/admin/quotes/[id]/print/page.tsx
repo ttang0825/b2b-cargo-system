@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { COMPANY_INFO, COMPANY_BANK_ACCOUNT, hasBankAccount } from "@/lib/companyInfo";
 import { calcVatAmount, calcInclusiveAmount } from "@/lib/vat";
@@ -61,6 +61,10 @@ function formatDateTime(v: string | null) {
 export default function QuotePrintPage() {
   const params = useParams();
   const id = params?.id as string;
+  // 🔴 화주포털 모달(`Pv2PrintModal`)이 쓰는 값과 **같게 둔다** — 견적서 print 2종은
+  //    항상 쌍으로 움직인다(31차). 관리자 화면에는 아직 그 모달이 없지만, 한쪽에만
+  //    분기를 두면 다음에 붙일 때 어긋난다.
+  const embedded = useSearchParams().get("embed") === "1";
 
   const [quote, setQuote] = useState<QuoteDetail | null>(null);
   const [items, setItems] = useState<QuoteItem[]>([]);
@@ -125,7 +129,7 @@ export default function QuotePrintPage() {
       <div
         className="print-hide"
         style={{
-          display: "flex",
+          display: embedded ? "none" : "flex",
           justifyContent: "space-between",
           alignItems: "center",
           marginBottom: 16,

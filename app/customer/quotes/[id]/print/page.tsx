@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import { COMPANY_INFO, COMPANY_BANK_ACCOUNT, hasBankAccount } from "@/lib/companyInfo";
 import { calcVatAmount, calcInclusiveAmount } from "@/lib/vat";
@@ -45,6 +45,10 @@ function formatDateTime(v: string | null) {
 export default function CustomerQuotePrintPage() {
   const params = useParams();
   const id = params?.id as string;
+  // 🔴 포털 모달(`Pv2PrintModal`)이 이 라우트를 iframe 으로 띄울 때 붙이는 값이다.
+  //    그때는 화면 위 안내·인쇄 버튼을 숨긴다 — 모달 바에 같은 버튼이 있어서
+  //    두 번 보이면 어느 것을 눌러야 하는지 헷갈린다.
+  const embedded = useSearchParams().get("embed") === "1";
 
   const [quote, setQuote] = useState<QuoteDetail | null>(null);
   const [items, setItems] = useState<QuoteItem[]>([]);
@@ -116,7 +120,7 @@ export default function CustomerQuotePrintPage() {
         <div
           className="print-hide"
           style={{
-            display: "flex",
+            display: embedded ? "none" : "flex",
             justifyContent: "space-between",
             alignItems: "center",
             marginBottom: 16,
