@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import MixableBadge from "@/components/MixableBadge";
@@ -11,7 +10,7 @@ import { useListSearchSort } from "@/lib/useListSearchSort";
 //    맞추려고 그 컴포넌트를 고치면 관리자가 같이 바뀐다. 계산 함수만 가져다 쓰고
 //    칩은 이 화면에서 시안 모양으로 그린다.
 import { DatePreset, getDateRange } from "@/components/DateRangeFilter";
-import { calcInclusiveAmount } from "@/lib/vat";
+import { calcVatAmount } from "@/lib/vat";
 import { downloadQuoteExcel } from "@/lib/quoteExcel";
 import {
   quoteStatusStyle,
@@ -25,22 +24,26 @@ import { COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
  * 🔴 금액이 아직 없는 견적은 「협의 중」으로 보여준다(시안 실측).
  *    `-` 로 두면 화주는 "0원인가?" 하고 되묻는다 — 담당자가 아직 값을 안 넣은 것이다.
  */
-function priceLabel(n: number | null) {
-  if (!n) return "협의 중";
+function won(n: number | null | undefined, fallback = "-") {
+  if (n === null || n === undefined) return fallback;
   return Math.round(n).toLocaleString("ko-KR") + "원";
 }
 
-function vatLabel(n: number | null) {
-  if (!n) return "담당자 확인 중";
-  return `부가세 별도 (부가세 포함 ${calcInclusiveAmount(n).toLocaleString("ko-KR")}원)`;
-}
-
+/** 「2026. 8. 20.」 — 시안 실측. `8월 20일` 형태로 되돌리지 말 것(줄이 길어져 밀린다). */
 function dateLabel(v: string | null) {
   if (!v) return "";
-  return new Date(v).toLocaleDateString("ko-KR", {
+  return new Date(v).toLocaleDateString("ko-KR");
+}
+
+/** 「2026. 08. 21. 오전 09:00」 — 시안 실측. ko-KR 은 12시간제라 오전/오후가 붙는다. */
+function dateTimeLabel(v: string | null) {
+  if (!v) return "-";
+  return new Date(v).toLocaleString("ko-KR", {
     year: "numeric",
-    month: "long",
-    day: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
@@ -67,6 +70,8 @@ type Row =
   | { kind: "quote"; id: string; created_at: string; sortAmount: number | null; data: any }
   | { kind: "rejected"; id: string; created_at: string; sortAmount: number | null; data: any };
 
+type QuoteItem = { id: string; item_name: string | null; amount: number | null };
+
 const SORT_OPTIONS = [
   { value: "created_at:desc", label: "견적일 최신순" },
   { value: "created_at:asc", label: "견적일 오래된순" },
@@ -74,25 +79,90 @@ const SORT_OPTIONS = [
   { value: "final_amount:asc", label: "금액 낮은순" },
 ];
 
+/** 승인 버튼이 뜨는 유일한 상태 — 「견적 도착」 */
+const APPROVABLE_STATUS = "견적제출";
+
 export default function CustomerQuotesPage() {
   const router = useRouter();
   const [quotes, setQuotes] = useState<any[]>([]);
   const [rejected, setRejected] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<DatePreset>("all");
+  // 🔴 한 번에 하나만 펼친다 — 여러 장이 동시에 열리면 카드가 화면을 넘어가
+  //    화주가 목록을 훑을 수 없다(시안도 하나만 열린 모양이다).
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  const [itemsByQuote, setItemsByQuote] = useState<Record<string, QuoteItem[]>>({});
   // 엑셀 생성 중인 견적 id(버튼 중복 클릭 방지)
   const [excelBusyId, setExcelBusyId] = useState<string | null>(null);
-  const [excelError, setExcelError] = useState<string | null>(null);
+  const [pageError, setPageError] = useState<string | null>(null);
+  // 견적 승인 확인 모달
+  const [approveTarget, setApproveTarget] = useState<any | null>(null);
+  const [approveBusy, setApproveBusy] = useState(false);
+  const [approveError, setApproveError] = useState<string | null>(null);
 
   async function handleExcel(quoteId: string) {
     setExcelBusyId(quoteId);
-    setExcelError(null);
+    setPageError(null);
     try {
       await downloadQuoteExcel(supabase, quoteId);
     } catch (e: any) {
-      setExcelError(e?.message || "견적서 엑셀을 만들지 못했습니다.");
+      setPageError(e?.message || "견적서 엑셀을 만들지 못했습니다.");
     } finally {
       setExcelBusyId(null);
+    }
+  }
+
+  /** 펼칠 때 그 견적의 가산 내역만 가져온다 — 목록 전체를 미리 받으면 느려진다 */
+  async function toggle(row: Row) {
+    const key = `${row.kind}-${row.id}`;
+    if (openKey === key) {
+      setOpenKey(null);
+      return;
+    }
+    setOpenKey(key);
+    if (row.kind === "quote" && !itemsByQuote[row.id]) {
+      const { data, error } = await supabase
+        .from("quote_items")
+        .select("id,item_name,amount")
+        .eq("quote_id", row.id);
+      // 🔴 error 를 삼키지 않는다 — 가산 내역이 조용히 비면 금액이 안 맞아 보인다
+      if (error) setPageError(`가산 내역을 불러오지 못했습니다: ${error.message}`);
+      setItemsByQuote((prev) => ({ ...prev, [row.id]: data || [] }));
+    }
+  }
+
+  async function handleApprove() {
+    if (!approveTarget) return;
+    setApproveBusy(true);
+    setApproveError(null);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) {
+        setApproveError("로그인이 만료되었습니다. 다시 로그인해주세요.");
+        return;
+      }
+      const res = await fetch("/api/customer/approve-quote", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ quote_id: approveTarget.id }),
+        cache: "no-store",
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setApproveError(json?.error || "승인하지 못했습니다.");
+        return;
+      }
+      setApproveTarget(null);
+      await load();
+    } catch (e: any) {
+      setApproveError(e?.message || "승인하지 못했습니다.");
+    } finally {
+      setApproveBusy(false);
     }
   }
 
@@ -157,11 +227,11 @@ export default function CustomerQuotesPage() {
     const { data, error } = await supabase
       .from("quotes")
       .select(
-        "id,quote_no,origin,destination,vehicle_type,item,final_amount,status,selected_options,loading_type,created_at"
+        "id,quote_no,origin,destination,vehicle_type,item,base_fare,final_amount,status,selected_options,loading_type,notes,requested_pickup_at,requested_dropoff_at,created_at"
       )
       .order("created_at", { ascending: false })
       .limit(100);
-    if (error) setExcelError(`견적을 불러오지 못했습니다: ${error.message}`);
+    if (error) setPageError(`견적을 불러오지 못했습니다: ${error.message}`);
     setQuotes(data || []);
 
     // 🔴 반려된 발주 요청만 가져온다 — `승인됨` 은 이미 견적으로 전환돼 위 목록에
@@ -170,11 +240,11 @@ export default function CustomerQuotesPage() {
     const { data: rej, error: rErr } = await supabase
       .from("portal_order_requests")
       .select(
-        "id,origin,destination,vehicle_type,body_type,item,notes,staff_note,status,created_at"
+        "id,origin,destination,vehicle_type,body_type,item,item_condition,trip_type,load_condition,unload_condition,transport_time,waiting_minutes,waypoint_count,requested_pickup_at,requested_dropoff_at,notes,staff_note,status,created_at"
       )
       .eq("status", "반려")
       .limit(100);
-    if (rErr) setExcelError(`반려된 요청을 불러오지 못했습니다: ${rErr.message}`);
+    if (rErr) setPageError(`반려된 요청을 불러오지 못했습니다: ${rErr.message}`);
     setRejected(rej || []);
 
     setLoading(false);
@@ -249,9 +319,9 @@ export default function CustomerQuotesPage() {
       </div>
 
       {/* 실패는 화면 전체를 덮지 않고 인라인 배너로만 알린다(원칙 33번) */}
-      {excelError && (
+      {pageError && (
         <div className="pv2-alert pv2-alert-error" style={{ marginBottom: 14 }}>
-          {excelError}
+          {pageError}
         </div>
       )}
 
@@ -279,87 +349,254 @@ export default function CustomerQuotesPage() {
         <div className="pv2-qlist">
           {visibleRows.map((row) => {
             const q = row.data;
+            const key = `${row.kind}-${row.id}`;
+            const open = openKey === key;
             const isRejected = row.kind === "rejected";
             const st = isRejected ? REJECTED_REQUEST_STYLE : quoteStatusStyle(q.status);
             const opts = q.selected_options || {};
-            const meta = isRejected
-              ? [q.vehicle_type, q.body_type, q.item].filter(Boolean).join(" · ")
-              : [q.vehicle_type, opts["차량형태"], opts["왕복/편도"], q.item]
-                  .filter(Boolean)
-                  .join(" · ");
+
+            // 반려 건(`portal_order_requests`)은 flat 컬럼이고 견적은 `selected_options`
+            // jsonb 다 — 같은 화면에 그리려면 여기서 한 모양으로 맞춰야 한다.
+            const cargo = isRejected
+              ? {
+                  vehicle: [q.vehicle_type, q.body_type].filter(Boolean).join(" · "),
+                  condition: q.item_condition,
+                  trip: q.trip_type,
+                  load: q.load_condition,
+                  unload: q.unload_condition,
+                  wait: q.waiting_minutes,
+                  waypoint: q.waypoint_count,
+                  time: q.transport_time,
+                }
+              : {
+                  vehicle: [q.vehicle_type, opts["차량형태"]].filter(Boolean).join(" · "),
+                  condition: opts["물품특성"],
+                  trip: opts["왕복/편도"],
+                  load: opts["상차조건"],
+                  unload: opts["하차조건"],
+                  wait: opts["대기시간_분"],
+                  waypoint: opts["경유지수"],
+                  time: opts["운송시간"],
+                };
+
+            const items = itemsByQuote[row.id] || [];
+            const supply: number | null = isRejected ? null : (q.final_amount ?? null);
+            const priceless = !supply;
 
             return (
-              <div key={`${row.kind}-${row.id}`} className="pv2-qcard">
-                {/* ⚠️ 배지는 하나만 그린다. 시안 모바일은 배지와 견적번호가 한 줄인데,
-                    둘이 서로 다른 부모에 있어 CSS 로는 합칠 수 없다 — 배지를 두 번
-                    그리면 원칙 13번(양쪽 관리)의 사고가 난다. 모바일에서는 배지가
-                    윗줄에 따로 온다. */}
-                <span className="pv2-qstatus" style={{ color: st.color, background: st.bg }}>
-                  {st.label}
-                </span>
-                <div className="pv2-qbody">
-                  <div className="pv2-qtop">
-                    <span className="pv2-qno">{isRejected ? "발주 요청" : q.quote_no}</span>
-                    <span className="pv2-qdate">{dateLabel(row.created_at)}</span>
-                    {!isRejected && q.loading_type === "mixable" && <MixableBadge />}
-                  </div>
-                  <div className="pv2-qroute">
-                    {shortAddress(q.origin) || "-"} <span className="pv2-qarrow">→</span>{" "}
-                    {shortAddress(q.destination) || "-"}
-                  </div>
-                  <div className="pv2-qaddr">
-                    {q.origin || "-"} → {q.destination || "-"}
-                  </div>
-                  {meta && <div className="pv2-qmeta">{meta}</div>}
-                  {/* 🔴 사유 없이 "반려"만 뜨면 화주가 다시 문의한다 — 이 화면을 만든
-                      이유가 없어진다. 담당자가 사유를 안 적었으면 그렇다고 말해준다. */}
-                  {isRejected && (
-                    <div className="pv2-qreason">
-                      {q.staff_note
-                        ? `반려 사유 · ${q.staff_note}`
-                        : `반려 사유가 기재되지 않았습니다. 고객센터(${COMPANY_SUPPORT_PHONE})로 문의해주세요.`}
+              <article key={key} className={`pv2-qcard${open ? " pv2-qcard-open" : ""}`}>
+                <div className="pv2-qhead">
+                  <span className="pv2-qstatus" style={{ color: st.color, background: st.bg }}>
+                    {st.label}
+                  </span>
+                  {/* 모바일에서만 배지 옆에 오는 날짜 — CSS 가 하나만 보여준다 */}
+                  <span className="pv2-qdate pv2-qdate-m">{dateLabel(row.created_at)}</span>
+                  <div className="pv2-qbody">
+                    <div className="pv2-qtop">
+                      <span className="pv2-qno">{isRejected ? "발주 요청" : q.quote_no}</span>
+                      <span className="pv2-qdate pv2-qdate-d">{dateLabel(row.created_at)}</span>
+                      {!isRejected && q.loading_type === "mixable" && <MixableBadge />}
                     </div>
-                  )}
-                  {/* 🔴 「운송 확정」일 때만 — 그 전에는 배차 자체가 없어서 눌러도 빈 화면이다 */}
-                  {!isRejected && isQuoteConfirmed(q.status) && (
+                    <div className="pv2-qroute">
+                      {shortAddress(q.origin) || "-"} <span className="pv2-qarrow">→</span>{" "}
+                      {shortAddress(q.destination) || "-"}
+                    </div>
+                    {/* 🔴 사유 없이 "반려"만 뜨면 화주가 다시 문의한다 — 이 화면을 만든
+                        이유가 없어진다. 담당자가 사유를 안 적었으면 그렇다고 말해준다. */}
+                    {isRejected && (
+                      <div className="pv2-qreason">
+                        {q.staff_note
+                          ? `반려 사유 · ${q.staff_note}`
+                          : `반려 사유가 기재되지 않았습니다. 고객센터(${COMPANY_SUPPORT_PHONE})로 문의해주세요.`}
+                      </div>
+                    )}
+                  </div>
+                  <div className="pv2-qright">
+                    {!isRejected && (
+                      <div className="pv2-qprice-wrap">
+                        {priceless ? (
+                          // 🔴 금액이 없으면 라벨도 없다 — 「견적 금액」이라 써두고 값이
+                          //    「협의 중」이면 견적이 나온 것처럼 읽힌다(시안 실측)
+                          <div className="pv2-qprice-soft">협의 중</div>
+                        ) : (
+                          <>
+                            <div className="pv2-qvat">견적 금액 (부가세 별도)</div>
+                            <div className="pv2-qprice">{won(supply)}</div>
+                          </>
+                        )}
+                      </div>
+                    )}
+                    {!isRejected && q.status === APPROVABLE_STATUS && !priceless && (
+                      <button
+                        type="button"
+                        className="pv2-qapprove"
+                        onClick={() => {
+                          setApproveError(null);
+                          setApproveTarget(q);
+                        }}
+                      >
+                        견적 승인
+                      </button>
+                    )}
                     <button
                       type="button"
-                      className="pv2-qgo"
-                      onClick={() => router.push("/customer/dispatches")}
+                      className={`pv2-qtoggle${open ? " pv2-qtoggle-on" : ""}`}
+                      aria-expanded={open}
+                      onClick={() => toggle(row)}
                     >
-                      배차·운송 조회에서 진행 상황 보기 →
+                      {open ? "접기" : "상세 보기"}
+                      <span className="pv2-qcaret" aria-hidden="true">
+                        {open ? "▲" : "▼"}
+                      </span>
                     </button>
-                  )}
+                  </div>
                 </div>
-                {/* 🔴 반려 건은 금액 자리를 비운다 — 견적이 나온 적이 없다.
-                    견적서 버튼도 없다(내려받을 견적서 자체가 없다). */}
-                {!isRejected && (
-                  <div className="pv2-qright">
-                    <div>
-                      <div className="pv2-qprice">{priceLabel(q.final_amount)}</div>
-                      <div className="pv2-qvat">{vatLabel(q.final_amount)}</div>
-                    </div>
-                    <div className="pv2-qacts">
-                      <span className="pv2-qdl-wrap">
-                        <span className="pv2-qdl-label">견적서</span>
+
+                {open && (
+                  <div className="pv2-qexp">
+                    <section className="pv2-qsec">
+                      <div className="pv2-qsec-title">운송 구간</div>
+                      <div className="pv2-qgrid pv2-qgrid-1">
+                        <div className="pv2-qkv">
+                          <span className="pv2-qk">출발지</span>
+                          <span className="pv2-qv">{q.origin || "-"}</span>
+                        </div>
+                        <div className="pv2-qkv">
+                          <span className="pv2-qk">도착지</span>
+                          <span className="pv2-qv">{q.destination || "-"}</span>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section className="pv2-qsec">
+                      <div className="pv2-qsec-title">화물 · 차량</div>
+                      <div className="pv2-qgrid">
+                        <div className="pv2-qkv">
+                          <span className="pv2-qk">차량</span>
+                          <span className="pv2-qv">{cargo.vehicle || "-"}</span>
+                        </div>
+                        <div className="pv2-qkv">
+                          <span className="pv2-qk">물품특성</span>
+                          <span className="pv2-qv">{cargo.condition || "-"}</span>
+                        </div>
+                        <div className="pv2-qkv">
+                          <span className="pv2-qk">품목</span>
+                          <span className="pv2-qv">{q.item || "-"}</span>
+                        </div>
+                        <div className="pv2-qkv">
+                          <span className="pv2-qk">왕복/편도</span>
+                          <span className="pv2-qv">{cargo.trip || "-"}</span>
+                        </div>
+                        <div className="pv2-qkv">
+                          <span className="pv2-qk">상차조건</span>
+                          <span className="pv2-qv">{cargo.load || "-"}</span>
+                        </div>
+                        <div className="pv2-qkv">
+                          <span className="pv2-qk">하차조건</span>
+                          <span className="pv2-qv">{cargo.unload || "-"}</span>
+                        </div>
+                        <div className="pv2-qkv">
+                          <span className="pv2-qk">대기시간</span>
+                          {/* 0 은 "없음"이라 `-` 로 그린다 — 「0분」은 값이 있는 것처럼 읽힌다 */}
+                          <span className="pv2-qv">{cargo.wait ? `${cargo.wait}분` : "-"}</span>
+                        </div>
+                        <div className="pv2-qkv">
+                          <span className="pv2-qk">경유지</span>
+                          <span className="pv2-qv">{`${Number(cargo.waypoint) || 0}곳`}</span>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section className="pv2-qsec">
+                      <div className="pv2-qsec-title">일정</div>
+                      <div className="pv2-qgrid">
+                        <div className="pv2-qkv">
+                          <span className="pv2-qk">희망 상차</span>
+                          <span className="pv2-qv">{dateTimeLabel(q.requested_pickup_at)}</span>
+                        </div>
+                        <div className="pv2-qkv">
+                          <span className="pv2-qk">희망 하차</span>
+                          <span className="pv2-qv">{dateTimeLabel(q.requested_dropoff_at)}</span>
+                        </div>
+                        <div className="pv2-qkv">
+                          <span className="pv2-qk">운송시간</span>
+                          <span className="pv2-qv">{cargo.time || "-"}</span>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section className="pv2-qsec">
+                      <div className="pv2-qsec-title">요청사항</div>
+                      <div className="pv2-qgrid pv2-qgrid-1">
+                        <div className="pv2-qkv">
+                          <span className="pv2-qk">내용</span>
+                          <span className="pv2-qv" style={{ whiteSpace: "pre-wrap" }}>
+                            {q.notes || "-"}
+                          </span>
+                        </div>
+                      </div>
+                    </section>
+
+                    {/* 🔴 반려 건에는 운임 내역·견적서 버튼이 없다 — 견적이 나온 적이 없다 */}
+                    {!isRejected && (
+                      <section className="pv2-qsec">
+                        <div className="pv2-qsec-title">운임 내역</div>
+                        <div className="pv2-qfare">
+                          <div className="pv2-qfare-i">
+                            <div className="pv2-qfare-k">기본운임</div>
+                            <div className="pv2-qfare-v">
+                              {q.base_fare ? won(q.base_fare) : priceless ? "협의 중" : "-"}
+                            </div>
+                          </div>
+                          {items.map((it) => (
+                            <div key={it.id} className="pv2-qfare-i">
+                              <div className="pv2-qfare-k">{it.item_name || "가산"}</div>
+                              <div className="pv2-qfare-v">{won(it.amount)}</div>
+                            </div>
+                          ))}
+                          <div className="pv2-qfare-i">
+                            <div className="pv2-qfare-k">부가세</div>
+                            {/* 🔴 금액이 없으면 부가세도 계산하지 않는다 — 0원으로 찍으면
+                                확정된 금액처럼 보인다 */}
+                            <div className="pv2-qfare-v">
+                              {priceless ? "-" : won(calcVatAmount(supply as number))}
+                            </div>
+                          </div>
+                          <div className="pv2-qfare-i pv2-qfare-total">
+                            <div className="pv2-qfare-k">합계 (부가세 별도)</div>
+                            <div className="pv2-qfare-v">{priceless ? "협의 중" : won(supply)}</div>
+                          </div>
+                        </div>
+                      </section>
+                    )}
+
+                    {!isRejected && (
+                      <div className="pv2-qfoot">
+                        {/* 🔴 「운송 확정」일 때만 — 그 전에는 배차 자체가 없어 빈 화면이다 */}
+                        {isQuoteConfirmed(q.status) && (
+                          <button
+                            type="button"
+                            className="pv2-qfoot-link"
+                            onClick={() => router.push("/customer/dispatches")}
+                          >
+                            배차·운송 조회에서 진행 상황 보기 →
+                          </button>
+                        )}
+                        <span className="pv2-qfoot-sp" />
                         <button
                           type="button"
-                          className="pv2-qdl"
-                          title="PDF 다운로드"
-                          aria-label="견적서 PDF 다운로드"
+                          className="pv2-qbtn"
                           onClick={() => window.open(`/customer/quotes/${q.id}/print`, "_blank")}
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src="/portal/pdf-icon.svg" alt="" style={{ width: 17, height: 17 }} />
+                          <img src="/portal/pdf-icon.svg" alt="" style={{ width: 16, height: 16 }} />
+                          PDF
                         </button>
                         {/* 엑셀은 새 탭 없이 그 자리에서 내려받는다. 조회는 로그인 세션으로
-                            하므로 RLS 가 본인 회사 견적만 내려준다 — 다른 회사 id 를 넣어도
-                            조회 자체가 실패한다. */}
+                            하므로 RLS 가 본인 회사 견적만 내려준다. */}
                         <button
                           type="button"
-                          className="pv2-qdl"
-                          title="엑셀 다운로드"
-                          aria-label="견적서 엑셀 다운로드"
+                          className="pv2-qbtn"
                           disabled={excelBusyId === q.id}
                           onClick={() => handleExcel(q.id)}
                         >
@@ -367,19 +604,90 @@ export default function CustomerQuotesPage() {
                           <img
                             src="/portal/excel-icon.svg"
                             alt=""
-                            style={{ width: 17, height: 17 }}
+                            style={{ width: 16, height: 16 }}
                           />
+                          엑셀
                         </button>
-                      </span>
-                      <Link className="pv2-qopen" href={`/customer/quotes/${q.id}`}>
-                        상세 보기
-                      </Link>
-                    </div>
+                        <button
+                          type="button"
+                          className="pv2-qbtn pv2-qbtn-dark"
+                          onClick={() => router.push(`/customer/quotes/${q.id}`)}
+                        >
+                          견적서 상세 보기
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
+              </article>
             );
           })}
+        </div>
+      )}
+
+      {/* 견적 승인 확인 — 🔴 한 번 누르면 담당자가 배차를 시작한다. 확인 없이 바로
+          바꾸지 말 것(시안도 확인 모달을 그린다). */}
+      {approveTarget && (
+        <div
+          className="pv2-modal-dim"
+          role="presentation"
+          onClick={() => !approveBusy && setApproveTarget(null)}
+        >
+          <div
+            className="pv2-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pv2-approve-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="pv2-modal-title" id="pv2-approve-title">
+              이 견적을 승인할까요?
+            </div>
+            <div className="pv2-modal-desc">
+              승인하면 정식 운송오더로 접수되어 담당자가 배차를 시작합니다.
+            </div>
+            <div className="pv2-qapv-box">
+              <div className="pv2-qapv-row">
+                <span className="pv2-qapv-k">견적번호</span>
+                <span className="pv2-qapv-v">{approveTarget.quote_no || "-"}</span>
+              </div>
+              <div className="pv2-qapv-row">
+                <span className="pv2-qapv-k">운송 구간</span>
+                <span className="pv2-qapv-v">
+                  {shortAddress(approveTarget.origin) || "-"} →{" "}
+                  {shortAddress(approveTarget.destination) || "-"}
+                </span>
+              </div>
+              <div className="pv2-qapv-rule" />
+              <div className="pv2-qapv-row">
+                <span className="pv2-qapv-k">견적 금액 (부가세 별도)</span>
+                <span className="pv2-qapv-v pv2-qapv-amount">{won(approveTarget.final_amount)}</span>
+              </div>
+            </div>
+            {approveError && (
+              <div className="pv2-alert pv2-alert-error" style={{ marginTop: 14 }}>
+                {approveError}
+              </div>
+            )}
+            <div className="pv2-modal-actions">
+              <button
+                type="button"
+                className="pv2-modal-cancel"
+                disabled={approveBusy}
+                onClick={() => setApproveTarget(null)}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                className="pv2-modal-confirm pv2-modal-confirm-yellow"
+                disabled={approveBusy}
+                onClick={handleApprove}
+              >
+                {approveBusy ? "승인 중..." : "견적 승인"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </>
