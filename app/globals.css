@@ -3962,7 +3962,8 @@ tbody tr:hover {
   color: var(--pv2-text);
   background: var(--pv2-border);
 }
-.pv2-type-cargo {
+.pv2-type-cargo,
+.pv2-type-note {
   color: var(--pv2-text-2);
   background: var(--pv2-input-bg);
 }
@@ -4002,6 +4003,14 @@ tbody tr:hover {
   font-size: 13.5px;
   color: var(--pv2-text-3);
   margin-top: 3px;
+}
+/* 요청 프리셋 카드 본문 — 화주가 적은 줄바꿈을 그대로 살린다 */
+.pv2-saved-note {
+  font-size: 14px;
+  color: var(--pv2-text-3);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 .pv2-note-chip {
   margin-top: 10px;

@@ -25,7 +25,6 @@ import Pv2Select from "@/components/pv2/Pv2Select";
 import {
   loadPresets,
   savePreset,
-  deletePreset,
   sanitizeCargoPayload,
   type CargoPresetPayload,
   type RequestPresetPayload,
@@ -85,8 +84,6 @@ export default function PortalRequestPage() {
   const [namePrompt, setNamePrompt] = useState<{ kind: "cargo" | "note"; initial: string } | null>(
     null
   );
-  const [pendingNoteDelete, setPendingNoteDelete] =
-    useState<CustomerPreset<RequestPresetPayload> | null>(null);
   // 🔴 제3자 제공 동의(20차). `form`과 분리된 별도 state라 **서버로 명시적으로 함께 보내야**
   // 한다 — 14차 전의 `/quote`가 정확히 이 값을 안 보내서 동의가 저장되지 않고 있었다.
   const [thirdPartyAgreed, setThirdPartyAgreed] = useState(false);
@@ -361,25 +358,6 @@ export default function PortalRequestPage() {
     loadPresetLists(companyId);
   }
 
-  /** 🔴 요청 프리셋은 관리 화면에 목록이 없다(시안에 없음) — 여기서 지울 수 없으면
-   *   잘못 저장한 프리셋을 영영 지울 방법이 없다. */
-  async function handleDeleteNotePreset(preset: CustomerPreset<RequestPresetPayload>) {
-    if (!companyId) return;
-    // 🔴 `window.confirm` 을 쓰지 않는다 — 저장 팝업과 모양이 갈린다(PR #103 리뷰 2·9번)
-    setPendingNoteDelete(preset);
-  }
-
-  async function confirmDeleteNotePreset() {
-    const preset = pendingNoteDelete;
-    if (!companyId || !preset) return;
-    setPendingNoteDelete(null);
-    const { error: delError } = await deletePreset(supabase, preset.id);
-    if (delError) {
-      setError(delError);
-      return;
-    }
-    loadPresetLists(companyId);
-  }
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.origin.trim() || !form.destination.trim()) {
@@ -840,6 +818,10 @@ export default function PortalRequestPage() {
               현재 요청 저장
             </button>
           </div>
+          {/* 🔴 여기에 「요청사항 삭제」 드롭다운을 다시 만들지 말 것(PR #104 리뷰 3라운드).
+              프리셋 관리(추가·수정·삭제)는 **배송지·화물 관리 화면 한 곳**으로 모았다 —
+              배송지·화물과 관리 방식이 갈리면 화주가 어디서 지우는지 매번 헷갈린다.
+              이 화면에는 "불러오기"와 "현재 요청 저장"만 남는다. */}
           <div className="pv2-load-row">
             <Pv2Select
               className="pv2-select-load"
@@ -854,22 +836,6 @@ export default function PortalRequestPage() {
               emptyLabel="저장된 요청이 없습니다"
               options={notePresets.map((p) => ({ value: p.id, label: p.name }))}
             />
-            {/* 🔴 관리 화면에 요청 프리셋 목록이 없다(시안에 없음) — 여기에 삭제 수단이
-                없으면 잘못 저장한 프리셋을 지울 방법이 아예 없다. */}
-            {notePresets.length > 0 && (
-              <Pv2Select
-                className="pv2-select-load"
-                wrapClassName="pv2-load-slot"
-                value=""
-                onChange={(v) => {
-                  const found = notePresets.find((p) => p.id === v);
-                  if (found) handleDeleteNotePreset(found);
-                }}
-                ariaLabel="요청사항 삭제"
-                placeholder="요청사항 삭제"
-                options={notePresets.map((p) => ({ value: p.id, label: p.name }))}
-              />
-            )}
           </div>
           <textarea
             className="pv2-textarea"
@@ -972,37 +938,6 @@ export default function PortalRequestPage() {
         />
       )}
 
-      {pendingNoteDelete && (
-        <div
-          className="pv2-modal-dim"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="pv2-note-del-title"
-          onClick={() => setPendingNoteDelete(null)}
-        >
-          <div className="pv2-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="pv2-modal-title" id="pv2-note-del-title">
-              자주 쓰는 요청을 삭제할까요?
-            </div>
-            <div className="pv2-modal-desc">
-              「{pendingNoteDelete.name}」을(를) 목록에서 지웁니다. 이미 보낸 발주 요청에는 영향이
-              없습니다.
-            </div>
-            <div className="pv2-modal-actions">
-              <button
-                type="button"
-                className="pv2-modal-cancel"
-                onClick={() => setPendingNoteDelete(null)}
-              >
-                취소
-              </button>
-              <button type="button" className="pv2-modal-confirm" onClick={confirmDeleteNotePreset}>
-                삭제
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }
