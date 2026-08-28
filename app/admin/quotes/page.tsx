@@ -248,7 +248,7 @@ function QuotesPageInner() {
       const { data: reqData } = await supabase
         .from("portal_order_requests")
         .select(
-          "id,company_id,origin,origin_sido,origin_sigungu,destination,destination_sido,destination_sigungu,origin_company_name,origin_contact_name,origin_contact_phone,destination_company_name,destination_contact_name,destination_contact_phone,vehicle_type,body_type,item,load_condition,unload_condition,item_condition,transport_time,urgency,trip_type,loading_type,waiting_minutes,waypoint_count,requested_pickup_at,requested_dropoff_at,notes,companies(id,name,phone,address,status)"
+          "id,company_id,origin,origin_sido,origin_sigungu,destination,destination_sido,destination_sigungu,origin_company_name,origin_contact_name,origin_contact_phone,destination_company_name,destination_contact_name,destination_contact_phone,vehicle_type,body_type,item,load_condition,unload_condition,item_condition,transport_time,urgency,trip_type,loading_type,collection_method,direct_collection_point,dropoff_arrival_type,waiting_minutes,waypoint_count,requested_pickup_at,requested_dropoff_at,notes,companies(id,name,phone,address,status)"
         )
         .eq("id", fromRequestId)
         .single();
@@ -287,13 +287,39 @@ function QuotesPageInner() {
         // 🔴 화주가 발주 요청에서 고른 적재구분을 그대로 이어받는다(PR #103 리뷰 6번).
         //   빠뜨리면 화주가 "혼적가능"을 골라도 견적이 독차로 계산돼 할인이 사라진다.
         loading_type: ((reqData as any).loading_type as "exclusive" | "mixable") || prev.loading_type,
+        // 🔴 화주가 발주 요청에서 고른 정산방식을 그대로 이어받는다(27차 리뷰 4라운드).
+        //   빠뜨리면 화주가 선착불을 골라도 견적이 주선사 정산으로 저장돼, 담당자가
+        //   되물어야 하고 화주에게 나가는 견적서의 정산방식도 사실과 달라진다.
+        //   ⚠️ 청구주기(`billing_cycle`)는 발주 요청에 없다 — 화주별 계약 사항이라
+        //   담당자가 이 화면에서 정한다. `prev` 값(건별)을 그대로 둔다.
+        collection_method:
+          ((reqData as any).collection_method as "broker" | "driver_direct") || prev.collection_method,
+        direct_collection_point:
+          (reqData as any).collection_method === "driver_direct"
+            ? ((reqData as any).direct_collection_point as any) || "undecided"
+            : null,
         requested_pickup_at: reqData.requested_pickup_at
           ? toLocalDateTimeInput(reqData.requested_pickup_at)
           : prev.requested_pickup_at,
         requested_dropoff_at: reqData.requested_dropoff_at
           ? toLocalDateTimeInput(reqData.requested_dropoff_at)
           : prev.requested_dropoff_at,
-        notes: reqData.notes || prev.notes,
+        // 🔴 **당착·내착을 특이사항에 남긴다** — `quotes` 에는 도착구분 컬럼이 없어서
+        //   이 줄이 없으면 화주가 「당착」을 골랐다는 사실이 견적 전환에서 통째로
+        //   사라진다(원칙 42번 정보 손실 금지). 저장된 하차 일시의 23:59 는 자리
+        //   채움이라 그것만으로는 담당자가 뜻을 알 수 없다.
+        //   ⚠️ 담당자가 지울 수 있는 한 줄이며, 그대로 두면 견적서 특이사항에도 남는다.
+        notes:
+          [
+            reqData.notes,
+            (reqData as any).dropoff_arrival_type === "same_day"
+              ? "※ 화주 요청: 당착 (상차 당일 도착 · 시각 무관)"
+              : (reqData as any).dropoff_arrival_type === "next_day"
+              ? "※ 화주 요청: 내착 (상차 다음 날 도착 · 시각 무관)"
+              : null,
+          ]
+            .filter(Boolean)
+            .join("\n") || prev.notes,
       }));
     }
     prefillFromRequest();

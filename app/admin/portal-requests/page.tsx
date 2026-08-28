@@ -7,6 +7,7 @@ import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRang
 import { notifyBadgeRefresh } from "@/lib/notifyBadgeRefresh";
 import { getCurrentStaffRole } from "@/lib/currentStaff";
 import MixableBadge from "@/components/MixableBadge";
+import { getQuoteSettlementLine } from "@/lib/settlementLabels";
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   대기중: { bg: "#fff1e2", text: "#d9730d" },
@@ -33,7 +34,7 @@ export default function PortalRequestsPage() {
     const { data, error } = await supabase
       .from("portal_order_requests")
       .select(
-        "id,company_id,origin,destination,vehicle_type,body_type,loading_type,item,requested_pickup_at,requested_dropoff_at,notes,status,staff_note,quote_id,created_at,companies(name)"
+        "id,company_id,origin,destination,vehicle_type,body_type,loading_type,item,requested_pickup_at,requested_dropoff_at,collection_method,direct_collection_point,dropoff_arrival_type,notes,status,staff_note,quote_id,created_at,companies(name)"
       )
       .order("created_at", { ascending: false })
       .limit(100);
@@ -169,7 +170,7 @@ export default function PortalRequestsPage() {
         ) : filtered.length === 0 ? (
           <div className="empty-state">해당하는 요청이 없습니다.</div>
         ) : (
-          <table style={{ minWidth: 920 }}>
+          <table style={{ minWidth: 1030 }}>
             <thead>
               <tr>
                 <th>화주</th>
@@ -177,6 +178,7 @@ export default function PortalRequestsPage() {
                 <th>차량</th>
                 <th>희망 상차일</th>
                 <th>희망 하차일</th>
+                <th>정산방식</th>
                 <th>특이사항</th>
                 <th>상태</th>
                 <th></th>
@@ -227,16 +229,62 @@ export default function PortalRequestsPage() {
                     </span>
                   </td>
                   <td className="cell-nowrap">
-                    <span className="num">
-                      {r.requested_dropoff_at
-                        ? new Date(r.requested_dropoff_at).toLocaleString("ko-KR", {
-                            month: "2-digit",
-                            day: "2-digit",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
-                        : "-"}
-                    </span>
+                    {/* 🔴 화주가 「당착」·「내착」을 고른 건은 **시각이 무관하다.**
+                        저장된 23:59 는 자리 채움이라, 그대로 그리면 화주가 그 시각을
+                        요청한 것처럼 읽혀 배차가 틀어진다(27차 리뷰 4라운드). */}
+                    {r.dropoff_arrival_type ? (
+                      <>
+                        <div style={{ fontWeight: 600 }}>
+                          {r.dropoff_arrival_type === "same_day" ? "당착" : "내착"}
+                        </div>
+                        <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
+                          <span className="num">
+                            {r.requested_dropoff_at
+                              ? new Date(r.requested_dropoff_at).toLocaleDateString("ko-KR", {
+                                  month: "2-digit",
+                                  day: "2-digit",
+                                })
+                              : "-"}
+                          </span>{" "}
+                          · 시각 무관
+                        </div>
+                      </>
+                    ) : (
+                      <span className="num">
+                        {r.requested_dropoff_at
+                          ? new Date(r.requested_dropoff_at).toLocaleString("ko-KR", {
+                              month: "2-digit",
+                              day: "2-digit",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "-"}
+                      </span>
+                    )}
+                  </td>
+                  {/* 🔴 화주가 발주 요청에서 고른 정산방식(27차 리뷰 4라운드) — 이게 안
+                      보이면 견적 전환 때 담당자가 매번 전화로 되물어야 한다.
+                      ⚠️ 발주 요청에는 청구주기 축이 없다(화주별 계약 사항이라 담당자가
+                      정한다) — `per_order` 로 읽어 라벨을 만든다. */}
+                  <td className="cell-nowrap">
+                    {getQuoteSettlementLine(r.collection_method, "per_order", r.direct_collection_point) ? (
+                      <>
+                        <div>
+                          {r.collection_method === "driver_direct" ? "선착불" : "주선사 정산"}
+                        </div>
+                        {r.direct_collection_point && (
+                          <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
+                            {r.direct_collection_point === "pickup"
+                              ? "선불(상차지)"
+                              : r.direct_collection_point === "dropoff"
+                              ? "착불(하차지)"
+                              : "협의중"}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      "-"
+                    )}
                   </td>
                   <td style={{ maxWidth: 180 }}>{r.notes || "-"}</td>
                   <td className="cell-nowrap">

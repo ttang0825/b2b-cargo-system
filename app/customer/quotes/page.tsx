@@ -18,6 +18,7 @@ import {
   isQuoteConfirmed,
   REJECTED_REQUEST_STYLE,
 } from "@/lib/quoteStatusLabels";
+import { getQuoteSettlementLine } from "@/lib/settlementLabels";
 import { shortAddress } from "@/lib/shortAddress";
 import { COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
 
@@ -234,7 +235,7 @@ export default function CustomerQuotesPage() {
     const { data, error } = await supabase
       .from("quotes")
       .select(
-        "id,quote_no,origin,destination,vehicle_type,item,base_fare,final_amount,status,selected_options,loading_type,notes,requested_pickup_at,requested_dropoff_at,created_at"
+        "id,quote_no,origin,destination,vehicle_type,item,base_fare,final_amount,status,selected_options,loading_type,collection_method,billing_cycle,direct_collection_point,notes,requested_pickup_at,requested_dropoff_at,created_at"
       )
       .order("created_at", { ascending: false })
       .limit(100);
@@ -247,7 +248,7 @@ export default function CustomerQuotesPage() {
     const { data: rej, error: rErr } = await supabase
       .from("portal_order_requests")
       .select(
-        "id,origin,destination,vehicle_type,body_type,item,item_condition,trip_type,load_condition,unload_condition,transport_time,waiting_minutes,waypoint_count,requested_pickup_at,requested_dropoff_at,notes,staff_note,status,created_at"
+        "id,origin,destination,vehicle_type,body_type,item,item_condition,trip_type,load_condition,unload_condition,transport_time,waiting_minutes,waypoint_count,requested_pickup_at,requested_dropoff_at,collection_method,direct_collection_point,dropoff_arrival_type,notes,staff_note,status,created_at"
       )
       .in("status", ["대기중", "반려"])
       .limit(100);
@@ -392,6 +393,25 @@ export default function CustomerQuotesPage() {
                   time: opts["운송시간"],
                 };
 
+            /**
+             * 🔴 정산방식 (27차 리뷰 4라운드) — 견적과 발주 요청 **양쪽**에 있다.
+             *    견적은 13차부터, 발주 요청은 이번 차수부터. 문구는 견적서 네 산출물과
+             *    같은 `getQuoteSettlementLine()` 으로 만든다(같은 건이 화면마다 다르게
+             *    보이면 안 된다).
+             *    ⚠️ 발주 요청에는 청구주기 축이 없다 — `per_order` 로 읽어 라벨을 만든다.
+             */
+            const settlementLine = isRequest
+              ? getQuoteSettlementLine(q.collection_method, "per_order", q.direct_collection_point)
+              : getQuoteSettlementLine(q.collection_method, q.billing_cycle, q.direct_collection_point);
+
+            /** 🔴 당착·내착이면 **시각 대신** 이것을 그린다 — 23:59 는 자리 채움이다 */
+            const arrivalLabel =
+              q.dropoff_arrival_type === "same_day"
+                ? "당착 (상차 당일 도착 · 시각 무관)"
+                : q.dropoff_arrival_type === "next_day"
+                ? "내착 (다음 날 도착 · 시각 무관)"
+                : null;
+
             const items = itemsByQuote[row.id] || [];
             const supply: number | null = isRequest ? null : (q.final_amount ?? null);
             const priceless = !supply;
@@ -517,6 +537,14 @@ export default function CustomerQuotesPage() {
                           <span className="pv2-qk">경유지</span>
                           <span className="pv2-qv">{`${Number(cargo.waypoint) || 0}곳`}</span>
                         </div>
+                        {/* 🔴 값이 없으면 칸 자체를 넣지 않는다 — 27차 이전 건에는 이 값이
+                            없고, 빈 「-」 칸이 늘면 그리드 한 줄이 더 생긴다 */}
+                        {settlementLine && (
+                          <div className="pv2-qkv">
+                            <span className="pv2-qk">정산방식</span>
+                            <span className="pv2-qv">{settlementLine}</span>
+                          </div>
+                        )}
                       </div>
                     </section>
 
@@ -529,7 +557,11 @@ export default function CustomerQuotesPage() {
                         </div>
                         <div className="pv2-qkv">
                           <span className="pv2-qk">희망 하차</span>
-                          <span className="pv2-qv">{dateTimeLabel(q.requested_dropoff_at)}</span>
+                          {/* 🔴 당착·내착은 **시각이 무관한 선택지**다 — 자리 채움 시각(23:59)을
+                              그대로 그리면 화주가 그 시각을 요청한 것처럼 읽힌다 */}
+                          <span className="pv2-qv">
+                            {arrivalLabel || dateTimeLabel(q.requested_dropoff_at)}
+                          </span>
                         </div>
                         <div className="pv2-qkv">
                           <span className="pv2-qk">운송시간</span>
