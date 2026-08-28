@@ -1017,11 +1017,14 @@ export default function PortalRequestPage() {
             ⚠️ 문구를 여기 직접 적지 말 것 — `lib/legalInfo.ts`가 유일 정의처다. */}
         <div className="pv2-form-block pv2-consent">
           <div className="pv2-consent-title">{PORTAL_ORDER_THIRD_PARTY_CONSENT.title}</div>
-          {/* 🔴 **접힌 상태에서도 이 두 줄은 반드시 보여야 한다**(5라운드에 세부만 접었다).
-              개인정보보호법 제15조 2항이 고지와 **거부권 안내**를 요구하므로, 무엇을 왜
-              제공하는지(intro)와 거부권(refusal)까지 접으면 동의 자체가 부실해진다.
-              접는 것은 **제공받는 자·목적·항목·기간 4항목과 확인 문장**뿐이다.
-              🔴 「자세히 보기」 안으로 intro·refusal 을 옮기지 말 것. */}
+          {/* 🔴 **접힌 상태에서 남는 것은 고지 문장(intro)과 체크박스 두 개뿐이다.**
+              5라운드에는 거부권 안내(refusal)도 밖에 뒀는데 **6라운드에 사용자가 그것도
+              접으라고 확정**했다 — 접는 것이지 없애는 것이 아니고, 「자세히 보기」가
+              체크박스 바로 위에 있어 한 번 눌러 볼 수 있다.
+              🔴 **`intro` 는 접지 말 것** — 무엇을 왜 제공하는지까지 감추면 체크박스만
+              남아 동의를 구하는 문장이 화면에서 사라진다.
+              ⚠️ 개인정보보호법 제15조 2항이 고지와 거부권 안내를 요구한다 — 접어도
+              화면에 있긴 하지만 **문구 자체가 변호사 검토 대상이다**(47차 이후 계속). */}
           <p className="pv2-consent-p">{PORTAL_ORDER_THIRD_PARTY_CONSENT.intro}</p>
           <button
             type="button"
@@ -1042,9 +1045,9 @@ export default function PortalRequestPage() {
                 ))}
               </ul>
               <p className="pv2-consent-p">{PORTAL_ORDER_THIRD_PARTY_CONSENT.confirm}</p>
+              <p className="pv2-consent-p">{PORTAL_ORDER_THIRD_PARTY_CONSENT.refusal}</p>
             </div>
           )}
-          <p className="pv2-consent-p">{PORTAL_ORDER_THIRD_PARTY_CONSENT.refusal}</p>
           <label className="pv2-consent-check">
             <input
               type="checkbox"
