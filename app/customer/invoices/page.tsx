@@ -1,63 +1,65 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import MixableBadge from "@/components/MixableBadge";
 import { getSettlementDisplayLabel, getPaymentConditionLabel } from "@/lib/settlementLabels";
 import { PORTAL_INVOICE_FIELDS, PORTAL_DISPATCH_EXTRA_CHARGE_FIELDS } from "@/lib/portalInvoiceFields";
 import { getDispatchExtraChargeCategoryLabel } from "@/lib/dispatchExtraCharges";
 import { useListSearchSort, sortIndicator } from "@/lib/useListSearchSort";
-import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
+import { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import { calcInclusiveAmount } from "@/lib/vat";
+import { COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
+import Pv2Select from "@/components/pv2/Pv2Select";
+
+const PERIOD_CHIPS: { value: DatePreset; label: string }[] = [
+  { value: "today", label: "오늘" },
+  { value: "week", label: "이번주" },
+  { value: "month", label: "이번달" },
+  { value: "all", label: "전체" },
+];
+
+const SORT_OPTIONS = [
+  { value: "created_at:desc", label: "최신 등록순" },
+  { value: "billing_period:desc", label: "정산월 최신순" },
+  { value: "billing_period:asc", label: "정산월 오래된순" },
+  { value: "customer_charge_total:desc", label: "청구금액 높은순" },
+  { value: "customer_charge_total:asc", label: "청구금액 낮은순" },
+  { value: "status:asc", label: "상태순" },
+  { value: "settlement_type:asc", label: "정산방식순" },
+];
+
+/** 🔴 배지 색 4종 — 시안 실측값(`IC`). 새 색을 만들지 말 것. */
+const TAX_BADGE = {
+  issued: { label: "발행완료", color: "#1D57C6", bg: "#E8EFFC" },
+  pending: { label: "발행예정", color: "#6B6759", bg: "#F4F3EF" },
+};
+const PAY_BADGE = {
+  done: { label: "입금완료", color: "#1A1A1A", bg: "#EBEAE7" },
+  waiting: { label: "입금대기", color: "#7A5F00", bg: "#FFF9D6" },
+};
+/**
+ * ⚠️ 배지 색은 **청구 축**에 건다 — 시안이 `월별` 에만 옐로를 준 것과 같다.
+ *    「운임 수금방식」 줄은 배지가 아니라 평문이다(축이 둘이라 배지를 둘 다
+ *    칠하면 어느 쪽이 강조인지 읽히지 않는다).
+ */
+const CYCLE_BADGE: Record<string, { label: string; color: string; bg: string }> = {
+  monthly: { label: "월정산", color: "#7A5F00", bg: "#FFF9D6" },
+  per_order: { label: "건별", color: "#6B6759", bg: "#F4F3EF" },
+};
 
 function won(n: number | null) {
   if (!n) return "-";
   return Math.round(n).toLocaleString("ko-KR") + "원";
 }
 
+function wonNum(n: number | null) {
+  return Math.round(n || 0).toLocaleString("ko-KR");
+}
+
 function wonVatIncluded(n: number | null) {
   if (!n) return null;
   return calcInclusiveAmount(n).toLocaleString("ko-KR") + "원";
-}
-
-// admin 정산관리 목록(SettlementBadgeLabel)과 동일한 줄바꿈 처리 — "/"가
-// 있는 라벨("선착불 / 수수료 월정산")만 "/" 뒤에서 한 번 줄바꿈. 주선수수료
-// 금액/지급자·정보망 정산방식은 애초에 조회하지 않으므로(PORTAL_INVOICE_FIELDS,
-// 작업지시서 4-6) 여기 표시될 수 없음
-function SettlementBadgeLabel({
-  collectionMethod,
-  billingCycle,
-  directCollectionPoint,
-}: {
-  collectionMethod: string | null | undefined;
-  billingCycle: string | null | undefined;
-  directCollectionPoint: string | null | undefined;
-}) {
-  const label = getSettlementDisplayLabel(collectionMethod, billingCycle);
-  const condition = getPaymentConditionLabel(directCollectionPoint);
-  const slashIdx = label.indexOf("/");
-  const labelNode =
-    slashIdx === -1 ? (
-      <>{label}</>
-    ) : (
-      <>
-        {label.slice(0, slashIdx + 1)}
-        <br />
-        {label.slice(slashIdx + 1)}
-      </>
-    );
-  return (
-    <>
-      {labelNode}
-      {condition && (
-        <>
-          <br />
-          {condition}
-        </>
-      )}
-    </>
-  );
 }
 
 function formatDate(d: string | null) {
@@ -68,6 +70,7 @@ function formatDate(d: string | null) {
 export default function CustomerInvoicesPage() {
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState<string | null>(null);
   const [period, setPeriod] = useState<DatePreset>("all");
   // 로드맵③ addendum(2-5 변경) — 현장 추가비 항목별 내역(화주 청구액만,
   // driver_payout_amount는 DB 권한 자체가 없어 애초에 안 내려옴).
@@ -106,13 +109,44 @@ export default function CustomerInvoicesPage() {
     "desc"
   );
 
+  /**
+   * 요약 카드 3개. 🔴 「이번 달」은 `billing_period`(YYYY-MM) 기준이다 —
+   * `created_at` 으로 세면 지난달 정산월 건이 이번 달에 등록됐다는 이유로
+   * 이번 달 청구금액에 섞인다.
+   */
+  const summary = useMemo(() => {
+    const thisMonth = new Date().toISOString().slice(0, 7);
+    let monthTotal = 0;
+    let unpaidTotal = 0;
+    let unpaidCount = 0;
+    let taxCount = 0;
+    let latestTaxDate: string | null = null;
+    invoices.forEach((i) => {
+      if (i.billing_period === thisMonth) monthTotal += i.customer_charge_total || 0;
+      if (!i.payment_received) {
+        unpaidTotal += i.customer_charge_total || 0;
+        unpaidCount += 1;
+      }
+      if (i.tax_invoice_issued) {
+        taxCount += 1;
+        if (i.tax_invoice_date && (!latestTaxDate || i.tax_invoice_date > latestTaxDate)) {
+          latestTaxDate = i.tax_invoice_date;
+        }
+      }
+    });
+    return { monthTotal, unpaidTotal, unpaidCount, taxCount, latestTaxDate };
+  }, [invoices]);
+
   useEffect(() => {
     async function load() {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("invoices")
         .select(PORTAL_INVOICE_FIELDS)
         .order("created_at", { ascending: false })
         .limit(100);
+      // 조회 실패를 삼키면 "빈 목록"으로 보여 원인을 짚을 수 없다(원칙 55번)
+      if (error) setPageError(error.message);
+      else setPageError(null);
       const rows = data || [];
       setInvoices(rows);
       await loadExtraCharges(rows);
@@ -206,273 +240,292 @@ export default function CustomerInvoicesPage() {
 
   return (
     <main className="container">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">정산·세금계산서 확인</h1>
-          <p className="page-desc">
-            청구 내역과 세금계산서 발행 여부를 확인하세요. 엑셀로 내려받으시려면{" "}
-            <Link href="/customer/stats" style={{ textDecoration: "underline" }}>
-              월별 통계
-            </Link>{" "}
-            페이지를 이용해주세요.
-          </p>
+      <div className="pv2-page-head-tight">
+        <h1 className="pv2-page-title">정산·결제내역</h1>
+        <p className="pv2-page-desc">청구 내역과 세금계산서 발행·입금 상태를 확인하세요.</p>
+      </div>
+
+      <div className="pv2-isum">
+        <div className="pv2-isum-card">
+          <div className="pv2-isum-label">이번 달 청구금액</div>
+          <div className="pv2-isum-value">
+            {wonNum(summary.monthTotal)}
+            <span className="pv2-isum-unit"> 원</span>
+          </div>
+          <div className="pv2-isum-sub">
+            부가세 별도 · 포함 {wonNum(calcInclusiveAmount(summary.monthTotal))}원
+          </div>
+        </div>
+        <div className="pv2-isum-card">
+          <div className="pv2-isum-label">미결제 잔액</div>
+          {/* 🔴 미결제 잔액만 값 색이 다르다(시안 `#B4423A`) */}
+          <div className="pv2-isum-value" style={{ color: "#B4423A" }}>
+            {wonNum(summary.unpaidTotal)}
+            <span className="pv2-isum-unit" style={{ color: "#B4423A" }}>
+              {" "}
+              원
+            </span>
+          </div>
+          <div className="pv2-isum-sub">{summary.unpaidCount}건 입금 대기 중</div>
+        </div>
+        <div className="pv2-isum-card">
+          <div className="pv2-isum-label">세금계산서</div>
+          <div className="pv2-isum-value">
+            {summary.taxCount}
+            <span className="pv2-isum-unit"> 건 발행</span>
+          </div>
+          <div className="pv2-isum-sub">
+            {summary.latestTaxDate ? `최근 발행일 ${formatDate(summary.latestTaxDate)}` : "발행 이력 없음"}
+          </div>
         </div>
       </div>
 
-      {invoices.length > 0 && (
-        <div style={{ marginBottom: 10 }}>
-          <DateRangeFilter value={period} onChange={setPeriod} />
+      {/* 🔴 전화번호를 하드코딩하지 말 것 — `lib/contactInfo.ts` 상수다.
+          번호가 바뀌면 이 띠·랜딩·푸터가 한 번에 따라온다. */}
+      <div className="pv2-inotice">
+        <span className="pv2-inotice-badge">월별 정산 안내</span>
+        <div className="pv2-inotice-body">
+          지금은 <b>건별 정산</b>입니다. 정기 물량 화주님께는 한 달치를 한 번에 처리하는{" "}
+          <b>월별(합산) 정산</b>을 안내드립니다. 담당자 또는 <b>{COMPANY_SUPPORT_PHONE}</b>으로 연락
+          주세요.
+        </div>
+      </div>
+
+      <div className="pv2-filter-row">
+        <div className="pv2-chipgroup">
+          {PERIOD_CHIPS.map((c) => (
+            <button
+              key={c.value}
+              type="button"
+              className={`pv2-fchip${period === c.value ? " pv2-fchip-on" : ""}`}
+              onClick={() => setPeriod(c.value)}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+        <input
+          className="pv2-search"
+          type="text"
+          placeholder="오더번호 · 정산월 검색"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          aria-label="정산 검색"
+        />
+        {/* 🔴 네이티브 select 를 쓰지 않는다(원칙 57번) */}
+        <Pv2Select
+          wrapStyle={{ flex: "none", width: "auto", minWidth: 168 }}
+          value={`${sortKey}:${sortDir}`}
+          onChange={(v) => {
+            const [key, dir] = v.split(":");
+            setSortKey(key);
+            setSortDir(dir as "asc" | "desc");
+          }}
+          ariaLabel="정렬 기준"
+          options={SORT_OPTIONS}
+        />
+      </div>
+
+      {pageError && (
+        <div className="pv2-alert pv2-alert-error" style={{ marginBottom: 14 }}>
+          {pageError}
         </div>
       )}
 
-      {invoices.length > 0 && (
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-          <input
-            type="text"
-            placeholder="오더번호·정산월·상태 검색"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ flex: 1, minWidth: 180, fontSize: 13, padding: "8px 12px" }}
+      {loading ? (
+        <div className="pv2-empty">불러오는 중...</div>
+      ) : visibleInvoices.length === 0 ? (
+        <div className="pv2-card-empty">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/portal/wecarry-eng-cropped.svg"
+            alt=""
+            className="pv2-empty-logo"
+            style={{ width: 106 }}
           />
-          <select
-            className="mobile-only"
-            value={`${sortKey}:${sortDir}`}
-            onChange={(e) => {
-              const [key, dir] = e.target.value.split(":");
-              setSortKey(key);
-              setSortDir(dir as "asc" | "desc");
-            }}
-            style={{ fontSize: 13, padding: "8px 12px" }}
-          >
-            <option value="created_at:desc">최신 등록순</option>
-            <option value="billing_period:desc">정산월 최신순</option>
-            <option value="billing_period:asc">정산월 오래된순</option>
-            <option value="customer_charge_total:desc">청구금액 높은순</option>
-            <option value="customer_charge_total:asc">청구금액 낮은순</option>
-            <option value="status:asc">상태순</option>
-            <option value="settlement_type:asc">정산방식순</option>
-          </select>
+          <div className="pv2-card-empty-title">
+            {invoices.length === 0 ? "정산 내역이 없습니다" : "조건에 맞는 정산 내역이 없습니다"}
+          </div>
+          <div className="pv2-card-empty-desc">
+            {invoices.length === 0
+              ? "운송이 완료되면 청구·세금계산서·입금 내역이 이곳에 표시됩니다."
+              : "기간이나 검색어를 바꿔보세요."}
+          </div>
         </div>
-      )}
-
-      <div className="card" style={{ overflowX: "auto" }}>
-        {loading ? (
-          <div className="empty-state">불러오는 중...</div>
-        ) : invoices.length === 0 ? (
-          <div className="empty-state">정산 내역이 없습니다.</div>
-        ) : visibleInvoices.length === 0 ? (
-          <div className="empty-state">검색 결과가 없습니다.</div>
-        ) : (
-          <>
-            <table className="desktop-only" style={{ minWidth: 860 }}>
-              <thead>
-                <tr>
-                  <th>오더번호</th>
-                  <th style={{ cursor: "pointer" }} onClick={() => toggleSort("billing_period")}>
-                    정산월{sortIndicator(sortKey, "billing_period", sortDir)}
-                  </th>
-                  <th style={{ cursor: "pointer" }} onClick={() => toggleSort("customer_charge_total")}>
-                    청구금액{sortIndicator(sortKey, "customer_charge_total", sortDir)}
-                  </th>
-                  <th>세금계산서</th>
-                  <th>발행일</th>
-                  <th>입금</th>
-                  <th>입금일</th>
-                  <th style={{ cursor: "pointer" }} onClick={() => toggleSort("status")}>
-                    상태{sortIndicator(sortKey, "status", sortDir)}
-                  </th>
-                  <th style={{ cursor: "pointer" }} onClick={() => toggleSort("settlement_type")}>
-                    정산방식{sortIndicator(sortKey, "settlement_type", sortDir)}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleInvoices.map((i) => {
-                  const extras = extraChargesByInvoiceId[i.id] || [];
-                  const extraTotal = extras.reduce((s, e) => s + (e.customer_charge_amount || 0), 0);
-                  const expanded = expandedInvoiceIds.has(i.id);
-                  return (
-                    <Fragment key={i.id}>
-                      <tr>
-                        <td className="cell-nowrap">
-                          <span className="num">{i.orders?.order_no || "-"}</span>
-                          {i.orders?.loading_type === "mixable" && (
-                            <div style={{ marginTop: 4 }}>
-                              <MixableBadge />
-                            </div>
-                          )}
-                          {correctionInvoiceIds.has(i.id) && (
-                            <div style={{ marginTop: 4 }}>
-                              <span className="badge" style={{ fontSize: 11 }}>
-                                현장추가비 정정청구
-                              </span>
-                            </div>
-                          )}
-                        </td>
-                        <td className="cell-nowrap">
-                          <span className="num">{i.billing_period || "-"}</span>
-                        </td>
-                        <td className="cell-nowrap">
-                          <span className="num">{won(i.customer_charge_total)}</span>
-                          <div style={{ fontSize: 10.5, color: "var(--text-muted)" }}>
-                            부가세 별도
-                            {wonVatIncluded(i.customer_charge_total) && (
-                              <> (부가세 포함 {wonVatIncluded(i.customer_charge_total)})</>
-                            )}
-                          </div>
-                          {extras.length > 0 && (
-                            <button
-                              type="button"
-                              onClick={() => toggleExpanded(i.id)}
-                              className="btn btn-ghost"
-                              style={{ fontSize: 10.5, padding: "2px 6px", marginTop: 4 }}
-                            >
-                              현장 추가비 +{extras.length}건 ({won(extraTotal)}) {expanded ? "▲" : "▼"}
-                            </button>
-                          )}
-                        </td>
-                        <td className="cell-nowrap">{i.tax_invoice_issued ? "발행완료" : "미발행"}</td>
-                        <td className="cell-nowrap">
-                          <span className="num">{formatDate(i.tax_invoice_date)}</span>
-                        </td>
-                        <td className="cell-nowrap">{i.payment_received ? "완료" : "대기"}</td>
-                        <td className="cell-nowrap">
-                          <span className="num">{formatDate(i.payment_received_date)}</span>
-                        </td>
-                        <td className="cell-nowrap">{i.status}</td>
-                        <td>
-                          <span
-                            className="badge"
-                            style={{ display: "inline-block", textAlign: "center", lineHeight: 1.5 }}
-                          >
-                            <SettlementBadgeLabel
-                            collectionMethod={i.collection_method}
-                            billingCycle={i.billing_cycle}
-                            directCollectionPoint={i.direct_collection_point}
-                          />
-                          </span>
-                        </td>
-                      </tr>
-                      {expanded && extras.length > 0 && (
-                        <tr>
-                          <td colSpan={9} style={{ background: "var(--bg)" }}>
-                            <table style={{ margin: 0 }}>
-                              <thead>
-                                <tr>
-                                  <th>항목</th>
-                                  <th>금액</th>
-                                  <th>메모</th>
-                                  <th>등록일</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {extras.map((e) => (
-                                  <tr key={e.id}>
-                                    <td>{getDispatchExtraChargeCategoryLabel(e.category)}</td>
-                                    <td>{won(e.customer_charge_amount)}</td>
-                                    <td>{e.note || "-"}</td>
-                                    <td>{formatDate(e.created_at)}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </td>
-                        </tr>
+      ) : (
+        <>
+          <div className="pv2-itable">
+          <div className="pv2-itable-head">
+            <span>오더번호</span>
+            <button type="button" onClick={() => toggleSort("billing_period")}>
+              정산월{sortIndicator(sortKey, "billing_period", sortDir)}
+            </button>
+            <button type="button" onClick={() => toggleSort("customer_charge_total")}>
+              청구금액{sortIndicator(sortKey, "customer_charge_total", sortDir)}
+            </button>
+            <span>세금계산서</span>
+            <span>입금</span>
+            <button type="button" onClick={() => toggleSort("settlement_type")}>
+              정산방식{sortIndicator(sortKey, "settlement_type", sortDir)}
+            </button>
+          </div>
+          {visibleInvoices.map((i) => {
+            const extras = extraChargesByInvoiceId[i.id] || [];
+            const extraTotal = extras.reduce((s, e) => s + (e.customer_charge_amount || 0), 0);
+            const expanded = expandedInvoiceIds.has(i.id);
+            const tax = i.tax_invoice_issued ? TAX_BADGE.issued : TAX_BADGE.pending;
+            const pay = i.payment_received ? PAY_BADGE.done : PAY_BADGE.waiting;
+            const cycle = CYCLE_BADGE[i.billing_cycle] || CYCLE_BADGE.per_order;
+            const condition = getPaymentConditionLabel(i.direct_collection_point);
+            return (
+              <Fragment key={i.id}>
+                <div className="pv2-itable-row">
+                  <div>
+                    <div className="pv2-ino num">{i.orders?.order_no || "-"}</div>
+                    <div className="pv2-ibadges" style={{ marginTop: 4 }}>
+                      {i.orders?.loading_type === "mixable" && <MixableBadge />}
+                      {correctionInvoiceIds.has(i.id) && (
+                        <span className="badge" style={{ fontSize: 11 }}>
+                          현장추가비 정정청구
+                        </span>
                       )}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-
-            <div className="mobile-only">
-              {visibleInvoices.map((i) => {
-                const extras = extraChargesByInvoiceId[i.id] || [];
-                const extraTotal = extras.reduce((s, e) => s + (e.customer_charge_amount || 0), 0);
-                const expanded = expandedInvoiceIds.has(i.id);
-                return (
-                <div key={i.id} className="mobile-row-card">
-                  <div className="mobile-row-top">
-                    <span className="num" style={{ fontSize: 13, fontWeight: 700 }}>
-                      {i.orders?.order_no || "-"}
+                      {/* 🔴 진행 상태는 시안 6열에 없지만 지우지 않았다(원칙 42번) —
+                          「지연」·「거래중단」·「정산확정」은 세금계산서·입금 배지로는
+                          표현되지 않는다. 열을 늘리지 않으려고 오더번호 칸에 뒀다. */}
+                      {i.status && (
+                        <span className="badge" style={{ fontSize: 11 }}>
+                          {i.status}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="pv2-imonth num">{i.billing_period || "-"}</div>
+                  <div>
+                    <div className="pv2-iamt num">{won(i.customer_charge_total)}</div>
+                    <div className="pv2-isubtext">
+                      부가세 별도
+                      {wonVatIncluded(i.customer_charge_total) && (
+                        <> · 포함 {wonVatIncluded(i.customer_charge_total)}</>
+                      )}
+                    </div>
+                    {/* 🔴 현장 추가비 펼치기는 데스크탑·모바일 둘 다 유지한다 */}
+                    {extras.length > 0 && (
+                      <button type="button" className="pv2-iextra-btn" onClick={() => toggleExpanded(i.id)}>
+                        현장 추가비 +{extras.length}건 ({won(extraTotal)}) {expanded ? "▲" : "▼"}
+                      </button>
+                    )}
+                  </div>
+                  <div>
+                    <span className="pv2-ibadge" style={{ background: tax.bg, color: tax.color }}>
+                      {tax.label}
                     </span>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        padding: "3px 10px",
-                        borderRadius: 999,
-                        fontSize: 11.5,
-                        fontWeight: 700,
-                        background: "var(--accent-soft)",
-                        color: "var(--accent)",
-                      }}
-                    >
-                      {i.status}
+                    <div className="pv2-idate num">
+                      {i.tax_invoice_issued ? formatDate(i.tax_invoice_date) : "-"}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="pv2-ibadge" style={{ background: pay.bg, color: pay.color }}>
+                      {pay.label}
+                    </span>
+                    <div className="pv2-idate num">
+                      {i.payment_received ? formatDate(i.payment_received_date) : "-"}
+                    </div>
+                  </div>
+                  {/* 🔴 정산방식은 「운임 수금방식」 + 「청구」 두 줄이다(P1-1은 커밋⑥). */}
+                  <div className="pv2-isettle">
+                    <span className="pv2-isubtext" style={{ marginTop: 0 }}>
+                      {getSettlementDisplayLabel(i.collection_method, i.billing_cycle)}
+                      {condition ? ` · ${condition}` : ""}
+                    </span>
+                    <span className="pv2-ibadge" style={{ background: cycle.bg, color: cycle.color }}>
+                      {cycle.label}
                     </span>
                   </div>
-                  {i.orders?.loading_type === "mixable" && (
-                    <div style={{ marginBottom: 6 }}>
-                      <MixableBadge />
-                    </div>
-                  )}
-                  {correctionInvoiceIds.has(i.id) && (
-                    <div style={{ marginBottom: 6 }}>
+                </div>
+                {expanded && extras.length > 0 && (
+                  <div className="pv2-iextra">
+                    {extras.map((e) => (
+                      <div key={e.id} className="pv2-iextra-line">
+                        <b>{getDispatchExtraChargeCategoryLabel(e.category)}</b>
+                        <span className="num">{won(e.customer_charge_amount)}</span>
+                        <span>{e.note || ""}</span>
+                        <span style={{ marginLeft: "auto" }} className="num">
+                          {formatDate(e.created_at)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Fragment>
+            );
+          })}
+          </div>
+
+          {/* 🔴 모바일은 표가 아니라 카드다(시안) — 데스크탑 grid 와 **별개 JSX**
+              이므로 열을 늘리거나 줄일 때 양쪽을 같이 고칠 것(원칙 13번). */}
+          <div className="pv2-imlist">
+            {visibleInvoices.map((i) => {
+              const extras = extraChargesByInvoiceId[i.id] || [];
+              const extraTotal = extras.reduce((s, e) => s + (e.customer_charge_amount || 0), 0);
+              const expanded = expandedInvoiceIds.has(i.id);
+              const tax = i.tax_invoice_issued ? TAX_BADGE.issued : TAX_BADGE.pending;
+              const pay = i.payment_received ? PAY_BADGE.done : PAY_BADGE.waiting;
+              const cycle = CYCLE_BADGE[i.billing_cycle] || CYCLE_BADGE.per_order;
+              const condition = getPaymentConditionLabel(i.direct_collection_point);
+              return (
+                <div key={i.id} className="pv2-imcard">
+                  <div className="pv2-imtop">
+                    <span className="pv2-imno num">{i.orders?.order_no || "-"}</span>
+                    <span className="pv2-immonth num">{i.billing_period || "-"}</span>
+                    {i.orders?.loading_type === "mixable" && <MixableBadge />}
+                    {correctionInvoiceIds.has(i.id) && (
                       <span className="badge" style={{ fontSize: 11 }}>
                         현장추가비 정정청구
                       </span>
-                    </div>
-                  )}
-                  <div className="mobile-row-line">
-                    <span className="mobile-row-label">정산월</span>
-                    <span className="num">{i.billing_period || "-"}</span>
+                    )}
+                    {i.status && (
+                      <span className="badge" style={{ fontSize: 11 }}>
+                        {i.status}
+                      </span>
+                    )}
                   </div>
-                  <div className="mobile-row-line">
-                    <span className="mobile-row-label">청구금액</span>
-                    <span className="num">
-                      {won(i.customer_charge_total)}
+                  <div className="pv2-imamt-line">
+                    <span className="pv2-imamt num">{won(i.customer_charge_total)}</span>
+                    <span className="pv2-imvat">
+                      부가세 별도
                       {wonVatIncluded(i.customer_charge_total) && (
-                        <span style={{ fontSize: 10.5, color: "var(--text-muted)", marginLeft: 4 }}>
-                          (부가세 별도, 포함 {wonVatIncluded(i.customer_charge_total)})
-                        </span>
+                        <> · 포함 {wonVatIncluded(i.customer_charge_total)}</>
                       )}
                     </span>
                   </div>
-                  <div className="mobile-row-line">
-                    <span className="mobile-row-label">세금계산서</span>
-                    <span>
-                      {i.tax_invoice_issued ? `발행완료 (${formatDate(i.tax_invoice_date)})` : "미발행"}
+                  <div className="pv2-imbadges">
+                    <span className="pv2-ibadge" style={{ background: tax.bg, color: tax.color }}>
+                      {tax.label}
+                      {i.tax_invoice_issued ? ` ${formatDate(i.tax_invoice_date)}` : ""}
+                    </span>
+                    <span className="pv2-ibadge" style={{ background: pay.bg, color: pay.color }}>
+                      {pay.label}
+                      {i.payment_received ? ` ${formatDate(i.payment_received_date)}` : ""}
+                    </span>
+                    <span className="pv2-ibadge" style={{ background: cycle.bg, color: cycle.color }}>
+                      {cycle.label}
                     </span>
                   </div>
-                  <div className="mobile-row-line">
-                    <span className="mobile-row-label">입금</span>
-                    <span>{i.payment_received ? `완료 (${formatDate(i.payment_received_date)})` : "대기"}</span>
+                  <div className="pv2-imvat">
+                    {getSettlementDisplayLabel(i.collection_method, i.billing_cycle)}
+                    {condition ? ` · ${condition}` : ""}
                   </div>
-                  <div className="mobile-row-line">
-                    <span className="mobile-row-label">정산방식</span>
-                    <span>
-                      {getSettlementDisplayLabel(i.collection_method, i.billing_cycle)}
-                      {getPaymentConditionLabel(i.direct_collection_point) && (
-                        <> · {getPaymentConditionLabel(i.direct_collection_point)}</>
-                      )}
-                    </span>
-                  </div>
+                  {/* 🔴 현장 추가비 펼치기는 모바일에도 유지한다 */}
                   {extras.length > 0 && (
-                    <div style={{ marginTop: 8 }}>
-                      <button
-                        type="button"
-                        onClick={() => toggleExpanded(i.id)}
-                        className="btn btn-ghost"
-                        style={{ fontSize: 11.5, padding: "4px 8px" }}
-                      >
+                    <div>
+                      <button type="button" className="pv2-iextra-btn" onClick={() => toggleExpanded(i.id)}>
                         현장 추가비 +{extras.length}건 ({won(extraTotal)}) {expanded ? "▲" : "▼"}
                       </button>
                       {expanded && (
                         <div style={{ marginTop: 6 }}>
                           {extras.map((e) => (
-                            <div key={e.id} className="mobile-row-line">
-                              <span className="mobile-row-label">
-                                {getDispatchExtraChargeCategoryLabel(e.category)}
-                              </span>
+                            <div key={e.id} className="pv2-iextra-line">
+                              <b>{getDispatchExtraChargeCategoryLabel(e.category)}</b>
                               <span className="num">{won(e.customer_charge_amount)}</span>
                             </div>
                           ))}
@@ -481,12 +534,11 @@ export default function CustomerInvoicesPage() {
                     </div>
                   )}
                 </div>
-                );
-              })}
-            </div>
-          </>
-        )}
-      </div>
+              );
+            })}
+          </div>
+        </>
+      )}
     </main>
   );
 }

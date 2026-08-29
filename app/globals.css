@@ -5538,3 +5538,282 @@ tbody tr:hover {
     margin-top: 0;
   }
 }
+
+/* ══ 정산·결제내역 (29차) ══════════════════════════════
+   🔴 표는 `<table>` 이 아니라 grid 다(시안). 열 6개 비율을 바꾸면 머리와 행이
+      어긋나므로 `.pv2-itable-head` 와 `.pv2-itable-row` 를 항상 같이 고칠 것. */
+.pv2-isum {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.pv2-isum-card {
+  background: var(--pv2-surface);
+  border: none;
+  border-radius: 20px;
+  padding: 20px 24px;
+}
+.pv2-isum-label {
+  font-size: 14px;
+  color: var(--pv2-text-3);
+  margin-bottom: 8px;
+}
+.pv2-isum-value {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.pv2-isum-unit {
+  font-size: 15.5px;
+  font-weight: 500;
+  color: var(--pv2-text-3);
+}
+.pv2-isum-sub {
+  font-size: 13.5px;
+  color: var(--pv2-text-3);
+  margin-top: 4px;
+}
+/* 월별 정산 안내 띠 — 🔴 전화번호는 `lib/contactInfo.ts` 상수에서 온다. */
+.pv2-inotice {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: #fff9d6;
+  border: 1px solid var(--pv2-border);
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+}
+.pv2-inotice-badge {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--pv2-text);
+  background: #ffd833;
+  border-radius: 6px;
+  padding: 3px 8px;
+  margin-top: 1px;
+  white-space: nowrap;
+}
+.pv2-inotice-body {
+  font-size: 14px;
+  color: var(--pv2-text-2);
+  line-height: 1.6;
+  word-break: keep-all;
+  text-wrap: pretty;
+}
+.pv2-inotice-body b {
+  color: var(--pv2-text);
+}
+.pv2-itable {
+  background: var(--pv2-surface);
+  border: none;
+  border-radius: 20px;
+  overflow: hidden;
+}
+.pv2-itable-head,
+.pv2-itable-row {
+  display: grid;
+  grid-template-columns: 1.3fr 0.8fr 1fr 1fr 1fr 0.9fr;
+  gap: 12px;
+}
+.pv2-itable-head {
+  padding: 14px 26px;
+  border-bottom: 1px solid var(--pv2-border);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--pv2-text-3);
+}
+.pv2-itable-head button {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.pv2-itable-row {
+  padding: 18px 26px;
+  font-size: 15px;
+  align-items: center;
+  border-bottom: 1px solid var(--pv2-border);
+}
+.pv2-itable-row:hover {
+  background: #fffdf5;
+}
+.pv2-itable-row:last-of-type {
+  border-bottom: none;
+}
+.pv2-ino {
+  font-weight: 600;
+}
+.pv2-imonth {
+  color: var(--pv2-text-2);
+}
+.pv2-iamt {
+  font-weight: 700;
+}
+.pv2-isubtext {
+  font-size: 13px;
+  color: var(--pv2-text-3);
+  margin-top: 2px;
+}
+.pv2-idate {
+  font-size: 13px;
+  color: var(--pv2-text-3);
+  margin-top: 4px;
+}
+.pv2-ibadge {
+  display: inline-block;
+  font-size: 13.5px;
+  font-weight: 600;
+  border-radius: 99px;
+  padding: 3px 10px;
+  justify-self: start;
+  white-space: nowrap;
+}
+.pv2-isettle {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+/* 현장 추가비 펼치기 — 🔴 데스크탑·모바일 둘 다 유지한다(원칙 42번). */
+.pv2-iextra-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  margin-top: 4px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--pv2-text-2);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.pv2-iextra {
+  padding: 14px 26px 18px;
+  background: var(--pv2-bg);
+  border-bottom: 1px solid var(--pv2-border);
+  font-size: 13.5px;
+}
+.pv2-iextra-line {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 4px 0;
+  color: var(--pv2-text-2);
+}
+.pv2-iextra-line b {
+  color: var(--pv2-text);
+  font-weight: 600;
+  min-width: 96px;
+}
+
+@media (max-width: 700px) {
+  .pv2-isum {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .pv2-isum-card {
+    border-radius: 14px;
+    padding: 13px;
+  }
+  .pv2-isum-card:nth-child(3) {
+    grid-column: 1 / -1;
+  }
+  .pv2-isum-label {
+    font-size: 13px;
+    margin-bottom: 6px;
+  }
+  .pv2-isum-value {
+    font-size: 17.5px;
+  }
+  .pv2-isum-unit {
+    font-size: 13px;
+  }
+  .pv2-isum-sub {
+    font-size: 12px;
+  }
+  .pv2-ibadge {
+    font-size: 13px;
+    padding: 3px 9px;
+  }
+  .pv2-iextra {
+    background: var(--pv2-surface);
+    border-radius: 16px;
+    border-bottom: none;
+    padding: 12px 15px;
+  }
+  .pv2-inotice {
+    padding: 12px 14px;
+    gap: 10px;
+    flex-direction: column;
+  }
+  .pv2-inotice-body {
+    font-size: 13px;
+  }
+}
+
+/* 🔴 모바일 정산 카드 — 데스크탑 grid 표와 **별개 JSX** 다(원칙 13번).
+   grid 를 CSS 로만 1열로 무너뜨리면 시안의 3줄 구성(번호+정산월 / 금액+부가세 /
+   배지 가로 나열)이 안 나온다. 열을 늘리거나 줄일 때 양쪽을 같이 볼 것. */
+.pv2-imlist {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+}
+/* 🔴 분기점을 `.desktop-only`(760px)가 아니라 포털 미디어쿼리(700px)에 맞춘다 —
+   둘을 섞으면 그 사이 폭에서 표와 카드가 함께 뜨거나 함께 사라진다. */
+@media (max-width: 700px) {
+  .pv2-itable {
+    display: none;
+  }
+  .pv2-imlist {
+    display: flex;
+  }
+}
+.pv2-imcard {
+  background: var(--pv2-surface);
+  border: none;
+  border-radius: 16px;
+  padding: 14px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pv2-imtop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pv2-imno {
+  font-size: 13.5px;
+  font-weight: 700;
+}
+.pv2-immonth {
+  font-size: 13px;
+  color: var(--pv2-text-3);
+}
+.pv2-imamt-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.pv2-imamt {
+  font-size: 16.5px;
+  font-weight: 700;
+}
+.pv2-imvat {
+  font-size: 12px;
+  color: var(--pv2-text-3);
+}
+.pv2-imbadges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
