@@ -3,7 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import MixableBadge from "@/components/MixableBadge";
-import { getSettlementDisplayLabel, getPaymentConditionLabel } from "@/lib/settlementLabels";
+import {
+  getCustomerCollectionMethodLabel,
+  getCustomerBillingCycleLabel,
+  getPaymentConditionLabel,
+  CUSTOMER_COLLECTION_AXIS_LABEL,
+  CUSTOMER_BILLING_AXIS_LABEL,
+} from "@/lib/settlementLabels";
 import { useListSearchSort } from "@/lib/useListSearchSort";
 import { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import DispatchPhotosPanel from "@/components/DispatchPhotosPanel";
@@ -231,7 +237,8 @@ export default function CustomerDispatchesPage() {
               stage === 2 ? "완료" : pickup ? `${pickup} 예정` : "예정",
             ];
             const photoReady = isDispatchReadyForPhotoUpload(d.dispatch_status, d.delivery_confirmed);
-            const settleLabel = getSettlementDisplayLabel(o.collection_method, o.billing_cycle);
+            const settleLabel = getCustomerCollectionMethodLabel(o.collection_method);
+            const cycleLabel = getCustomerBillingCycleLabel(o.billing_cycle);
             const condition = getPaymentConditionLabel(o.direct_collection_point);
             return (
               <article key={d.id} className="pv2-dcard">
@@ -297,9 +304,24 @@ export default function CustomerDispatchesPage() {
                     뜻이 아니다. */}
                 <div className="pv2-dfoot">
                   {o.loading_type === "mixable" && <MixableBadge />}
+                  {/* 🔴 화주 말이고 축이 둘이다(P1-1, (A)안 확정 2026-08-29).
+                      담당자 말 함수(관리자 정산관리·배차가 쓰는 것)를 여기에
+                      끌어오지 말 것 — 「주선사 정산」은 담당자의 말이다.
+                      ⚠️ 그 함수 이름을 주석에 쓰면 완료조건 grep 에 주석 자신이
+                      걸린다(51차 ⑨(a) 와 같은 오탐). */}
                   <span className="pv2-dsettle">
-                    {settleLabel}
-                    {condition ? ` · ${condition}` : ""}
+                    {settleLabel && (
+                      <>
+                        {CUSTOMER_COLLECTION_AXIS_LABEL} {settleLabel}
+                        {condition ? ` · ${condition}` : ""}
+                      </>
+                    )}
+                    {cycleLabel && (
+                      <>
+                        {settleLabel ? " · " : ""}
+                        {CUSTOMER_BILLING_AXIS_LABEL} {cycleLabel}
+                      </>
+                    )}
                   </span>
                   {photoReady && (
                     <button

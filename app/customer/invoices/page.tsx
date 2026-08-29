@@ -3,7 +3,13 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import MixableBadge from "@/components/MixableBadge";
-import { getSettlementDisplayLabel, getPaymentConditionLabel } from "@/lib/settlementLabels";
+import {
+  getCustomerCollectionMethodLabel,
+  getCustomerBillingCycleLabel,
+  getPaymentConditionLabel,
+  CUSTOMER_COLLECTION_AXIS_LABEL,
+  CUSTOMER_BILLING_AXIS_LABEL,
+} from "@/lib/settlementLabels";
 import { PORTAL_INVOICE_FIELDS, PORTAL_DISPATCH_EXTRA_CHARGE_FIELDS } from "@/lib/portalInvoiceFields";
 import { getDispatchExtraChargeCategoryLabel } from "@/lib/dispatchExtraCharges";
 import { useListSearchSort, sortIndicator } from "@/lib/useListSearchSort";
@@ -43,10 +49,17 @@ const PAY_BADGE = {
  *    「운임 수금방식」 줄은 배지가 아니라 평문이다(축이 둘이라 배지를 둘 다
  *    칠하면 어느 쪽이 강조인지 읽히지 않는다).
  */
-const CYCLE_BADGE: Record<string, { label: string; color: string; bg: string }> = {
-  monthly: { label: "월정산", color: "#7A5F00", bg: "#FFF9D6" },
-  per_order: { label: "건별", color: "#6B6759", bg: "#F4F3EF" },
+const CYCLE_BADGE_COLOR: Record<string, { color: string; bg: string }> = {
+  monthly: { color: "#7A5F00", bg: "#FFF9D6" },
+  per_order: { color: "#6B6759", bg: "#F4F3EF" },
 };
+
+/** 🔴 라벨은 공용 함수에서 온다 — 여기에 「월정산」을 다시 적으면 두 곳이 갈린다. */
+function cycleBadge(billingCycle: string | null | undefined) {
+  const label = getCustomerBillingCycleLabel(billingCycle);
+  const color = CYCLE_BADGE_COLOR[billingCycle || ""] || CYCLE_BADGE_COLOR.per_order;
+  return { label, ...color };
+}
 
 function won(n: number | null) {
   if (!n) return "-";
@@ -103,7 +116,7 @@ export default function CustomerInvoicesPage() {
       billing_period: (i) => i.billing_period,
       customer_charge_total: (i) => i.customer_charge_total,
       status: (i) => i.status,
-      settlement_type: (i) => getSettlementDisplayLabel(i.collection_method, i.billing_cycle),
+      settlement_type: (i) => getCustomerCollectionMethodLabel(i.collection_method),
     },
     "created_at",
     "desc"
@@ -375,7 +388,8 @@ export default function CustomerInvoicesPage() {
             const expanded = expandedInvoiceIds.has(i.id);
             const tax = i.tax_invoice_issued ? TAX_BADGE.issued : TAX_BADGE.pending;
             const pay = i.payment_received ? PAY_BADGE.done : PAY_BADGE.waiting;
-            const cycle = CYCLE_BADGE[i.billing_cycle] || CYCLE_BADGE.per_order;
+            const cycle = cycleBadge(i.billing_cycle);
+            const method = getCustomerCollectionMethodLabel(i.collection_method);
             const condition = getPaymentConditionLabel(i.direct_collection_point);
             return (
               <Fragment key={i.id}>
@@ -432,14 +446,19 @@ export default function CustomerInvoicesPage() {
                     </div>
                   </div>
                   {/* 🔴 정산방식은 「운임 수금방식」 + 「청구」 두 줄이다(P1-1은 커밋⑥). */}
+                  {/* 🔴 화주 말 두 줄이다(P1-1) — 윗줄 「운임 수금방식」, 아랫줄
+                      「청구」. 배지는 청구 축에만 건다(시안이 `월별`에만 옐로를
+                      준 것과 같다). 담당자 말 함수를 여기에 끌어오지 말 것. */}
                   <div className="pv2-isettle">
                     <span className="pv2-isubtext" style={{ marginTop: 0 }}>
-                      {getSettlementDisplayLabel(i.collection_method, i.billing_cycle)}
+                      {CUSTOMER_COLLECTION_AXIS_LABEL} {method || "-"}
                       {condition ? ` · ${condition}` : ""}
                     </span>
-                    <span className="pv2-ibadge" style={{ background: cycle.bg, color: cycle.color }}>
-                      {cycle.label}
-                    </span>
+                    {cycle.label && (
+                      <span className="pv2-ibadge" style={{ background: cycle.bg, color: cycle.color }}>
+                        {CUSTOMER_BILLING_AXIS_LABEL} {cycle.label}
+                      </span>
+                    )}
                   </div>
                 </div>
                 {expanded && extras.length > 0 && (
@@ -470,7 +489,8 @@ export default function CustomerInvoicesPage() {
               const expanded = expandedInvoiceIds.has(i.id);
               const tax = i.tax_invoice_issued ? TAX_BADGE.issued : TAX_BADGE.pending;
               const pay = i.payment_received ? PAY_BADGE.done : PAY_BADGE.waiting;
-              const cycle = CYCLE_BADGE[i.billing_cycle] || CYCLE_BADGE.per_order;
+              const cycle = cycleBadge(i.billing_cycle);
+              const method = getCustomerCollectionMethodLabel(i.collection_method);
               const condition = getPaymentConditionLabel(i.direct_collection_point);
               return (
                 <div key={i.id} className="pv2-imcard">
@@ -507,12 +527,14 @@ export default function CustomerInvoicesPage() {
                       {pay.label}
                       {i.payment_received ? ` ${formatDate(i.payment_received_date)}` : ""}
                     </span>
-                    <span className="pv2-ibadge" style={{ background: cycle.bg, color: cycle.color }}>
-                      {cycle.label}
-                    </span>
+                    {cycle.label && (
+                      <span className="pv2-ibadge" style={{ background: cycle.bg, color: cycle.color }}>
+                        {CUSTOMER_BILLING_AXIS_LABEL} {cycle.label}
+                      </span>
+                    )}
                   </div>
                   <div className="pv2-imvat">
-                    {getSettlementDisplayLabel(i.collection_method, i.billing_cycle)}
+                    {CUSTOMER_COLLECTION_AXIS_LABEL} {method || "-"}
                     {condition ? ` · ${condition}` : ""}
                   </div>
                   {/* 🔴 현장 추가비 펼치기는 모바일에도 유지한다 */}
