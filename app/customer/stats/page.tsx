@@ -1,45 +1,117 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
-import { getExportPeriodFrom, exportMultiSheetExcel, buildExportFilename, ExportPeriod } from "@/lib/exportExcel";
+import { exportMultiSheetExcel, buildExportFilename } from "@/lib/exportExcel";
+import { LEGAL_EFFECTIVE_DATE } from "@/lib/legalInfo";
+import Pv2DatePicker from "@/components/pv2/Pv2DatePicker";
+import Pv2Select from "@/components/pv2/Pv2Select";
 
-const PERIOD_LABELS: Record<ExportPeriod, string> = {
-  week: "이번 주",
-  month: "이번 달",
-  year: "올해",
-  all: "전체",
-};
+/**
+ * 🔴 조회 하한은 서비스 시행일이 속한 달이다 — 그 전에는 이 시스템으로 처리한
+ *    운송 자체가 없어서 빈 달만 늘어난다. 날짜를 하드코딩하지 말 것
+ *    (`lib/legalInfo.ts` 의 `LEGAL_EFFECTIVE_DATE` 가 정본이다).
+ */
+const MIN_MONTH = LEGAL_EFFECTIVE_DATE.slice(0, 7);
+const MIN_DATE = `${MIN_MONTH}-01`;
+
+function monthLabel(month: string) {
+  const [y, m] = month.split("-");
+  return `${y}년 ${Number(m)}월`;
+}
+
+function shortMonth(month: string, showYear: boolean) {
+  const [y, m] = month.split("-");
+  return `${showYear ? `'${y.slice(2)} ` : ""}${Number(m)}월`;
+}
 
 function won(n: number) {
   return Math.round(n).toLocaleString("ko-KR") + "원";
 }
 
-// 파일명에 쓸, 상황에 맞는 날짜 표기 (이번달→"2026년 7월", 이번주→"2026년 7월 3째주" 등)
-function getFileDateLabel(period: ExportPeriod) {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
-
-  if (period === "all") return "전체기간";
-  if (period === "year") return `${year}년`;
-  if (period === "month") return `${year}년 ${month}월`;
-  if (period === "week") {
-    const firstWeekday = new Date(year, now.getMonth(), 1).getDay();
-    const weekOfMonth = Math.ceil((now.getDate() + firstWeekday) / 7);
-    return `${year}년 ${month}월 ${weekOfMonth}째주`;
-  }
-  return "";
+function manwon(n: number) {
+  return `${Math.round(n / 10000).toLocaleString("ko-KR")}만`;
 }
+
+function addMonths(month: string, delta: number) {
+  const [y, m] = month.split("-").map(Number);
+  const abs = y * 12 + (m - 1) + delta;
+  return `${Math.floor(abs / 12)}-${String((abs % 12) + 1).padStart(2, "0")}`;
+}
+
+function monthsBetween(from: string, to: string) {
+  const out: string[] = [];
+  let cur = from;
+  // 넉넉한 상한 — 무한 루프 방지
+  for (let i = 0; i < 240 && cur <= to; i += 1) {
+    out.push(cur);
+    cur = addMonths(cur, 1);
+  }
+  return out;
+}
+
+/** 도착지 문자열에서 시·도만 뽑는다. 「경기 성남시 …」 → 「경기」 */
+function regionOf(address: string | null | undefined) {
+  if (!address) return null;
+  const first = address.trim().split(/\s+/)[0];
+  if (!first) return null;
+  return first.replace(/(특별시|광역시|특별자치시|특별자치도)$/, "");
+}
+
+/** 하차지 이름 — 시·군·구까지만(전체 주소는 카드에서 줄이 넘친다) */
+function dropSpotOf(address: string | null | undefined) {
+  if (!address) return null;
+  const parts = address.trim().split(/\s+/);
+  if (parts.length === 0) return null;
+  return parts.slice(0, Math.min(3, parts.length)).join(" ");
+}
+
+const PRESETS = [
+  { key: "this", label: "이번 달" },
+  { key: "last", label: "지난달" },
+  { key: "m3", label: "최근 3개월" },
+  { key: "m6", label: "최근 6개월" },
+  { key: "m12", label: "최근 12개월" },
+  { key: "all", label: "전체" },
+] as const;
+type PresetKey = (typeof PRESETS)[number]["key"];
 
 export default function PortalStatsPage() {
   const [companyName, setCompanyName] = useState("");
-  const [rows, setRows] = useState<{ period: string; count: number; total: number }[]>([]);
-  const [pending, setPending] = useState({ count: 0, total: 0 });
-  const [topRoutes, setTopRoutes] = useState<{ route: string; count: number }[]>([]);
+  const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
-  const [exportPeriod, setExportPeriod] = useState<ExportPeriod>("month");
+
+  const thisMonth = new Date().toISOString().slice(0, 7);
+  const [fromDate, setFromDate] = useState(`${addMonths(thisMonth, -5) < MIN_MONTH ? MIN_MONTH : addMonths(thisMonth, -5)}-01`);
+  const [toDate, setToDate] = useState(`${thisMonth}-28`);
+  const [preset, setPreset] = useState<PresetKey | null>("m6");
+
+  function applyPreset(key: PresetKey) {
+    setPreset(key);
+    const end = `${thisMonth}-28`;
+    if (key === "this") {
+      setFromDate(`${thisMonth}-01`);
+      setToDate(end);
+      return;
+    }
+    if (key === "last") {
+      const prev = addMonths(thisMonth, -1);
+      setFromDate(`${prev}-01`);
+      setToDate(`${prev}-28`);
+      return;
+    }
+    if (key === "all") {
+      setFromDate(MIN_DATE);
+      setToDate(end);
+      return;
+    }
+    const back = key === "m3" ? 2 : key === "m6" ? 5 : 11;
+    const start = addMonths(thisMonth, -back);
+    setFromDate(`${start < MIN_MONTH ? MIN_MONTH : start}-01`);
+    setToDate(end);
+  }
 
   useEffect(() => {
     async function load() {
@@ -55,80 +127,122 @@ export default function PortalStatsPage() {
         setCompanyName((account?.companies as any)?.name || "");
       }
 
-      const { data } = await supabase
+      // 🔴 집계 기준은 그대로다 — 입금이 확인된 정산 건만 실적으로 센다.
+      //    지역·하차지 집계를 위해 오더 구간을 함께 읽는다.
+      const { data, error } = await supabase
         .from("invoices")
-        .select("billing_period,customer_charge_total,payment_received")
-        .order("billing_period", { ascending: true });
-
-      const map: Record<string, { period: string; count: number; total: number }> = {};
-      let pendingCount = 0;
-      let pendingTotal = 0;
-
-      (data || []).forEach((r: any) => {
-        if (!r.payment_received) {
-          pendingCount += 1;
-          pendingTotal += r.customer_charge_total || 0;
-          return;
-        }
-        const key = r.billing_period || "미지정";
-        if (!map[key]) map[key] = { period: key, count: 0, total: 0 };
-        map[key].count += 1;
-        map[key].total += r.customer_charge_total || 0;
-      });
-
-      setRows(Object.values(map));
-      setPending({ count: pendingCount, total: pendingTotal });
-
-      // 자주 이용하는 구간 TOP 3
-      const { data: orderRows } = await supabase
-        .from("orders")
-        .select("origin,destination")
-        .limit(500);
-      const routeCount: Record<string, number> = {};
-      (orderRows || []).forEach((o: any) => {
-        if (!o.origin || !o.destination) return;
-        const key = `${o.origin} → ${o.destination}`;
-        routeCount[key] = (routeCount[key] || 0) + 1;
-      });
-      const sortedRoutes = Object.entries(routeCount)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 3)
-        .map(([route, count]) => ({ route, count }));
-      setTopRoutes(sortedRoutes);
-
+        .select(
+          "billing_period,customer_charge_total,payment_received,orders(origin,destination)"
+        )
+        .order("billing_period", { ascending: true })
+        .limit(2000);
+      if (error) setPageError(error.message);
+      else setPageError(null);
+      setInvoices(data || []);
       setLoading(false);
     }
     load();
   }, []);
 
+  const fromMonth = fromDate.slice(0, 7);
+  const toMonth = toDate.slice(0, 7);
+
+  const stats = useMemo(() => {
+    const paid = invoices.filter(
+      (i) =>
+        i.payment_received &&
+        i.billing_period &&
+        i.billing_period >= fromMonth &&
+        i.billing_period <= toMonth
+    );
+
+    const months = monthsBetween(fromMonth < MIN_MONTH ? MIN_MONTH : fromMonth, toMonth);
+    const byMonth: Record<string, { total: number; count: number }> = {};
+    months.forEach((m) => {
+      byMonth[m] = { total: 0, count: 0 };
+    });
+    const byRegion: Record<string, number> = {};
+    const byDrop: Record<string, { total: number; count: number }> = {};
+
+    paid.forEach((i) => {
+      const amount = i.customer_charge_total || 0;
+      if (byMonth[i.billing_period]) {
+        byMonth[i.billing_period].total += amount;
+        byMonth[i.billing_period].count += 1;
+      }
+      const region = regionOf(i.orders?.destination);
+      if (region) byRegion[region] = (byRegion[region] || 0) + amount;
+      const spot = dropSpotOf(i.orders?.destination);
+      if (spot) {
+        if (!byDrop[spot]) byDrop[spot] = { total: 0, count: 0 };
+        byDrop[spot].total += amount;
+        byDrop[spot].count += 1;
+      }
+    });
+
+    const monthRows = months.map((m) => ({ month: m, ...byMonth[m] }));
+    const total = monthRows.reduce((s, r) => s + r.total, 0);
+    const count = monthRows.reduce((s, r) => s + r.count, 0);
+    const max = Math.max(1, ...monthRows.map((r) => r.total));
+    const nonZero = monthRows.filter((r) => r.total > 0);
+    const avgMonth = nonZero.length ? nonZero.reduce((s, r) => s + r.total, 0) / nonZero.length : 0;
+
+    const regionTotal = Object.values(byRegion).reduce((s, v) => s + v, 0) || 1;
+    const regions = Object.entries(byRegion)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+      .map(([label, amount], i) => ({
+        label,
+        amount,
+        share: Math.round((amount / regionTotal) * 100),
+        barBg: i === 0 ? "#1A1A1A" : "#FFD833",
+      }));
+
+    const dropTotal = Object.values(byDrop).reduce((s, v) => s + v.total, 0) || 1;
+    const drops = Object.entries(byDrop)
+      .sort((a, b) => b[1].total - a[1].total)
+      .slice(0, 4)
+      .map(([name, v], i) => ({
+        name,
+        count: v.count,
+        amount: v.total,
+        share: Math.round((v.total / dropTotal) * 100),
+        barBg: i === 0 ? "#1A1A1A" : "#FFD833",
+        rankBg: i === 0 ? "#1A1A1A" : "#F4F3EF",
+        rankColor: i === 0 ? "#FFD833" : "#6B6759",
+      }));
+
+    return { monthRows, total, count, max, avgMonth, regions, drops, empty: total === 0 };
+  }, [invoices, fromMonth, toMonth]);
+
+  const showYear = useMemo(
+    () => new Set(stats.monthRows.map((r) => r.month.slice(0, 4))).size > 1,
+    [stats.monthRows]
+  );
+
   async function handleExport() {
     setExporting(true);
-    const from = getExportPeriodFrom(exportPeriod);
-
-    let dispatchQuery = supabase
-      .from("dispatches")
-      .select("dispatch_status,created_at,orders(order_no,origin,destination,requested_pickup_at)")
-      .order("created_at", { ascending: false })
-      .limit(2000);
-    let invoiceQuery = supabase
-      .from("invoices")
-      .select(
-        "billing_period,customer_charge_total,tax_invoice_issued,tax_invoice_date,payment_received,payment_received_date,status,created_at,orders(order_no)"
-      )
-      .order("created_at", { ascending: false })
-      .limit(2000);
-    if (from) {
-      dispatchQuery = dispatchQuery.gte("created_at", from);
-      invoiceQuery = invoiceQuery.gte("created_at", from);
-    }
-
-    const [{ data: dispatchData }, { data: invoiceData }] = await Promise.all([
-      dispatchQuery,
-      invoiceQuery,
+    const fromIso = `${fromMonth}-01`;
+    const [dispatchRes, invoiceRes] = await Promise.all([
+      supabase
+        .from("dispatches")
+        .select("dispatch_status,created_at,orders(order_no,origin,destination,requested_pickup_at)")
+        .gte("created_at", fromIso)
+        .order("created_at", { ascending: false })
+        .limit(2000),
+      supabase
+        .from("invoices")
+        .select(
+          "billing_period,customer_charge_total,tax_invoice_issued,tax_invoice_date,payment_received,payment_received_date,status,created_at,orders(order_no)"
+        )
+        .gte("billing_period", fromMonth)
+        .lte("billing_period", toMonth)
+        .order("billing_period", { ascending: false })
+        .limit(2000),
     ]);
     setExporting(false);
 
-    const dispatchRows = (dispatchData || []).map((d: any) => ({
+    const dispatchRows = (dispatchRes.data || []).map((d: any) => ({
       오더번호: d.orders?.order_no || "",
       출발지: d.orders?.origin || "",
       도착지: d.orders?.destination || "",
@@ -138,7 +252,7 @@ export default function PortalStatsPage() {
       배차상태: d.dispatch_status || "",
     }));
 
-    const invoiceRows = (invoiceData || []).map((i: any) => ({
+    const invoiceRows = (invoiceRes.data || []).map((i: any) => ({
       오더번호: i.orders?.order_no || "",
       정산월: i.billing_period || "",
       청구금액: i.customer_charge_total || 0,
@@ -154,7 +268,11 @@ export default function PortalStatsPage() {
       return;
     }
 
-    const filename = buildExportFilename(companyName, "운송정산내역", getFileDateLabel(exportPeriod));
+    const filename = buildExportFilename(
+      companyName,
+      "운송정산내역",
+      fromMonth === toMonth ? monthLabel(fromMonth) : `${monthLabel(fromMonth)}~${monthLabel(toMonth)}`
+    );
 
     exportMultiSheetExcel(filename, [
       { name: "운송내역", rows: dispatchRows.length > 0 ? dispatchRows : [{ 안내: "해당 기간 운송내역 없음" }] },
@@ -162,156 +280,282 @@ export default function PortalStatsPage() {
     ]);
   }
 
-  const maxTotal = Math.max(1, ...rows.map((r) => r.total));
-  const totalAll = rows.reduce((sum, r) => sum + r.total, 0);
-  const countAll = rows.reduce((sum, r) => sum + r.count, 0);
-  const avgUnitPrice = countAll > 0 ? totalAll / countAll : 0;
+  const monthOptions = useMemo(() => {
+    const out: { value: string; label: string }[] = [];
+    let cur = MIN_MONTH;
+    for (let i = 0; i < 240 && cur <= thisMonth; i += 1) {
+      out.push({ value: `${cur}-01`, label: monthLabel(cur) });
+      cur = addMonths(cur, 1);
+    }
+    return out.reverse();
+  }, [thisMonth]);
+
+  const gridRatios = [1, 0.75, 0.5, 0.25];
 
   return (
     <main className="container">
-      <div className="page-header">
+      <div className="pv2-shead">
         <div>
-          <h1 className="page-title">월별 운송 통계</h1>
-          <p className="page-desc">입금이 확인된 정산 건만 실적으로 집계합니다.</p>
+          <h1 className="pv2-page-title">월별 통계</h1>
+          <p className="pv2-page-desc">
+            입금이 확인된 정산 건만 실적으로 집계합니다. {monthLabel(MIN_MONTH)} 이후의 이력을 볼 수 있습니다.
+          </p>
+        </div>
+        {/* 🔴 「PDF 전체 다운로드」를 만들지 말 것(사용자 확정 12번) — 엑셀 하나뿐이다. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <button type="button" className="pv2-sbtn" onClick={handleExport} disabled={exporting}>
+            {exporting ? "내려받는 중..." : "엑셀 다운로드"}
+          </button>
         </div>
       </div>
 
-      <div
-        className="card"
-        style={{
-          padding: 16,
-          marginBottom: 20,
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          flexWrap: "wrap",
-        }}
-      >
-        <span style={{ fontSize: 12.5, color: "var(--text-muted)", fontWeight: 600 }}>
-          운송내역 + 정산내역 통합 다운로드
-        </span>
-        <select
-          value={exportPeriod}
-          onChange={(e) => setExportPeriod(e.target.value as ExportPeriod)}
-          style={{ fontSize: 12.5, padding: "7px 10px" }}
-        >
-          {(Object.keys(PERIOD_LABELS) as ExportPeriod[]).map((p) => (
-            <option key={p} value={p}>
-              {PERIOD_LABELS[p]}
-            </option>
+      <div className="pv2-srange">
+        <span className="pv2-srange-label">조회 기간</span>
+        {/* 🔴 달력은 26차 `Pv2DatePicker` 를 그대로 쓴다 — 새로 만들지 말 것(원칙 57번) */}
+        <div className="pv2-sonly-desktop">
+          <Pv2DatePicker
+            value={fromDate}
+            onChange={(v) => {
+              setFromDate(v);
+              setPreset(null);
+            }}
+            min={MIN_DATE}
+            max={toDate}
+            ariaLabel="조회 시작일"
+            wrapStyle={{ width: "auto" }}
+          />
+          <span className="pv2-srange-tilde">~</span>
+          <Pv2DatePicker
+            value={toDate}
+            onChange={(v) => {
+              setToDate(v);
+              setPreset(null);
+            }}
+            min={fromDate}
+            ariaLabel="조회 종료일"
+            wrapStyle={{ width: "auto" }}
+          />
+        </div>
+        {/* 🔴 모바일은 달력이 아니라 드롭다운이다(시안) */}
+        <div className="pv2-sonly-mobile">
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <Pv2Select
+              value={`${fromMonth}-01`}
+              onChange={(v) => {
+                setFromDate(v);
+                setPreset(null);
+              }}
+              options={monthOptions}
+              ariaLabel="조회 시작월"
+              wrapStyle={{ flex: "none", width: 128 }}
+            />
+            <span className="pv2-srange-tilde">~</span>
+            <Pv2Select
+              value={`${toMonth}-01`}
+              onChange={(v) => {
+                setToDate(v);
+                setPreset(null);
+              }}
+              options={monthOptions}
+              ariaLabel="조회 종료월"
+              wrapStyle={{ flex: "none", width: 128 }}
+            />
+          </div>
+        </div>
+        <div className="pv2-spresets">
+          {PRESETS.map((p) => (
+            <button
+              key={p.key}
+              type="button"
+              className={`pv2-spreset${preset === p.key ? " pv2-spreset-on" : ""}`}
+              onClick={() => applyPreset(p.key)}
+            >
+              {p.label}
+            </button>
           ))}
-        </select>
-        <button className="btn" style={{ fontSize: 12.5, padding: "8px 16px" }} onClick={handleExport} disabled={exporting}>
-          {exporting ? "내려받는 중..." : "엑셀 다운로드"}
-        </button>
+        </div>
       </div>
 
+      {pageError && (
+        <div className="pv2-alert pv2-alert-error" style={{ marginBottom: 14 }}>
+          {pageError}
+        </div>
+      )}
+
       {loading ? (
-        <div className="empty-state">불러오는 중...</div>
-      ) : rows.length === 0 && pending.count === 0 ? (
-        <div className="empty-state">아직 통계로 보여드릴 정산 내역이 없습니다.</div>
+        <div className="pv2-empty">불러오는 중...</div>
       ) : (
         <>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-              gap: 16,
-              marginBottom: 24,
-            }}
-          >
-            <div className="card" style={{ padding: 20 }}>
-              <div style={{ fontSize: 12.5, color: "var(--text-muted)" }}>입금 확정 누적금액</div>
-              <div className="num" style={{ fontSize: 22, fontWeight: 800 }}>{won(totalAll)}</div>
+          <div className="pv2-isum">
+            <div className="pv2-isum-card">
+              <div className="pv2-isum-label">운송비 합계</div>
+              <div className="pv2-isum-value">
+                {Math.round(stats.total).toLocaleString("ko-KR")}
+                <span className="pv2-isum-unit"> 원</span>
+              </div>
             </div>
-            <div className="card" style={{ padding: 20 }}>
-              <div style={{ fontSize: 12.5, color: "var(--text-muted)" }}>입금 확정 건수</div>
-              <div className="num" style={{ fontSize: 22, fontWeight: 800 }}>{countAll}건</div>
+            <div className="pv2-isum-card">
+              <div className="pv2-isum-label">운송 건수</div>
+              <div className="pv2-isum-value">
+                {stats.count.toLocaleString("ko-KR")}
+                <span className="pv2-isum-unit"> 건</span>
+              </div>
             </div>
-            <div className="card" style={{ padding: 20 }}>
-              <div style={{ fontSize: 12.5, color: "var(--text-muted)" }}>평균 건당 운임</div>
-              <div className="num" style={{ fontSize: 22, fontWeight: 800 }}>{won(avgUnitPrice)}</div>
+            <div className="pv2-isum-card">
+              <div className="pv2-isum-label">평균 건당 운임</div>
+              <div className="pv2-isum-value">
+                {Math.round(stats.count ? stats.total / stats.count : 0).toLocaleString("ko-KR")}
+                <span className="pv2-isum-unit"> 원</span>
+              </div>
             </div>
-            {pending.count > 0 && (
-              <div className="card" style={{ padding: 20, background: "var(--accent-soft)", border: "none" }}>
-                <div style={{ fontSize: 12.5, color: "var(--accent)", fontWeight: 700 }}>정산대기 중</div>
-                <div className="num" style={{ fontSize: 22, fontWeight: 800, color: "var(--accent)" }}>
-                  {pending.count}건 · {won(pending.total)}
+          </div>
+
+          <div className="pv2-scard">
+            <div className="pv2-scard-head">
+              <span className="pv2-scard-title">월별 운송비</span>
+              <span className="pv2-scard-sub">
+                {fromMonth === toMonth
+                  ? monthLabel(fromMonth)
+                  : `${monthLabel(fromMonth)} ~ ${monthLabel(toMonth)}`}
+              </span>
+            </div>
+            {stats.empty ? (
+              <div className="pv2-empty">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/portal/wecarry-eng-cropped.svg"
+                  alt=""
+                  className="pv2-empty-logo"
+                  style={{ width: 106 }}
+                />
+                <div className="pv2-empty-title">이 기간에는 집계된 실적이 없습니다</div>
+                <div className="pv2-empty-desc">
+                  입금이 확인된 정산 건이 생기면 월별 그래프가 표시됩니다.
+                </div>
+              </div>
+            ) : (
+              <div className="pv2-sgraph">
+                <div className="pv2-syaxis">
+                  {gridRatios.map((r) => (
+                    <span key={r} style={{ bottom: `${r * 100}%` }}>
+                      {manwon(stats.max * r)}
+                    </span>
+                  ))}
+                  <span style={{ bottom: 0 }}>0</span>
+                </div>
+                <div className="pv2-splotwrap">
+                  <div className="pv2-splot">
+                    {gridRatios.map((r) => (
+                      <span key={r} className="pv2-sgrid" style={{ bottom: `${r * 100}%` }} />
+                    ))}
+                    {stats.avgMonth > 0 && (
+                      <>
+                        <span
+                          className="pv2-savg"
+                          style={{ bottom: `${Math.round((stats.avgMonth / stats.max) * 100)}%` }}
+                        />
+                        <span
+                          className="pv2-savg-label"
+                          style={{ bottom: `${Math.round((stats.avgMonth / stats.max) * 100)}%` }}
+                        >
+                          평균 {manwon(stats.avgMonth)}
+                        </span>
+                      </>
+                    )}
+                    <div className="pv2-sbars">
+                      {stats.monthRows.map((r) => {
+                        const isMax = r.total === stats.max && r.total > 0;
+                        return (
+                          <div key={r.month} className="pv2-sbarcol">
+                            <span
+                              className="pv2-sbarval"
+                              style={{
+                                color: r.total === 0 ? "#BAB9B6" : "#1A1A1A",
+                                fontWeight: isMax ? 800 : 600,
+                              }}
+                            >
+                              {r.total === 0 ? "—" : manwon(r.total)}
+                            </span>
+                            <div
+                              className="pv2-sbar"
+                              style={{
+                                height: r.total === 0 ? 2 : `${Math.max(Math.round((r.total / stats.max) * 100), 3)}%`,
+                                background: r.total === 0 ? "#EBEAE7" : isMax ? "#1A1A1A" : "#FFD833",
+                              }}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="pv2-sxaxis">
+                    {stats.monthRows.map((r) => (
+                      <div key={r.month} className="pv2-sxcol">
+                        <span className="pv2-sxmonth">{shortMonth(r.month, showYear)}</span>
+                        <span className="pv2-sxcount">{r.count}건</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
           </div>
 
-          {rows.length > 0 && (
-            <div className="card" style={{ padding: 24, marginBottom: 20 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 16 }}>월별 추이</div>
-              {rows.map((r, idx) => {
-                const prev = idx > 0 ? rows[idx - 1] : null;
-                const changePct = prev && prev.total > 0 ? Math.round(((r.total - prev.total) / prev.total) * 100) : null;
-                return (
-                  <div key={r.period} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-                    <div className="num" style={{ width: 70, fontSize: 12.5, color: "var(--text-muted)" }}>
-                      {r.period}
+          <div className="pv2-sgrid2">
+            <div className="pv2-scard" style={{ marginBottom: 0 }}>
+              <div className="pv2-scard-head" style={{ marginBottom: 18 }}>
+                <span className="pv2-scard-title">지역별 운송비</span>
+                <span className="pv2-scard-sub">도착지 기준</span>
+              </div>
+              {stats.regions.length === 0 ? (
+                <div className="pv2-sempty-line">집계된 지역이 없습니다</div>
+              ) : (
+                stats.regions.map((r) => (
+                  <div key={r.label} className="pv2-srow">
+                    <div className="pv2-srow-top">
+                      <span className="pv2-srow-name">{r.label}</span>
+                      <span className="pv2-srow-share">{r.share}%</span>
+                      <span className="pv2-srow-amt num">{won(r.amount)}</span>
                     </div>
-                    <div style={{ flex: 1, background: "var(--bg)", borderRadius: 8, overflow: "hidden", height: 26 }}>
-                      <div
-                        style={{
-                          width: `${(r.total / maxTotal) * 100}%`,
-                          background: "var(--accent)",
-                          height: "100%",
-                          borderRadius: 8,
-                          minWidth: r.total > 0 ? 4 : 0,
-                        }}
-                      />
-                    </div>
-                    <div className="num" style={{ width: 110, textAlign: "right", fontSize: 13 }}>
-                      {won(r.total)}
-                    </div>
-                    <div style={{ width: 40, textAlign: "right", fontSize: 12, color: "var(--text-muted)" }}>
-                      {r.count}건
-                    </div>
-                    <div style={{ width: 50, textAlign: "right", fontSize: 11.5 }}>
-                      {changePct !== null && (
-                        <span style={{ color: changePct >= 0 ? "#1b9c57" : "#e5484d", fontWeight: 700 }}>
-                          {changePct >= 0 ? "▲" : "▼"} {Math.abs(changePct)}%
-                        </span>
-                      )}
+                    <div className="pv2-sbartrack">
+                      <div className="pv2-sbarfill" style={{ width: `${r.share}%`, background: r.barBg }} />
                     </div>
                   </div>
-                );
-              })}
-              <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8, marginBottom: 0 }}>
-                증감률은 바로 이전 달 대비입니다.
-              </p>
+                ))
+              )}
             </div>
-          )}
 
-          {topRoutes.length > 0 && (
-            <div className="card" style={{ padding: 24 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 14 }}>자주 이용하는 구간 TOP {topRoutes.length}</div>
-              {topRoutes.map((r, idx) => (
-                <div
-                  key={r.route}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    padding: "10px 0",
-                    borderBottom: idx < topRoutes.length - 1 ? "1px solid var(--border)" : "none",
-                    fontSize: 13,
-                  }}
-                >
-                  <span>
-                    <span className="num" style={{ color: "var(--accent)", fontWeight: 800, marginRight: 8 }}>
-                      {idx + 1}
-                    </span>
-                    {r.route}
-                  </span>
-                  <span className="num" style={{ color: "var(--text-muted)" }}>{r.count}회</span>
-                </div>
-              ))}
+            <div className="pv2-scard" style={{ marginBottom: 0 }}>
+              <div className="pv2-scard-head" style={{ marginBottom: 18 }}>
+                <span className="pv2-scard-title">하차지별 운송현황</span>
+                <span className="pv2-scard-sub">운송비 상위 4곳</span>
+              </div>
+              {stats.drops.length === 0 ? (
+                <div className="pv2-sempty-line">집계된 하차지가 없습니다</div>
+              ) : (
+                stats.drops.map((d, i) => (
+                  <div key={d.name} className="pv2-srow">
+                    <div className="pv2-srow-top" style={{ gap: 10 }}>
+                      <span
+                        className="pv2-srank"
+                        style={{ background: d.rankBg, color: d.rankColor }}
+                      >
+                        {i + 1}
+                      </span>
+                      <span className="pv2-sdropname">{d.name}</span>
+                      <span className="pv2-srow-share">
+                        {d.count}건 · {d.share}%
+                      </span>
+                      <span className="pv2-srow-amt num">{won(d.amount)}</span>
+                    </div>
+                    <div className="pv2-sbartrack pv2-sdropbar">
+                      <div className="pv2-sbarfill" style={{ width: `${d.share}%`, background: d.barBg }} />
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
-          )}
+          </div>
         </>
       )}
     </main>
