@@ -6134,3 +6134,211 @@ tbody tr:hover {
     font-size: 12.5px;
   }
 }
+
+/* ══ 배차 캘린더 (29차 — 월별 통계 화면 하단) ═══════════ */
+.pv2-calhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 28px 0 16px;
+  flex-wrap: wrap;
+}
+.pv2-caltitle {
+  font-size: 17.5px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.pv2-calsub {
+  font-size: 14.5px;
+  color: var(--pv2-text-3);
+}
+.pv2-calnav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pv2-calbtn {
+  border: none;
+  background: var(--pv2-bg);
+  border-radius: 12px;
+  padding: 8px 14px;
+  font-size: 14.5px;
+  font-family: inherit;
+  color: var(--pv2-text);
+  cursor: pointer;
+}
+.pv2-calbtn-arrow {
+  padding: 8px 12px;
+}
+.pv2-calbtn:hover:not(:disabled) {
+  background: #fff9d6;
+}
+/* 🔴 비활성은 opacity 로만 표시한다(시안) — 버튼을 숨기면 자리가 밀린다. */
+.pv2-calbtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.pv2-calmonth {
+  font-size: 17.5px;
+  font-weight: 700;
+  padding: 0 6px;
+  white-space: nowrap;
+}
+.pv2-caltable {
+  background: var(--pv2-surface);
+  border: none;
+  border-radius: 20px;
+  overflow: hidden;
+}
+.pv2-calwk {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  border-bottom: 1px solid var(--pv2-border);
+}
+.pv2-calwk span {
+  padding: 12px 0;
+  text-align: center;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.pv2-calgrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+.pv2-calcell {
+  min-height: 92px;
+  border-bottom: 1px solid var(--pv2-border);
+  border-right: 1px solid var(--pv2-border);
+  padding: 10px 12px;
+  box-sizing: border-box;
+  background: none;
+  font-family: inherit;
+  text-align: left;
+  display: block;
+  width: 100%;
+}
+.pv2-calcell:nth-child(7n) {
+  border-right: none;
+}
+.pv2-calcell-on {
+  cursor: pointer;
+}
+.pv2-calcell-on:hover {
+  background: #fffdf5;
+}
+.pv2-calday {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 14px;
+}
+.pv2-calcount {
+  display: block;
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  background: #fff9d6;
+  border: 1px solid var(--pv2-border);
+  color: #7a5f00;
+  border-radius: 7px;
+  padding: 5px 9px;
+}
+.pv2-callink {
+  display: block;
+  width: 100%;
+  margin-top: 18px;
+  background: var(--pv2-text);
+  color: var(--pv2-surface);
+  border: none;
+  border-radius: 12px;
+  padding: 13px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: center;
+  text-decoration: none;
+}
+.pv2-callink:hover {
+  background: #2a2825;
+}
+/* 🔴 날짜 클릭 상세는 34차가 만든 기능이다 — 지우지 말 것. */
+.pv2-caldetail {
+  background: var(--pv2-surface);
+  border-radius: 20px;
+  padding: 22px 26px;
+  margin-top: 16px;
+}
+.pv2-caldetail-title {
+  font-size: 15.5px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.pv2-caldetail-sub {
+  font-size: 13.5px;
+  color: var(--pv2-text-3);
+  margin-bottom: 14px;
+}
+.pv2-caldetail-row {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--pv2-border);
+  font-size: 14px;
+}
+.pv2-caldetail-row:last-child {
+  border-bottom: none;
+}
+.pv2-caldetail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  color: var(--pv2-text-3);
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+@media (max-width: 700px) {
+  .pv2-calhead {
+    margin: 20px 0 12px;
+    gap: 10px;
+  }
+  .pv2-caltitle {
+    font-size: 15.5px;
+  }
+  .pv2-calsub {
+    font-size: 13px;
+  }
+  .pv2-caltable {
+    border-radius: 16px;
+  }
+  .pv2-calcell {
+    min-height: 62px;
+    padding: 6px 5px;
+  }
+  .pv2-calwk span {
+    padding: 9px 0;
+    font-size: 12.5px;
+  }
+  .pv2-calday {
+    min-width: 21px;
+    height: 21px;
+    font-size: 13px;
+  }
+  .pv2-calcount {
+    margin-top: 5px;
+    font-size: 11px;
+    padding: 3px 5px;
+  }
+  .pv2-callink {
+    margin-top: 14px;
+    font-size: 14.5px;
+  }
+  .pv2-caldetail {
+    border-radius: 16px;
+    padding: 15px;
+  }
+}

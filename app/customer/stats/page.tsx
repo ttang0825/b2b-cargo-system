@@ -6,6 +6,7 @@ import { exportMultiSheetExcel, buildExportFilename } from "@/lib/exportExcel";
 import { LEGAL_EFFECTIVE_DATE } from "@/lib/legalInfo";
 import Pv2DatePicker from "@/components/pv2/Pv2DatePicker";
 import Pv2Select from "@/components/pv2/Pv2Select";
+import Pv2DispatchCalendar from "@/components/pv2/Pv2DispatchCalendar";
 
 /**
  * 🔴 조회 하한은 서비스 시행일이 속한 달이다 — 그 전에는 이 시스템으로 처리한
@@ -556,6 +557,10 @@ export default function PortalStatsPage() {
               )}
             </div>
           </div>
+
+          {/* 🔴 배차 캘린더의 정식 자리는 여기다(29차) — 홈으로 옮기지 말 것.
+              `/customer/calendar` 라우트와 **같은 컴포넌트**를 쓴다. */}
+          <Pv2DispatchCalendar />
         </>
       )}
     </main>
