@@ -16,7 +16,13 @@
  */
 export const CUSTOMER_APPROVED_LABEL = "화주 승인";
 
-/** 승인 시각 — 목록에 들어가야 해서 짧게(`8/29 16:20`). 시각을 보는 사람의 로컬 TZ 기준. */
+/**
+ * 승인 시각 — 목록 칸에 들어가야 해서 짧게(`8. 29. 16:20`). 시각을 보는 사람의 로컬 TZ 기준.
+ *
+ * 🔴 **`hour12: false` 를 빼지 말 것** — 빼면 「오전 10:33」처럼 나온다. 이 저장소의
+ *    관리자 화면은 전부 24시간 `HH:mm` 이라(56차 확정) 여기만 다르면 같은 화면에서
+ *    두 가지 시각 표기가 섞인다.
+ */
 export function formatCustomerApprovedAt(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const d = new Date(iso);
@@ -26,5 +32,6 @@ export function formatCustomerApprovedAt(iso: string | null | undefined): string
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    hour12: false,
   });
 }
