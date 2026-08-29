@@ -225,7 +225,7 @@ export default function DispatchDetailPage() {
     const { data, error } = await supabase
       .from("dispatches")
       .select(
-        "*, orders(id,order_no,origin,destination,item,vehicle_type,loading_type,mixed_discount_type,mixed_discount_amount,mixed_discount_percent), drivers(id,name,phone,vehicles(vehicle_number,vehicle_type))"
+        "*, orders(id,order_no,origin,destination,item,vehicle_type,loading_type,special_notes,mixed_discount_type,mixed_discount_amount,mixed_discount_percent), drivers(id,name,phone,vehicles(vehicle_number,vehicle_type))"
       )
       .eq("id", id)
       .single();
@@ -1185,6 +1185,34 @@ export default function DispatchDetailPage() {
             <Link href={`/admin/orders/${dispatch.orders.id}`} style={{ fontSize: 12.5, textDecoration: "underline" }}>
               연결된 운송오더 보기 →
             </Link>
+          </div>
+        )}
+
+        {/* 🔴 오더 특이사항을 여기서 읽는다 — 「당착/내착」이 배차에서 끊기던 지점이다.
+            포털 dropoff_arrival_type → 견적 notes 한 줄 → 오더 special_notes 까지는
+            이어지는데(27차 ③-4), 배차 상세가 오더에서 읽는 것이 order_no·구간·item·
+            차량·혼적뿐이라 **차주에게 「당착」을 알려줄 근거가 화면에 없었다**(28차 §4-2).
+            🔴 읽기 전용이다. 정본은 오더이므로 여기서 고칠 수 있게 만들지 말 것.
+            🔴 dispatches 에 도착구분 컬럼을 만들지 말 것 — 승계가 성립하려면
+               quotes·orders 에도 만들어야 해서 표 3개 + 마이그레이션이 된다(결정 1).
+            🔴 값이 비면 블록 자체를 그리지 않는다. */}
+        {dispatch.orders?.special_notes && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 4 }}>
+              운송오더 특이사항
+            </div>
+            <div
+              style={{
+                fontSize: 13,
+                whiteSpace: "pre-wrap",
+                overflowWrap: "anywhere",
+                background: "var(--bg)",
+                borderRadius: 8,
+                padding: "8px 12px",
+              }}
+            >
+              {dispatch.orders.special_notes}
+            </div>
           </div>
         )}
 
