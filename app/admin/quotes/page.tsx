@@ -25,6 +25,12 @@ import { applyMixedDiscount } from "@/lib/settlementCalc";
 // 🔴 차량형태 선택지는 DB(`rate_surcharges`)가 정본이고 **표시 순서만** 코드가 정한다.
 //    모르는 옵션은 버리지 않고 맨 뒤에 붙인다(`lib/vehicleBodyTypes.ts` 참고).
 import { orderBodyTypes } from "@/lib/vehicleBodyTypes";
+import { CUSTOMER_APPROVED_LABEL, formatCustomerApprovedAt } from "@/lib/quoteApproval";
+import {
+  arrivalTypeLabel,
+  arrivalTypeHint,
+  ARRIVAL_TIME_FREE_NOTE,
+} from "@/lib/arrivalType";
 
 // .field input 전역 CSS(width:100%, padding, border-radius 등)가 텍스트
 // 입력창 기준이라 체크박스/라디오에 그대로 적용되면 뭉개져 보임 — 명시적으로
@@ -70,6 +76,7 @@ type QuoteRow = {
   status: string;
   created_at: string;
   guest_name: string | null;
+  approved_by_customer_at: string | null;
   companies: { name: string } | null;
 };
 
@@ -125,6 +132,12 @@ function QuotesPageInner() {
   const [calculatingDistance, setCalculatingDistance] = useState(false);
   const [distanceAutoCalculated, setDistanceAutoCalculated] = useState(false);
   const [allowManualDistance, setAllowManualDistance] = useState(false);
+  /**
+   * 🔴 화주가 고른 하차 도착구분(당착/내착). 견적 폼에는 저장 컬럼이 없고 **화면 표시
+   *    전용**이다 — `quotes` 에 도착구분 컬럼을 만들지 않는다는 결정(28차 결정 1) 그대로다.
+   *    값 자체는 특이사항 한 줄로 이어져 오더·배차까지 살아 있다.
+   */
+  const [dropoffArrivalType, setDropoffArrivalType] = useState<string | null>(null);
   const [useManualFinalAmount, setUseManualFinalAmount] = useState(false);
   const [finalAmountOverride, setFinalAmountOverride] = useState("");
   const [ratesLoading, setRatesLoading] = useState(true);
@@ -217,7 +230,7 @@ function QuotesPageInner() {
     let query = supabase
       .from("quotes")
       .select(
-        "id,quote_no,origin,destination,vehicle_type,final_amount,status,created_at,guest_name,companies(name)"
+        "id,quote_no,origin,destination,vehicle_type,final_amount,status,created_at,guest_name,approved_by_customer_at,companies(name)"
       )
       .order("created_at", { ascending: false })
       .limit(preset === "all" ? 50 : 200);
@@ -258,6 +271,8 @@ function QuotesPageInner() {
       if (reqData.companies) {
         setSelectedCompany(reqData.companies as any);
       }
+      // 🔴 화면 표시용 — 하차 시각이 빈 채로 채워지는 이유를 담당자에게 알려준다(28차 §3).
+      setDropoffArrivalType(((reqData as any).dropoff_arrival_type as string) || null);
       setForm((prev) => ({
         ...prev,
         origin: reqData.origin || "",
@@ -1323,6 +1338,22 @@ function QuotesPageInner() {
                   minDateTime={minDropoffDateTime}
                   minDateTimeLabel={minDropoffLabel}
                 />
+                {/* 🔴 화주가 「당착/내착」을 고른 건은 **시각이 무관하다.** 저장된 23:59 는
+                    자리 채움인데 시간 드롭다운이 30분 단위라 선택지에 없어서, 프리필에서
+                    **날짜만 채워지고 시각이 빈 값으로 떨어진다**(28차 §3 실측).
+                    🔴 그 빈 시각을 담당자가 임의로 채우면 배차가 틀어진다 — 그래서 이유를
+                       여기에 적는다. **시각 칸은 비운 채로 두는 것이 맞다.**
+                    🔴 표기는 화주요청 목록과 같은 말을 쓴다(`lib/arrivalType.ts`). */}
+                {arrivalTypeLabel(dropoffArrivalType) && (
+                  <div style={{ marginTop: 6 }}>
+                    <span className="badge">
+                      {arrivalTypeLabel(dropoffArrivalType)} · {ARRIVAL_TIME_FREE_NOTE}
+                    </span>
+                    <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 4 }}>
+                      {arrivalTypeHint(dropoffArrivalType)}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="field">
@@ -1774,7 +1805,19 @@ function QuotesPageInner() {
                       </div>
                     )}
                   </td>
-                  <td className="cell-nowrap">{q.status}</td>
+                  <td className="cell-nowrap">
+                    <div>{q.status}</div>
+                    {/* 🔴 화주가 포털에서 직접 승인한 건임을 표시한다. 없으면 담당자가
+                        손으로 바꾼 것이다 — 27차까지는 둘이 구분되지 않았다(28차 §5-1). */}
+                    {formatCustomerApprovedAt(q.approved_by_customer_at) && (
+                      <div style={{ fontSize: 10.5, color: "var(--text-muted)" }}>
+                        {CUSTOMER_APPROVED_LABEL}{" "}
+                        <span className="num">
+                          {formatCustomerApprovedAt(q.approved_by_customer_at)}
+                        </span>
+                      </div>
+                    )}
+                  </td>
                   <td className="cell-nowrap">
                     <span className="num">
                       {new Date(q.created_at).toLocaleDateString("ko-KR")}

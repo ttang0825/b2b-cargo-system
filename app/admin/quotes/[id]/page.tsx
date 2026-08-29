@@ -32,6 +32,7 @@ import { getSettlementDisplayLabel, getPaymentConditionLabel, mapToLegacySettlem
 // 🔴 차량형태 선택지는 DB(`rate_surcharges`)가 정본이고 **표시 순서만** 코드가 정한다.
 //    모르는 옵션은 버리지 않고 맨 뒤에 붙인다(`lib/vehicleBodyTypes.ts` 참고).
 import { orderBodyTypes } from "@/lib/vehicleBodyTypes";
+import { CUSTOMER_APPROVED_LABEL, formatCustomerApprovedAt } from "@/lib/quoteApproval";
 
 const STATUS_OPTIONS = ["상담중", "견적제출", "수주", "보류", "실패"];
 
@@ -55,6 +56,8 @@ type Surcharge = { category: string; option_name: string };
 type QuoteDetail = {
   id: string;
   quote_no: string | null;
+  /** 화주가 포털에서 직접 승인한 시각. null 이면 담당자가 손으로 바꾼 것이다. */
+  approved_by_customer_at: string | null;
   origin: string | null;
   origin_sido: string | null;
   origin_sigungu: string | null;
@@ -633,6 +636,18 @@ export default function QuoteDetailPage() {
             >
               + 운송오더 생성
             </button>
+          )}
+          {/* 🔴 화주가 포털에서 직접 승인한 건임을 표시한다(2026-08-29). 이 줄이 없으면
+              담당자가 손으로 `수주` 로 바꾼 건과 구분되지 않는다 — 28차 §5-1 이 찾아낸
+              것이고, 그래서 `quotes` 에 컬럼 2개를 만들었다.
+              ⚠️ 과거 건은 전부 null 이라 이 줄이 없는 것이 정상이다(소급 기록 금지). */}
+          {formatCustomerApprovedAt(quote.approved_by_customer_at) && (
+            <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 6 }}>
+              {CUSTOMER_APPROVED_LABEL} ·{" "}
+              <span className="num">
+                {formatCustomerApprovedAt(quote.approved_by_customer_at)}
+              </span>
+            </div>
           )}
         </div>
 
