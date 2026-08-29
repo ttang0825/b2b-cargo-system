@@ -91,13 +91,19 @@ export async function POST(req: Request) {
     );
   }
 
-  // 🔴 상태 하나만 바꾼다. `updated_by` 는 `staff_accounts` 를 참조하는 컬럼이라
-  //    화주 계정 id 를 넣으면 FK 위반이 난다 — 손대지 않는다(`updated_at` 은 트리거가 갱신).
-  // ⚠️ 그래서 **"화주가 승인한 것"과 "담당자가 수주로 바꾼 것"이 DB 상 구분되지 않는다.**
-  //    구분하려면 컬럼이 필요한데 이번 차수는 DB 변경이 없다 — 28차 조사 항목으로 남겼다.
+  // 🔴 `updated_by` 는 `staff_accounts` 를 참조하는 컬럼이라 화주 계정 id 를 넣으면
+  //    FK 위반이 난다 — 손대지 않는다(`updated_at` 은 트리거가 갱신).
+  // 🔴 **승인 흔적 두 값을 같은 UPDATE 에서 쓴다**(2026-08-29 마이그레이션).
+  //    따로 쓰면 상태만 바뀌고 흔적이 빠진 건이 생기고, 그러면 담당자가 화주 승인분과
+  //    자기가 바꾼 건을 다시 구분할 수 없다 — 이 컬럼을 만든 이유가 사라진다.
+  //    ⚠️ null 이 "담당자가 바꾼 것"을 뜻하므로, 실패했을 때 나중에 채워 넣지 말 것.
   const { error: upErr } = await admin
     .from("quotes")
-    .update({ status: APPROVED_TO })
+    .update({
+      status: APPROVED_TO,
+      approved_by_customer_at: new Date().toISOString(),
+      approved_by_account_id: account.id,
+    })
     .eq("id", quoteId)
     // 경합 방지 — 그 사이 담당자가 상태를 바꿨으면 0행이 되어 아래에서 걸린다
     .eq("status", APPROVABLE_FROM);

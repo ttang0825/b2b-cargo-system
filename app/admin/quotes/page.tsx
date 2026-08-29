@@ -25,6 +25,7 @@ import { applyMixedDiscount } from "@/lib/settlementCalc";
 // 🔴 차량형태 선택지는 DB(`rate_surcharges`)가 정본이고 **표시 순서만** 코드가 정한다.
 //    모르는 옵션은 버리지 않고 맨 뒤에 붙인다(`lib/vehicleBodyTypes.ts` 참고).
 import { orderBodyTypes } from "@/lib/vehicleBodyTypes";
+import { CUSTOMER_APPROVED_LABEL, formatCustomerApprovedAt } from "@/lib/quoteApproval";
 
 // .field input 전역 CSS(width:100%, padding, border-radius 등)가 텍스트
 // 입력창 기준이라 체크박스/라디오에 그대로 적용되면 뭉개져 보임 — 명시적으로
@@ -70,6 +71,7 @@ type QuoteRow = {
   status: string;
   created_at: string;
   guest_name: string | null;
+  approved_by_customer_at: string | null;
   companies: { name: string } | null;
 };
 
@@ -217,7 +219,7 @@ function QuotesPageInner() {
     let query = supabase
       .from("quotes")
       .select(
-        "id,quote_no,origin,destination,vehicle_type,final_amount,status,created_at,guest_name,companies(name)"
+        "id,quote_no,origin,destination,vehicle_type,final_amount,status,created_at,guest_name,approved_by_customer_at,companies(name)"
       )
       .order("created_at", { ascending: false })
       .limit(preset === "all" ? 50 : 200);
@@ -1774,7 +1776,19 @@ function QuotesPageInner() {
                       </div>
                     )}
                   </td>
-                  <td className="cell-nowrap">{q.status}</td>
+                  <td className="cell-nowrap">
+                    <div>{q.status}</div>
+                    {/* 🔴 화주가 포털에서 직접 승인한 건임을 표시한다. 없으면 담당자가
+                        손으로 바꾼 것이다 — 27차까지는 둘이 구분되지 않았다(28차 §5-1). */}
+                    {formatCustomerApprovedAt(q.approved_by_customer_at) && (
+                      <div style={{ fontSize: 10.5, color: "var(--text-muted)" }}>
+                        {CUSTOMER_APPROVED_LABEL}{" "}
+                        <span className="num">
+                          {formatCustomerApprovedAt(q.approved_by_customer_at)}
+                        </span>
+                      </div>
+                    )}
+                  </td>
                   <td className="cell-nowrap">
                     <span className="num">
                       {new Date(q.created_at).toLocaleDateString("ko-KR")}
