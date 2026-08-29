@@ -13,8 +13,17 @@ import Pv2DispatchCalendar from "@/components/pv2/Pv2DispatchCalendar";
  *    운송 자체가 없어서 빈 달만 늘어난다. 날짜를 하드코딩하지 말 것
  *    (`lib/legalInfo.ts` 의 `LEGAL_EFFECTIVE_DATE` 가 정본이다).
  */
-const MIN_MONTH = LEGAL_EFFECTIVE_DATE.slice(0, 7);
-const MIN_DATE = `${MIN_MONTH}-01`;
+const EFFECTIVE_MONTH = LEGAL_EFFECTIVE_DATE.slice(0, 7);
+
+/**
+ * 🔴 하한을 「시행일이 속한 달」로 **그대로** 두면 시행일 전에는 조회 구간이
+ *    거꾸로(시작 > 끝) 잡혀 화면이 통째로 빈다 — 55차 ⑩ 이 발주 폼에서 겪은 것과
+ *    같은 함정이다(`max(오늘, 시행일)` 로 두었더니 시행일 전까지 발주가 아예 안 됐다).
+ *    그래서 **이번 달을 넘지 않게** 한 번 더 눌러준다. 날짜는 여전히 하드코딩하지 않는다.
+ */
+function floorMonth(thisMonth: string) {
+  return EFFECTIVE_MONTH <= thisMonth ? EFFECTIVE_MONTH : thisMonth;
+}
 
 function monthLabel(month: string) {
   const [y, m] = month.split("-");
@@ -85,6 +94,8 @@ export default function PortalStatsPage() {
   const [exporting, setExporting] = useState(false);
 
   const thisMonth = new Date().toISOString().slice(0, 7);
+  const MIN_MONTH = floorMonth(thisMonth);
+  const MIN_DATE = `${MIN_MONTH}-01`;
   const [fromDate, setFromDate] = useState(`${addMonths(thisMonth, -5) < MIN_MONTH ? MIN_MONTH : addMonths(thisMonth, -5)}-01`);
   const [toDate, setToDate] = useState(`${thisMonth}-28`);
   const [preset, setPreset] = useState<PresetKey | null>("m6");
@@ -299,7 +310,7 @@ export default function PortalStatsPage() {
         <div>
           <h1 className="pv2-page-title">월별 통계</h1>
           <p className="pv2-page-desc">
-            입금이 확인된 정산 건만 실적으로 집계합니다. {monthLabel(MIN_MONTH)} 이후의 이력을 볼 수 있습니다.
+            입금이 확인된 정산 건만 실적으로 집계합니다. {monthLabel(EFFECTIVE_MONTH)} 이후의 이력을 볼 수 있습니다.
           </p>
         </div>
         {/* 🔴 「PDF 전체 다운로드」를 만들지 말 것(사용자 확정 12번) — 엑셀 하나뿐이다. */}

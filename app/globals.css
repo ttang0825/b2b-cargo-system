@@ -5394,6 +5394,12 @@ tbody tr:hover {
   color: var(--pv2-text-3);
   margin-top: 5px;
 }
+/* 🔴 구간 화살표만 옐로다(시안 실측 `#FFD833`). 홈의 `.pv2-arrow-glyph` 는
+   24차가 `--pv2-yellow-text`(#7A5F00)로 둔 것이고 그것을 되돌리지 않는다 —
+   여기서만 시안 값으로 덮는다(두 클래스로 특성도를 올렸다, 원칙 58번). */
+.pv2-droute .pv2-arrow-glyph {
+  color: #ffd833;
+}
 .pv2-droute {
   display: block;
   font-size: 16.5px;
