@@ -5347,3 +5347,194 @@ tbody tr:hover {
     min-width: 0;
   }
 }
+
+/* ══ 배차·운송 조회 카드 (29차) ══════════════════════════
+   🔴 시안 실측값이다. 카드 radius 20 · padding 22/26 · gap 20.
+   🔴 알약 3개는 배차 단계이고 「문제 발생」은 그 위의 별도 배지다 —
+      알약 줄에 끼워 넣지 말 것(사용자 확정 6번). */
+.pv2-dlist {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pv2-dcard {
+  background: var(--pv2-surface);
+  border: none;
+  border-radius: 20px;
+  padding: 22px 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.pv2-dhead {
+  display: flex;
+  flex-direction: column;
+}
+.pv2-dno-line {
+  display: block;
+  margin-bottom: 6px;
+  line-height: 1.5;
+}
+.pv2-dno {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pv2-text-3);
+}
+.pv2-dpickup {
+  font-size: 13.5px;
+  color: var(--pv2-text-4);
+  margin-left: 10px;
+}
+/* 🔴 상차 줄을 두 자리에 그리고 CSS 로 하나만 보여준다 — 데스크탑은 오더번호와
+   같은 줄, 모바일은 구간 아래다(시안 실측). 27차 ② 의 날짜 처리와 같은 방식이고,
+   **같은 문자열**이라 두 자리가 갈릴 일이 없다(배지처럼 색·뜻이 갈리는 것과 다르다). */
+.pv2-dpickup-m {
+  display: none;
+  font-size: 13px;
+  color: var(--pv2-text-3);
+  margin-top: 5px;
+}
+.pv2-droute {
+  display: block;
+  font-size: 16.5px;
+  font-weight: 700;
+  line-height: 1.5;
+  word-break: keep-all;
+  text-wrap: pretty;
+}
+.pv2-dmeta {
+  font-size: 14px;
+  color: var(--pv2-text-3);
+  margin-top: 5px;
+  line-height: 1.5;
+}
+/* 🔴 「문제 발생」 배지 — 4번째 알약이 아니다. 색은 27차가 견적 「취소」에 쓴
+   시안 팔레트 값 그대로이고 새로 만든 색이 아니다. */
+.pv2-dissue {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 99px;
+  padding: 6px 14px;
+  font-size: 13.5px;
+  font-weight: 700;
+  background: #fdf3f2;
+  color: #b4423a;
+  margin-top: -8px;
+}
+.pv2-dsteps {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+.pv2-dstep {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1.5px solid;
+  border-radius: 99px;
+  padding: 12px 22px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.pv2-dstep-label {
+  font-size: 15px;
+  white-space: nowrap;
+}
+.pv2-dstep-sub {
+  font-size: 13px;
+  white-space: nowrap;
+}
+/* 🔴 연결선은 실선이 아니라 점선 도트다(radial-gradient) — border-top: dashed 로
+   바꾸면 시안과 도트 간격·크기가 달라진다. */
+.pv2-dline {
+  flex: none;
+  width: 30px;
+  height: 4px;
+  margin: 0 4px;
+  background-size: 9px 4px;
+  background-repeat: repeat-x;
+  background-position: center;
+}
+.pv2-dfoot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: -6px;
+}
+.pv2-dsettle {
+  font-size: 13.5px;
+  color: var(--pv2-text-3);
+  line-height: 1.5;
+}
+.pv2-dphoto-btn {
+  border: 1px solid var(--pv2-border);
+  background: var(--pv2-surface);
+  color: var(--pv2-text);
+  border-radius: 99px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.pv2-dphoto-btn:hover {
+  border-color: var(--pv2-text-4);
+}
+
+@media (max-width: 700px) {
+  .pv2-dcard {
+    border-radius: 16px;
+    padding: 15px;
+    gap: 10px;
+  }
+  .pv2-dno {
+    font-size: 13px;
+  }
+  .pv2-dno-line {
+    margin-bottom: 0;
+  }
+  /* 모바일은 오더번호 → 구간 → 상차 → 보조 순서다(시안). 데스크탑의 인라인
+     상차는 숨기고 아래 줄을 보여준다. */
+  .pv2-dpickup {
+    display: none;
+  }
+  .pv2-dpickup-m {
+    display: block;
+  }
+  .pv2-droute {
+    font-size: 14px;
+    font-weight: 600;
+    margin-top: 10px;
+  }
+  .pv2-dmeta {
+    font-size: 13px;
+  }
+  /* 🔴 모바일은 알약을 세로로 쌓고 연결선을 그리지 않는다(시안). */
+  .pv2-dsteps {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    margin-top: 2px;
+  }
+  .pv2-dstep {
+    padding: 9px 16px;
+  }
+  .pv2-dstep-label {
+    font-size: 13.5px;
+  }
+  .pv2-dstep-sub {
+    font-size: 12.5px;
+  }
+  .pv2-dline {
+    display: none;
+  }
+  .pv2-dissue {
+    margin-top: 0;
+  }
+  .pv2-dfoot {
+    margin-top: 0;
+  }
+}
