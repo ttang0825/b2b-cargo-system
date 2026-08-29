@@ -8,6 +8,7 @@ import { notifyBadgeRefresh } from "@/lib/notifyBadgeRefresh";
 import { getCurrentStaffRole } from "@/lib/currentStaff";
 import MixableBadge from "@/components/MixableBadge";
 import { getQuoteSettlementLine } from "@/lib/settlementLabels";
+import PortalRequestDetailModal from "@/components/PortalRequestDetailModal";
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   대기중: { bg: "#fff1e2", text: "#d9730d" },
@@ -22,6 +23,8 @@ export default function PortalRequestsPage() {
   const [error, setError] = useState<string | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [filter, setFilter] = useState("대기중");
+  // 🔴 목록 + 상세 모달(원칙 18번). 목록 표는 이미 minWidth:1030 이라 열을 못 늘린다.
+  const [detail, setDetail] = useState<any | null>(null);
   const [period, setPeriod] = useState<DatePreset>("all");
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -34,7 +37,7 @@ export default function PortalRequestsPage() {
     const { data, error } = await supabase
       .from("portal_order_requests")
       .select(
-        "id,company_id,origin,destination,vehicle_type,body_type,loading_type,item,requested_pickup_at,requested_dropoff_at,collection_method,direct_collection_point,dropoff_arrival_type,notes,status,staff_note,quote_id,created_at,companies(name)"
+        "id,company_id,origin,destination,vehicle_type,body_type,loading_type,item,requested_pickup_at,requested_dropoff_at,collection_method,direct_collection_point,dropoff_arrival_type,notes,status,staff_note,quote_id,created_at,load_condition,unload_condition,item_condition,transport_time,trip_type,waiting_minutes,waypoint_count,origin_company_name,origin_contact_name,origin_contact_phone,destination_company_name,destination_contact_name,destination_contact_phone,companies(name)"
       )
       .order("created_at", { ascending: false })
       .limit(100);
@@ -186,13 +189,19 @@ export default function PortalRequestsPage() {
             </thead>
             <tbody>
               {filtered.map((r) => (
-                <tr key={r.id}>
+                <tr
+                  key={r.id}
+                  onClick={() => setDetail(r)}
+                  style={{ cursor: "pointer" }}
+                >
                   <td className="cell-nowrap">
                     {r.companies?.name ? (
                       <a
                         href={`/admin/companies/${r.company_id}`}
                         onClick={(e) => {
                           e.preventDefault();
+                          // 행 클릭(상세 모달)까지 같이 열리지 않게 막는다
+                          e.stopPropagation();
                           router.push(`/admin/companies/${r.company_id}`);
                         }}
                         style={{ textDecoration: "underline" }}
@@ -302,7 +311,7 @@ export default function PortalRequestsPage() {
                       {r.status}
                     </span>
                   </td>
-                  <td className="cell-nowrap">
+                  <td className="cell-nowrap" onClick={(e) => e.stopPropagation()}>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", maxWidth: 190 }}>
                       {r.status === "대기중" && (
                         <>
@@ -361,6 +370,10 @@ export default function PortalRequestsPage() {
           </table>
         )}
       </div>
+
+      {detail && (
+        <PortalRequestDetailModal request={detail} onClose={() => setDetail(null)} />
+      )}
     </main>
   );
 }
