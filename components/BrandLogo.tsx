@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 // 워드마크(WeCarry 위캐리 운송) 인라인 SVG 컴포넌트.
 //
 // **인라인이어야 하는 이유**: 루트에 `fill="currentColor"`가 걸려 있어 부모의 `color`를
@@ -18,13 +19,20 @@
 // 접근성: 이 SVG 자체는 `aria-hidden`이고, 감싸는 링크가 `aria-label`로 이름을 제공함
 // (텍스트를 이미지로 바꾸면 스크린리더가 읽을 내용이 사라지므로 반드시 필요).
 
-export default function BrandLogo({ className }: { className?: string }) {
+/**
+ * @param style 인라인 크기 지정용. 🔴 31차 `SubmitDone` 이 클래스 없이 높이만 주려고
+ *   더했다 — `LegalLinks` 에 `linkClassName` 을 더한 것과 같은 **추가만 하는** 방식이다.
+ *   ⚠️ `fill="currentColor"` 는 그대로 두어야 한다(부모 color 를 상속해 다크 배경에서도
+ *   보인다 — 27차). `style` 로 `fill` 을 덮지 말 것.
+ */
+export default function BrandLogo({ className, style }: { className?: string; style?: CSSProperties }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       viewBox="9 25 982 151"
       fill="currentColor"
       className={className}
+      style={style}
       aria-hidden="true"
       focusable="false"
     >
