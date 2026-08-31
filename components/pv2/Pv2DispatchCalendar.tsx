@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import { getOrderStatusColor } from "@/lib/orderStatusColors";
@@ -36,6 +36,10 @@ export default function Pv2DispatchCalendar() {
   const [loading, setLoading] = useState(true);
   const [monthOffset, setMonthOffset] = useState(0);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  // 🔴 팝오버 위치는 grid 좌표를 계산하지 않고 **클릭한 칸의 실제 offset** 에서 읽는다.
+  //    칸마다 폭이 달라져도(모바일) 어긋나지 않는다.
+  const [popAt, setPopAt] = useState<{ left: number; top: number } | null>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -60,6 +64,34 @@ export default function Pv2DispatchCalendar() {
       supabase.removeChannel(channel);
     };
   }, []);
+
+  const closePop = useCallback(() => {
+    setSelectedDay(null);
+    setPopAt(null);
+  }, []);
+
+  // Esc 로 닫는다(모달·바텀시트와 같은 관례)
+  useEffect(() => {
+    if (!popAt) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") closePop();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [popAt, closePop]);
+
+  function openPop(day: number, el: HTMLElement) {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    const POP_W = 360;
+    const wrapW = wrap.clientWidth;
+    const w = Math.min(POP_W, wrapW - 16);
+    // 칸 가운데를 기준으로 두되 캘린더 밖으로 나가지 않게 가둔다
+    const center = el.offsetLeft + el.offsetWidth / 2;
+    const left = Math.max(8, Math.min(center - w / 2, wrapW - w - 8));
+    setSelectedDay(day);
+    setPopAt({ left, top: el.offsetTop + el.offsetHeight + 6 });
+  }
 
   const today = new Date();
   const baseDate = new Date();
@@ -106,7 +138,7 @@ export default function Pv2DispatchCalendar() {
             className="pv2-calbtn"
             onClick={() => {
               setMonthOffset(0);
-              setSelectedDay(null);
+              closePop();
             }}
           >
             오늘
@@ -117,7 +149,7 @@ export default function Pv2DispatchCalendar() {
             aria-label="이전 달"
             onClick={() => {
               setMonthOffset((m) => m - 1);
-              setSelectedDay(null);
+              closePop();
             }}
           >
             ←
@@ -131,7 +163,7 @@ export default function Pv2DispatchCalendar() {
             aria-label="다음 달"
             onClick={() => {
               setMonthOffset((m) => m + 1);
-              setSelectedDay(null);
+              closePop();
             }}
           >
             →
@@ -143,6 +175,7 @@ export default function Pv2DispatchCalendar() {
         <div className="pv2-empty">불러오는 중...</div>
       ) : (
         <>
+          <div className="pv2-calwrap" ref={wrapRef}>
           <div className="pv2-caltable">
             <div className="pv2-calwk">
               {WEEKDAYS.map((w) => (
@@ -163,7 +196,11 @@ export default function Pv2DispatchCalendar() {
                     type="button"
                     disabled={!day}
                     className={`pv2-calcell${day ? " pv2-calcell-on" : ""}`}
-                    onClick={() => day && setSelectedDay(isSelected ? null : day)}
+                    onClick={(e) => {
+                      if (!day) return;
+                      if (isSelected) closePop();
+                      else openPop(day, e.currentTarget);
+                    }}
                   >
                     {day && (
                       <>
@@ -194,76 +231,92 @@ export default function Pv2DispatchCalendar() {
             </div>
           </div>
 
-          <Link href="/customer/dispatches" className="pv2-callink">
-            배차·운송 조회에서 전체 보기
-          </Link>
-
-          {/* 🔴 날짜 클릭 상세는 34차 기능이다 — 지우지 말 것.
-              시안은 클릭 위치에 뜨는 팝오버이지만 표 아래 카드로 뒀다. 팝오버는
-              달력 칸마다 위치를 계산해야 하고 모바일에서 화면을 덮는데, 이 카드는
-              같은 정보를 더 안정적으로 보여준다. */}
-          {selectedDay && (
-            <div className="pv2-caldetail">
-              <div className="pv2-caldetail-title">
-                {year}. {String(month + 1).padStart(2, "0")}. {String(selectedDay).padStart(2, "0")} 상차
-              </div>
-              <div className="pv2-caldetail-sub">
-                이 날 상차 예정인 운송 {selectedOrders.length}건
-              </div>
-              {selectedOrders.length === 0 ? (
-                <div className="pv2-sempty-line">이 날짜에 예정된 운송이 없습니다</div>
-              ) : (
-                selectedOrders.map((o) => (
-                  <div key={o.id} className="pv2-caldetail-row">
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        gap: 10,
-                        flexWrap: "wrap",
-                      }}
-                    >
-                      <span className="num" style={{ fontWeight: 700 }}>
-                        {o.order_no}
-                      </span>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span className="num" style={{ color: "var(--pv2-text-3)" }}>
-                          {new Date(o.requested_pickup_at).toLocaleTimeString("ko-KR", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            hour12: false,
-                          })}
-                        </span>
-                        <span
-                          style={{
-                            display: "inline-block",
-                            padding: "3px 10px",
-                            borderRadius: 999,
-                            fontSize: 12,
-                            fontWeight: 700,
-                            background: getOrderStatusColor(o.status).bg,
-                            color: getOrderStatusColor(o.status).text,
-                          }}
-                        >
-                          {o.status}
-                        </span>
-                      </div>
+          {/* 🔴 날짜 클릭 상세는 34차 기능이고, **팝오버**가 시안이다(PR #107 리뷰).
+              표 아래 카드로 되돌리지 말 것. 「배차·운송 조회에서 전체 보기」도
+              이 팝오버 안에 있고 캘린더 아래에 따로 두지 않는다. */}
+          {selectedDay !== null && popAt && (
+            <>
+              {/* 바깥을 누르면 닫힌다 — 팝오버보다 z-index 가 하나 낮다 */}
+              <div className="pv2-calpop-back" onClick={closePop} aria-hidden="true" />
+              <div
+                className="pv2-calpop"
+                role="dialog"
+                aria-modal="false"
+                aria-label={`${year}년 ${month + 1}월 ${selectedDay}일 상차 일정`}
+                style={{ left: popAt.left, top: popAt.top }}
+              >
+                <div className="pv2-calpop-head">
+                  <div>
+                    <div className="pv2-calpop-title num">
+                      {year}. {String(month + 1).padStart(2, "0")}. {String(selectedDay).padStart(2, "0")} 상차
                     </div>
-                    <div style={{ marginTop: 4 }}>
-                      {o.origin} <span className="pv2-arrow-glyph">→</span> {o.destination}
-                    </div>
-                    <div className="pv2-caldetail-meta">
-                      <span>품목 {o.item || "-"}</span>
-                      <span>· 차량 {o.vehicle_type || "-"}</span>
-                      <span className="num">· 금액 {won(o.quotes?.final_amount)}</span>
-                      {o.loading_type === "mixable" && <MixableBadge />}
+                    <div className="pv2-calpop-sub">
+                      이 날 상차 예정인 운송 {selectedOrders.length}건
                     </div>
                   </div>
-                ))
-              )}
-            </div>
+                  <button
+                    type="button"
+                    className="pv2-calpop-close"
+                    onClick={closePop}
+                    aria-label="닫기"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {selectedOrders.length === 0 ? (
+                  <div className="pv2-calpop-empty">이 날짜에 예정된 운송이 없습니다</div>
+                ) : (
+                  <div className="pv2-calpop-list">
+                    {selectedOrders.map((o) => (
+                      <div key={o.id} className="pv2-calpop-row">
+                        <div className="pv2-calpop-top">
+                          {/* ⚠️ 이 배지는 **오더 상태**다 — 배차 3단계로 바꾸지 말 것.
+                              캘린더는 `orders` 를 읽고, 오더 상태에는 「운송중」처럼
+                              3단계로는 표현되지 않는 값이 있다(원칙 42번). */}
+                          <span
+                            style={{
+                              display: "inline-block",
+                              padding: "3px 10px",
+                              borderRadius: 999,
+                              fontSize: 12,
+                              fontWeight: 700,
+                              background: getOrderStatusColor(o.status).bg,
+                              color: getOrderStatusColor(o.status).text,
+                            }}
+                          >
+                            {o.status}
+                          </span>
+                          <span className="pv2-calpop-no num">{o.order_no}</span>
+                          <span className="pv2-calpop-no num">
+                            상차{" "}
+                            {new Date(o.requested_pickup_at).toLocaleTimeString("ko-KR", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              hour12: false,
+                            })}
+                          </span>
+                        </div>
+                        <div className="pv2-calpop-route">
+                          {o.origin} <span className="pv2-arrow-glyph">→</span> {o.destination}
+                        </div>
+                        <div className="pv2-calpop-meta">
+                          <span>{[o.item, o.vehicle_type].filter(Boolean).join(" · ") || "-"}</span>
+                          <span className="num">· {won(o.quotes?.final_amount)}</span>
+                          {o.loading_type === "mixable" && <MixableBadge />}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <Link href="/customer/dispatches" className="pv2-callink">
+                  배차·운송 조회에서 전체 보기
+                </Link>
+              </div>
+            </>
           )}
+          </div>
         </>
       )}
     </>
