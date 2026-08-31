@@ -330,3 +330,34 @@
 @media (max-width: 700px) {
   .landing-consent-links { padding-left: 0 !important; flex-wrap: wrap !important; gap: 12px !important; }
 }
+
+/* 동의 카드의 「전문 보기」 — 30차 `LegalLinks` 모달을 여는 링크를 시안의 알약 버튼
+   모양으로 그린다. 🔴 전역 `site-footer-link` 를 덮지 않으려고 클래스를 넘겨 쓴다. */
+.landing-page .landing-consent-doc-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 9px 16px;
+  border: 1px solid #e1e0db;
+  border-radius: 999px;
+  background: #ffffff;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4a4945;
+  text-decoration: none;
+  cursor: pointer;
+}
+.landing-page .landing-consent-doc-link:hover {
+  background: #f4f3ef;
+}
+
+@media (max-width: 900px) {
+  .landing-apply-grid { grid-template-columns: minmax(0,1fr) !important; }
+}
+
+@media (max-width: 700px) {
+  /* 동의 카드의 「전문 보기」는 세 번째 자식이다(시안은 button, 우리는 링크 래퍼) */
+  .landing-consent > .landing-consent-doc { grid-column: 2 !important; grid-row: 2 !important; justify-self: start !important; }
+  .landing-page .landing-consent-doc-link { padding: 6px 12px !important; font-size: 12.5px !important; }
+  .landing-apply-tel { font-size: 34px !important; }
+}

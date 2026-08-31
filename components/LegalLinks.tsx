@@ -19,7 +19,7 @@ import { LEGAL_EFFECTIVE_DATE_LABEL } from "@/lib/legalInfo";
 // 조문 내용은 `lib/legal/*.ts`를 페이지와 그대로 공유하므로, 문서를 고치면 페이지와
 // 모달에 동시에 반영된다(한쪽만 낡는 일이 없음).
 
-type DocKey = "terms" | "privacy" | "email-policy";
+export type DocKey = "terms" | "privacy" | "email-policy";
 
 const DOCS: Record<
   DocKey,
@@ -63,13 +63,24 @@ const ORDER: { key: DocKey; emphasis: boolean }[] = [
  *   (`site-footer-link`)를 랜딩 스코프에서 덮어쓰면 **전역 클래스 재정의**가 되므로,
  *   랜딩이 자기 클래스(`landing-legal-link`)를 넘겨 쓰는 방식으로 갈랐다.
  *   ⚠️ 문서 목록·모달은 그대로 공유한다 — 두 곳이 갈리지 않는 것이 이 prop 의 목적이다.
+ * @param only 보여줄 문서를 좁힌다. 31차 `/apply` 가 동의 항목마다 그 항목의 문서
+ *   하나만 「전문 보기」로 여는 데 쓴다. 🔴 **문서 정의·모달은 그대로 공유한다** —
+ *   화면이 조문을 따로 들고 있으면 개정 때 한쪽이 낡는다(시안이 실제로 약관 초안을
+ *   코드에 통째로 들고 있었다).
+ * @param label 링크에 쓸 글자를 바꾼다(기본값은 문서 이름).
  */
-export default function LegalLinks({ linkClassName }: { linkClassName?: string } = {}) {
+export default function LegalLinks({
+  linkClassName,
+  only,
+  label,
+}: { linkClassName?: string; only?: DocKey[]; label?: string } = {}) {
   const [openDoc, setOpenDoc] = useState<DocKey | null>(null);
+
+  const shown = only ? ORDER.filter((o) => only.includes(o.key)) : ORDER;
 
   return (
     <>
-      {ORDER.map(({ key, emphasis }) => {
+      {shown.map(({ key, emphasis }) => {
         const doc = DOCS[key];
         return (
           <Link
@@ -85,7 +96,7 @@ export default function LegalLinks({ linkClassName }: { linkClassName?: string }
               setOpenDoc(key);
             }}
           >
-            {doc.label}
+            {label ?? doc.label}
           </Link>
         );
       })}

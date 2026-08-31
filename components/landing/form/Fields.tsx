@@ -65,6 +65,11 @@ const menuItem = (active: boolean, selected: boolean): CSSProperties => ({
 export const fieldLabel: CSSProperties = { display: "block", fontSize: 14, fontWeight: 600, color: "#6B6759" };
 
 /** 입력창. 시안 값 그대로다. */
+// 🔴 **입력창 글자는 16px 이다 — 시안의 15px 을 그대로 쓰지 말 것.**
+// iOS Safari 는 16px 미만 입력창에 포커스하면 화면을 자동으로 확대하고, 그러면 뷰포트가
+// 페이지보다 좁아져 좌우로 밀리는 것처럼 보인다(26차에 사용자가 「커지고 밀린다」로
+// 신고한 것이 이것이다). 전역 `.public-form` 규칙이 16px 을 주지만 **인라인 style 이
+// 그 CSS 를 이기므로** 값 자체를 올려둔다.
 export const fieldStyle: CSSProperties = {
   width: "100%",
   padding: "15px 16px",
@@ -72,7 +77,7 @@ export const fieldStyle: CSSProperties = {
   borderRadius: 12,
   background: "#FFFFFF",
   fontFamily: "inherit",
-  fontSize: 15,
+  fontSize: 16,
   color: "#1A1A1A",
 };
 

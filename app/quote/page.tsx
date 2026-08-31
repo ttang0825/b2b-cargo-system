@@ -220,7 +220,7 @@ export default function PublicQuotePage() {
   );
 
   return (
-    <div className="landing-page" style={{ width: "100%", margin: "0 auto", overflowX: "clip", background: "#F4F3F0", color: "#0E0F12" }}>
+    <div className="landing-page public-form" style={{ width: "100%", margin: "0 auto", overflowX: "clip", background: "#F4F3F0", color: "#0E0F12" }}>
       <LandingHeader />
 
       <section className="landing-quote" style={{ padding: "170px max(56px, calc((100% - 1200px) / 2)) 0" }}>
@@ -350,7 +350,7 @@ export default function PublicQuotePage() {
                         onChange={(e) => setAgreed(e.target.checked)}
                         style={{ position: "absolute", inset: 0, width: "100%", height: "100%", margin: 0, opacity: 0, cursor: "pointer" }}
                       />
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden style={{ display: "block", opacity: agreed ? 1 : 0 }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden style={{ display: "block", opacity: agreed ? 1 : 0, pointerEvents: "none" }}>
                         <path d="M5 12.6l4.4 4.4L19 7.4" stroke="#0E0F12" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     </span>

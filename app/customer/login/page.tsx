@@ -28,6 +28,9 @@ import "@/app/landing.css";
 //    입력이 전역 `.field input`(14px)을 상속받을 수 있어서다.
 
 const labelStyle: CSSProperties = { display: "block", fontSize: 13, fontWeight: 600, color: "#4A4945" };
+// 🔴 입력창 글자는 16px 이다 — 시안의 15px 을 그대로 쓰면 iOS 가 포커스 때 화면을
+// 자동 확대한다(26차 「커지고 밀린다」 신고의 원인). 전역 `.public-form` 규칙이 16px 을
+// 주지만 인라인 style 이 그 CSS 를 이기므로 값 자체를 올려둔다.
 const inputStyle: CSSProperties = {
   width: "100%",
   marginTop: 9,
@@ -36,7 +39,7 @@ const inputStyle: CSSProperties = {
   borderRadius: 12,
   background: "#FAFAF8",
   fontFamily: "inherit",
-  fontSize: 15,
+  fontSize: 16,
   color: "#1A1A1A",
 };
 
@@ -183,7 +186,7 @@ export default function CustomerLoginPage() {
               <div>
                 <div style={{ fontSize: 14.5, fontWeight: 600 }}>계정이 없으신가요?</div>
                 <div style={{ marginTop: 5, fontSize: 13, color: "#8B8A85" }}>
-                  평일 {COMPANY_SUPPORT_HOURS} 접수 기준 당일 발급
+                  {COMPANY_SUPPORT_HOURS} 접수 기준 당일 발급
                 </div>
               </div>
               <Link
