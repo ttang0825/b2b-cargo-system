@@ -6200,6 +6200,7 @@ tbody tr:hover {
   grid-template-columns: repeat(7, 1fr);
 }
 .pv2-calcell {
+  position: relative;
   min-height: 92px;
   /* 🔴 `border: none` 을 빼지 말 것 — 이 칸은 `<button>` 이라 위·왼쪽에
      **브라우저 기본 버튼 테두리(진한 회색)** 가 남는다. PR #107 리뷰에서
@@ -6223,6 +6224,30 @@ tbody tr:hover {
 }
 .pv2-calcell-on:hover {
   background: #fffdf5;
+}
+/* 🔴 클릭 안내는 네이티브 `title` 이 아니라 CSS 로 즉시 띄운다 — `title` 은
+   브라우저 기본 지연(약 1초)이 있어 21차에 사용자가 그 늦음을 지적했고 그때도
+   커스텀 표시로 교체했다. `title` 로 되돌리지 말 것.
+   ⚠️ 건수가 있는 날짜에만 붙인다 — 빈 날짜에 「상세 보기」를 띄우면 볼 것이
+   있다는 뜻이 되어 눌렀을 때 빈 팝오버가 뜬다.
+   🔴 자리는 **날짜 숫자 오른쪽(칸 위쪽)** 이다 — 아래로 내리면 「N건 상차」
+   배지와 겹친다(실측: 칸 130x92 / 배지가 47~77px 을 쓰고 남는 세로가 5px 뿐).
+   문구도 그래서 짧다(실측 폭 — 「눌러서 상세 보기」 87px > 남는 76px). */
+.pv2-calhint {
+  position: absolute;
+  top: 14px;
+  right: 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--pv2-text-2);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.pv2-calcell-on:hover .pv2-calhint,
+.pv2-calcell-on:focus-visible .pv2-calhint {
+  opacity: 1;
 }
 .pv2-calday {
   display: inline-flex;
@@ -6295,6 +6320,10 @@ tbody tr:hover {
     margin-top: 5px;
     font-size: 11px;
     padding: 3px 5px;
+  }
+  /* 터치에는 hover 가 없고, 탭하면 :hover 가 남아 안내가 계속 떠 있게 된다 */
+  .pv2-calhint {
+    display: none;
   }
   .pv2-callink {
     margin-top: 14px;

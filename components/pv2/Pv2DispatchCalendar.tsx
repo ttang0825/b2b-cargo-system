@@ -221,7 +221,12 @@ export default function Pv2DispatchCalendar() {
                           {day}
                         </span>
                         {dayOrders.length > 0 && (
-                          <span className="pv2-calcount num">{dayOrders.length}건 상차</span>
+                          <>
+                            <span className="pv2-calcount num">{dayOrders.length}건 상차</span>
+                            {/* 클릭을 유도하는 안내 — hover·키보드 포커스에 즉시 뜬다.
+                                🔴 네이티브 `title` 로 바꾸지 말 것(브라우저 지연). */}
+                            <span className="pv2-calhint">상세 보기</span>
+                          </>
                         )}
                       </>
                     )}
