@@ -11,12 +11,14 @@ const PALETTE = {
     off: { border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)" },
     pad: "4px 10px",
     size: 12,
+    extra: {} as React.CSSProperties,
   },
   landing: {
     on: { border: "1px solid #FFD834", background: "#FFFCEC", color: "#0E0F12" },
     off: { border: "1px solid #EBEAE7", background: "#FAFAF8", color: "#4A4945" },
     pad: "9px 16px",
     size: 13.5,
+    extra: { whiteSpace: "nowrap", fontFamily: "inherit" } as React.CSSProperties,
   },
 } as const;
 
@@ -61,8 +63,9 @@ export default function MultiSelectTags({
               borderRadius: 999,
               fontSize: palette.size,
               cursor: "pointer",
-              whiteSpace: "nowrap",
-              fontFamily: "inherit",
+              // 🔴 `extra` 는 landing 에만 있다 — portal(관리자 4개 화면)의 렌더링 값을
+              //    31차 이전과 **한 글자도 다르지 않게** 두기 위해서다.
+              ...palette.extra,
               ...(active ? palette.on : palette.off),
               fontWeight: active ? 600 : 400,
             }}
