@@ -1,6 +1,7 @@
 import Link from "next/link";
 import LandingHeader from "@/components/LandingHeader";
 import SiteFooter from "@/components/SiteFooter";
+import { vehicles as LANDING_VEHICLES } from "@/components/landing/data";
 
 // 차량·요금 안내. 실무 문의 1순위인 "어떤 차가 얼마나 싣고 얼마인가"에 답하는 페이지.
 //
@@ -37,14 +38,18 @@ const PRICING_NOTES = [
   "표시 금액은 10km 이내 기준 최소 운임이며, 부가가치세는 별도입니다.",
   "실제 운임은 운송 거리, 차량 종류, 상·하차 조건, 운송 시간대, 화물 특성에 따라 달라집니다.",
   "정확한 금액은 견적 시 안내해 드립니다.",
-  // 상한을 닫지 않되 약속도 하지 않는 표현. "25톤"·"전 차종"으로 바꾸지 말 것(32차 확정)
-  "5톤 이상 대형 차량도 문의 주시면 확인해 안내드립니다.",
+  // 🔴 30차에 25톤 기준으로 바뀌었다(사용자 확정). "전 차종"·"모든 차량"은 여전히 금지다.
+  "표에 없는 차급이 필요하시면 문의해 주세요. 1톤부터 25톤까지 확인해 안내드립니다.",
 ];
 
-// `lib/constants.ts`의 BODY_TYPES는 11종(냉장탑·냉동탑·크레인·렉카·트레일러·사다리차 포함)이지만
-// 취급 범위가 확정되지 않아 전부 노출하지 않음(원칙 50번 — 상수를 그대로 순회하지 말고
-// 실제로 보여줄 값만 담은 로컬 배열로 좁힐 것). 냉장·냉동 등을 추가할지는 확인 후 결정.
-const BODY_TYPES_SHOWN = ["카고", "탑차", "윙바디", "리프트"] as const;
+// 🔴 30차에 4종 → **12종**이 됐다(사용자 확정). 랜딩과 **같은 순서·같은 이름·같은
+// 이미지**를 써야 한다 — 랜딩에서 12개를 보고 이 화면에 들어왔는데 4개만 있으면 안 된다.
+// 그래서 배열을 여기에 다시 적지 않고 랜딩 데이터(`components/landing/data.ts`)를 그대로
+// 읽는다. **두 곳에 각각 적으면 조용히 갈린다.**
+//
+// ⚠️ 이 이름들은 **발주 폼 선택지와 다르다** — 폼은 차급 11종과 형태 21종을 각각 고르는
+// 구조라 「5톤 윙바디」라는 선택지가 없다. 이름은 시안 그대로 두기로 확정됐고, 그 간극은
+// 랜딩과 이 화면의 안내 한 줄이 메운다. 폼 값으로 바꾸지 말 것.
 
 export default function VehiclesPage() {
   return (
@@ -129,23 +134,55 @@ export default function VehiclesPage() {
         {/* 차량 형태 */}
         <section className="card" style={{ padding: 28, marginBottom: 20 }}>
           <h2 className="about-section-title">차량 형태</h2>
-          {/* 차량 범위 표현 기준(12차 확정): **"1톤부터 5톤 이상까지"**.
-              🔴 "이상"을 빼면 "1톤부터 5톤까지"가 되어 금지 표현이 된다.
-              ⚠️ "25톤"·"전 차종"도 쓰지 말 것.
-              ⚠️ **하한에 소형 차종명을 다시 붙이지 말 것**(12차에 뺐음) — 2021년 5월 단종되어
-              배차 확보가 불확실하다.
-              ⚠️ 이 문장은 랜딩 ④ 차량 형태 섹션(app/page.tsx)과 **글자까지 같다** —
-              한쪽을 고치면 다른 쪽도 같이 고칠 것. */}
-          <p style={{ fontSize: 13.5, color: "var(--text-muted)", lineHeight: 1.7, margin: "0 0 14px" }}>
-            1톤부터 5톤 이상까지 다양한 차량에 배차가 가능합니다.
+          {/* 🔴 차량 범위 표현 기준이 30차에 **「1톤부터 25톤까지」**로 바뀌었다(사용자 확정).
+              12차·34차의 「1톤부터 5톤 이상까지」를 근거로 되돌리지 말 것 —
+              `rate_distance_tiers` 에 25톤 행이 실재하고 차급이 11종이라 견적이 실제로
+              산출된다(52차).
+              🔴 **"전 차종"·"모든 차량"·"특수차량"은 여전히 금지다** — 25톤이 풀렸다고
+              함께 풀린 것이 아니다(트레일러·크레인은 취급 범위 밖).
+              ⚠️ 이 문장은 랜딩 차량 형태 섹션(app/page.tsx)과 기준이 같다 —
+              한쪽을 고치면 다른 쪽도 같이 볼 것. */}
+          <p style={{ fontSize: 13.5, color: "var(--text-muted)", lineHeight: 1.7, margin: "0 0 16px" }}>
+            1톤부터 25톤까지 다양한 차량에 배차가 가능합니다.
           </p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-            {BODY_TYPES_SHOWN.map((t) => (
-              <span key={t} className="badge">
-                {t}
-              </span>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+              gap: 12,
+              marginBottom: 16,
+            }}
+          >
+            {LANDING_VEHICLES.map((v) => (
+              <div key={v.name}>
+                <div
+                  style={{
+                    position: "relative",
+                    aspectRatio: "1 / 1",
+                    borderRadius: 10,
+                    overflow: "hidden",
+                    background: "var(--bg)",
+                  }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={v.img}
+                    alt={v.name}
+                    loading="lazy"
+                    style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+                  />
+                </div>
+                <div style={{ marginTop: 8, fontSize: 13.5, fontWeight: 700, wordBreak: "keep-all" }}>{v.name}</div>
+                <div style={{ marginTop: 3, fontSize: 12, lineHeight: 1.5, color: "var(--text-muted)", wordBreak: "keep-all" }}>
+                  {v.desc}
+                </div>
+              </div>
             ))}
           </div>
+          {/* 🔴 랜딩과 같은 안내다 — 이름이 발주 폼 선택지와 다른 간극을 메운다. 지우지 말 것. */}
+          <p style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.7, margin: "0 0 8px" }}>
+            발주 요청에서는 차량 크기와 형태를 각각 선택합니다. 예를 들어 「5톤 윙바디」는 5톤 + 윙바디로 고르시면 됩니다.
+          </p>
           <p style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.7, margin: 0 }}>
             그 밖의 차량 형태가 필요하시면 문의해 주세요. 가능 여부를 확인해 안내드립니다.
           </p>
