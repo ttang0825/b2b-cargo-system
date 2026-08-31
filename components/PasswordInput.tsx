@@ -2,16 +2,23 @@
 
 import { useState } from "react";
 
+/**
+ * @param inputStyle 입력창 인라인 스타일. 🔴 31차 `/customer/login` 이 `.field` 래퍼 없이
+ *   시안 스타일을 입히려고 더했다(추가만 하는 방식 — `BrandLogo` 의 `style` 과 같다).
+ *   ⚠️ `paddingRight` 는 눈 아이콘 자리라 덮어쓰지 말 것.
+ */
 export default function PasswordInput({
   value,
   onChange,
   placeholder,
   autoFocus,
+  inputStyle,
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   autoFocus?: boolean;
+  inputStyle?: React.CSSProperties;
 }) {
   const [show, setShow] = useState(false);
 
@@ -23,7 +30,7 @@ export default function PasswordInput({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         autoFocus={autoFocus}
-        style={{ paddingRight: 42 }}
+        style={{ ...inputStyle, paddingRight: 42 }}
       />
       <button
         type="button"
