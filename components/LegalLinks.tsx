@@ -57,7 +57,14 @@ const ORDER: { key: DocKey; emphasis: boolean }[] = [
   { key: "email-policy", emphasis: false },
 ];
 
-export default function LegalLinks() {
+/**
+ * @param linkClassName 링크에 쓸 클래스를 바꾼다. 기본값은 푸터용(`site-footer-link`).
+ *   🔴 30차 랜딩이 어두운 CTA 띠 위에 이 링크를 놓으면서 필요해졌다 — 전역 클래스
+ *   (`site-footer-link`)를 랜딩 스코프에서 덮어쓰면 **전역 클래스 재정의**가 되므로,
+ *   랜딩이 자기 클래스(`landing-legal-link`)를 넘겨 쓰는 방식으로 갈랐다.
+ *   ⚠️ 문서 목록·모달은 그대로 공유한다 — 두 곳이 갈리지 않는 것이 이 prop 의 목적이다.
+ */
+export default function LegalLinks({ linkClassName }: { linkClassName?: string } = {}) {
   const [openDoc, setOpenDoc] = useState<DocKey | null>(null);
 
   return (
@@ -68,7 +75,9 @@ export default function LegalLinks() {
           <Link
             key={key}
             href={doc.href}
-            className={emphasis ? "site-footer-link" : "site-footer-link site-footer-link-sub"}
+            className={
+              linkClassName ?? (emphasis ? "site-footer-link" : "site-footer-link site-footer-link-sub")
+            }
             onClick={(e) => {
               // 새 탭/새 창으로 열려는 클릭은 그대로 통과시킨다
               if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;

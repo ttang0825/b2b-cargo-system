@@ -1,550 +1,321 @@
+"use client";
+
 import Link from "next/link";
-import LandingHeader from "@/components/LandingHeader";
-import LandingImage from "@/components/LandingImage";
-import SiteFooter from "@/components/SiteFooter";
-import { LANDING_IMAGES } from "@/lib/landingImages";
-import { COMPANY_SUPPORT_PHONE, COMPANY_SUPPORT_HOURS } from "@/lib/contactInfo";
-import { COMPANY_FREIGHT_BROKER_LICENSE } from "@/lib/companyInfo";
-import {
-  INSURANCE_ENABLED,
-  INSURANCE_PRODUCT_NAME,
-  INSURANCE_INSURER,
-  INSURANCE_COVERAGE_LIMIT,
-  INSURANCE_EXCLUSION_NOTE,
-} from "@/lib/insuranceInfo";
+import { useState, type CSSProperties } from "react";
+import "./landing.css";
+import LandingHeader from "@/components/landing/LandingHeader";
+import LandingFooter from "@/components/landing/LandingFooter";
+import TmsShowcase from "@/components/landing/TmsShowcase";
+import FaqList from "@/components/landing/FaqList";
+import RatesModal from "@/components/landing/RatesModal";
+import LegalLinks from "@/components/LegalLinks";
+import { useReveal } from "@/components/landing/useReveal";
+import { buildReasons, IMG, process, services, vehicles } from "@/components/landing/data";
+import { INSURANCE_ENABLED } from "@/lib/insuranceInfo";
+import { COMPANY_SUPPORT_HOURS, COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
 
-// 랜딩(/)의 title·description은 app/layout.tsx(루트 metadata)에서 관리함 —
-// 여기서 다시 title을 export하면 루트 값을 덮어써서 두 곳을 같이 고쳐야 하므로 두지 않음
-//
-// ⚠️ **쓰지 않기로 한 표현**(32차 확정): "예비 배차처", "계약 없이", "기존 거래처를 바꾸",
-// "1톤~5톤"처럼 상한을 못박는 표현, "25톤"·"전 차종"처럼 대형을 약속하는 표현, "이사",
-// "B2B", 고객 접점의 "화주". 포지셔닝이 "보조 배차처"에서 "정식 물류 파트너"로 바뀌었다.
-//
-// 🔴 **섹션 배경 교차 순서가 시안 리듬의 핵심**이다(다크 → 흰색 → 옅은 노랑 → 흰색 →
-// 회색 → **옅은 노랑 → 흰색** → 다크. 뒤 두 개가 13차에 신설된 ⑥⑦). 섹션을 추가·이동할
-// 때 이 교차가 깨지지 않는지 먼저 확인할 것.
-// 레이아웃 값은 전부 `app/globals.css`의 "랜딩(/) 레이아웃" 블록에 모여 있다.
-//
-// ⚠️ **이미지 5종은 아직 자리표시자**다. 경로는 `lib/landingImages.ts` 한 곳에만 있으니
-// 사진이 준비되면 그 파일만 채우면 된다(컴포넌트에 경로를 직접 적지 말 것).
+const PAD = "max(56px, calc((100% - 1200px) / 2))";
 
-// 히어로 하단 신뢰 배지. 누적 실적이 없는 신생사가 내세울 수 있는 검증 가능한 지표들.
-//
-// 🔴 **보험 줄은 `INSURANCE_ENABLED`가 켜졌을 때만 붙는다**(13차). 미가입 상태에서
-// "보험 가입"이 보이면 허위·과장 광고다 — 34차에 고객 접점에서 전부 지웠던 이유도
-// 같다(당시 증권이 이사화물 특별약관이라 일반화물 담보 여부가 확인되지 않았음).
-// 🔴 **여기엔 한도 숫자를 넣지 말 것.** 금액이 들어가는 곳은 ⑦ 안전·책임 카드 한 곳뿐이다.
-// 🔴 노출 제어 플래그를 새로 만들지 말 것 — 이 줄과 ⑦-3 카드를 같은 플래그 하나가
-// 제어해야 한쪽만 켜지는 사고가 안 난다.
-const TRUST_POINTS = [
-  `화물자동차 운송주선사업 정식 허가업체 ${COMPANY_FREIGHT_BROKER_LICENSE}`,
-  "세금계산서 발행 · 건별 정산 및 월정산 가능",
-  "전국 배차망 연계 · 1톤부터 5톤 이상까지",
-  ...(INSURANCE_ENABLED ? ["적재물배상책임보험 가입"] : []),
+const h2: CSSProperties = { fontSize: 46.2, lineHeight: 1.2, fontWeight: 600, letterSpacing: "-0.035em" };
+
+const heroBtn = (bg: string, fg: string, border: string, shadow?: string): CSSProperties => ({
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  minWidth: 330,
+  padding: "23px 45px",
+  border: `1px solid ${border}`,
+  background: bg,
+  color: fg,
+  whiteSpace: "nowrap",
+  borderRadius: 999,
+  fontSize: 26,
+  fontWeight: 600,
+  boxShadow: shadow,
+});
+
+const ctaBtn = (bg: string): CSSProperties => ({
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  minWidth: 236,
+  padding: "16px 32px",
+  background: bg,
+  color: "#0E0F12",
+  whiteSpace: "nowrap",
+  borderRadius: 999,
+  fontSize: 18,
+  fontWeight: 600,
+});
+
+const stepIcons = [
+  <>
+    <path d="M7 3.5h7.5L19 8v12.5H7z" />
+    <path d="M14 3.5V8h5" />
+    <path d="M10 12.5h6M10 16h4" />
+  </>,
+  <>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M8 12.2l2.8 2.8L16 9.6" />
+  </>,
+  <>
+    <rect x="4.5" y="10.5" width="15" height="9.5" rx="2" />
+    <path d="M8.5 10.5V7.8a3.5 3.5 0 0 1 7 0v2.7" />
+    <circle cx="12" cy="15.2" r="1.2" />
+  </>,
 ];
 
-// "어떤 업체인가"가 아니라 "어떤 운송인가"로 제시한다.
-// 업종을 나열하면 목록에 없는 업체가 "나는 대상이 아니다"라고 읽기 때문(32차 확정).
-// 업종 정보 자체는 영업 DB와 내부 문서에 그대로 유지되며 랜딩에서만 뺐다.
-const TRANSPORT_TYPES = [
-  { title: "정기 납품", desc: "같은 구간을 주기적으로 오가는 운송" },
-  { title: "긴급 출고", desc: "당일·익일 처리가 필요한 건" },
-  { title: "창고·거점 이동", desc: "재고 이전, 센터 간 이동" },
-  { title: "현장 납품", desc: "시공·설치 현장으로 직접 배송" },
-  { title: "행사 반입·철수", desc: "전시·행사 장비의 왕복 운송" },
-  { title: "대형 상품 배송", desc: "택배로 보내기 어려운 부피·중량 화물" },
-];
-
-// 고객이 배차처를 고를 때 실제로 던지는 질문 4개.
-// ⚠️ 13차에 3·4번 설명을 **한 문장 약속**으로 줄이고 신설 섹션(⑦·⑥)으로 가는 앵커
-// 링크를 붙였다 — 이 섹션은 "판단 기준(질문) + 약속"을 맡고, **방법과 절차는 ⑥·⑦이
-// 맡는다**는 계층 분리다. 여기에 방법 설명을 다시 늘리면 두 곳이 같은 말을 하게 된다.
-// ⚠️ 11차에서 5문항 → 4문항으로 합쳤다(사용자 확정) — 기존 "정산이 편한가?"와
-// "다음 거래가 더 편한가?"가 결국 같은 이야기(반복 거래의 편의)라 시안이 한 장으로
-// 묶었고, 그래야 2×2 그리드가 맞는다. 다시 5개로 늘리면 시안 레이아웃이 깨진다.
-const VALUES = [
-  {
-    icon: LANDING_IMAGES.icons.dispatch,
-    q: "차량이 잘 잡히는가?",
-    a: "가능 차량을 빠르게 확인하고, 배차 확정 정보를 명확히 안내합니다.",
-    link: null,
-  },
-  {
-    icon: LANDING_IMAGES.icons.price,
-    q: "운임이 납득 가능한가?",
-    a: "거리·차량·상하차·시간·대기 조건을 기준으로 운임을 설명합니다.",
-    link: null,
-  },
-  {
-    icon: LANDING_IMAGES.icons.support,
-    q: "문제 생기면 대응하는가?",
-    a: "사진과 기사 확인으로 사실부터 확인합니다.",
-    link: { href: "#safety", label: "책임 절차 보기" },
-  },
-  {
-    icon: LANDING_IMAGES.icons.repeat,
-    q: "반복 거래가 편한가?",
-    a: "자주 쓰는 주소와 물품 조건을 저장해 다음 접수를 줄입니다.",
-    link: { href: "#management", label: "운송관리 보기" },
-  },
-];
-
-// 차량 형태 4종. ⚠️ `lib/constants.ts`의 `BODY_TYPES`(11종 — 냉장탑·냉동탑·크레인·
-// 트레일러 등 포함)를 그대로 노출하지 않는다(원칙 50번). 취급 범위가 확실한 4종만
-// 고른 로컬 배열이며, `/vehicles`의 `BODY_TYPES_SHOWN`과 같은 4종으로 맞춰져 있다.
-//
-// `descShort`는 모바일 전용 — 2×2 그리드에서 칸이 좁아 desc가 3줄로 늘어진다.
-const VEHICLES = [
-  { name: "카고", desc: "개방형 적재함, 일반 화물", descShort: "개방형 적재함", image: LANDING_IMAGES.vehicles.cargo },
-  { name: "탑차", desc: "밀폐형 적재함, 우천·보안", descShort: "밀폐형 적재함", image: LANDING_IMAGES.vehicles.box },
-  { name: "윙바디", desc: "측면 개방, 파렛트 적재", descShort: "측면 개방, 파렛트 적재", image: LANDING_IMAGES.vehicles.wing },
-  { name: "리프트", desc: "지게차 없는 현장 상·하차", descShort: "지게차 없는 현장", image: LANDING_IMAGES.vehicles.lift },
-];
-
-// 이용 절차 3단계(28차 반영분). 각 항목의 두 줄은 시안의 줄바꿈을 그대로 따른 것이라
-// 배열로 두고 <br />로 이어 붙인다.
-const STEPS = [
-  {
-    n: "1",
-    title: "문의·견적",
-    desc: ["상차지·하차지·연락처만 남겨주시면", "차량과 운임을 확인해 연락드립니다."],
-  },
-  {
-    n: "2",
-    title: "배차 확정",
-    desc: ["차량 종류와 운임 내역이 담긴 견적서를 보내드립니다.", "배차 확정 시 차량·기사 정보를 안내드립니다."],
-  },
-  {
-    n: "3",
-    title: "운송·정산",
-    desc: ["운송 완료 후 인수증과 정산 내역이 남습니다.", "세금계산서 발행, 건별 정산 및 월정산 가능합니다."],
-  },
-];
-
-// ⑥ 운송관리 섹션의 기능 4줄. 화면 이름과 순서는 실제 운송관리 좌측 메뉴 순서를 따른다
-// (견적확인 → 배차·운송조회 → 정산확인 → 월별통계) — 캡처와 어긋나면 안 되기 때문.
-const MANAGEMENT_FEATURES = [
-  { title: "견적 확인", desc: "받으신 견적서를 화면에서 다시 보고, PDF로 내려받으실 수 있습니다." },
-  { title: "배차·운송 조회", desc: "배차 확정과 상·하차 진행 상황을 확인하실 수 있습니다." },
-  { title: "정산 확인", desc: "청구 내역, 세금계산서 발행일, 입금일이 기록으로 남습니다." },
-  { title: "월별 통계", desc: "월별 운송 건수와 운임, 자주 쓰는 구간을 확인하실 수 있습니다." },
-];
-
-// ⑦ 안전·책임 카드. 🔴 **열 수가 항목 수를 따라간다** — 2항목이면 2열, 3항목이면 3열.
-// 9/7 공개 시점의 실제 출시본은 **2항목**이므로 2항목 완성도를 우선한다.
-//
-// 🔴 보험 카드는 `INSURANCE_ENABLED`가 true일 때만 **배열에 들어간다** — display:none이
-// 아니라 조건부 렌더링이어야 한다. 숨기기만 하면 페이지 소스에 남아 검색·스크래핑에 잡힌다.
-// ⚠️ 보험 문구를 여기에 하드코딩하지 말 것. 값은 전부 `lib/insuranceInfo.ts`에서 온다.
-const SAFETY_ITEMS = [
-  {
-    icon: LANDING_IMAGES.safety.record,
-    title: "기록으로 남습니다",
-    // ⚠️ 둘째 문장은 11차 운송관리 곁다리 카드에 있던 원문을 13차에 이관한 것이다 —
-    // 이 회사가 하지 않겠다고 약속하는 것을 적은 문장이라 버리지 말 것.
-    desc: "견적서, 배차 내역, 인수증, 정산 내역이 운송관리 화면에 남습니다. 전화와 문자로만 오가다 나중에 확인할 방법이 없는 일을 만들지 않겠습니다.",
-    tags: ["견적서", "배차 내역", "인수증", "정산 내역"],
-    rows: [] as { label: string; value: string }[],
-  },
-  {
-    icon: LANDING_IMAGES.safety.process,
-    title: "문제가 생기면 절차로 대응합니다",
-    desc: "사진과 현장 상황, 기사 확인을 거쳐 접수하고, 중재 절차를 진행합니다.",
-    tags: ["사진 확인", "현장 상황", "기사 확인", "중재 절차"],
-    rows: [] as { label: string; value: string }[],
-  },
-  ...(INSURANCE_ENABLED
-    ? [
-        {
-          icon: LANDING_IMAGES.safety.insurance,
-          title: "적재물배상책임보험",
-          desc: INSURANCE_EXCLUSION_NOTE,
-          tags: [] as string[],
-          // 값이 빈 항목은 줄 자체를 그리지 않는다(가입 직후 일부만 채워진 상태 대비)
-          rows: [
-            { label: "상품명", value: INSURANCE_PRODUCT_NAME },
-            { label: "보험사", value: INSURANCE_INSURER },
-            { label: "배상 한도", value: INSURANCE_COVERAGE_LIMIT },
-          ].filter((r) => r.value),
-        },
-      ]
-    : []),
+const steps = [
+  { title: "1. 계정 신청", desc: "전화 또는 신청서로 계정을 신청해주세요" },
+  { title: "2. 계정 발급", desc: "본사에서 계정을 생성해 아이디와 비밀번호를 보내드립니다" },
+  { title: "3. 로그인", desc: "발급받은 아이디와 비밀번호로 홈페이지 우측 상단의 운송관리 로그인 버튼에서 로그인하세요" },
 ];
 
 export default function LandingPage() {
+  const [ratesOpen, setRatesOpen] = useState(false);
+
+  // 🔴 보험 카드·FAQ 문항은 `INSURANCE_ENABLED` 가 false 인 동안 **배열에서 빠진다** —
+  //    화면에서 숨기는 것이 아니라 DOM 에 렌더링하지 않는다(미가입 상태 노출은 표시광고
+  //    문제이고 `display:none` 은 페이지 소스에 남는다).
+  const reasons = buildReasons(INSURANCE_ENABLED);
+
+  const reasonsRef = useReveal<HTMLDivElement>();
+  const servicesRef = useReveal<HTMLDivElement>();
+  const tmsImgRef = useReveal<HTMLImageElement>();
+  const vehiclesRef = useReveal<HTMLDivElement>();
+
   return (
-    <div className="portal-theme landing-page">
+    <div className="landing-page" style={{ width: "100%", margin: "0 auto", overflowX: "clip", background: "#F4F3F0", color: "#0E0F12" }}>
       <LandingHeader />
 
-      {/* ── ① 히어로 (다크) ─────────────────────────────────────────────────
-          데스크탑은 우측에 이미지가 배경으로 깔리고 좌측 텍스트 위로 그라데이션이 덮인다.
-          🔴 모바일에서는 CSS(order)로 이미지가 맨 아래로 내려간다 —
-          텍스트 → CTA 2개 → 신뢰 3줄 → 이미지 순서를 지킬 것. */}
-      <section className="landing-hero">
-        <div className="landing-hero-media" aria-hidden="true">
-          <LandingImage src={LANDING_IMAGES.hero.desktop} alt="" dark />
+      {/* ── 히어로 ─────────────────────────────────── */}
+      <section id="top" className="landing-hero"
+        style={{ position: "relative", height: 820, backgroundColor: "#F3F0E9", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "center", padding: `120px ${PAD} 56px` }}>
+        <div className="landing-hero-band"
+          style={{ position: "absolute", top: 0, right: 0, bottom: 0, width: "min(1520px, calc(80% - 72px))", backgroundColor: "#F3F0E9", backgroundImage: `url('${IMG.heroMain}')`, backgroundRepeat: "no-repeat", backgroundSize: "cover", backgroundPosition: "82% center", pointerEvents: "none" }}>
+          <div className="landing-hero-fade"
+            style={{ position: "absolute", inset: 0, backgroundImage: `url('${IMG.heroAlt}')`, backgroundRepeat: "no-repeat", backgroundSize: "cover", backgroundPosition: "88% center", opacity: 0 }} />
         </div>
-        <div className="landing-hero-overlay" aria-hidden="true" />
+        <div className="landing-hero-scrim"
+          style={{ position: "absolute", top: 0, bottom: 0, right: "calc(min(1520px, calc(80% - 72px)) - 320px)", width: 320, background: "linear-gradient(90deg, #F3F0E9 0%, rgba(243,240,233,0.98) 14%, rgba(243,240,233,0.86) 32%, rgba(243,240,233,0.58) 54%, rgba(243,240,233,0.26) 76%, rgba(243,240,233,0) 100%)", pointerEvents: "none" }} />
 
-        <div className="landing-hero-inner">
-          <div className="landing-hero-text">
-            <p className="landing-hero-eyebrow">화물자동차 운송주선사업 정식 허가업체</p>
-            <h1 className="landing-hero-title">
-              출발부터 도착까지,
-              <br />
-              화물운송을 확실하게 관리합니다
-            </h1>
-            {/* ⚠️ 리드 문구는 **"연락처만"**이다(13차 확정). 그 전에는 품목을 요구하는 것처럼
-                적혀 있었는데, `/quote` 폼의 필수 항목은 성함/업체명 · 연락처 · 출발지 ·
-                도착지이고 **품목은 선택**이라 실제 폼과 어긋나는 약속이었다.
-                🔴 폼을 줄여서 맞추지 않고 문구를 폼에 맞췄다 — 필수 항목을 줄이면 상담
-                품질이 떨어진다. 같은 문장이 마감 CTA·⑤ 1단계·`/`·`/quote` 메타에도 있으니
-                한 곳만 고치지 말 것(검색결과에 옛 문장이 남는다).
-                🔴 헤드라인 두 줄과 아래 두 번째 문장은 32차 확정이라 건드리지 말 것. */}
-            <p className="landing-hero-sub">
-              상·하차지와 연락처만 남겨주시면 차량과 운임을 확인해 연락드립니다.
-              <br />
-              견적서부터 월정산까지, 운송 내역이 기록으로 남습니다.
-            </p>
-
-            {/* 견적 → 전화 순서. 🔴 **CTA는 2개다** — 여기 있던 세 번째 보조 링크
-                "운송관리 계정 신청"은 9차 시안 검수 결과 제거했다(첫 화면에 선택지가 셋이면
-                결정이 늦어진다). 계정 신청은 ⑥ 운송관리 섹션에 있고 맥락상 그 자리가 맞다.
-                🔴 히어로에 세 번째 선택지를 다시 넣지 말 것. */}
-            <div className="landing-hero-actions">
-              <Link href="/quote" className="landing-btn-primary">
-                무료 견적 문의 <span aria-hidden="true">→</span>
-              </Link>
-              {/* 모바일에서 탭하면 바로 발신되도록 tel: 링크. 번호는 상수 참조(하드코딩 금지) */}
-              <a href={`tel:${COMPANY_SUPPORT_PHONE}`} className="landing-btn-phone">
-                전화 문의 {COMPANY_SUPPORT_PHONE}
-              </a>
-            </div>
-          </div>
-
-          {/* 신뢰 배지 — 누적 실적이 없는 신생사가 내세울 수 있는 검증 가능한 지표.
-              ⚠️ 보험 언급을 추가하지 말 것(34차, 자세한 이유는 TRUST_POINTS 주석 참고).
-              본문(.landing-hero-text)보다 넓게 잡아야 2열이 눌리지 않는다. */}
-          <div className="landing-hero-trust-wrap">
-            <ul className="hero-trust">
-              {TRUST_POINTS.map((t) => (
-                <li key={t}>
-                  <span className="hero-trust-check" aria-hidden="true">
-                    ✓
-                  </span>
-                  {t}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      {/* ── ② 이런 운송을 맡고 있습니다 (흰색) ─────────────────────────────── */}
-      <section className="landing-section landing-section-white">
-        <div className="landing-inner landing-types">
-          <div>
-            <h2 className="landing-h2">
-              이런 운송을
-              <br />
-              맡고 있습니다
-            </h2>
-            <p className="landing-sub">업종과 규모에 관계없이 문의해 주세요.</p>
-            {/* 모바일에는 이 사진을 넣지 않는다 — 목록만으로 충분한데 세로가 길어짐(지시서 4-2) */}
-            <div className="desktop-only">
-              <LandingImage
-                src={LANDING_IMAGES.transportTypes}
-                alt="창고에서 지게차로 화물을 상차하는 모습"
-                className="landing-types-media"
-              />
-            </div>
-          </div>
-
-          <div>
-            <ul className="landing-list">
-              {TRANSPORT_TYPES.map((t, i) => (
-                <li key={t.title}>
-                  {/* 번호 배지는 노란 원 + 검정 숫자(반전) — 색을 뒤집지 말 것 */}
-                  <span className="landing-num num" aria-hidden="true">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <div>
-                    <h3 className="landing-list-title">{t.title}</h3>
-                    <p className="landing-list-desc">{t.desc}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-            {/* 목록이 "취급 범위 한정"으로 읽히지 않도록 하는 문구 — 지우지 말 것 */}
-            <p className="landing-types-note">
-              목록에 없는 운송도 문의해 주세요. 가능 여부를 확인해 안내드립니다.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* ── ③ 위캐리를 선택하는 이유 (옅은 노랑) ───────────────────────────── */}
-      <section className="landing-section landing-section-soft">
-        <div className="landing-inner">
-          <div className="landing-values-head">
-            <h2 className="landing-h2">위캐리를 선택하는 이유</h2>
-            <div className="landing-rule" aria-hidden="true" />
-          </div>
-          <div className="landing-values-grid">
-            {VALUES.map((v) => (
-              <div key={v.q} className="landing-value-card">
-                <LandingImage src={v.icon} alt="" className="landing-value-icon" />
-                <h3 className="landing-value-q">{v.q}</h3>
-                <p className="landing-value-a">{v.a}</p>
-                {/* 앵커 스크롤 오프셋은 31차의 `.portal-theme :target`이 이미 처리한다
-                    (스티키 헤더가 대상 제목을 가리는 문제) — 섹션에 id만 붙이면 된다.
-                    🔴 전역(html)에 새로 걸지 말 것: /admin/guide의 해시 앵커까지 밀린다. */}
-                {v.link && (
-                  <a href={v.link.href} className="landing-value-link">
-                    {v.link.label}{" "}
-                    <span className="landing-arrow" aria-hidden="true">
-                      →
-                    </span>
-                  </a>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── ④ 필요한 차량 형태로 배차해드립니다 (흰색) ─────────────────────── */}
-      <section className="landing-section landing-section-white">
-        <div className="landing-inner">
-          <div className="landing-vehicles-head">
-            <div>
-              <h2 className="landing-h2">
-                필요한 차량 형태로
-                <br />
-                배차해드립니다
-              </h2>
-              {/* 차량 범위 표현 기준(12차 확정): **"1톤부터 5톤 이상까지"**.
-                  🔴 "이상" 한 단어가 금지와 허용을 가른다 — "1톤부터 5톤까지"는 상한을
-                  못 박는 금지 표현이므로 "이상"을 절대 빼지 말 것.
-                  ⚠️ "25톤"·"전 차종"도 쓰지 말 것(배차망으로 대형이 가능하긴 하나 아직
-                  수월하지 않아 약속하지 않음).
-                  ⚠️ **하한에 소형 차종명을 다시 붙이지 말 것**(12차에 뺐음) — 2021년 5월
-                  단종되어 신차가 없고 전부 중고 운행분이라 배차 확보가 불확실하다.
-                  못 잡는 차를 광고하면 첫 통화에서 신뢰를 잃는다. */}
-              <p className="landing-sub">1톤부터 5톤 이상까지 다양한 차량에 배차가 가능합니다.</p>
-            </div>
-            <p className="landing-vehicles-aside">
-              그 밖의 차량 형태가 필요하시면 문의해 주세요.
-              <br />
-              가능 여부를 확인해 안내드립니다.
-            </p>
-          </div>
-
-          {/* 🔴 모바일에서도 2×2를 유지한다(가로 스크롤로 바꾸지 말 것) — 4종을
-              한눈에 비교하는 것이 이 섹션의 목적이다(지시서 4-4) */}
-          <div className="landing-vehicles-grid">
-            {VEHICLES.map((v) => (
-              <div key={v.name}>
-                <LandingImage src={v.image} alt={`${v.name} 차량`} className="landing-vehicle-media" />
-                <h3 className="landing-vehicle-name">{v.name}</h3>
-                <p className="landing-vehicle-desc desktop-only">{v.desc}</p>
-                <p className="landing-vehicle-desc mobile-only">{v.descShort}</p>
-              </div>
-            ))}
-          </div>
-
-          <Link href="/vehicles" className="landing-arrow-link">
-            차량·요금 자세히 보기{" "}
-            <span className="landing-arrow" aria-hidden="true">
-              →
-            </span>
-          </Link>
-        </div>
-      </section>
-
-      {/* ── ⑤ 이렇게 진행됩니다 (회색) ─────────────────────────────────────────
-          ⚠️ 13차에 이 섹션에서 두 블록을 뺐다: **운송관리 곁다리 카드**(⑥ 독립 섹션으로
-          승격 — 소개만 하고 갈 곳을 주지 않던 상태였음)와 **첫 거래 혜택 칩 4개**
-          (적용 조건·기간이 확정되지 않은 한시 프로모션이라 표시광고 문제가 되고,
-          나머지 칩 2개는 혜택이 아니라 ⑥·⑦과 겹치는 기능 설명이었음).
-          🔴 혜택을 다시 쓰려면 **조건·기간을 확정한 뒤** 별도 차수로 설계할 것. */}
-      <section className="landing-section landing-section-gray landing-section-steps">
-        <div className="landing-inner">
-          <h2 className="landing-h2">이렇게 진행됩니다</h2>
-
-          {/* 데스크탑은 가로 진행선, 모바일은 세로 진행선(CSS에서 전환) */}
-          <div className="landing-steps">
-            {STEPS.map((s) => (
-              <div key={s.n} className="landing-step">
-                <span className="landing-step-badge num" aria-hidden="true">
-                  {s.n}
-                </span>
-                <h3 className="landing-step-title">{s.title}</h3>
-                <p className="landing-step-desc">
-                  {s.desc.map((line, i) => (
-                    <span key={line}>
-                      {i > 0 && <br />}
-                      {line}
-                    </span>
-                  ))}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── ⑥ 운송관리 (옅은 노랑) ─────────────────────────────────────────────
-          13차 신설. 그 전에는 ⑤ 안의 곁다리 카드 하나로만 소개했고 **버튼이 없어
-          클릭할 데가 없었다** — 소개는 하는데 갈 곳을 주지 않는 상태였음.
-          🔴 옅은 노랑 배경 위에 직접 회색 텍스트(--text-muted)를 올리면 대비가 모자라므로
-          설명문은 반드시 **흰 카드 안**에 넣는다.
-          🔴 모바일 순서는 기능 4줄 → 캡처 → 버튼 → 배지다(CSS grid-template-areas가
-          전환한다). 캡처를 맨 위에 두면 버튼이 한참 아래로 밀린다. */}
-      <section id="management" className="landing-section landing-section-soft">
-        <div className="landing-inner">
-          <div className="landing-values-head">
-            <h2 className="landing-h2">맡기신 운송, 화면에서 직접 확인하세요</h2>
-            <p className="landing-sub">견적서부터 월정산까지, 전화하지 않아도 됩니다.</p>
-          </div>
-
-          <div className="landing-mgmt-card">
-            <div className="landing-mgmt-media-wrap">
-              {/* 캡처는 안에 글자가 있어서 모바일 전용 크롭을 따로 쓴다 —
-                  데스크탑 자산(1240px)을 모바일 폭(320px)으로 줄이면 표 안 글자가 뭉개진다.
-                  모바일 자산은 표가 아니라 **카드 뷰**를 찍는다(.mobile-row-card). */}
-              <LandingImage
-                src={LANDING_IMAGES.portal.desktop}
-                mobileSrc={LANDING_IMAGES.portal.mobile}
-                alt="운송관리 화면의 운송 목록 예시"
-                className="landing-mgmt-media"
-              />
-              {/* 🔴 캡처 하단 페이드 — 표가 잘린 자리를 자연스럽게 흐린다 */}
-              <div className="landing-mgmt-fade" aria-hidden="true" />
-            </div>
-
-            <ul className="landing-mgmt-features">
-              {MANAGEMENT_FEATURES.map((f) => (
-                <li key={f.title}>
-                  <span className="landing-mgmt-check" aria-hidden="true">
-                    ✓
-                  </span>
-                  <div>
-                    <h3 className="landing-mgmt-feature-title">{f.title}</h3>
-                    <p className="landing-mgmt-feature-desc">{f.desc}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-
-            {/* 로그인(주) → 계정 신청(보조) 순서. 헤더의 `.btn`·`.btn-ghost`는 옐로 위에서
-                묻히거나 테두리가 없어서 여기서도 쓰지 않고 전용 클래스를 둔다 */}
-            <div className="landing-mgmt-actions">
-              {/* ⚠️ `?from=landing`은 이 화면들의 "← 홈으로"가 **왔던 자리로 되돌아가야**
-                  한다는 표시다(components/BackToHomeLink.tsx). 지우면 홈 맨 위로 튕긴다. */}
-              <Link href="/customer/login?from=landing" className="landing-mgmt-btn">
-                운송관리 로그인 <span aria-hidden="true">→</span>
-              </Link>
-              <Link href="/apply?from=landing" className="landing-mgmt-btn-ghost">
-                운송관리 계정 신청 <span aria-hidden="true">→</span>
-              </Link>
-            </div>
-
-            {/* 🔴 "2~3시간"은 이 회사의 차별점이라 큰 숫자로 강조한다 — 회색 보조
-                텍스트로 흘리지 말 것. 둘째 줄(접수 시간 단서)도 각주로 밀거나 접지
-                않는다(`/vehicles`의 PRICING_NOTES와 같은 급). 운영시간은 상수 참조. */}
-            <div className="landing-mgmt-notice">
-              <span className="landing-mgmt-notice-lead num">2~3시간 이내</span>
-              <span className="landing-mgmt-notice-body">
-                신청 접수 후 계정을 발급해드립니다.
-                <span className="landing-mgmt-notice-sub">
-                  {COMPANY_SUPPORT_HOURS} 접수 기준 · 15시 이후 접수는 다음 영업일 오전 중 발급
-                </span>
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── ⑦ 안전·책임 (흰색) ────────────────────────────────────────────────
-          13차 신설. 🔴 카드 열 수는 항목 수를 따라간다(2항목 2열 / 3항목 3열).
-          🔴 보험 카드는 `INSURANCE_ENABLED`가 false면 배열에 아예 들어가지 않는다 —
-          숨기는 것이 아니라 렌더링하지 않는 것이다(SAFETY_ITEMS 주석 참고). */}
-      <section id="safety" className="landing-section landing-section-white">
-        <div className="landing-inner">
-          <div className="landing-values-head">
-            <h2 className="landing-h2">맡기신 화물에 대한 책임</h2>
-            <p className="landing-sub">기록과 절차로 관리합니다.</p>
-          </div>
-
-          <div className={`landing-safety-grid landing-safety-grid-${SAFETY_ITEMS.length}`}>
-            {SAFETY_ITEMS.map((item) => (
-              <div key={item.title} className="landing-safety-card">
-                <LandingImage src={item.icon} alt="" className="landing-safety-icon" />
-                <h3 className="landing-safety-title">{item.title}</h3>
-                {item.rows.length > 0 && (
-                  <dl className="landing-safety-rows">
-                    {item.rows.map((r) => (
-                      <div key={r.label}>
-                        <dt>{r.label}</dt>
-                        <dd>{r.value}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                )}
-                {item.desc && <p className="landing-safety-desc">{item.desc}</p>}
-                {item.tags.length > 0 && (
-                  <div className="landing-safety-tags">
-                    {item.tags.map((t) => (
-                      <span key={t} className="landing-safety-tag">
-                        {t}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* 하단 띠 — 허가 사실과 문의처를 한 줄로 붙인다.
-              🔴 전화번호를 하드코딩하지 말 것(lib/contactInfo.ts 상수). 모바일에서
-              탭하면 바로 발신되도록 tel: 링크. */}
-          <div className="landing-safety-band">
-            <p className="landing-safety-band-text">
-              화물자동차 운송주선사업 정식 허가업체 · 허가번호 {COMPANY_FREIGHT_BROKER_LICENSE}
-            </p>
-            <a href={`tel:${COMPANY_SUPPORT_PHONE}`} className="landing-safety-band-tel">
-              문제 발생 시 <span className="num">{COMPANY_SUPPORT_PHONE}</span>{" "}
-              <span aria-hidden="true">→</span>
-            </a>
-          </div>
-        </div>
-      </section>
-
-      {/* ── ⑧ 마감 CTA (다크) ──────────────────────────────────────────────── */}
-      <section className="landing-section landing-section-dark">
-        <div className="landing-inner landing-cta-final">
-          <div>
-            <h2 className="landing-cta-title">지금 바로 견적을 받아보세요</h2>
-            <p className="landing-cta-sub">
-              상·하차지와 연락처만 남겨주시면 확인해 연락드립니다.
-              <br />
-              고객센터 <span className="landing-cta-phone num">{COMPANY_SUPPORT_PHONE}</span> · {COMPANY_SUPPORT_HOURS}
-            </p>
-          </div>
-          {/* 버튼 순서는 히어로와 동일하게 견적 → 전화 */}
-          <div className="landing-cta-actions">
-            <Link href="/quote" className="landing-btn-primary">
-              무료 견적 문의 <span aria-hidden="true">→</span>
-            </Link>
-            <a href={`tel:${COMPANY_SUPPORT_PHONE}`} className="landing-btn-phone">
+        <div className="landing-hero-copy" style={{ position: "relative", maxWidth: "min(760px, 44%)" }}>
+          <h1 style={{ margin: 0, fontSize: "clamp(34px, 4.3vw, 68px)", lineHeight: 1.14, fontWeight: 600, letterSpacing: "-0.04em", color: "#0E0F12", whiteSpace: "nowrap" }}>
+            출발부터 도착까지,<br />위캐리가 관리합니다.
+          </h1>
+          <p style={{ margin: "24px 0 0", fontSize: 18.2, lineHeight: 1.85, color: "rgba(21,24,33,0.7)" }}>
+            전화 주시면 가능 차량과 운임을<br />확인해 바로 안내드립니다.
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, marginTop: 34 }}>
+            <Link href="/quote" style={heroBtn("#0E0F12", "#FFFFFF", "#0E0F12", "0 6px 27px rgba(21,24,33,0.18)")}>무료 견적 문의</Link>
+            <a href={`tel:${COMPANY_SUPPORT_PHONE.replace(/-/g, "")}`} style={heroBtn("#FFFFFF", "#0E0F12", "#FFFFFF")}>
               전화 문의 {COMPANY_SUPPORT_PHONE}
             </a>
           </div>
         </div>
       </section>
 
-      <SiteFooter />
+      {/* ── WHY WECARRY ────────────────────────────── */}
+      <section className="landing-about" style={{ padding: `180px ${PAD} 0` }}>
+        <div className="landing-about-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0,380px) minmax(0,1fr)", gap: 64 }}>
+          <div className="landing-about-head" style={{ position: "sticky", top: 110, alignSelf: "start" }}>
+            <h2 style={{ ...h2, margin: "24px 0 18px", fontSize: 46.2, lineHeight: 1.15 }}>위캐리를 <br />선택하는 이유</h2>
+          </div>
+          <div ref={reasonsRef} style={{ display: "flex", flexDirection: "column" }}>
+            {reasons.map((r) => (
+              <div key={r.no} className="landing-reason-row"
+                style={{ display: "grid", gridTemplateColumns: "52px minmax(0,1fr) 132px", alignItems: "start", gap: 24, padding: "26px 0", borderTop: "1px solid #E4E3DE" }}>
+                <div style={{ fontSize: 20, lineHeight: 1.3, fontWeight: 700, letterSpacing: "-0.02em", color: "#0E0F12", paddingTop: 4 }}>{r.no}</div>
+                <div>
+                  <div style={{ fontSize: 26, lineHeight: 1.3, fontWeight: 600, letterSpacing: "-0.03em", color: "#0E0F12" }}>{r.title}</div>
+                  <div style={{ marginTop: 10, fontSize: 17.4, lineHeight: 1.8, color: "#6C6B65", whiteSpace: "pre-line", textWrap: "pretty" } as CSSProperties}>{r.desc}</div>
+                </div>
+                <div style={{ position: "relative", alignSelf: "center", width: 132, height: 96 }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={r.img} alt={r.title} loading="lazy"
+                    style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", width: 132, height: 132, objectFit: "contain" }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── 위캐리 서비스 ──────────────────────────── */}
+      <section id="work" style={{ padding: `150px ${PAD} 0` }}>
+        <h2 style={{ ...h2, margin: "24px 0 40px" }}>위캐리 서비스</h2>
+        <div ref={servicesRef} className="landing-work-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 16 }}>
+          {services.map((s) => (
+            <div key={s.title} className="landing-card-lift"
+              style={{ display: "flex", flexDirection: "column", background: "#FFFFFF", border: "1px solid #E4E3DE", borderRadius: 18, overflow: "hidden" }}>
+              <div style={{ position: "relative", aspectRatio: "4 / 3", backgroundColor: "#E3E2DD" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={s.img} alt={s.title} loading="lazy" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", padding: 24 }}>
+                <div style={{ fontSize: 24, lineHeight: 1.3, fontWeight: 700, letterSpacing: "-0.03em", color: "#0E0F12", wordBreak: "keep-all" }}>{s.title}</div>
+                <div style={{ marginTop: 10, fontSize: 17.4, lineHeight: 1.7, color: "#6C6B65", wordBreak: "keep-all", textWrap: "pretty" } as CSSProperties}>{s.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── 운송관리 시스템 ────────────────────────── */}
+      <section id="manage" style={{ padding: `200px ${PAD} 0`, paddingBottom: 0 }}>
+        <div style={{ textAlign: "center" }}>
+          <h2 style={{ ...h2, margin: "24px 0 0", textWrap: "balance" } as CSSProperties}>운송 발주부터 정산까지, 위캐리 운송관리 시스템</h2>
+          <p style={{ margin: "18px auto 0", maxWidth: 640, fontSize: 18.6, lineHeight: 1.8, color: "#6C6B65", textWrap: "pretty" } as CSSProperties}>
+            발주 요청부터 견적 확인, 배차 조회, 정산까지 한 화면에서 관리합니다.<br />PC와 모바일 모두 같은 화면으로 확인할 수 있습니다.
+          </p>
+        </div>
+
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img ref={tmsImgRef} src={IMG.tmsOverview} alt="위캐리 운송관리 프로그램 PC·모바일 화면"
+          style={{ display: "block", width: "100%", maxWidth: 1200, height: "auto", margin: "36px auto 0" }} />
+
+        <div className="landing-tms-lead" style={{ margin: "120px auto 0", textAlign: "center" }}>
+          <div className="landing-lead-text" style={{ fontSize: 32.4, lineHeight: 1.3, fontWeight: 600, letterSpacing: "-0.03em", color: "#0E0F12" }}>
+            발주부터 정산까지, <br />한 화면에서 관리하세요
+          </div>
+        </div>
+
+        <TmsShowcase />
+
+        <div className="landing-tms-foot"
+          style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 36, maxWidth: 1200, margin: "112px auto 0", padding: "72px 56px 76px", borderRadius: 28, background: "#0E0F12", textAlign: "center" }}>
+          <div>
+            <div style={{ fontSize: 34, lineHeight: 1.3, fontWeight: 600, letterSpacing: "-0.035em", color: "#FFFFFF", wordBreak: "keep-all" }}>
+              운송 관리 시스템, 어떻게 시작하나요?
+            </div>
+          </div>
+          <div className="landing-tms-steps" style={{ width: "100%", display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 16 }}>
+            {steps.map((s, i) => (
+              <div key={s.title} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, padding: "32px 24px 30px", borderRadius: 20, background: "rgba(255,255,255,0.07)" }}>
+                <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#FFD834" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  {stepIcons[i]}
+                </svg>
+                <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", color: "#FFFFFF" }}>{s.title}</div>
+                <div style={{ fontSize: 15.5, lineHeight: 1.7, color: "rgba(255,255,255,0.62)", wordBreak: "keep-all" }}>{s.desc}</div>
+              </div>
+            ))}
+          </div>
+          <Link href="/apply"
+            style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "22px 52px", background: "#FFD834", color: "#0E0F12", borderRadius: 999, fontSize: 21, fontWeight: 700, letterSpacing: "-0.02em", whiteSpace: "nowrap" }}>
+            운송관리 계정 신청
+          </Link>
+        </div>
+      </section>
+
+      {/* ── 차량 형태 ──────────────────────────────── */}
+      <section id="vehicles" style={{ padding: `150px ${PAD}` }}>
+        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-end", gap: 24 }}>
+          <div>
+            {/* 🔴 시안은 「1톤부터 5톤 이상, 특수차량까지」였다 — 25톤 기준으로 통일하고
+                「특수차량」을 뺐다(트레일러·크레인은 여전히 취급 범위 밖이다). */}
+            <h2 style={{ ...h2, margin: "24px 0 12px" }}>1톤부터 25톤까지<br />필요한 차량 형태로 배차해드립니다.</h2>
+            <p style={{ margin: 0, fontSize: 18.6, lineHeight: 1.8, color: "#6C6B65" }}>
+              그 밖의 차량 형태가 필요하시면 문의해 주세요. 빠르게 확인해 안내드립니다.
+            </p>
+          </div>
+        </div>
+        <div ref={vehiclesRef} className="landing-vehicle-grid" style={{ marginTop: 48, display: "grid", gridTemplateColumns: "repeat(6, minmax(0,1fr))", gap: 12 }}>
+          {vehicles.map((v) => (
+            <div key={v.name}>
+              <div className="landing-card-lift" style={{ position: "relative", aspectRatio: "1 / 1", borderRadius: 16, overflow: "hidden", background: "#ECEBE6" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={v.img} alt={v.name} loading="lazy" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+              </div>
+              <div style={{ marginTop: 14, fontSize: 18, fontWeight: 700, letterSpacing: "-0.03em", color: "#0E0F12", wordBreak: "keep-all" }}>{v.name}</div>
+              <div style={{ marginTop: 5, fontSize: 14, lineHeight: 1.5, color: "#6C6B65", wordBreak: "keep-all" }}>{v.desc}</div>
+            </div>
+          ))}
+        </div>
+        {/* 🔴 랜딩 이름(「5톤 윙바디」)과 발주 폼 선택지가 다르다 — 폼은 차급과 형태를
+            **각각** 고르는 구조라 그 이름이 통째로 있지는 않다. 이름은 시안 그대로
+            두기로 확정됐으므로(사용자), 그 간극을 이 한 줄이 메운다. 지우지 말 것. */}
+        <p className="landing-vehicle-note"
+          style={{ margin: "28px 0 0", fontSize: 16.2, lineHeight: 1.8, color: "#6C6B65", wordBreak: "keep-all" }}>
+          발주 요청에서는 <strong style={{ fontWeight: 700, color: "#0E0F12" }}>차량 크기와 형태를 각각 선택</strong>합니다.
+          예를 들어 「5톤 윙바디」는 <strong style={{ fontWeight: 700, color: "#0E0F12" }}>5톤 + 윙바디</strong>로 고르시면 됩니다.
+        </p>
+        <div style={{ display: "flex", justifyContent: "center", marginTop: 56 }}>
+          <button type="button" onClick={() => setRatesOpen(true)}
+            style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "19px 40px", border: "none", borderRadius: 999, background: "#0E0F12", fontFamily: "inherit", fontSize: 20, fontWeight: 600, letterSpacing: "-0.02em", color: "#FFFFFF", cursor: "pointer" }}>
+            차량 · 요금 가이드 <span style={{ fontSize: 18 }}>›</span>
+          </button>
+        </div>
+      </section>
+
+      {/* ── 진행 절차 ──────────────────────────────── */}
+      <section id="process" style={{ background: "#0E0F12", padding: `150px ${PAD} 160px` }}>
+        <h2 style={{ ...h2, margin: 0, color: "#FFFFFF" }}>이렇게 진행됩니다.</h2>
+        <p style={{ margin: "16px 0 40px", fontSize: 18.6, lineHeight: 1.8, color: "rgba(255,255,255,0.55)" }}>
+          각 단계의 내역이 운송관리 화면에 남습니다.
+        </p>
+        {process.map((p) => (
+          <div key={p.no} className="landing-process-row"
+            style={{ display: "grid", gridTemplateColumns: "minmax(200px, 320px) minmax(280px, 1fr)", gap: 48, padding: "40px 0", borderTop: "1px solid rgba(255,255,255,0.14)", alignItems: "baseline" }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 16 }}>
+              <span style={{ fontSize: 15, fontWeight: 500, color: "rgba(255,255,255,0.4)" }}>{p.no}</span>
+              <h3 style={{ margin: 0, fontSize: 29.2, fontWeight: 600, letterSpacing: "-0.03em", color: "#FFFFFF" }}>{p.title}</h3>
+            </div>
+            <p style={{ margin: 0, fontSize: 18, lineHeight: 1.85, color: "rgba(255,255,255,0.66)", textWrap: "pretty" } as CSSProperties}>{p.desc}</p>
+          </div>
+        ))}
+      </section>
+
+      {/* ── FAQ ────────────────────────────────────── */}
+      <section style={{ padding: `150px ${PAD} 170px` }}>
+        <div className="landing-faq-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(0,1fr))", gap: 64, alignItems: "start" }}>
+          <div>
+            <h2 style={{ ...h2, margin: "24px 0 0", fontSize: 42, lineHeight: 1.25 }}>궁금하실 것들,<br />먼저 답해드립니다.</h2>
+          </div>
+          <FaqList />
+        </div>
+      </section>
+
+      {/* ── CTA ────────────────────────────────────── */}
+      <section className="landing-cta"
+        style={{ position: "relative", backgroundColor: "#0B0D12", backgroundImage: `url('${IMG.ctaBg}')`, backgroundSize: "cover", backgroundPosition: "center 42%", backgroundRepeat: "no-repeat", padding: `190px ${PAD} 56px`, display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
+        <h2 style={{ position: "relative", margin: 0, maxWidth: 820, fontSize: 58.8, lineHeight: 1.15, fontWeight: 600, letterSpacing: "-0.04em", color: "#FFFFFF", textWrap: "balance" } as CSSProperties}>
+          지금 바로 견적을 받아보세요.
+        </h2>
+        <p style={{ position: "relative", margin: "22px 0 0", maxWidth: 520, fontSize: 18.2, lineHeight: 1.8, color: "rgba(255,255,255,0.78)" }}>
+          상·하차지와 연락처만 남겨주시면 확인해 안내드립니다.<br />고객센터 {COMPANY_SUPPORT_PHONE} · {COMPANY_SUPPORT_HOURS}
+        </p>
+        <div style={{ position: "relative", display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 12, marginTop: 36 }}>
+          <Link href="/quote" style={ctaBtn("#FFFFFF")}>무료 견적 문의</Link>
+          <Link href="/apply" style={ctaBtn("#FFD834")}>운송관리 계정 신청</Link>
+        </div>
+        <div className="landing-cta-bottom"
+          style={{ position: "relative", width: "100%", maxWidth: 1200, marginTop: 130, paddingTop: 28, borderTop: "1px solid rgba(255,255,255,0.14)", display: "flex", flexWrap: "wrap", gap: "16px 32px", justifyContent: "space-between", alignItems: "center" }}>
+          {/* 🔴 `/about`·`/vehicles`·`/status` 는 랜딩 어디에도 링크가 없어서 이 자리에
+              넣었다 — 시안의 `#vehicles` 는 페이지 내부 앵커라 그 세 화면이 고아가 된다.
+              🔴 특히 `/status`(문의·신청 현황)는 **비회원이 갈 수 있는 유일한 경로**다. */}
+          <div className="landing-cta-links" style={{ display: "flex", flexWrap: "wrap", gap: 24, fontSize: 15.6, color: "rgba(255,255,255,0.6)" }}>
+            <a href="#work">운송 유형</a>
+            <a href="#vehicles">차량 형태</a>
+            <a href="#manage">운송관리</a>
+            <a href="#process">진행 절차</a>
+            <Link href="/vehicles">차량·요금 안내</Link>
+            <Link href="/about">회사소개</Link>
+            <Link href="/status">문의·신청 현황</Link>
+            <Link href="/customer/login">운송관리 시스템</Link>
+          </div>
+          {/* 🔴 법적 문서는 기존 모달(`components/LegalLinks.tsx`)을 그대로 쓴다 —
+              시안의 `LegalModal` 은 약관·방침이 「전문 준비 중」 자리표시자였다.
+              우리에겐 `lib/legal/*` 에 전문이 있고, 페이지(`/terms` 등)와 같은 데이터를
+              공유하므로 한쪽만 낡는 일이 없다. `lib/legal/` 은 한 줄도 안 고쳤다. */}
+          <div className="landing-cta-links" style={{ display: "flex", flexWrap: "wrap", gap: 24, fontSize: 15.6, color: "rgba(255,255,255,0.6)" }}>
+            <LegalLinks linkClassName="landing-legal-link" />
+          </div>
+        </div>
+      </section>
+
+      <LandingFooter />
+
+      <RatesModal open={ratesOpen} onClose={() => setRatesOpen(false)} />
     </div>
   );
 }
