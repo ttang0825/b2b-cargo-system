@@ -293,14 +293,18 @@ export default function LandingPage() {
           <Link href="/apply" style={ctaBtn("#FFD834")}>운송관리 계정 신청</Link>
         </div>
         <div className="landing-cta-bottom"
-          style={{ position: "relative", width: "100%", maxWidth: 1200, marginTop: 130, paddingTop: 28, borderTop: "1px solid rgba(255,255,255,0.14)", display: "flex", flexWrap: "wrap", gap: "16px 32px", justifyContent: "space-between", alignItems: "center" }}>
+          style={{ position: "relative", width: "100%", maxWidth: 1200, marginTop: 130, paddingTop: 28, borderTop: "1px solid rgba(255,255,255,0.14)", display: "flex", flexWrap: "wrap", gap: "16px 32px", justifyContent: "flex-end", alignItems: "center" }}>
           {/* 🔴 30차 리뷰 ④: 이 자리에 있던 이동 링크 8개(페이지 내부 앵커 4 +
               `/vehicles`·`/about`·`/status`·`/customer/login`)를 **전부 뺐다**(사용자 지시
               — "중복 기능이라 없어도 된다"). 앵커 4개와 `/vehicles`·`/about`·로그인은
               헤더에 그대로 있고, `/status` 는 `/quote`·`/apply` 헤더 칩과 두 접수완료
               화면에 있다. 🔴 여기에 다시 채우지 말 것.
               ⚠️ 푸터의 법정 표시사항(전자상거래법 제10조)은 "중복 기능"이 아니라
-              **빼면 위법 소지**라 그대로 뒀다(`LandingFooter`). */}
+              **빼면 위법 소지**라 그대로 뒀다(`LandingFooter`).
+              🔴 그래서 이 줄은 `justify-content: flex-end` 다 — 링크가 하나만 남아
+              `space-between` 이면 **왼쪽으로 붙는데, 배경 사진의 밝은 부분과 겹쳐
+              글자가 안 보인다**(사용자 지적). 시안도 오른쪽 하단이다. 모바일은
+              `app/landing.css` 가 가운데로 돌린다. */}
           {/* 🔴 법적 문서는 기존 모달(`components/LegalLinks.tsx`)을 그대로 쓴다 —
               시안의 `LegalModal` 은 약관·방침이 「전문 준비 중」 자리표시자였다.
               우리에겐 `lib/legal/*` 에 전문이 있고, 페이지(`/terms` 등)와 같은 데이터를
