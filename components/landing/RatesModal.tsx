@@ -1,9 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { rateRows } from "./data";
-
-const cols = "minmax(88px,1fr) minmax(88px,1fr) minmax(150px,2fr)";
+import { startPrices } from "./data";
 
 /* 「차량 · 요금 가이드」 버튼으로 열리는 팝업. */
 export default function RatesModal({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -18,32 +16,16 @@ export default function RatesModal({ open, onClose }: { open: boolean; onClose: 
           <div>
             <div style={{ fontSize: 30.2, fontWeight: 600, letterSpacing: "-0.03em" }}>차량·요금 안내</div>
             <p style={{ margin: "10px 0 0", fontSize: 17.4, lineHeight: 1.8, color: "#6C6B65" }}>
-              어떤 차량에 얼마나 실을 수 있는지, 운임은 어디서부터 시작하는지 안내합니다.
+              차급별 운임이 어디서부터 시작하는지 안내합니다.
             </p>
           </div>
           <button type="button" onClick={onClose}
             style={{ flex: "0 0 auto", width: 36, height: 36, border: "none", borderRadius: 999, background: "#E9E8E3", fontFamily: "inherit", fontSize: 18, color: "#4A4945", cursor: "pointer" }}>✕</button>
         </div>
 
-        <div className="landing-rate-table" style={{ marginTop: 30, background: "#FFFFFF", borderRadius: 16, padding: "26px 28px" }}>
-          <div style={{ fontSize: 18.2, fontWeight: 600 }}>차종·적재 용량</div>
-          <div style={{ display: "grid", gridTemplateColumns: cols, gap: 12, marginTop: 16, paddingBottom: 10, borderBottom: "1px solid #EEEDE9", fontSize: 15, color: "#9C9B95" }}>
-            <span>차량</span>
-            <span>적재 용량</span>
-            <span>실을 수 있는 예</span>
-          </div>
-          {rateRows.map((r) => (
-            <div key={r.ton} style={{ display: "grid", gridTemplateColumns: cols, gap: 12, padding: "13px 0", borderBottom: "1px solid #F3F2EE", fontSize: 16.8 }}>
-              <span style={{ fontWeight: 600 }}>{r.ton}</span>
-              <span style={{ color: "#4A4945" }}>{r.cbm}</span>
-              <span style={{ color: "#6C6B65" }}>{r.example}</span>
-            </div>
-          ))}
-        </div>
-
-        <div className="landing-rate-price" style={{ marginTop: 16, background: "#FFFFFF", borderRadius: 16, padding: "26px 28px" }}>
+        <div className="landing-rate-price" style={{ marginTop: 30, background: "#FFFFFF", borderRadius: 16, padding: "26px 28px" }}>
           <div style={{ fontSize: 18.2, fontWeight: 600 }}>시작가</div>
-          {rateRows.map((r) => (
+          {startPrices.map((r) => (
             <div key={r.ton} style={{ display: "flex", justifyContent: "space-between", gap: 16, padding: "13px 0", borderBottom: "1px solid #F3F2EE", fontSize: 16.8 }}>
               <span style={{ fontWeight: 600 }}>{r.ton}</span>
               <span style={{ color: "#0E0F12", fontWeight: 600 }}>{r.from}</span>
@@ -53,7 +35,7 @@ export default function RatesModal({ open, onClose }: { open: boolean; onClose: 
             <li>표시 금액은 10km 이내 기준 최소 운임이며, 부가가치세는 별도입니다.</li>
             <li>실제 운임은 운송 거리, 차량 종류, 상·하차 조건, 운송 시간대, 화물 특성에 따라 달라집니다.</li>
             <li>정확한 금액은 견적 시 안내해 드립니다.</li>
-            <li>표에 없는 차급이 필요하시면 문의해 주세요. 1톤부터 25톤까지 확인해 안내드립니다.</li>
+            <li>차급은 1톤부터 25톤까지 안내드립니다. 그 밖의 조건은 문의해 주시면 확인해 드립니다.</li>
           </ul>
         </div>
 

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import LandingHeader from "@/components/LandingHeader";
 import SiteFooter from "@/components/SiteFooter";
-import { vehicles as LANDING_VEHICLES } from "@/components/landing/data";
+import { startPrices as START_PRICES, vehicles as LANDING_VEHICLES } from "@/components/landing/data";
 
 // 차량·요금 안내. 실무 문의 1순위인 "어떤 차가 얼마나 싣고 얼마인가"에 답하는 페이지.
 //
@@ -9,29 +9,14 @@ import { vehicles as LANDING_VEHICLES } from "@/components/landing/data";
 // 공개하지 않기로 함. 그래서 아래 PRICING_NOTES(표시가격 안내 문구)가 **반드시 표 바로 아래
 // 있어야 함** — 없으면 "홈페이지에 4만원이라던데 왜 다르냐"는 분쟁 근거가 됨. 지우지 말 것.
 //
-// ⚠️ **단일 소스가 아님**: 아래 시작가는 운임기준표(`rate_*` 테이블)에서 자동으로 가져오는 값이
-// 아니라 손으로 옮겨 적은 값임. **운임기준표가 바뀌면 이 파일의 START_PRICES도 함께 갱신할 것.**
-
-const VEHICLE_SPECS: { name: string; capacity: string; example: string }[] = [
-  { name: "1톤", capacity: "4~5CBM", example: "소량 박스, 택배로 보내기 어려운 물품" },
-  { name: "1.4톤", capacity: "6CBM", example: "박스 다수, 소형 장비" },
-  { name: "2.5톤", capacity: "14CBM", example: "파렛트 화물, 중량 박스" },
-  { name: "3.5톤", capacity: "17CBM", example: "중형 납품 물량" },
-  { name: "5톤", capacity: "28CBM", example: "파렛트 다수, 대량 물량" },
-  { name: "5톤 플러스/축", capacity: "35CBM", example: "장거리·대량 물량" },
-];
-
-// 16차(2026-08-25) 갱신 — `rate_distance_tiers`의 "10km 이내" 행과 1원도 다르면 안 된다.
-// 게시가와 실제 견적이 어긋나면 그대로 표시가격 분쟁이 되므로, 운임기준표를 바꾸는
-// 마이그레이션과 이 배열은 **항상 같은 PR에서 함께** 움직일 것.
-const START_PRICES: { name: string; price: string }[] = [
-  { name: "1톤", price: "48,000원부터" },
-  { name: "1.4톤", price: "60,000원부터" },
-  { name: "2.5톤", price: "84,000원부터" },
-  { name: "3.5톤", price: "96,000원부터" },
-  { name: "5톤", price: "108,000원부터" },
-  { name: "5톤 플러스/축", price: "133,000원부터" },
-];
+// 🔴 **시작가는 `components/landing/data.ts` 의 `startPrices` 를 그대로 읽는다** —
+// 30차 리뷰 전에는 이 파일과 랜딩 모달에 각각 적혀 있었다. 다시 갈라 적지 말 것.
+// ⚠️ 자동 연동은 아니다(손으로 맞춘 값) — **운임기준표를 바꾸는 마이그레이션과 항상 같은
+// PR 에서 함께** 움직일 것. 30차 리뷰에 `verify` 로 11차급 전부를 실측해 맞췄다.
+//
+// ⚠️ **「차종·적재 용량」 표는 30차 리뷰에서 뺐다**(사용자 지시 — 요금 안내는 시작가만).
+// 되살리려면 8~25톤 5개 차급의 CBM·적재 예시를 먼저 정해야 한다(28차에 만든 6종 값은
+// 커밋 이력에 남아 있다).
 
 const PRICING_NOTES = [
   // ⚠️ 아래 3줄은 표시가격 분쟁을 막는 필수 문구다. 지우지 말 것.
@@ -39,7 +24,7 @@ const PRICING_NOTES = [
   "실제 운임은 운송 거리, 차량 종류, 상·하차 조건, 운송 시간대, 화물 특성에 따라 달라집니다.",
   "정확한 금액은 견적 시 안내해 드립니다.",
   // 🔴 30차에 25톤 기준으로 바뀌었다(사용자 확정). "전 차종"·"모든 차량"은 여전히 금지다.
-  "표에 없는 차급이 필요하시면 문의해 주세요. 1톤부터 25톤까지 확인해 안내드립니다.",
+  "차급은 1톤부터 25톤까지 안내드립니다. 그 밖의 조건은 문의해 주시면 확인해 드립니다.",
 ];
 
 // 🔴 30차에 4종 → **12종**이 됐다(사용자 확정). 랜딩과 **같은 순서·같은 이름·같은
@@ -60,36 +45,9 @@ export default function VehiclesPage() {
         <div className="page-header">
           <div>
             <h1 className="page-title">차량·요금 안내</h1>
-            <p className="page-desc">어떤 차량에 얼마나 실을 수 있는지, 운임은 어디서부터 시작하는지 안내합니다.</p>
+            <p className="page-desc">차급별 운임이 어디서부터 시작하는지, 어떤 차량 형태로 배차되는지 안내합니다.</p>
           </div>
         </div>
-
-        {/* 차종·적재량 */}
-        <section className="card" style={{ padding: 0, marginBottom: 20, overflow: "hidden" }}>
-          <h2 className="about-section-title" style={{ padding: "24px 24px 0", margin: 0 }}>
-            차종·적재 용량
-          </h2>
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>차량</th>
-                  <th>적재 용량</th>
-                  <th>실을 수 있는 예</th>
-                </tr>
-              </thead>
-              <tbody>
-                {VEHICLE_SPECS.map((v) => (
-                  <tr key={v.name}>
-                    <td style={{ fontWeight: 700, whiteSpace: "nowrap" }}>{v.name}</td>
-                    <td style={{ whiteSpace: "nowrap" }}>{v.capacity}</td>
-                    <td>{v.example}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
 
         {/* 시작가 */}
         <section className="card" style={{ padding: 0, marginBottom: 20, overflow: "hidden" }}>
@@ -106,9 +64,9 @@ export default function VehiclesPage() {
               </thead>
               <tbody>
                 {START_PRICES.map((p) => (
-                  <tr key={p.name}>
-                    <td style={{ fontWeight: 700, whiteSpace: "nowrap" }}>{p.name}</td>
-                    <td style={{ whiteSpace: "nowrap" }}>{p.price}</td>
+                  <tr key={p.ton}>
+                    <td style={{ fontWeight: 700, whiteSpace: "nowrap" }}>{p.ton}</td>
+                    <td style={{ whiteSpace: "nowrap" }}>{p.from}</td>
                   </tr>
                 ))}
               </tbody>

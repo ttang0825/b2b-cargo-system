@@ -211,9 +211,13 @@ export default function LandingPage() {
       <section id="vehicles" style={{ padding: `150px ${PAD}` }}>
         <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-end", gap: 24 }}>
           <div>
-            {/* 🔴 시안은 「1톤부터 5톤 이상, 특수차량까지」였다 — 25톤 기준으로 통일하고
-                「특수차량」을 뺐다(트레일러·크레인은 여전히 취급 범위 밖이다). */}
-            <h2 style={{ ...h2, margin: "24px 0 12px" }}>1톤부터 25톤까지<br />필요한 차량 형태로 배차해드립니다.</h2>
+            {/* 🔴 30차 리뷰: **시안 문구 그대로 되돌렸다**(사용자 지시). 30차 본작업에서
+                「1톤부터 25톤까지」로 바꾸고 「특수차량」을 뺐던 자리다.
+                ⚠️ 이 섹션이 말하는 것은 **차량 형태**다 — 아래 12장이 무진동·초장축·냉동탑
+                처럼 특수한 **형태**를 실제로 담고 있어서 「특수차량까지」가 이 섹션에서는
+                형태를 가리킨다. 차급 범위(1톤~25톤)는 WHY 02·FAQ·요금 가이드가 말한다.
+                🔴 「전 차종」·「모든 차량」은 여전히 금지다(트레일러·크레인은 취급 범위 밖). */}
+            <h2 style={{ ...h2, margin: "24px 0 12px" }}>1톤부터 5톤 이상, 특수차량까지<br />필요한 차량 형태로 배차해드립니다.</h2>
             <p style={{ margin: 0, fontSize: 18.6, lineHeight: 1.8, color: "#6C6B65" }}>
               그 밖의 차량 형태가 필요하시면 문의해 주세요. 빠르게 확인해 안내드립니다.
             </p>
@@ -290,19 +294,13 @@ export default function LandingPage() {
         </div>
         <div className="landing-cta-bottom"
           style={{ position: "relative", width: "100%", maxWidth: 1200, marginTop: 130, paddingTop: 28, borderTop: "1px solid rgba(255,255,255,0.14)", display: "flex", flexWrap: "wrap", gap: "16px 32px", justifyContent: "space-between", alignItems: "center" }}>
-          {/* 🔴 `/about`·`/vehicles`·`/status` 는 랜딩 어디에도 링크가 없어서 이 자리에
-              넣었다 — 시안의 `#vehicles` 는 페이지 내부 앵커라 그 세 화면이 고아가 된다.
-              🔴 특히 `/status`(문의·신청 현황)는 **비회원이 갈 수 있는 유일한 경로**다. */}
-          <div className="landing-cta-links" style={{ display: "flex", flexWrap: "wrap", gap: 24, fontSize: 15.6, color: "rgba(255,255,255,0.6)" }}>
-            <a href="#work">운송 유형</a>
-            <a href="#vehicles">차량 형태</a>
-            <a href="#manage">운송관리</a>
-            <a href="#process">진행 절차</a>
-            <Link href="/vehicles">차량·요금 안내</Link>
-            <Link href="/about">회사소개</Link>
-            <Link href="/status">문의·신청 현황</Link>
-            <Link href="/customer/login">운송관리 시스템</Link>
-          </div>
+          {/* 🔴 30차 리뷰 ④: 이 자리에 있던 이동 링크 8개(페이지 내부 앵커 4 +
+              `/vehicles`·`/about`·`/status`·`/customer/login`)를 **전부 뺐다**(사용자 지시
+              — "중복 기능이라 없어도 된다"). 앵커 4개와 `/vehicles`·`/about`·로그인은
+              헤더에 그대로 있고, `/status` 는 `/quote`·`/apply` 헤더 칩과 두 접수완료
+              화면에 있다. 🔴 여기에 다시 채우지 말 것.
+              ⚠️ 푸터의 법정 표시사항(전자상거래법 제10조)은 "중복 기능"이 아니라
+              **빼면 위법 소지**라 그대로 뒀다(`LandingFooter`). */}
           {/* 🔴 법적 문서는 기존 모달(`components/LegalLinks.tsx`)을 그대로 쓴다 —
               시안의 `LegalModal` 은 약관·방침이 「전문 준비 중」 자리표시자였다.
               우리에겐 `lib/legal/*` 에 전문이 있고, 페이지(`/terms` 등)와 같은 데이터를
