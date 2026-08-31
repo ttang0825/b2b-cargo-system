@@ -12,8 +12,6 @@ import {
 } from "@/lib/settlementLabels";
 import { useListSearchSort } from "@/lib/useListSearchSort";
 import { DatePreset, getDateRange } from "@/components/DateRangeFilter";
-import DispatchPhotosPanel from "@/components/DispatchPhotosPanel";
-import { isDispatchReadyForPhotoUpload } from "@/lib/dispatchPhotos";
 import Pv2Select from "@/components/pv2/Pv2Select";
 import {
   getDispatchStage,
@@ -80,7 +78,6 @@ export default function CustomerDispatchesPage() {
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
   const [period, setPeriod] = useState<DatePreset>("all");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const periodFiltered = useMemo(() => {
     const { from } = getDateRange(period);
@@ -236,7 +233,6 @@ export default function CustomerDispatchesPage() {
               //    아예 없다(53차 ⑦). 「완료」 한 단어로 끝낸다.
               stage === 2 ? "완료" : pickup ? `${pickup} 예정` : "예정",
             ];
-            const photoReady = isDispatchReadyForPhotoUpload(d.dispatch_status, d.delivery_confirmed);
             const settleLabel = getCustomerCollectionMethodLabel(o.collection_method);
             const cycleLabel = getCustomerBillingCycleLabel(o.billing_cycle);
             const condition = getPaymentConditionLabel(o.direct_collection_point);
@@ -299,9 +295,12 @@ export default function CustomerDispatchesPage() {
                   })}
                 </div>
 
-                {/* 🔴 시안에 없다는 이유로 혼적 배지·정산방식·사진을 지우지 말 것
-                    (원칙 42번 · 사용자 확정 10번). 시안이 안 그린 것이지 없애라는
-                    뜻이 아니다. */}
+                {/* 🔴 시안에 없다는 이유로 혼적 배지·정산방식을 지우지 말 것(원칙 42번).
+                    ⚠️ **사진·인수증만 예외로 뺐다** — 사용자 확정 10번(존치)을 PR #107
+                    리뷰에서 사용자 본인이 뒤집었다: *"화주에게 인수증 전달은 여기서
+                    안 함."* 27차 5라운드가 선착불 입금 계좌를 뒤집은 것과 같은 구조다.
+                    🔴 `components/DispatchPhotosPanel.tsx` 와 관리자 업로드·열람은
+                    그대로 살아 있다 — 이 화면에서만 안 보여주는 것이다. */}
                 <div className="pv2-dfoot">
                   {o.loading_type === "mixable" && <MixableBadge />}
                   {/* 🔴 화주 말이고 축이 둘이다(P1-1, (A)안 확정 2026-08-29).
@@ -323,18 +322,7 @@ export default function CustomerDispatchesPage() {
                       </>
                     )}
                   </span>
-                  {photoReady && (
-                    <button
-                      type="button"
-                      className="pv2-dphoto-btn"
-                      style={{ marginLeft: "auto" }}
-                      onClick={() => setExpandedId(expandedId === d.id ? null : d.id)}
-                    >
-                      {expandedId === d.id ? "사진 닫기" : "사진·인수증 보기"}
-                    </button>
-                  )}
                 </div>
-                {photoReady && expandedId === d.id && <DispatchPhotosPanel dispatchId={d.id} />}
               </article>
             );
           })}

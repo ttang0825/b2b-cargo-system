@@ -5476,19 +5476,6 @@ tbody tr:hover {
   color: var(--pv2-text-3);
   line-height: 1.5;
 }
-.pv2-dphoto-btn {
-  border: 1px solid var(--pv2-border);
-  background: var(--pv2-surface);
-  color: var(--pv2-text);
-  border-radius: 99px;
-  padding: 6px 14px;
-  font-size: 13px;
-  font-family: inherit;
-  cursor: pointer;
-}
-.pv2-dphoto-btn:hover {
-  border-color: var(--pv2-text-4);
-}
 
 @media (max-width: 700px) {
   .pv2-dcard {
