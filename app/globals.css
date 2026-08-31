@@ -5347,3 +5347,1098 @@ tbody tr:hover {
     min-width: 0;
   }
 }
+
+/* ══ 배차·운송 조회 카드 (29차) ══════════════════════════
+   🔴 시안 실측값이다. 카드 radius 20 · padding 22/26 · gap 20.
+   🔴 알약 3개는 배차 단계이고 「문제 발생」은 그 위의 별도 배지다 —
+      알약 줄에 끼워 넣지 말 것(사용자 확정 6번). */
+.pv2-dlist {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pv2-dcard {
+  background: var(--pv2-surface);
+  border: none;
+  border-radius: 20px;
+  padding: 22px 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.pv2-dhead {
+  display: flex;
+  flex-direction: column;
+}
+.pv2-dno-line {
+  display: block;
+  margin-bottom: 6px;
+  line-height: 1.5;
+}
+.pv2-dno {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pv2-text-3);
+}
+.pv2-dpickup {
+  font-size: 13.5px;
+  color: var(--pv2-text-4);
+  margin-left: 10px;
+}
+/* 🔴 상차 줄을 두 자리에 그리고 CSS 로 하나만 보여준다 — 데스크탑은 오더번호와
+   같은 줄, 모바일은 구간 아래다(시안 실측). 27차 ② 의 날짜 처리와 같은 방식이고,
+   **같은 문자열**이라 두 자리가 갈릴 일이 없다(배지처럼 색·뜻이 갈리는 것과 다르다). */
+.pv2-dpickup-m {
+  display: none;
+  font-size: 13px;
+  color: var(--pv2-text-3);
+  margin-top: 5px;
+}
+/* 🔴 구간 화살표만 옐로다(시안 실측 `#FFD833`). 홈의 `.pv2-arrow-glyph` 는
+   24차가 `--pv2-yellow-text`(#7A5F00)로 둔 것이고 그것을 되돌리지 않는다 —
+   여기서만 시안 값으로 덮는다(두 클래스로 특성도를 올렸다, 원칙 58번). */
+.pv2-droute .pv2-arrow-glyph {
+  color: #ffd833;
+}
+.pv2-droute {
+  display: block;
+  font-size: 16.5px;
+  font-weight: 700;
+  line-height: 1.5;
+  word-break: keep-all;
+  text-wrap: pretty;
+}
+.pv2-dmeta {
+  font-size: 14px;
+  color: var(--pv2-text-3);
+  margin-top: 5px;
+  line-height: 1.5;
+}
+/* 🔴 「문제 발생」 배지 — 4번째 알약이 아니다. 색은 27차가 견적 「취소」에 쓴
+   시안 팔레트 값 그대로이고 새로 만든 색이 아니다. */
+.pv2-dissue {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 99px;
+  padding: 6px 14px;
+  font-size: 13.5px;
+  font-weight: 700;
+  background: #fdf3f2;
+  color: #b4423a;
+  margin-top: -8px;
+}
+.pv2-dsteps {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+.pv2-dstep {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1.5px solid;
+  border-radius: 99px;
+  padding: 12px 22px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.pv2-dstep-label {
+  font-size: 15px;
+  white-space: nowrap;
+}
+.pv2-dstep-sub {
+  font-size: 13px;
+  white-space: nowrap;
+}
+/* 🔴 연결선은 실선이 아니라 점선 도트다(radial-gradient) — border-top: dashed 로
+   바꾸면 시안과 도트 간격·크기가 달라진다. */
+.pv2-dline {
+  flex: none;
+  width: 30px;
+  height: 4px;
+  margin: 0 4px;
+  background-size: 9px 4px;
+  background-repeat: repeat-x;
+  background-position: center;
+}
+.pv2-dfoot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: -6px;
+}
+.pv2-dsettle {
+  font-size: 13.5px;
+  color: var(--pv2-text-3);
+  line-height: 1.5;
+}
+
+@media (max-width: 700px) {
+  .pv2-dcard {
+    border-radius: 16px;
+    padding: 15px;
+    gap: 10px;
+  }
+  .pv2-dno {
+    font-size: 13px;
+  }
+  .pv2-dno-line {
+    margin-bottom: 0;
+  }
+  /* 모바일은 오더번호 → 구간 → 상차 → 보조 순서다(시안). 데스크탑의 인라인
+     상차는 숨기고 아래 줄을 보여준다. */
+  .pv2-dpickup {
+    display: none;
+  }
+  .pv2-dpickup-m {
+    display: block;
+  }
+  .pv2-droute {
+    font-size: 14px;
+    font-weight: 600;
+    margin-top: 10px;
+  }
+  .pv2-dmeta {
+    font-size: 13px;
+  }
+  /* 🔴 모바일은 알약을 세로로 쌓고 연결선을 그리지 않는다(시안). */
+  .pv2-dsteps {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    margin-top: 2px;
+  }
+  .pv2-dstep {
+    padding: 9px 16px;
+  }
+  .pv2-dstep-label {
+    font-size: 13.5px;
+  }
+  .pv2-dstep-sub {
+    font-size: 12.5px;
+  }
+  .pv2-dline {
+    display: none;
+  }
+  .pv2-dissue {
+    margin-top: 0;
+  }
+  .pv2-dfoot {
+    margin-top: 0;
+  }
+}
+
+/* ══ 정산·결제내역 (29차) ══════════════════════════════
+   🔴 표는 `<table>` 이 아니라 grid 다(시안). 열 6개 비율을 바꾸면 머리와 행이
+      어긋나므로 `.pv2-itable-head` 와 `.pv2-itable-row` 를 항상 같이 고칠 것. */
+.pv2-isum {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.pv2-isum-card {
+  background: var(--pv2-surface);
+  border: none;
+  border-radius: 20px;
+  padding: 20px 24px;
+}
+.pv2-isum-label {
+  font-size: 14px;
+  color: var(--pv2-text-3);
+  margin-bottom: 8px;
+}
+.pv2-isum-value {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.pv2-isum-unit {
+  font-size: 15.5px;
+  font-weight: 500;
+  color: var(--pv2-text-3);
+}
+.pv2-isum-sub {
+  font-size: 13.5px;
+  color: var(--pv2-text-3);
+  margin-top: 4px;
+}
+/* 월별 정산 안내 띠 — 🔴 전화번호는 `lib/contactInfo.ts` 상수에서 온다. */
+.pv2-inotice {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: #fff9d6;
+  border: 1px solid var(--pv2-border);
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+}
+.pv2-inotice-badge {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--pv2-text);
+  background: #ffd833;
+  border-radius: 6px;
+  padding: 3px 8px;
+  margin-top: 1px;
+  white-space: nowrap;
+}
+.pv2-inotice-body {
+  font-size: 14px;
+  color: var(--pv2-text-2);
+  line-height: 1.6;
+  word-break: keep-all;
+  text-wrap: pretty;
+}
+.pv2-inotice-body b {
+  color: var(--pv2-text);
+}
+.pv2-itable {
+  background: var(--pv2-surface);
+  border: none;
+  border-radius: 20px;
+  overflow: hidden;
+}
+.pv2-itable-head,
+.pv2-itable-row {
+  display: grid;
+  grid-template-columns: 1.3fr 0.8fr 1fr 1fr 1fr 0.9fr;
+  gap: 12px;
+}
+.pv2-itable-head {
+  padding: 14px 26px;
+  border-bottom: 1px solid var(--pv2-border);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--pv2-text-3);
+}
+.pv2-itable-head button {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.pv2-itable-row {
+  padding: 18px 26px;
+  font-size: 15px;
+  align-items: center;
+  border-bottom: 1px solid var(--pv2-border);
+}
+.pv2-itable-row:hover {
+  background: #fffdf5;
+}
+.pv2-itable-row:last-of-type {
+  border-bottom: none;
+}
+.pv2-ino {
+  font-weight: 600;
+}
+.pv2-imonth {
+  color: var(--pv2-text-2);
+}
+.pv2-iamt {
+  font-weight: 700;
+}
+.pv2-isubtext {
+  font-size: 13px;
+  color: var(--pv2-text-3);
+  margin-top: 2px;
+}
+.pv2-idate {
+  font-size: 13px;
+  color: var(--pv2-text-3);
+  margin-top: 4px;
+}
+.pv2-ibadge {
+  display: inline-block;
+  font-size: 13.5px;
+  font-weight: 600;
+  border-radius: 99px;
+  padding: 3px 10px;
+  justify-self: start;
+  white-space: nowrap;
+}
+.pv2-isettle {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+/* 현장 추가비 펼치기 — 🔴 데스크탑·모바일 둘 다 유지한다(원칙 42번). */
+.pv2-iextra-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  margin-top: 4px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--pv2-text-2);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.pv2-iextra {
+  padding: 14px 26px 18px;
+  background: var(--pv2-bg);
+  border-bottom: 1px solid var(--pv2-border);
+  font-size: 13.5px;
+}
+.pv2-iextra-line {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 4px 0;
+  color: var(--pv2-text-2);
+}
+.pv2-iextra-line b {
+  color: var(--pv2-text);
+  font-weight: 600;
+  min-width: 96px;
+}
+
+@media (max-width: 700px) {
+  .pv2-isum {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .pv2-isum-card {
+    border-radius: 14px;
+    padding: 13px;
+  }
+  .pv2-isum-card:nth-child(3) {
+    grid-column: 1 / -1;
+  }
+  .pv2-isum-label {
+    font-size: 13px;
+    margin-bottom: 6px;
+  }
+  .pv2-isum-value {
+    font-size: 17.5px;
+  }
+  .pv2-isum-unit {
+    font-size: 13px;
+  }
+  .pv2-isum-sub {
+    font-size: 12px;
+  }
+  .pv2-ibadge {
+    font-size: 13px;
+    padding: 3px 9px;
+  }
+  .pv2-iextra {
+    background: var(--pv2-surface);
+    border-radius: 16px;
+    border-bottom: none;
+    padding: 12px 15px;
+  }
+  .pv2-inotice {
+    padding: 12px 14px;
+    gap: 10px;
+    flex-direction: column;
+  }
+  .pv2-inotice-body {
+    font-size: 13px;
+  }
+}
+
+/* 🔴 모바일 정산 카드 — 데스크탑 grid 표와 **별개 JSX** 다(원칙 13번).
+   grid 를 CSS 로만 1열로 무너뜨리면 시안의 3줄 구성(번호+정산월 / 금액+부가세 /
+   배지 가로 나열)이 안 나온다. 열을 늘리거나 줄일 때 양쪽을 같이 볼 것. */
+.pv2-imlist {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+}
+/* 🔴 분기점을 `.desktop-only`(760px)가 아니라 포털 미디어쿼리(700px)에 맞춘다 —
+   둘을 섞으면 그 사이 폭에서 표와 카드가 함께 뜨거나 함께 사라진다. */
+@media (max-width: 700px) {
+  .pv2-itable {
+    display: none;
+  }
+  .pv2-imlist {
+    display: flex;
+  }
+}
+.pv2-imcard {
+  background: var(--pv2-surface);
+  border: none;
+  border-radius: 16px;
+  padding: 14px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pv2-imtop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pv2-imno {
+  font-size: 13.5px;
+  font-weight: 700;
+}
+.pv2-immonth {
+  font-size: 13px;
+  color: var(--pv2-text-3);
+}
+.pv2-imamt-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.pv2-imamt {
+  font-size: 16.5px;
+  font-weight: 700;
+}
+.pv2-imvat {
+  font-size: 12px;
+  color: var(--pv2-text-3);
+}
+.pv2-imbadges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* ══ 월별 통계 (29차) ═══════════════════════════════════ */
+.pv2-shead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+/* 🔴 버튼은 「엑셀 다운로드」 하나뿐이다 — PDF 전체 다운로드를 만들지 말 것
+   (사용자 확정 12번). 시안 헤더에 `dlPdfAll` 이 있지만 따르지 않는다. */
+.pv2-sbtn {
+  border: 1px solid var(--pv2-border);
+  background: var(--pv2-surface);
+  border-radius: 12px;
+  padding: 10px 18px;
+  font-size: 14.5px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--pv2-text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+.pv2-sbtn:hover:not(:disabled) {
+  background: #fffdf5;
+}
+.pv2-sbtn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.pv2-srange {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.pv2-srange-label {
+  font-size: 14.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.pv2-srange-tilde {
+  font-size: 13.5px;
+  color: var(--pv2-text-3);
+}
+.pv2-spresets {
+  display: flex;
+  gap: 6px;
+  margin-left: 4px;
+  flex-wrap: wrap;
+}
+.pv2-spreset {
+  border: none;
+  cursor: pointer;
+  border-radius: 99px;
+  padding: 8px 14px;
+  font-size: 13.5px;
+  font-family: inherit;
+  white-space: nowrap;
+  background: transparent;
+  color: var(--pv2-text-2);
+  font-weight: 400;
+}
+.pv2-spreset:hover {
+  box-shadow: inset 0 0 0 999px rgba(105, 90, 20, 0.06);
+}
+.pv2-spreset-on {
+  background: var(--pv2-text);
+  color: var(--pv2-surface);
+  font-weight: 700;
+}
+.pv2-spreset-on:hover {
+  box-shadow: none;
+}
+.pv2-scard {
+  background: var(--pv2-surface);
+  border: none;
+  border-radius: 20px;
+  padding: 22px 26px;
+  margin-bottom: 20px;
+}
+.pv2-scard-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 22px;
+}
+.pv2-scard-title {
+  font-size: 15.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.pv2-scard-sub {
+  font-size: 13px;
+  color: var(--pv2-text-3);
+  white-space: nowrap;
+}
+.pv2-sgraph {
+  display: flex;
+  gap: 14px;
+}
+.pv2-syaxis {
+  flex: none;
+  width: 44px;
+  position: relative;
+  height: 236px;
+}
+.pv2-syaxis span {
+  position: absolute;
+  right: 0;
+  transform: translateY(50%);
+  font-size: 12px;
+  color: var(--pv2-text-4);
+  white-space: nowrap;
+}
+.pv2-splotwrap {
+  flex: 1;
+  min-width: 0;
+}
+.pv2-splot {
+  position: relative;
+  height: 236px;
+}
+.pv2-sgrid {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--pv2-border);
+}
+/* 🔴 평균선은 점선이고 라벨 배경이 흰색이다 — 격자선과 겹쳐도 읽히게 하려는 것이다. */
+.pv2-savg {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px dashed var(--pv2-text-4);
+}
+.pv2-savg-label {
+  position: absolute;
+  right: 0;
+  transform: translateY(-100%);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--pv2-text-3);
+  background: var(--pv2-surface);
+  padding: 0 5px;
+  white-space: nowrap;
+}
+.pv2-sbars {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+.pv2-sbarcol {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  justify-content: flex-end;
+  height: 100%;
+}
+.pv2-sbarval {
+  font-size: 13px;
+  white-space: nowrap;
+}
+.pv2-sbar {
+  width: 64%;
+  max-width: 40px;
+  border-radius: 8px 8px 2px 2px;
+  transition: opacity 0.15s ease;
+}
+.pv2-sbar:hover {
+  opacity: 0.82;
+}
+.pv2-sxaxis {
+  border-top: 1px solid var(--pv2-border);
+  display: flex;
+  gap: 10px;
+  padding-top: 10px;
+}
+.pv2-sxcol {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.pv2-sxmonth {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pv2-text);
+  white-space: nowrap;
+}
+.pv2-sxcount {
+  font-size: 12.5px;
+  color: var(--pv2-text-4);
+  white-space: nowrap;
+}
+.pv2-sgrid2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+  align-items: stretch;
+}
+.pv2-srow {
+  padding: 9px 0;
+}
+.pv2-srow-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+.pv2-srow-name {
+  flex: none;
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.pv2-srow-share {
+  flex: none;
+  font-size: 12.5px;
+  color: var(--pv2-text-3);
+}
+.pv2-srow-amt {
+  margin-left: auto;
+  flex: none;
+  font-size: 14.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.pv2-sbartrack {
+  height: 8px;
+  background: var(--pv2-bg);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.pv2-sbarfill {
+  height: 100%;
+  border-radius: 99px;
+}
+.pv2-srank {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 7px;
+  font-size: 12.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pv2-sdropname {
+  flex: 1;
+  min-width: 0;
+  font-size: 14.5px;
+  font-weight: 600;
+  word-break: keep-all;
+}
+/* 🔴 하차지 막대만 순위 배지 폭만큼 들여쓴다(시안) */
+.pv2-sdropbar {
+  margin-left: 32px;
+}
+.pv2-sempty-line {
+  padding: 28px 0;
+  font-size: 14px;
+  color: var(--pv2-text-3);
+  text-align: center;
+}
+.pv2-sonly-desktop {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pv2-sonly-mobile {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  .pv2-scard {
+    border-radius: 16px;
+    padding: 15px;
+  }
+  .pv2-scard-title {
+    font-size: 14px;
+  }
+  .pv2-sgraph {
+    gap: 8px;
+  }
+  .pv2-syaxis {
+    width: 36px;
+  }
+  /* 🔴 모바일은 기간 선택이 달력이 아니라 드롭다운이다(시안) */
+  .pv2-sonly-desktop {
+    display: none;
+  }
+  .pv2-sonly-mobile {
+    display: block;
+  }
+  .pv2-spresets {
+    margin-left: 0;
+  }
+  .pv2-spreset {
+    padding: 7px 11px;
+    font-size: 12.5px;
+  }
+}
+
+/* ══ 배차 캘린더 (29차 — 월별 통계 화면 하단) ═══════════ */
+.pv2-calhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 28px 0 16px;
+  flex-wrap: wrap;
+}
+.pv2-caltitle {
+  font-size: 17.5px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.pv2-calsub {
+  font-size: 14.5px;
+  color: var(--pv2-text-3);
+}
+.pv2-calnav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pv2-calbtn {
+  border: none;
+  background: var(--pv2-bg);
+  border-radius: 12px;
+  padding: 8px 14px;
+  font-size: 14.5px;
+  font-family: inherit;
+  color: var(--pv2-text);
+  cursor: pointer;
+}
+.pv2-calbtn-arrow {
+  padding: 8px 12px;
+}
+.pv2-calbtn:hover:not(:disabled) {
+  background: #fff9d6;
+}
+/* 🔴 비활성은 opacity 로만 표시한다(시안) — 버튼을 숨기면 자리가 밀린다. */
+.pv2-calbtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.pv2-calmonth {
+  font-size: 17.5px;
+  font-weight: 700;
+  padding: 0 6px;
+  white-space: nowrap;
+}
+.pv2-caltable {
+  background: var(--pv2-surface);
+  border: none;
+  border-radius: 20px;
+  overflow: hidden;
+}
+.pv2-calwk {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  border-bottom: 1px solid var(--pv2-border);
+}
+.pv2-calwk span {
+  padding: 12px 0;
+  text-align: center;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.pv2-calgrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+.pv2-calcell {
+  position: relative;
+  min-height: 92px;
+  /* 🔴 `border: none` 을 빼지 말 것 — 이 칸은 `<button>` 이라 위·왼쪽에
+     **브라우저 기본 버튼 테두리(진한 회색)** 가 남는다. PR #107 리뷰에서
+     사용자가 「지난간 날짜에 회색 진한 라인」으로 지적한 것이 이것이다. */
+  border: none;
+  border-bottom: 1px solid var(--pv2-border);
+  border-right: 1px solid var(--pv2-border);
+  padding: 10px 12px;
+  box-sizing: border-box;
+  background: none;
+  font-family: inherit;
+  text-align: left;
+  display: block;
+  width: 100%;
+}
+.pv2-calcell:nth-child(7n) {
+  border-right: none;
+}
+.pv2-calcell-on {
+  cursor: pointer;
+}
+.pv2-calcell-on:hover {
+  background: #fffdf5;
+}
+/* 🔴 클릭 안내는 네이티브 `title` 이 아니라 CSS 로 즉시 띄운다 — `title` 은
+   브라우저 기본 지연(약 1초)이 있어 21차에 사용자가 그 늦음을 지적했고 그때도
+   커스텀 표시로 교체했다. `title` 로 되돌리지 말 것.
+   ⚠️ 건수가 있는 날짜에만 붙인다 — 빈 날짜에 「상세 보기」를 띄우면 볼 것이
+   있다는 뜻이 되어 눌렀을 때 빈 팝오버가 뜬다.
+   🔴 자리는 **날짜 숫자 오른쪽(칸 위쪽)** 이다 — 아래로 내리면 「N건 상차」
+   배지와 겹친다(실측: 칸 130x92 / 배지가 47~77px 을 쓰고 남는 세로가 5px 뿐).
+   문구도 그래서 짧다(실측 폭 — 「눌러서 상세 보기」 87px > 남는 76px). */
+.pv2-calhint {
+  position: absolute;
+  top: 14px;
+  right: 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--pv2-text-2);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.pv2-calcell-on:hover .pv2-calhint,
+.pv2-calcell-on:focus-visible .pv2-calhint {
+  opacity: 1;
+}
+.pv2-calday {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 14px;
+}
+.pv2-calcount {
+  display: block;
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  background: #fff9d6;
+  border: 1px solid var(--pv2-border);
+  color: #7a5f00;
+  border-radius: 7px;
+  padding: 5px 9px;
+}
+.pv2-callink {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  background: var(--pv2-text);
+  color: var(--pv2-surface);
+  border: none;
+  border-radius: 12px;
+  padding: 13px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: center;
+  text-decoration: none;
+}
+.pv2-callink:hover {
+  background: #2a2825;
+}
+
+@media (max-width: 700px) {
+  .pv2-calhead {
+    margin: 20px 0 12px;
+    gap: 10px;
+  }
+  .pv2-caltitle {
+    font-size: 15.5px;
+  }
+  .pv2-calsub {
+    font-size: 13px;
+  }
+  .pv2-caltable {
+    border-radius: 16px;
+  }
+  .pv2-calcell {
+    min-height: 62px;
+    padding: 6px 5px;
+  }
+  .pv2-calwk span {
+    padding: 9px 0;
+    font-size: 12.5px;
+  }
+  .pv2-calday {
+    min-width: 21px;
+    height: 21px;
+    font-size: 13px;
+  }
+  .pv2-calcount {
+    margin-top: 5px;
+    font-size: 11px;
+    padding: 3px 5px;
+  }
+  /* 터치에는 hover 가 없고, 탭하면 :hover 가 남아 안내가 계속 떠 있게 된다 */
+  .pv2-calhint {
+    display: none;
+  }
+  .pv2-callink {
+    margin-top: 14px;
+    font-size: 14.5px;
+  }
+}
+
+/* 🔴 날짜 클릭 상세는 **팝오버**다(PR #107 리뷰 — 시안대로). 표 아래 카드로
+   되돌리지 말 것. 「배차·운송 조회에서 전체 보기」 버튼도 이 팝오버 안에 있고
+   캘린더 아래에 따로 두지 않는다. */
+.pv2-calwrap {
+  position: relative;
+}
+.pv2-calpop-back {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+.pv2-calpop {
+  position: absolute;
+  z-index: 41;
+  width: 360px;
+  max-width: calc(100% - 16px);
+  background: var(--pv2-surface);
+  border-radius: 16px;
+  box-shadow: 0 8px 28px rgba(26, 26, 26, 0.16);
+  padding: 20px 22px;
+  box-sizing: border-box;
+}
+.pv2-calpop-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.pv2-calpop-title {
+  font-size: 17.5px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.pv2-calpop-sub {
+  font-size: 13.5px;
+  color: var(--pv2-text-3);
+}
+.pv2-calpop-close {
+  margin-left: auto;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: var(--pv2-bg);
+  color: var(--pv2-text-2);
+  font-size: 15px;
+  line-height: 1;
+  font-family: inherit;
+  cursor: pointer;
+}
+.pv2-calpop-close:hover {
+  background: #ebeae7;
+}
+.pv2-calpop-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.pv2-calpop-row {
+  border: 1px solid var(--pv2-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.pv2-calpop-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.pv2-calpop-no {
+  font-size: 13px;
+  color: var(--pv2-text-3);
+}
+.pv2-calpop-route {
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  word-break: keep-all;
+}
+.pv2-calpop-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--pv2-text-3);
+  margin-top: 4px;
+}
+.pv2-calpop-empty {
+  font-size: 14px;
+  color: var(--pv2-text-3);
+  padding: 18px 0;
+  text-align: center;
+}
+
+@media (max-width: 700px) {
+  .pv2-calpop {
+    padding: 15px;
+    border-radius: 14px;
+  }
+  .pv2-calpop-title {
+    font-size: 15.5px;
+  }
+  .pv2-calpop-list {
+    max-height: 260px;
+  }
+}

@@ -56,6 +56,33 @@ export function getCustomerCollectionMethodLabel(
 }
 
 /**
+ * 🔴 **청구주기 축은 이 함수다 — `getCustomerCollectionMethodLabel()` 안에 넣지 말 것.**
+ *
+ *    그것이 27차가 기각한 (C)안(화주 말에 청구주기 축을 더해 2축 4값으로 만드는 안)
+ *    이고, 사용자가 2026-08-29 에 **(A)안**으로 확정했다: 담당자 화면은 그대로 두고
+ *    화주 화면만 화주 말을 쓰되 **축을 두 줄로 쪼갠다.**
+ *
+ * ```
+ *   운임 수금방식   위캐리 수금 / 선착불(차주 직접수금)   ← getCustomerCollectionMethodLabel()
+ *   청구           건별 / 월정산                        ← 이 함수 (별도 줄)
+ * ```
+ *
+ * 🔴 **이것은 「정산방식 4종을 2종으로 줄이는 것」이 아니다**(사용자 확정 8번과 충돌하지
+ *    않는다) — 2축으로 **나누는** 것이라 조합 4가지가 그대로 표현된다. 특히
+ *    「월정산」이 화면에서 사라지지 않는다(원칙 42번) — 사라지면 월정산 묶음 청구가
+ *    그 값으로 도는데 화주는 그 사실을 모르게 된다.
+ */
+export const CUSTOMER_BILLING_AXIS_LABEL = "청구";
+
+export function getCustomerBillingCycleLabel(
+  billingCycle: string | null | undefined
+): string | null {
+  if (billingCycle === "monthly") return "월정산";
+  if (billingCycle === "per_order") return "건별";
+  return null;
+}
+
+/**
  * 🔴 견적서에 한 줄로 찍는 정산방식 문구 (27차 리뷰 4라운드).
  *
  *    **견적서 상세 · PDF 2종 · 엑셀 네 산출물이 이 함수 하나를 쓴다.** 각자 조합하면

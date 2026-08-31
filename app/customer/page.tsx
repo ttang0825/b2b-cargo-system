@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
-import { getDispatchStatusColor } from "@/lib/dispatchStatusColors";
+import {
+  getDispatchStage,
+  getDispatchStageStyle,
+  hasDispatchIssue,
+  DISPATCH_ISSUE_STYLE,
+} from "@/lib/dispatchStage";
 import { calcInclusiveAmount } from "@/lib/vat";
 import { getLastSeen } from "@/lib/portalNotifications";
 
@@ -132,9 +137,12 @@ export default function CustomerHomePage() {
       supabase
         .from("dispatches")
         .select(
-          "id,dispatch_status,created_at,orders(order_no,origin,destination,requested_pickup_at,item,vehicle_type)"
+          "id,dispatch_status,pickup_confirmed,delivery_confirmed,issue_occurred,created_at,orders(order_no,origin,destination,requested_pickup_at,item,vehicle_type)"
         )
-        .neq("dispatch_status", "운송완료")
+        // 🔴 3단계 매핑에서 `하차완료`도 「운송완료」 단계다(53차 ⑦ — 화물은 이미 도착했다).
+        //    이 줄을 `neq("운송완료")` 하나로 되돌리면 "진행 중인 운송" 블록에
+        //    「운송완료」 배지가 달린 행이 나타난다.
+        .not("dispatch_status", "in", "(운송완료,하차완료)")
         .order("created_at", { ascending: false })
         .limit(5),
       supabase
@@ -280,17 +288,25 @@ export default function CustomerHomePage() {
           <div>
             {activeDispatches.map((d) => (
               <div key={d.id} className="pv2-active-row">
-                {/* ⚠️ 배차 상태 배지는 현행 6종 그대로다. 시안의 3단계(접수/배차완료/운송완료)
-                    매핑은 25차 범위이며(2026-08-26 확정), 배차·운송 조회 화면과 같은 공용
-                    매핑을 한 번에 만드는 편이 두 곳이 어긋나지 않는다. 25차가 여기도 함께 바꾼다. */}
+                {/* 🔴 배차 상태 배지는 3단계다(29차). 매핑 정의처는 `lib/dispatchStage.ts` 하나이고
+                    배차·운송 조회 화면이 같은 파일을 쓴다 — 여기에 매핑을 다시 적지 말 것.
+                    🔴 「문제 발생」은 단계가 아니라 별도 배지다(사용자 확정 6번). */}
+                {hasDispatchIssue(d) && (
+                  <span
+                    className="pv2-status-badge"
+                    style={{ background: DISPATCH_ISSUE_STYLE.bg, color: DISPATCH_ISSUE_STYLE.color }}
+                  >
+                    {DISPATCH_ISSUE_STYLE.label}
+                  </span>
+                )}
                 <span
                   className="pv2-status-badge"
                   style={{
-                    background: getDispatchStatusColor(d.dispatch_status).bg,
-                    color: getDispatchStatusColor(d.dispatch_status).text,
+                    background: getDispatchStageStyle(getDispatchStage(d)).bg,
+                    color: getDispatchStageStyle(getDispatchStage(d)).color,
                   }}
                 >
-                  {d.dispatch_status}
+                  {getDispatchStageStyle(getDispatchStage(d)).label}
                 </span>
                 <div className="pv2-active-body">
                   <div className="pv2-active-title">
