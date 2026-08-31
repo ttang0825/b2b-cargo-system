@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import BrandLogo from "@/components/BrandLogo";
 import { COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
 
@@ -20,10 +20,14 @@ export default function SubmitDone({
   title,
   message,
   href = "/",
+  extra,
 }: {
   title: string;
   message: string;
   href?: string;
+  /** 확인 버튼 아래에 덧붙일 것. `/quote` 가 계정 신청 유도 카드를 넣는다(원칙 42번 —
+   *  옛 접수완료 화면에 있던 안내를 잃지 않기 위해서다). */
+  extra?: ReactNode;
 }) {
   return (
     <div
@@ -53,6 +57,8 @@ export default function SubmitDone({
           <Link href={href} style={{ display: "block", marginTop: 22, padding: 19, background: "#FFD834", color: "#0E0F12", borderRadius: 16, textAlign: "center", fontSize: 16, fontWeight: 600, letterSpacing: "-0.02em" }}>
             확인
           </Link>
+
+          {extra}
         </div>
 
         <div style={{ padding: "24px 40px 26px", borderTop: "1px solid #EEEDE9", background: "#FAFAF8", display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>

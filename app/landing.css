@@ -264,3 +264,69 @@
   .landing-cta-links { gap: 14px 18px !important; font-size: 14.4px !important; }
   .landing-legal-link { font-size: 14.4px; }
 }
+
+/* ── 31차: 폼 3화면 공용 ──────────────────────────────────────────────
+   🔴 주소 입력은 공용 `AddressSearch`(원칙 37번)를 그대로 쓰되, 그 컴포넌트가
+   기본으로 다는 `.field` 대신 이 클래스를 넘겨 시안 모양으로 그린다. 컴포넌트를
+   고치면 관리자 6개 화면이 같이 바뀌므로 **원본은 한 줄도 안 건드렸다.**
+   라벨은 화면이 직접 그린다(출발지 줄에 「⇄ 바꾸기」 버튼이 함께 있어서)
+   — 그래서 컴포넌트가 그리는 빈 라벨은 숨긴다. */
+.landing-page .landing-addr > label:empty {
+  display: none;
+}
+.landing-page .landing-addr input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 15px 16px;
+  border: 1px solid #ebeae7;
+  border-radius: 12px;
+  background: #ffffff;
+  font-family: inherit;
+  font-size: 15px;
+  color: #1a1a1a;
+}
+.landing-page .landing-addr input::placeholder {
+  color: #888378;
+}
+.landing-page .landing-addr input:focus {
+  outline: none;
+  border-color: #1a1a1a;
+}
+.landing-page .landing-addr > input {
+  margin-top: 8px;
+}
+.landing-page .landing-addr button {
+  flex-shrink: 0;
+  padding: 0 18px;
+  border: 1px solid #ebeae7;
+  border-radius: 12px;
+  background: #f4f3ef;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: #4a4945;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.landing-page .landing-addr button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* 폼 화면(밝은 카드 위)의 법적 문서 링크. 🔴 랜딩 CTA 띠(어두운 배경)용
+   `.landing-legal-link` 와 색이 달라야 해서 클래스를 따로 뒀다 — 전역
+   `site-footer-link` 를 덮어쓰면 전역 클래스 재정의가 된다(30차 ⑦). */
+.landing-page .landing-form-legal-link {
+  color: #6c6b65;
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.landing-page .landing-form-legal-link:hover {
+  color: #0e0f12;
+}
+
+@media (max-width: 700px) {
+  .landing-consent-links { padding-left: 0 !important; flex-wrap: wrap !important; gap: 12px !important; }
+}
