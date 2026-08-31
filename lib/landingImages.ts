@@ -1,82 +1,82 @@
-// 랜딩(/) 이미지 경로 모음.
+// 랜딩(/) 이미지 경로의 **유일한 정의처**.
 //
-// 🔴 **컴포넌트에 경로를 직접 박지 말 것.** 나중에 실제 사진이 준비되면 이 파일의
-// 값만 채우면 랜딩 전체가 한 번에 교체된다(11차 지시서 5-1).
+// 🔴 **컴포넌트·데이터 파일에 경로를 직접 박지 말 것.** 사진을 교체할 때 랜딩 전체를
+// 뒤지지 않아도 되도록 30차에도 이 규칙을 유지했다(디자인팀 `data.ts` 는 `/public`
+// 경로를 직접 적어 왔고 `TODO(dev)` 로 표시해 뒀다 — 전부 이 파일 참조로 바꿨다).
 //
-// ⚠️ **현재는 5종 전부 자리표시자(null) 상태이며, 실제 이미지 교체는 Go-Live 차단
-// 항목이다.** null이면 `components/LandingImage.tsx`가 "이미지 준비 중" 회색 상자를
-// 대신 그리고, 상자 크기(비율)는 이미지가 있든 없든 동일하므로 레이아웃은 무너지지 않는다.
+// ── 30차에 구조가 통째로 바뀌었다 ──────────────────────────────────────────
+// 11~13차 구조는 **5종 · 전부 `null` 자리표시자**였고 `components/LandingImage.tsx` 가
+// "이미지 준비 중" 회색 상자를 대신 그렸다. 30차에 디자인팀이 **실물 32종**을 주면서
+// 자리표시자가 필요 없어졌다 — 그래서 `null` 을 허용하지 않는 `string` 타입이다.
+// 🔴 **`null` 을 다시 허용하지 말 것** — 허용하면 "이미지가 없어도 통과"하게 되어
+// 파일이 빠진 것을 빌드도 검증도 못 잡는다.
 //
-// 규격(11차 지시서 5장 — 시안 실측으로 확정된 값):
-//   hero              데스크탑 870×716                    (히어로 배경·배너, 자산 1장)
-//   transportTypes    데스크탑 456×304 / 모바일 없음      (이런 운송을 맡고 있습니다)
-//   vehicles          데스크탑 272×200 / 모바일 154×104   (차량 형태 4장)
-//   icons             데스크탑 64×64   / 모바일 48×48     (선택 이유 카드 4종)
-//   portal            데스크탑 1240×800 → 620×400 표시 / 모바일 640×456 → 320×228 표시
-//   safety            데스크탑 56×56   / 모바일 48×48     (안전·책임 카드 3종)
+// ⚠️ `components/LandingImage.tsx` 는 이제 아무 데서도 쓰이지 않는다(자리표시자 상자를
+// 그리던 컴포넌트다). 지우지 않고 뒀다 — 50차가 죽은 파일을 정리하지 않고 남긴 것과 같은
+// 처리이며, 되살릴 일이 생기면 그때 판단한다.
 //
-// ⚠️ 히어로 데스크탑은 **870×716**이 확정값이다(규격서에 있던 520은 폐기됨).
+// ── 파일 규칙 ────────────────────────────────────────────────────────────
+// 실제 파일은 `public/landing/` 에 있고 **파일명 번호 = 화면 노출 순서**다.
+// 🔴 순서를 바꾸려면 아래 배열 순서를 바꿀 것 — 파일명을 바꾸지 말 것(디자인팀 정본과
+// 대조가 안 된다).
 //
-// ── 🔴 모바일 전용 자산을 따로 두는 기준: **"글자를 읽어야 하는가"** ─────────────────
-// 12차에 `hero.mobile` 키를 **없앴고** `portal.mobile`만 남겼다. 판단 기준은 이것 하나다.
-//
-//   히어로       트럭 사진. **글자 없음** → 데스크탑 자산 하나로 충분(CSS가 비율만 바꿈)
-//   운송관리 캡처  목록 화면. **글자 있음** → 별도 크롭 필요
-//
-// 제작 1240px 자산을 모바일 320px에 표시하면 축소율이 **26%**라, 캡처 안의 13px 글자가
-// **6.7px로 뭉개진다.** 그래서 캡처만 모바일 전용 자산을 쓴다.
-// ⚠️ **`hero.mobile`을 다시 만들지 말 것** — 사진에는 판독할 글자가 없어 자산만 늘어난다.
-//
-// 모바일 캡처는 **카드 뷰**를 찍는다 — 640px 폭에는 목록 표가 안 들어가고, 이 시스템은
-// 모바일에서 표를 카드로 전환하기 때문(`.mobile-row-card`).
-type LandingImageSrc = string | null;
+// 🟢 `service-01-personal.jpg` 는 **zip 에 들어온 것이 이미 교체본**이다(사용자 확인
+// 2026-08-31). 나중에 또 바뀌면 **같은 파일명으로 덮어쓰면** 코드를 건드릴 필요가 없다.
 
-export type LandingImages = {
-  /**
-   * 히어로 — 데스크탑은 우측 배경, 모바일은 CTA·신뢰 3줄 아래 배너.
-   * ⚠️ 두 화면이 **같은 자산 하나**를 쓴다(비율만 CSS가 바꿈). 사진에 판독할 글자가
-   * 없어서 모바일 전용 크롭이 필요 없다 — 위 "글자를 읽어야 하는가" 기준 참고.
-   */
-  hero: { desktop: LandingImageSrc };
-  /** "이런 운송을 맡고 있습니다" 좌측 사진 (모바일에는 노출하지 않음) */
-  transportTypes: LandingImageSrc;
-  /** 차량 형태 4종. 키 순서가 화면 노출 순서 */
-  vehicles: {
-    cargo: LandingImageSrc;
-    box: LandingImageSrc;
-    wing: LandingImageSrc;
-    lift: LandingImageSrc;
-  };
-  /** "위캐리를 선택하는 이유" 카드 아이콘 4종 */
-  icons: {
-    dispatch: LandingImageSrc;
-    price: LandingImageSrc;
-    support: LandingImageSrc;
-    repeat: LandingImageSrc;
-  };
-  /**
-   * 운송관리 화면 캡처. **모바일 전용 크롭이 반드시 필요하다** — 캡처 안의 글자가
-   * 축소되면 뭉개지기 때문(위 기준 참고). `components/LandingImage.tsx`의
-   * `mobileSrc` prop으로 넘어가 `<picture>`의 `<source media="(max-width: 760px)">`가 된다.
-   */
-  portal: { desktop: LandingImageSrc; mobile: LandingImageSrc };
-  /**
-   * ⑦ 안전·책임 카드 아이콘 3종(13차 신설).
-   * ⚠️ `insurance`는 `lib/insuranceInfo.ts`의 `INSURANCE_ENABLED`가 false인 동안
-   * 카드 자체가 렌더링되지 않으므로 화면에 나타나지 않는다 — 값을 채워도 마찬가지다.
-   */
-  safety: {
-    record: LandingImageSrc;
-    process: LandingImageSrc;
-    insurance: LandingImageSrc;
-  };
-};
+const BASE = "/landing";
 
-export const LANDING_IMAGES: LandingImages = {
-  hero: { desktop: null },
-  transportTypes: null,
-  vehicles: { cargo: null, box: null, wing: null, lift: null },
-  icons: { dispatch: null, price: null, support: null, repeat: null },
-  portal: { desktop: null, mobile: null },
-  safety: { record: null, process: null, insurance: null },
-};
+/** 히어로(교차 페이드 2장) · CTA 배경 · TMS 전체 화면 · 로고 */
+export const LANDING_IMAGES = {
+  heroMain: `${BASE}/hero-main.jpg`,
+  heroAlt: `${BASE}/hero-alt.jpg`,
+  ctaBg: `${BASE}/cta-bg.jpg`,
+  tmsOverview: `${BASE}/tms-overview.png`,
+  /** ⚠️ 헤더·접수완료 화면은 이 파일이 아니라 `<BrandLogo />`(인라인 SVG)를 쓴다 —
+   *  `currentColor` 를 상속받아야 다크 배경에서도 보이기 때문(27차). */
+  logo: `${BASE}/wecarry-logo.svg`,
+} as const;
+
+/** 위캐리 서비스 4종 — 키 순서가 노출 순서 */
+export const LANDING_SERVICE_IMAGES = {
+  personal: `${BASE}/service-01-personal.jpg`,
+  nationwide: `${BASE}/service-02-nationwide.jpg`,
+  mixed: `${BASE}/service-03-mixed.jpg`,
+  moving: `${BASE}/service-04-moving.jpg`,
+} as const;
+
+/** WHY WECARRY 5종.
+ *  ⚠️ `insurance` 는 `lib/insuranceInfo.ts` 의 `INSURANCE_ENABLED` 가 false 인 동안
+ *  카드 자체가 렌더링되지 않으므로 화면에 나타나지 않는다. */
+export const LANDING_REASON_IMAGES = {
+  tms: `${BASE}/why-01-tms.png`,
+  dispatch: `${BASE}/why-02-dispatch.png`,
+  insurance: `${BASE}/why-03-insurance.png`,
+  settlement: `${BASE}/why-04-settlement.png`,
+  price: `${BASE}/why-05-price.png`,
+} as const;
+
+/** 차량 형태 12종 — 배열 순서가 노출 순서다(파일명 번호와 같다). */
+export const LANDING_VEHICLE_IMAGES = [
+  `${BASE}/vehicle-01-cargo.jpg`,
+  `${BASE}/vehicle-02-top.jpg`,
+  `${BASE}/vehicle-03-wing.jpg`,
+  `${BASE}/vehicle-04-lift.jpg`,
+  `${BASE}/vehicle-05-wing-lift.jpg`,
+  `${BASE}/vehicle-06-horu.jpg`,
+  `${BASE}/vehicle-07-freezer.jpg`,
+  `${BASE}/vehicle-08-nonvibration.jpg`,
+  `${BASE}/vehicle-09-top-5t.jpg`,
+  `${BASE}/vehicle-10-wing-mid.jpg`,
+  `${BASE}/vehicle-11-longcargo.jpg`,
+  `${BASE}/vehicle-12-wing-5t.jpg`,
+] as const;
+
+/** TMS 캐러셀 6종 — 배열 순서가 노출 순서 */
+export const LANDING_TMS_IMAGES = [
+  `${BASE}/tms-01-request.png`,
+  `${BASE}/tms-02-quotes.png`,
+  `${BASE}/tms-03-dispatch.png`,
+  `${BASE}/tms-04-invoices.png`,
+  `${BASE}/tms-05-stats.png`,
+  `${BASE}/tms-06-locations.png`,
+] as const;

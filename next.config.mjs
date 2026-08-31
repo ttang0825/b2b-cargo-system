@@ -43,11 +43,11 @@ const PLACEHOLDER_CHECKS = [
   },
   {
     // 아직 가입 전이라 값이 전부 비어 있음. 가입이 끝나면 lib/insuranceInfo.ts의 값들을
-    // 채우고 이 플래그를 false로, INSURANCE_ENABLED를 true로 함께 바꿀 것.
+    // 채우고 이 플래그를 false로 내릴 것(INSURANCE_ENABLED는 30차 리뷰에 이미 true다).
     file: "lib/insuranceInfo.ts",
     flag: "INSURANCE_INFO_IS_PLACEHOLDER",
     label: "적재물배상책임보험 정보",
-    note: "미가입 상태 — INSURANCE_ENABLED가 false라 관련 UI는 렌더링되지 않음(13차에 UI 예정)",
+    note: "🔴 INSURANCE_ENABLED는 30차 리뷰에 true가 됐다(사용자 지시) — 랜딩 WHY 03 카드와 FAQ 파손 문항이 이미 노출된다. 이 상수 5개는 아직 비어 있고 그 값을 렌더링하는 화면은 없다. 증권 수령 후 값을 채우고 이 플래그를 false로 내릴 것",
   },
 ];
 
