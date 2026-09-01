@@ -2,7 +2,7 @@ import Link from "next/link";
 import LandingHeader from "@/components/LandingHeader";
 import SiteFooter from "@/components/SiteFooter";
 import { vehicles as LANDING_VEHICLES } from "@/components/landing/data";
-import { fetchStartPrices, formatStartPrice } from "@/lib/startPrices";
+import { fetchStartPrices, formatStartPrice, START_PRICE_NOTE } from "@/lib/startPrices";
 
 // 차량·요금 안내. 실무 문의 1순위인 "어떤 차가 얼마나 싣고 얼마인가"에 답하는 페이지.
 //
@@ -19,15 +19,6 @@ import { fetchStartPrices, formatStartPrice } from "@/lib/startPrices";
 // ⚠️ **「차종·적재 용량」 표는 30차 리뷰에서 뺐다**(사용자 지시 — 요금 안내는 기준가만).
 // 되살리려면 8~25톤 5개 차급의 CBM·적재 예시를 먼저 정해야 한다(28차에 만든 6종 값은
 // 커밋 이력에 남아 있다).
-
-const PRICING_NOTES = [
-  // ⚠️ 아래 3줄은 표시가격 분쟁을 막는 필수 문구다. 지우지 말 것.
-  "표시 금액은 10km 이내 기준가이며, 부가가치세는 별도입니다.",
-  "상황에 따라 기준가에서 ± 됩니다 — 운송 거리, 차량 종류, 상·하차 조건, 운송 시간대, 화물 특성에 따라 달라집니다.",
-  "정확한 금액은 견적 시 안내해 드립니다.",
-  // 🔴 30차에 25톤 기준으로 바뀌었다(사용자 확정). "전 차종"·"모든 차량"은 여전히 금지다.
-  "1톤부터 5톤 이상, 특수차량까지 안내드립니다. 표에 없는 조건은 문의해 주시면 확인해 드립니다.",
-];
 
 // 🔴 30차에 4종 → **12종**이 됐다(사용자 확정). 랜딩과 **같은 순서·같은 이름·같은
 // 이미지**를 써야 한다 — 랜딩에서 12개를 보고 이 화면에 들어왔는데 4개만 있으면 안 된다.
@@ -63,7 +54,21 @@ export default async function VehiclesPage() {
           <h2 className="about-section-title" style={{ padding: "24px 24px 0", margin: 0 }}>
             기준가
           </h2>
-          <div className="table-scroll">
+          {/* 🔴 표시가격 안내 — **표 위 설명글 한 문단**으로 합쳤다(사용자 지시
+              2026-09-01, 팝업과 같은 구성). 문구는 `lib/startPrices.ts` 가 유일
+              정의처다. 지우지 말 것 — 「10km 이내」·「부가가치세」·「견적」·「5톤보다
+              큰 차량도 문의」 넷이 표시가격 분쟁을 막는 문장이다. */}
+          <p style={{ margin: 0, padding: "10px 24px 0", fontSize: 13.5, lineHeight: 1.8, color: "var(--text-muted)" }}>
+            {START_PRICE_NOTE}
+          </p>
+          {/* 🔴 값을 못 읽었으면 표를 그리지 않는다 — 위와 같은 이유(lib/startPrices.ts) */}
+          {!START_PRICES.length && (
+            <p style={{ margin: 0, padding: "10px 24px 24px", fontSize: 13.5, lineHeight: 1.8, color: "var(--text-muted)" }}>
+              기준가를 불러오지 못했습니다. 정확한 금액은 견적으로 안내드립니다.
+            </p>
+          )}
+          {START_PRICES.length > 0 && (
+          <div className="table-scroll" style={{ marginTop: 14, paddingBottom: 8 }}>
             <table>
               <thead>
                 <tr>
@@ -81,21 +86,8 @@ export default async function VehiclesPage() {
               </tbody>
             </table>
           </div>
+          )}
 
-          {/* ⚠️ 표시가격 안내 — 표 바로 아래에 반드시 있어야 함. 지우지 말 것 */}
-          <ul
-            style={{
-              margin: 0,
-              padding: "18px 24px 24px 40px",
-              fontSize: 13,
-              lineHeight: 1.8,
-              color: "var(--text-muted)",
-            }}
-          >
-            {PRICING_NOTES.map((note) => (
-              <li key={note}>{note}</li>
-            ))}
-          </ul>
         </section>
 
         {/* 차량 형태 */}
