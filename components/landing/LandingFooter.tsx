@@ -19,7 +19,9 @@ import {
    ⚠️ 이메일은 `<ObfuscatedEmail />` 이다 — HTML 소스에 평문이 남지 않는다(30차). */
 export default function LandingFooter() {
   return (
-    <footer style={{ padding: "130px max(56px, calc((100% - 1200px) / 2)) 52px" }}>
+    /* 🔴 위 여백 130 → 76px (사용자 지시 2026-09-01 — "제일 아래 칸의 고객센터와 회사
+       정보 나와있는 칸의 위쪽 여백을 조금만 더 줄이고"). */
+    <footer style={{ padding: "76px max(56px, calc((100% - 1200px) / 2)) 52px" }}>
       <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: "32px 48px" }}>
         <div>
           <div style={{ fontSize: 14.4, fontWeight: 600, letterSpacing: "0.14em", color: "#9C9B95" }}>고객센터</div>
@@ -49,8 +51,13 @@ export default function LandingFooter() {
             </div>
           </div>
         </div>
-        <div style={{ fontSize: 12.5, lineHeight: 2.1, color: "#9C9B95", maxWidth: 380 }}>
-          <div style={{ marginBottom: 4, fontSize: 13.5, fontWeight: 700, color: "#4A4945" }}>
+        {/* 🔴 글자 12.5 → 14px, 색 #9C9B95 → #6C6B65 (사용자 지시 — "회사 정보는 좀더
+            잘보이게 하자. 글씨도 너무 작고 희미하다"). #9C9B95 는 흰 배경 대비가 약
+            2.8:1 로 **WCAG AA(4.5:1) 에 한참 못 미쳤다** — #6C6B65 는 약 5.6:1 이다.
+            🔴 다시 옅게 되돌리지 말 것: 이 블록은 전자상거래법 제10조 표시사항이라
+               「읽히는 것」이 요건의 일부다. 폭도 380 → 420 으로 넓혀 줄바꿈을 줄였다. */}
+        <div style={{ fontSize: 14, lineHeight: 1.95, color: "#6C6B65", maxWidth: 420 }}>
+          <div style={{ marginBottom: 6, fontSize: 15.5, fontWeight: 700, color: "#2F2E2B" }}>
             <CompanyNameMark />
           </div>
           <div>대표 {COMPANY_CEO} · 사업자등록번호 {COMPANY_BIZ_REG_NO}</div>
@@ -61,7 +68,7 @@ export default function LandingFooter() {
               **호스팅사업자**와, 개인정보처리방침이 지정한 **개인정보 보호책임자**다
               (30차 `SiteFooter` 가 같은 이유로 담고 있다). */}
           <div>개인정보 보호책임자 {COMPANY_CEO} · 호스팅 제공 Vercel Inc.</div>
-          <div style={{ marginTop: 8 }}>© {new Date().getFullYear()} {COMPANY_LEGAL_NAME}. All rights reserved.</div>
+          <div style={{ marginTop: 10, fontSize: 12.5, color: "#9C9B95" }}>© {new Date().getFullYear()} {COMPANY_LEGAL_NAME}. All rights reserved.</div>
         </div>
       </div>
     </footer>
