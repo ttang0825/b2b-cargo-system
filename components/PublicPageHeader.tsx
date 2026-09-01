@@ -4,12 +4,14 @@ import Link from "next/link";
 import BrandLogo from "@/components/BrandLogo";
 import { useScrolled } from "@/lib/useScrolled";
 
-// 공개 하위 화면(`/status`, `/quote/status`, `/apply/status`, `/customer/login`)의 공용 헤더.
-// ⚠️ `/quote`·`/apply` 는 31차에 시안 헤더(`components/landing/LandingHeader.tsx`)로 바뀌어 더는 쓰지 않는다.
+// 공개 하위 화면의 공용 헤더. 🔴 **지금 쓰는 곳은 `CustomerPortalShell` 의 공개 경로
+// 분기(`/customer/login` · `/customer/support-verify`) 하나뿐이다** — 원래 이 컴포넌트를
+// 쓰던 5개 화면 중 `/quote`·`/apply` 는 31차에 시안 헤더로 바뀌었고,
+// `/status`·`/quote/status`·`/apply/status` 는 31차 리뷰에 라우트째 삭제됐다.
 //
-// 이 5개 화면은 원래 **완전히 똑같은 헤더 JSX를 각자 복사해서** 갖고 있었다(2종 —
+// 그 5개 화면은 원래 **완전히 똑같은 헤더 JSX를 각자 복사해서** 갖고 있었다(2종 —
 // "로고만" / "로고 + 현황조회 링크"). PR #77에서 브랜드 로고를 통일할 때도 5곳을 각각
-// 고쳐야 했고, 스티키를 붙이려면 또 5곳을 고쳐야 해서 이번에 하나로 합쳤다.
+// 고쳐야 했고, 스티키를 붙이려면 또 5곳을 고쳐야 해서 하나로 합친 것이다.
 // **공개 하위 화면에 헤더를 새로 만들지 말고 이 컴포넌트를 쓸 것.**
 //
 // 랜딩·회사소개·차량안내·법적 문서는 메뉴와 모바일 드롭다운이 있는

@@ -12,7 +12,7 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: "*",
       // 이메일무단수집거부 경로는 5차에서 `/email-policy`로 확정함
       allow: ["/", "/about", "/vehicles", "/quote", "/apply", "/terms", "/privacy", "/email-policy"],
-      disallow: ["/admin", "/customer", "/status"],
+      disallow: ["/admin", "/customer"],
     },
   };
 }
