@@ -1,18 +1,26 @@
 import "./globals.css";
 import TopNav from "@/components/TopNav";
+import { buildPageMetadata } from "@/lib/pageMetadata";
+import { SITE_URL } from "@/lib/siteUrl";
 
-// 루트 metadata는 랜딩(/)의 값이자, 하위에서 따로 지정하지 않은 페이지의 기본값이기도 함.
-// 기존 description("화주 CRM · 견적 · 배차 · 정산 통합 관리")은 내부 시스템 설명이라
-// /quote·/apply 같은 공개 페이지가 이걸 그대로 상속받고 있었음 — 공개용 문구로 교체함.
-// title.template은 일부러 쓰지 않음(쓰면 하위 title에 브랜드명이 이중으로 붙음).
+// 🔴 `metadataBase` 가 있어야 상대경로(canonical 등)가 절대 URL 로 자동 변환된다.
+//    주소는 `lib/siteUrl.ts` 한 곳에만 있다 — 여기에 문자열로 적지 말 것.
+// ⚠️ 루트 metadata 는 랜딩(/)의 값이자 **하위에서 따로 지정하지 않은 화면의 기본값**
+//    이기도 하다. 그래서 `/admin`·`/customer` 는 각자 layout 에서 openGraph·twitter 를
+//    `null` 로 지워 이 값을 물려받지 않게 했다(그 두 곳은 링크 미리보기 대상이 아니다).
+// title.template 은 일부러 쓰지 않는다(쓰면 하위 title 에 브랜드명이 이중으로 붙는다).
 // 🔴 30차 리뷰에 취급 범위 표현이 **시안 문구**("1톤부터 5톤 이상, 특수차량까지")로 확정됐다(2026-08-31).
 // 32차·34차의 "25톤을 쓰지 않는다"를 근거로 되돌리지 말 것 — `rate_distance_tiers` 에
 // 25톤 행이 실재하고 차급이 11종이라 견적이 실제로 산출된다(52차).
 // 🔴 "전 차종"·"모든 차량"·"특수차량"은 여전히 금지다.
 export const metadata = {
-  title: "위캐리 운송 | 화물 배차·운송 주선",
-  description:
-    "1톤부터 5톤 이상, 특수차량까지, 상·하차지와 연락처만 남겨주시면 차량과 운임을 확인해 연락드립니다. 견적부터 정산까지 기록으로 남는 화물 배차 주선. 정식 허가업체(제180254호).",
+  metadataBase: new URL(SITE_URL),
+  ...buildPageMetadata({
+    title: "위캐리 운송 | 화물 배차·운송 주선",
+    description:
+      "1톤부터 5톤 이상, 특수차량까지, 상·하차지와 연락처만 남겨주시면 차량과 운임을 확인해 연락드립니다. 견적부터 정산까지 기록으로 남는 화물 배차 주선. 정식 허가업체(제180254호).",
+    path: "/",
+  }),
 };
 
 export default function RootLayout({
