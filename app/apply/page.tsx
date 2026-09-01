@@ -19,7 +19,7 @@ import {
   optionChipStyle,
   useOpenKey,
 } from "@/components/landing/form/Fields";
-import { APPLY_CONSENT_TEXT, TERMS_CONSENT } from "@/lib/legalInfo";
+import { APPLY_CONSENT_TEXT, APPLY_SITE_CONTACT_CONSENT, TERMS_CONSENT } from "@/lib/legalInfo";
 import { formatPhoneNumber, formatBizRegNo, REGIONS, VEHICLE_TYPES_PUBLIC } from "@/lib/constants";
 import { QUOTE_BODY_TYPES } from "@/lib/vehicleBodyTypes";
 import { COMPANY_SUPPORT_HOURS, COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
@@ -88,6 +88,11 @@ export default function ApplyPage() {
   // 🔴 이용약관 동의는 개인정보 동의와 **별개 state**다(18차). 법 제22조 1항이
   // 각각 구분해 받도록 하고 있어 한 값으로 합치면 안 된다.
   const [termsAgreed, setTermsAgreed] = useState(false);
+  // 🔴 현장 담당자 정보 동의는 **조건부**다 — 현장 담당자 연락처를 적었을 때만 카드가 뜨고,
+  //    그때만 `consents` 에 `third_party` 1행이 더 남는다(`lib/consent.ts` 의
+  //    `CONDITIONAL_CONSENT_TYPES_BY_SOURCE`). 안 적으면 제3자의 개인정보 자체가 없어
+  //    받을 동의도 없다. **항상 뜨게 바꾸지 말 것** — 그러면 기록이 거짓이 된다.
+  const [siteContactAgreed, setSiteContactAgreed] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const { openKey, setOpenKey } = useOpenKey();
 
@@ -161,6 +166,11 @@ export default function ApplyPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  /** 현장 담당자 **연락처**를 적었는가. 🔴 상호·담당자명이 아니라 연락처를 기준으로 삼는다 —
+   *  개인을 특정해 연락할 수 있게 되는 지점이 연락처이고, 서버도 같은 기준으로 본다. */
+  const hasSiteContact =
+    !!form.origin_contact_phone.trim() || !!form.destination_contact_phone.trim();
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -176,6 +186,10 @@ export default function ApplyPage() {
     }
     if (!agreed) {
       setError("개인정보 수집·이용에 동의해주셔야 신청을 접수할 수 있습니다.");
+      return;
+    }
+    if (hasSiteContact && !siteContactAgreed) {
+      setError("현장 담당자 정보 제공에 동의해주셔야 신청을 접수할 수 있습니다.");
       return;
     }
 
@@ -201,6 +215,10 @@ export default function ApplyPage() {
           notes: buildNotes() || null,
           agreed,
           termsAgreed,
+          // 🔴 현장 연락처 두 값은 **저장용이 아니라 서버가 제3자 동의를 요구할지 판단하는
+          //    근거**다(원칙 25번 — boolean 하나만 보내면 콘솔에서 우회된다). 값 자체는
+          //    이미 `notes` 안에 들어 있고 서버는 이 둘을 컬럼에 넣지 않는다.
+          thirdPartyAgreed: hasSiteContact ? siteContactAgreed : false,
         }),
       });
       const data = await res.json();
@@ -458,6 +476,51 @@ export default function ApplyPage() {
                         →
                       </span>
                     </div>
+
+                    {/* 🔴 **현장 담당자 연락처를 적었을 때만** 뜨는 동의다(사용자 지시
+                        2026-09-01). 안 적으면 제3자의 개인정보 자체가 없어 받을 동의도 없다 —
+                        **항상 뜨게 바꾸지 말 것.** 서버도 같은 조건으로 한 번 더 본다
+                        (원칙 25번, `/api/apply-submit`).
+                        🔴 문구는 `lib/legalInfo.ts` 의 `APPLY_SITE_CONTACT_CONSENT` 가 유일
+                           정의처다 — 여기에 적지 말 것. ⚠️ 초안이며 변호사 검토 대상이다. */}
+                    {hasSiteContact && (
+                      <div style={{ marginTop: 20, padding: "18px 20px", border: `1px solid ${siteContactAgreed ? "#FFD834" : "#EBEAE7"}`, borderRadius: 16, background: siteContactAgreed ? "#FFFCEC" : "#FAFAF8", transition: "background 0.2s ease, border-color 0.2s ease" }}>
+                        <label style={{ display: "flex", alignItems: "flex-start", gap: 14, cursor: "pointer" }}>
+                          <span style={{ position: "relative", flex: "0 0 auto", marginTop: 1, width: 22, height: 22, border: `1.5px solid ${siteContactAgreed ? "#FFD834" : "#D8D7D1"}`, borderRadius: 7, background: siteContactAgreed ? "#FFD834" : "#FFFFFF", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <input
+                              type="checkbox"
+                              checked={siteContactAgreed}
+                              onChange={(e) => setSiteContactAgreed(e.target.checked)}
+                              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", margin: 0, opacity: 0, cursor: "pointer" }}
+                            />
+                            {/* 🔴 `pointerEvents: "none"` — 없으면 체크마크가 클릭을 가로챈다(31차). */}
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden style={{ display: "block", opacity: siteContactAgreed ? 1 : 0, pointerEvents: "none" }}>
+                              <path d="M5 12.6l4.4 4.4L19 7.4" stroke="#0E0F12" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          </span>
+                          <span style={{ flex: "1 1 auto", minWidth: 0 }}>
+                            <span style={{ display: "block", fontSize: 14.5, fontWeight: 600, letterSpacing: "-0.02em", color: "#0E0F12" }}>
+                              {APPLY_SITE_CONTACT_CONSENT.title}
+                            </span>
+                            <span style={{ display: "block", marginTop: 4, fontSize: 13, lineHeight: 1.6, color: "#8B8A85" }}>
+                              {APPLY_SITE_CONTACT_CONSENT.intro}
+                            </span>
+                          </span>
+                        </label>
+                        <ul style={{ margin: "12px 0 0", paddingLeft: 36, listStyle: "none", fontSize: 12.5, lineHeight: 1.75, color: "#8B8A85" }}>
+                          {APPLY_SITE_CONTACT_CONSENT.items.map((it) => (
+                            <li key={it}>· {it}</li>
+                          ))}
+                        </ul>
+                        <p style={{ margin: "10px 0 0", paddingLeft: 36, fontSize: 12.5, lineHeight: 1.6, color: "#6C6B65" }}>
+                          {APPLY_SITE_CONTACT_CONSENT.confirm}
+                        </p>
+                        {/* 🔴 거부권 안내를 빼지 말 것 — 개인정보보호법 제15조 2항이 요구한다. */}
+                        <p style={{ margin: "6px 0 0", paddingLeft: 36, fontSize: 12.5, lineHeight: 1.6, color: "#8B8A85" }}>
+                          {APPLY_SITE_CONTACT_CONSENT.refusal}
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {/* 운송 규모 */}

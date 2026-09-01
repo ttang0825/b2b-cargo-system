@@ -79,6 +79,23 @@ export const CONSENT_TYPES_BY_SOURCE: Record<ConsentSource, readonly ConsentType
   customer_portal: ["third_party"],
 };
 
+/**
+ * 🔴 **화면 사정에 따라 있을 수도 없을 수도 있는 동의 항목.**
+ *
+ * 위 `CONSENT_TYPES_BY_SOURCE` 는 그 화면에서 **항상** 받는 것이고, 여기는 **조건이 맞을
+ * 때만** 화면에 뜨고 그때만 기록되는 것이다. 14차 원칙("문구에 없는 동의를 기록하지
+ * 않는다")은 그대로다 — 조건이 맞으면 문구도 함께 뜨기 때문이다.
+ *
+ * ⚠️ `/apply` 의 `third_party` — 현장 상호·담당자명·연락처는 **선택** 칸이라, 안 적으면
+ *    제3자의 개인정보 자체가 없어 받을 동의도 없다. 그래서 **현장 담당자 연락처를 입력한
+ *    경우에만** 카드가 뜨고 기록된다(`APPLY_SITE_CONTACT_CONSENT`).
+ * 🔴 **이 항목을 `CONSENT_TYPES_BY_SOURCE` 로 옮기지 말 것** — 옮기면 현장 정보를 한 글자도
+ *    안 적은 신청서에도 제3자 동의 행이 남아 **그 기록이 거짓이 된다.**
+ */
+export const CONDITIONAL_CONSENT_TYPES_BY_SOURCE: Partial<Record<ConsentSource, readonly ConsentType[]>> = {
+  "/apply": ["third_party"],
+};
+
 /** 관리자 화면 표시용 라벨. 화면마다 다시 적지 말 것. */
 export const CONSENT_TYPE_LABELS: Record<ConsentType, string> = {
   privacy: "개인정보 수집·이용",
@@ -101,6 +118,12 @@ type RecordConsentsParams = {
   /** 방금 만든 원본 행의 id */
   subjectId: string;
   source: ConsentSource;
+  /**
+   * 조건이 맞아 **실제로 화면에 뜨고 체크된** 추가 동의 항목.
+   * 🔴 `CONDITIONAL_CONSENT_TYPES_BY_SOURCE` 에 그 화면 몫으로 적혀 있는 값만 받는다 —
+   *    호출부가 아무 값이나 넣어 받지 않은 동의를 기록하는 길을 막는다.
+   */
+  extraTypes?: readonly ConsentType[];
 };
 
 /**
@@ -116,7 +139,11 @@ export async function recordConsents(
   admin: SupabaseClient,
   params: RecordConsentsParams
 ): Promise<{ error: string | null }> {
-  const rows = CONSENT_TYPES_BY_SOURCE[params.source].map((consentType) => ({
+  const allowedExtra = CONDITIONAL_CONSENT_TYPES_BY_SOURCE[params.source] ?? [];
+  const extra = (params.extraTypes ?? []).filter((t) => allowedExtra.includes(t));
+  const types = [...CONSENT_TYPES_BY_SOURCE[params.source], ...extra];
+
+  const rows = types.map((consentType) => ({
     subject_type: params.subjectType,
     subject_id: params.subjectId,
     consent_type: consentType,
