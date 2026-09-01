@@ -15,11 +15,13 @@ import {
   cardTitleStyle,
   fieldLabel,
   fieldStyle,
+  fieldOnTintStyle,
   optionChipStyle,
   useOpenKey,
 } from "@/components/landing/form/Fields";
 import { APPLY_CONSENT_TEXT, TERMS_CONSENT } from "@/lib/legalInfo";
 import { formatPhoneNumber, formatBizRegNo, REGIONS, VEHICLE_TYPES_PUBLIC } from "@/lib/constants";
+import { QUOTE_BODY_TYPES } from "@/lib/vehicleBodyTypes";
 import { COMPANY_SUPPORT_HOURS, COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import "@/app/landing.css";
@@ -40,7 +42,41 @@ import "@/app/landing.css";
 //    셋뿐이고 구간·규모·요청사항은 「상세 정보 입력하기」 안에 있다. 접혀 있어도 값은
 //    그대로 전송된다(펼치지 않으면 빈 값이 갈 뿐이다).
 
-const requiredMark = <span style={{ marginLeft: 4, color: "#C05B54" }}>*</span>;
+// 🔴 시안은 필수 표시가 **빨간 `*` 가 아니라 회색 「필수」 글자**다(31차 리뷰 — "가로 사이즈
+// 디자인이 시안과 많이 다르다" 와 함께 맞춘 것). 「선택」과 같은 모양이라 두 표시가 한 벌로 읽힌다.
+/** 주요 운송 구간의 두 하위 카드(시안) — 라벨과 state 키를 한 곳에 둔다.
+ *  🔴 `as const` 를 빼지 말 것: 빼면 `form[side.addr]` 의 키 타입이 string 으로 넓어져
+ *     오타가 컴파일에서 안 걸린다. */
+const ROUTE_SIDES = [
+  {
+    key: "origin",
+    title: "주요 출발지",
+    sub: "상차지 정보",
+    dot: "#FFD834",
+    addr: "main_origin",
+    addrDetail: "main_origin_detail",
+    sido: "main_origin_sido",
+    sigungu: "main_origin_sigungu",
+    siteName: "origin_site_name",
+    siteContact: "origin_contact_name",
+    sitePhone: "origin_contact_phone",
+  },
+  {
+    key: "destination",
+    title: "주요 도착지",
+    sub: "하차지 정보",
+    dot: "#0E0F12",
+    addr: "main_destination",
+    addrDetail: "main_destination_detail",
+    sido: "main_destination_sido",
+    sigungu: "main_destination_sigungu",
+    siteName: "destination_site_name",
+    siteContact: "destination_contact_name",
+    sitePhone: "destination_contact_phone",
+  },
+] as const;
+
+const requiredMark = <span style={{ marginLeft: 4, fontSize: 12.5, fontWeight: 500, color: "#A8A79F" }}>필수</span>;
 const optionalMark = <span style={{ marginLeft: 4, fontSize: 12.5, fontWeight: 500, color: "#A8A79F" }}>선택</span>;
 
 export default function ApplyPage() {
@@ -72,9 +108,54 @@ export default function ApplyPage() {
     monthly_volume_estimate: "",
     industry: "",
     preferred_regions: "",
-    preferred_vehicle: "",
+    // 🔴 「주 이용 차량」은 **톤수 + 형태 두 칸**이다(31차 리뷰 지시) — 제출 직전에
+    //    `"5톤 윙바디"` 처럼 공백으로 이어 `preferred_vehicle` 하나로 보낸다.
+    //    승인 시 `companies.recommended_vehicle` 로 그대로 승계되는 값이고, 운영 DB 의
+    //    기존 539건이 이미 `"1톤 탑차"` 형태라 **같은 모양을 유지해야 한다**(55차 ③).
+    vehicle_ton: "",
+    vehicle_body: "",
+    // 🔴 현장 정보 6칸(상·하차지 각 3개)은 **`customer_applications` 에 컬럼이 없다.**
+    //    31차는 DB 변경 0이 조건이라 27차 「당착/내착」과 같은 방식으로 `notes` 에 잇는다.
+    //    ⚠️ 이 값은 **제3자(현장 담당자)의 개인정보**다 — 아래 `buildNotes` 주석 참고.
+    origin_site_name: "",
+    origin_contact_name: "",
+    origin_contact_phone: "",
+    destination_site_name: "",
+    destination_contact_name: "",
+    destination_contact_phone: "",
     notes: "",
   });
+
+  /**
+   * 요청사항 + 현장 정보를 한 문자열로 잇는다.
+   * 🔴 `customer_applications` 에 현장 상호·담당자명·연락처 컬럼이 없어서(실측) DB 변경 없이
+   *    담당자가 볼 수 있게 하는 유일한 길이다. 27차가 「당착/내착」을 특이사항 한 줄로 이은
+   *    것과 같은 방식이고, 관리자 신청서 상세 모달이 `notes` 를 그대로 보여준다.
+   * ⚠️ **컬럼을 만들자는 제안이 나오면** `/api/apply-submit` 화이트리스트 · 관리자 신청서
+   *    상세 모달 · 승인 시 `customer_locations`(20차에 `contact_name`·`contact_phone` 가
+   *    이미 있다) 까지 함께 봐야 한다.
+   */
+  function buildNotes() {
+    const block = (title: string, rows: [string, string][]) => {
+      const lines = rows.filter(([, v]) => v.trim()).map(([k, v]) => `· ${k}: ${v.trim()}`);
+      return lines.length ? [`※ ${title}`, ...lines] : [];
+    };
+    const extra = [
+      ...block("주요 출발지 현장", [
+        ["현장 상호", form.origin_site_name],
+        ["담당자명", form.origin_contact_name],
+        ["담당자 연락처", form.origin_contact_phone],
+      ]),
+      ...block("주요 도착지 현장", [
+        ["현장 상호", form.destination_site_name],
+        ["담당자명", form.destination_contact_name],
+        ["담당자 연락처", form.destination_contact_phone],
+      ]),
+    ];
+    const base = form.notes.trim();
+    if (extra.length === 0) return base;
+    return [base, ...extra].filter(Boolean).join("\n");
+  }
 
   function setField(key: keyof typeof form, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -115,6 +196,9 @@ export default function ApplyPage() {
           ...form,
           main_origin: fullMainOrigin,
           main_destination: fullMainDestination,
+          // 🔴 톤수·형태를 공백으로 이어 한 칸으로 보낸다(`"5톤 윙바디"`) — 위 state 주석 참고.
+          preferred_vehicle: [form.vehicle_ton, form.vehicle_body].filter(Boolean).join(" ") || null,
+          notes: buildNotes() || null,
           agreed,
           termsAgreed,
         }),
@@ -166,7 +250,11 @@ export default function ApplyPage() {
           </div>
 
           <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} noValidate>
-            <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 720, margin: "0 auto" }}>
+            {/* 🔴 폼 컬럼은 **컨테이너(1200px) 전체 폭**이다 — 31차에 `/quote` 와 같은 720px 로
+                뒀는데 시안 실측이 1203px 이었고, 사용자가 "가로 사이즈 디자인이 시안과 많이
+                다르다"로 신고했다. ⚠️ `/quote` 시안은 실제로 720px 이라 **두 화면이 일부러
+                다르다** — 같이 맞추지 말 것. */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
                 <div className="landing-detail-head" style={{ fontSize: 26, lineHeight: 1.3, fontWeight: 600, letterSpacing: "-0.03em" }}>신청서 작성</div>
                 <div style={{ marginTop: 8, fontSize: 15, lineHeight: 1.7, color: "#6C6B65" }}>회사명과 담당자 연락처만 있으면 계정을 발급해드립니다.</div>
@@ -177,7 +265,10 @@ export default function ApplyPage() {
                 <div style={cardTitleStyle}>신청 정보</div>
                 <p style={{ margin: "8px 0 0", fontSize: 13.5, lineHeight: 1.7, color: "#888378" }}>발급 완료 안내는 담당자 연락처로 문자로 보내드립니다.</p>
 
-                <div className="landing-apply-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px,1fr))", gap: 16, marginTop: 20 }}>
+                {/* 🔴 `auto-fit` 을 쓰지 말 것 — 폼 폭이 1200 이 되면서 260px 최소폭으로는
+                    **4열**이 되어 시안(2열)과 어긋난다. 열 수를 고정하고 좁은 화면은
+                    `app/landing.css` 의 `.landing-apply-grid` 가 1열로 되돌린다. */}
+                <div className="landing-apply-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0,1fr))", gap: 16, marginTop: 20 }}>
                   <div>
                     <label style={fieldLabel}>회사명 {requiredMark}</label>
                     <input
@@ -202,7 +293,7 @@ export default function ApplyPage() {
                   </div>
                 </div>
 
-                <div className="landing-apply-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px,1fr))", gap: 16, marginTop: 20, paddingTop: 22, borderTop: "1px solid #EEEDE9" }}>
+                <div className="landing-apply-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 16, marginTop: 20, paddingTop: 22, borderTop: "1px solid #EEEDE9" }}>
                   <div>
                     <label style={fieldLabel}>담당자명 {requiredMark}</label>
                     <input
@@ -301,36 +392,71 @@ export default function ApplyPage() {
 
                     {/* 🔴 주소검색은 공용 `AddressSearch` 다(원칙 37번) — 승인 시
                         `companies.main_pickup_*` 와 `customer_locations` 로 자동 저장되는
-                        값이라 sido/sigungu 를 함께 넘겨야 한다. */}
-                    <div style={{ marginTop: 20 }}>
-                      <label style={fieldLabel}>주요 출발지</label>
-                      <div style={{ marginTop: 8 }}>
-                        <AddressSearch
-                          label=""
-                          className="landing-addr"
-                          value={form.main_origin}
-                          detailValue={form.main_origin_detail}
-                          onChange={(addr, sido, sigungu) =>
-                            setForm((p) => ({ ...p, main_origin: addr, main_origin_sido: sido, main_origin_sigungu: sigungu }))
-                          }
-                          onDetailChange={(v) => setField("main_origin_detail", v)}
-                        />
-                      </div>
-                    </div>
-                    <div style={{ marginTop: 20 }}>
-                      <label style={fieldLabel}>주요 도착지</label>
-                      <div style={{ marginTop: 8 }}>
-                        <AddressSearch
-                          label=""
-                          className="landing-addr"
-                          value={form.main_destination}
-                          detailValue={form.main_destination_detail}
-                          onChange={(addr, sido, sigungu) =>
-                            setForm((p) => ({ ...p, main_destination: addr, main_destination_sido: sido, main_destination_sigungu: sigungu }))
-                          }
-                          onDetailChange={(v) => setField("main_destination_detail", v)}
-                        />
-                      </div>
+                        값이라 sido/sigungu 를 함께 넘겨야 한다.
+                        🔴 시안은 출발지·도착지를 **옅은 회색 하위 카드 두 장으로 나란히** 두고
+                           가운데에 노란 화살표를 둔다(31차 리뷰 지시). 좁은 화면에서는
+                           `app/landing.css` 가 1열로 되돌리고 화살표를 숨긴다.
+                        🔴 하위 카드 배경이 #F4F3EF 라 그 안의 칸은 **흰색**이다
+                           (`fieldOnTintStyle` · `.landing-addr-tint`) — 같은 색을 겹치면 칸이 안 보인다. */}
+                    <div
+                      className="landing-route-grid"
+                      style={{ position: "relative", display: "grid", gridTemplateColumns: "repeat(2, minmax(0,1fr))", gap: 32, marginTop: 20, alignItems: "start" }}
+                    >
+                      {ROUTE_SIDES.map((side) => (
+                        <div key={side.key} style={{ padding: 20, borderRadius: 18, background: "#F4F3EF" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ width: 8, height: 8, borderRadius: 999, background: side.dot }} />
+                            <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.02em" }}>{side.title}</span>
+                            <span style={{ fontSize: 13, color: "#8B8A85" }}>{side.sub}</span>
+                          </div>
+                          <div style={{ marginTop: 12 }}>
+                            <AddressSearch
+                              label=""
+                              className="landing-addr landing-addr-tint"
+                              value={form[side.addr]}
+                              detailValue={form[side.addrDetail]}
+                              onChange={(addr, sido, sigungu) =>
+                                setForm((prev) => ({ ...prev, [side.addr]: addr, [side.sido]: sido, [side.sigungu]: sigungu }))
+                              }
+                              onDetailChange={(v) => setField(side.addrDetail, v)}
+                            />
+                          </div>
+                          {/* 🔴 현장 상호·담당자명·연락처는 **선택**이다(시안·사용자 지시).
+                              값은 `notes` 로 이어 붙인다 — 위 `buildNotes` 주석 참고. */}
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0,1fr))", gap: 10, marginTop: 10 }}>
+                            <input
+                              type="text"
+                              value={form[side.siteName]}
+                              onChange={(e) => setField(side.siteName, e.target.value)}
+                              placeholder="현장 상호 (선택)"
+                              style={{ ...fieldOnTintStyle, padding: "13px 14px" }}
+                            />
+                            <input
+                              type="text"
+                              value={form[side.siteContact]}
+                              onChange={(e) => setField(side.siteContact, e.target.value)}
+                              placeholder="담당자명 (선택)"
+                              style={{ ...fieldOnTintStyle, padding: "13px 14px" }}
+                            />
+                          </div>
+                          <input
+                            type="tel"
+                            inputMode="numeric"
+                            maxLength={13}
+                            value={form[side.sitePhone]}
+                            onChange={(e) => setField(side.sitePhone, formatPhoneNumber(e.target.value))}
+                            placeholder="현장 담당자 연락처 (선택)"
+                            style={{ ...fieldOnTintStyle, padding: "13px 14px", marginTop: 10 }}
+                          />
+                        </div>
+                      ))}
+                      <span
+                        className="landing-route-badge"
+                        aria-hidden
+                        style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", display: "flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: 999, background: "#FFD834", color: "#0E0F12", fontSize: 15, fontWeight: 700 }}
+                      >
+                        →
+                      </span>
                     </div>
                   </div>
 
@@ -368,21 +494,36 @@ export default function ApplyPage() {
                         </div>
                       </div>
                       <div>
-                        {/* ⚠️ 21차의 「!」 hover 툴팁을 캡션으로 바꿨다 — 톤수 목록은 드롭다운을
-                            열면 그대로 보이므로 잃는 정보가 없고, 터치에는 hover 가 없다. */}
-                        <Dropdown
-                          ddKey="vehicle"
-                          label="주 이용 차량"
-                          options={[...VEHICLE_TYPES_PUBLIC]}
-                          placeholder="선택 안 함"
-                          value={form.preferred_vehicle}
-                          onPick={(v) => setField("preferred_vehicle", v)}
-                          openKey={openKey}
-                          setOpenKey={setOpenKey}
-                          pad="14px 15px"
-                        />
+                        {/* 🔴 「주 이용 차량」은 **톤수 + 형태 두 칸**이다(31차 리뷰 지시).
+                            제출 직전에 `"5톤 윙바디"` 처럼 공백으로 이어 `preferred_vehicle`
+                            한 칸으로 보낸다 — 승인 시 `companies.recommended_vehicle` 로
+                            승계되고 운영 DB 기존 539건이 이미 그 형태다(55차 ③).
+                            ⚠️ 21차의 「!」 hover 툴팁은 캡션으로 바꿨다(터치에는 hover 가 없다). */}
+                        <label style={fieldLabel}>주 이용 차량</label>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0,1fr))", gap: 10, marginTop: 8 }}>
+                          <Dropdown
+                            ddKey="vehicleTon"
+                            options={[...VEHICLE_TYPES_PUBLIC]}
+                            placeholder="차량 톤수"
+                            value={form.vehicle_ton}
+                            onPick={(v) => setField("vehicle_ton", v)}
+                            openKey={openKey}
+                            setOpenKey={setOpenKey}
+                            pad="14px 15px"
+                          />
+                          <Dropdown
+                            ddKey="vehicleBody"
+                            options={[...QUOTE_BODY_TYPES]}
+                            placeholder="차량 형태"
+                            value={form.vehicle_body}
+                            onPick={(v) => setField("vehicle_body", v)}
+                            openKey={openKey}
+                            setOpenKey={setOpenKey}
+                            pad="14px 15px"
+                          />
+                        </div>
                         <div style={{ marginTop: 6, fontSize: 12.5, lineHeight: 1.6, color: "#A8A79F" }}>
-                          주로 이용하시는 차량 톤수를 골라주세요.
+                          주로 이용하시는 차량 톤수와 형태를 골라주세요.
                         </div>
                       </div>
                     </div>

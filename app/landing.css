@@ -283,10 +283,22 @@
   padding: 15px 16px;
   border: 1px solid #ebeae7;
   border-radius: 12px;
-  background: #ffffff;
+  /* 🔴 배경은 흰색이 아니라 #FAFAF8 이다 — 카드가 흰색이라 칸까지 흰색이면 경계가 사라진다
+     (31차 리뷰 "항목칸 컬러"). `fieldStyle`(Fields.tsx)과 같은 값이다. */
+  background: #fafaf8;
   font-family: inherit;
-  font-size: 15px;
+  /* 🔴 **16px 이다 — 15px 로 내리지 말 것.** iOS Safari 는 16px 미만 입력창에 포커스하면
+     화면을 자동 확대하고, 그러면 뷰포트가 페이지보다 좁아져 좌우로 밀리는 것처럼 보인다
+     (26차 신고). 이 선택자가 전역 `.public-form`(16px)보다 특성도가 높아 **여기서 15px 을
+     주면 그 방어가 통째로 무력화된다** — 31차에 실제로 그 상태였다(실측 15px). */
+  font-size: 16px;
   color: #1a1a1a;
+}
+
+/* 옅은 회색(#F4F3EF) 블록 안에 놓이는 주소칸 — 그 자리에서는 시안이 칸을 흰색으로
+   뒤집는다(`/apply` 주요 출발지·도착지 하위 카드). `fieldOnTintStyle` 과 같은 규칙이다. */
+.landing-page .landing-addr-tint input {
+  background: #ffffff;
 }
 .landing-page .landing-addr input::placeholder {
   color: #888378;
@@ -303,7 +315,8 @@
   padding: 0 18px;
   border: 1px solid #ebeae7;
   border-radius: 12px;
-  background: #f4f3ef;
+  /* 시안 실측값 — `searchBtnStyle`(Fields.tsx)과 같은 #EBEAE7 이다. */
+  background: #ebeae7;
   font-family: inherit;
   font-size: 14px;
   font-weight: 600;
