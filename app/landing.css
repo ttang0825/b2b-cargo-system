@@ -206,6 +206,9 @@
 }
 
 @media (max-width: 700px) {
+  /* 🔴 좁은 화면에서는 버튼을 아래로 내려 전체 폭으로 — 컴포넌트가 `nowrap` 이라
+     여기서 `wrap` 을 되돌려 줘야 한다. */
+  .landing-login-foot { flex-wrap: wrap !important; }
   .landing-login-foot a[href*="/apply"] { width: 100% !important; flex: 1 1 100% !important; box-sizing: border-box !important; padding: 17px !important; border-radius: 999px !important; font-size: 15.5px !important; font-weight: 600 !important; }
   .landing-route-grid { grid-template-columns: minmax(0,1fr) !important; }
   .landing-route-badge { display: none !important; }

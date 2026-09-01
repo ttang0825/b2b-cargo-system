@@ -179,13 +179,22 @@ export default function CustomerLoginPage() {
                    FAQ 문구(평일 09:00~18:00 접수 기준 당일 안)로 맞췄다 — 두 화면이 다른
                    시간을 약속하면 지키지 못하는 쪽이 생긴다.
                 🔴 라벨은 12차에 화면 6곳을 통일한 「운송관리 계정 신청」 그대로다. */}
+            {/* 🔴 `flexWrap: "nowrap"` 이다 — `wrap` 이면 왼쪽 글줄과 버튼의 **기본 폭 합이
+                카드 폭(352px)을 넘는 순간 버튼이 아래 줄로 떨어진다**(flex 는 줄을 나눈 뒤에
+                줄여서, 왼쪽이 줄어들 수 있어도 먼저 줄바꿈이 일어난다). 시안은 글줄 왼쪽 ·
+                버튼 오른쪽 한 줄이고, 사용자가 "버튼의 위치가 다르다"로 신고한 것이 이것이다.
+                🔴 대신 왼쪽에 `flex: 1 1 auto` + `minWidth: 0` 을 줘서 **글줄이 줄바꿈되게**
+                   했다 — 시안 문구(「2~3시간 이내 발급」)보다 우리 문구가 길기 때문이다.
+                   ⚠️ 짧게 줄이려고 운영시간을 빼지 말 것: 그러면 주말 접수 건에도 「당일
+                   발급」을 약속하는 문장이 된다(31차 ⑨(a) 가 FAQ 와 맞춘 이유).
+                ⚠️ 700px 이하는 `app/landing.css` 가 버튼을 전체 폭으로 되돌린다. */}
             <div
               className="landing-login-foot"
-              style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 16, marginTop: 32, paddingTop: 26, borderTop: "1px solid #E7E6E1" }}
+              style={{ display: "flex", flexWrap: "nowrap", alignItems: "center", justifyContent: "space-between", gap: 16, marginTop: 32, paddingTop: 26, borderTop: "1px solid #E7E6E1" }}
             >
-              <div>
+              <div style={{ flex: "1 1 auto", minWidth: 0 }}>
                 <div style={{ fontSize: 14.5, fontWeight: 600 }}>계정이 없으신가요?</div>
-                <div style={{ marginTop: 5, fontSize: 13, color: "#8B8A85" }}>
+                <div style={{ marginTop: 5, fontSize: 12.8, lineHeight: 1.5, color: "#8B8A85", wordBreak: "keep-all" }}>
                   {COMPANY_SUPPORT_HOURS} 접수 기준 당일 발급
                 </div>
               </div>
