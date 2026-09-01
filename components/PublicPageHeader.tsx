@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import BrandLogo from "@/components/BrandLogo";
 import { useScrolled } from "@/lib/useScrolled";
 

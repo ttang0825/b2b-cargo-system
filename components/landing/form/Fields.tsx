@@ -23,7 +23,10 @@ const trigger = (hasValue: boolean, pad: string): CSSProperties => ({
   padding: pad,
   border: "1px solid #EBEAE7",
   borderRadius: 12,
-  background: "#FFFFFF",
+  // 🔴 입력칸 배경은 흰색이 아니라 **#FAFAF8** 이다(시안 실측 — 31차 리뷰에 사용자가
+  //    "항목칸 컬러"가 다르다고 신고). 카드가 흰색(#FFFFFF)이라 칸이 흰색이면 경계가
+  //    사라진다. `#F4F3EF` 위에 올릴 때만 `fieldOnTintStyle` 로 흰색을 쓴다.
+  background: "#FAFAF8",
   fontSize: 15,
   textAlign: "left",
   cursor: "pointer",
@@ -75,11 +78,16 @@ export const fieldStyle: CSSProperties = {
   padding: "15px 16px",
   border: "1px solid #EBEAE7",
   borderRadius: 12,
-  background: "#FFFFFF",
+  // 🔴 위 `trigger` 와 같은 이유로 #FAFAF8 이다 — 흰색으로 되돌리지 말 것.
+  background: "#FAFAF8",
   fontFamily: "inherit",
   fontSize: 16,
   color: "#1A1A1A",
 };
+
+/** 옅은 회색(#F4F3EF) 블록 **안**에 놓이는 입력칸. 🔴 그 자리에서는 시안이 칸을 흰색으로
+ *  뒤집는다(`/apply` 의 주요 출발지·도착지 하위 카드) — 같은 색을 겹치면 칸이 안 보인다. */
+export const fieldOnTintStyle: CSSProperties = { ...fieldStyle, background: "#FFFFFF" };
 
 /** 카드(흰 블록). */
 export const cardStyle: CSSProperties = {
@@ -91,13 +99,15 @@ export const cardStyle: CSSProperties = {
 
 export const cardTitleStyle: CSSProperties = { fontSize: 19, fontWeight: 600, letterSpacing: "-0.02em" };
 
+// 「선택」 배지. 🔴 시안 실측값이다(배경 #F0EFEB · 글자 #6C6B66) — 31차에 처음 옮길 때
+// #F4F3EF / #8B8A85 로 두어 시안보다 흐렸고 사용자가 신고했다. 옅게 되돌리지 말 것.
 export const optionChipStyle: CSSProperties = {
   padding: "4px 10px",
   borderRadius: 999,
-  background: "#F4F3EF",
+  background: "#F0EFEB",
   fontSize: 12,
   fontWeight: 600,
-  color: "#8B8A85",
+  color: "#6C6B66",
 };
 
 export const searchBtnStyle: CSSProperties = {

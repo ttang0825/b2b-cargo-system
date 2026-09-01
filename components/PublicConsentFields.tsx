@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import LegalLinks from "@/components/LegalLinks";
-import { TERMS_CONSENT } from "@/lib/legalInfo";
+import { APPLY_CONSENT, TERMS_CONSENT } from "@/lib/legalInfo";
 
 // 이용약관 + 개인정보 동의 블록 (18차).
 //
@@ -58,7 +58,7 @@ type Props = {
 };
 
 /** 시안 모양의 동의 카드 한 장. 🔴 라벨·설명 문구는 상수에서 온 것을 그대로 받는다. */
-function LandingConsentCard({
+export function LandingConsentCard({
   checked,
   onChange,
   title,
@@ -108,7 +108,12 @@ function LandingConsentCard({
           </svg>
         </span>
         <span style={{ flex: "1 1 auto", minWidth: 0 }}>
-          <span style={{ display: "block", fontSize: 14.5, fontWeight: 600, letterSpacing: "-0.02em", color: "#0E0F12" }}>{title}</span>
+          <span style={{ display: "block", fontSize: 14.5, fontWeight: 600, letterSpacing: "-0.02em", color: "#0E0F12" }}>
+            {title}
+            {/* 🔴 「필수」는 제목 안 대괄호가 아니라 **별도 배지**다(시안) — 상수의
+                `[필수]` 접두사를 화면에 그대로 찍지 말 것. */}
+            <span style={{ marginLeft: 6, fontSize: 12, fontWeight: 600, color: "#8B8A85" }}>필수</span>
+          </span>
           {desc && <span style={{ display: "block", marginTop: 4, fontSize: 13, lineHeight: 1.6, color: "#8B8A85" }}>{desc}</span>}
         </span>
         {/* 🔴 「전문 보기」는 30차 `LegalLinks` 모달이다 — 시안은 약관 초안을 화면 코드에
@@ -133,16 +138,23 @@ export default function PublicConsentFields({
   if (variant === "landing") {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 24 }}>
+        {/* 🔴 landing 변형은 제목·설명을 **두 줄로 나눠** 그린다(31차 리뷰 확정) — 그래서
+            `termsLabel`/`privacyText`(=`[필수] …` 한 문장)를 쓰지 않고 상수의 조각을 쓴다.
+            portal 변형은 예전 그대로 한 문장을 쓰므로 두 화면이 갈리지 않는다. */}
         <LandingConsentCard
           checked={termsAgreed}
           onChange={onTermsChange}
-          title={termsLabel}
+          title={TERMS_CONSENT.label}
           desc={TERMS_CONSENT.summary}
           doc="terms"
         />
-        {/* 🔴 개인정보 동의 카드에는 설명 줄을 따로 두지 않는다 — `APPLY_CONSENT_TEXT`
-            자체가 목적·보유를 이미 말한다. 여기에 새 문구를 적으면 상수와 갈린다. */}
-        <LandingConsentCard checked={privacyAgreed} onChange={onPrivacyChange} title={privacyText} doc="privacy" />
+        <LandingConsentCard
+          checked={privacyAgreed}
+          onChange={onPrivacyChange}
+          title={APPLY_CONSENT.label}
+          desc={APPLY_CONSENT.detail}
+          doc="privacy"
+        />
         {/* 🔴 거부권 안내(`refusal`)를 빼지 말 것 — 개인정보보호법 제15조 2항이 요구한다.
             두 동의에 함께 걸리는 문장이라 카드 아래에 한 번만 둔다. */}
         <p style={{ margin: "2px 0 0", paddingLeft: 2, fontSize: 12.5, lineHeight: 1.6, color: "#8B8A85" }}>

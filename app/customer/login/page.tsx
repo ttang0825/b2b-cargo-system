@@ -89,7 +89,7 @@ export default function CustomerLoginPage() {
   return (
     <div
       className="landing-page public-form"
-      style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#F4F3F0", color: "#0E0F12" }}
+      style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#F4F3EF", color: "#0E0F12" }}
     >
       <header className="landing-login-header" style={{ padding: "18px 56px", display: "flex", alignItems: "center" }}>
         <Link href="/" aria-label="위캐리 운송 홈" style={{ display: "flex", alignItems: "center", color: "#0E0F12" }}>

@@ -6,7 +6,7 @@ import LandingHeader from "@/components/landing/LandingHeader";
 import LandingFooter from "@/components/landing/LandingFooter";
 import SubmitDone from "@/components/landing/SubmitDone";
 import AddressSearch from "@/components/AddressSearch";
-import LegalLinks from "@/components/LegalLinks";
+import { LandingConsentCard } from "@/components/PublicConsentFields";
 import {
   DatePicker,
   Dropdown,
@@ -24,7 +24,7 @@ import { VEHICLE_TYPES_PUBLIC, formatPhoneNumber } from "@/lib/constants";
 import { QUOTE_BODY_TYPES } from "@/lib/vehicleBodyTypes";
 import { LOADING_METHODS } from "@/lib/loadingMethods";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
-import { QUOTE_CONSENT_TEXT } from "@/lib/legalInfo";
+import { QUOTE_CONSENT } from "@/lib/legalInfo";
 import { localInputToISOString } from "@/lib/localDateTime";
 import "@/app/landing.css";
 
@@ -49,6 +49,9 @@ import "@/app/landing.css";
 //    상세와 **견적 전환 프리필**(`notes` → 견적 특이사항)까지 그대로 따라간다.
 //    ⚠️ 컬럼을 만들자는 제안이 나오면 그때는 관리자 목록·상세·프리필까지 함께 봐야 한다.
 
+// 「선택」 배지. 🔴 값은 `optionChipStyle`(Fields.tsx)이 유일 정의처다 — 31차 리뷰에
+// 사용자가 "「선택」부분의 글씨가 시안과 선명도가 다르다"고 해서 그쪽 값을 시안 실측값
+// (배경 #F0EFEB · 글자 #6C6B66)으로 올렸다. 여기서 다시 덮어쓰지 말 것.
 const detailChip: CSSProperties = { ...optionChipStyle };
 
 type Picks = Record<string, string>;
@@ -63,7 +66,6 @@ export default function PublicQuotePage() {
   const [form, setForm] = useState({
     name: "",
     phone: "",
-    email: "",
     origin: "",
     originDetail: "",
     originSido: "",
@@ -80,7 +82,9 @@ export default function PublicQuotePage() {
 
   // 드롭다운·달력 값. 🔴 열림은 화면 전체에서 하나뿐이다(`useOpenKey`).
   const [picks, setPicks] = useState<Picks>({
-    ton: VEHICLE_TYPES_PUBLIC[0],
+    // 🔴 톤수 기본값은 **빈 값(「선택 안 함」)** 이다 — 시안이 그렇고, `VEHICLE_TYPES_PUBLIC[0]`
+    //    으로 두면 고르지 않은 화주의 문의가 전부 「1톤」으로 접수되어 담당자가 되묻게 된다.
+    ton: "",
     load: LOADING_METHODS[0].label,
     unload: LOADING_METHODS[0].label,
   });
@@ -175,7 +179,9 @@ export default function PublicQuotePage() {
         body: JSON.stringify({
           name: form.name.trim(),
           phone: form.phone.trim(),
-          email: form.email.trim() || null,
+          // 🔴 이메일 칸은 31차 리뷰에 없앴다(사용자 지시 — 시안에도 없다).
+          //    `public_quote_requests.email` 컬럼과 API 는 그대로 두고 항상 null 을 보낸다.
+          email: null,
           origin: [form.origin.trim(), form.originDetail.trim()].filter(Boolean).join(" "),
           origin_sido: form.originSido || null,
           origin_sigungu: form.originSigungu || null,
@@ -305,7 +311,7 @@ export default function PublicQuotePage() {
                   type="text"
                   value={form.item}
                   onChange={(e) => setField("item", e.target.value)}
-                  placeholder="운송할 물품을 입력하세요 (예: 택배박스 20개)"
+                  placeholder="운송할 물품을 입력하세요"
                   style={{ ...fieldStyle, marginTop: 8 }}
                 />
 
@@ -329,41 +335,20 @@ export default function PublicQuotePage() {
                   style={{ ...fieldStyle, marginTop: 8 }}
                 />
 
-                <label style={{ ...fieldLabel, marginTop: 20 }}>이메일 (선택)</label>
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setField("email", e.target.value)}
-                  placeholder="quote@company.co.kr"
-                  style={{ ...fieldStyle, marginTop: 8 }}
-                />
-
                 {/* 🔴 동의 문구는 `lib/legalInfo.ts` 가 유일 정의처다 — 여기에 적지 말 것.
-                    🔴 「전문 보기」는 30차가 만든 `<LegalLinks />` 모달이다. 시안은 약관
-                       초안을 코드에 통째로 들고 있었다(우리에겐 `lib/legal/` 전문이 있다). */}
-                <div style={{ marginTop: 20, padding: "18px 20px", border: `1px solid ${agreed ? "#FFD834" : "#EBEAE7"}`, borderRadius: 16, background: agreed ? "#FFFCEC" : "#FAFAF8", transition: "background 0.2s ease, border-color 0.2s ease" }}>
-                  <label className="landing-consent" style={{ display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}>
-                    <span style={{ position: "relative", flex: "0 0 auto", width: 22, height: 22, border: `1.5px solid ${agreed ? "#FFD834" : "#D8D7D1"}`, borderRadius: 7, background: agreed ? "#FFD834" : "#FFFFFF", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <input
-                        type="checkbox"
-                        checked={agreed}
-                        onChange={(e) => setAgreed(e.target.checked)}
-                        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", margin: 0, opacity: 0, cursor: "pointer" }}
-                      />
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden style={{ display: "block", opacity: agreed ? 1 : 0, pointerEvents: "none" }}>
-                        <path d="M5 12.6l4.4 4.4L19 7.4" stroke="#0E0F12" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </span>
-                    <span style={{ flex: "1 1 auto", minWidth: 0 }}>
-                      <span style={{ display: "block", fontSize: 14.5, fontWeight: 600, letterSpacing: "-0.02em", color: "#0E0F12" }}>
-                        {QUOTE_CONSENT_TEXT}
-                        <span style={{ marginLeft: 6, fontSize: 12, fontWeight: 600, color: "#8B8A85" }}>필수</span>
-                      </span>
-                    </span>
-                  </label>
-                  <div className="landing-consent-links" style={{ display: "flex", gap: 16, marginTop: 10, paddingLeft: 36, fontSize: 13 }}>
-                    <LegalLinks linkClassName="landing-form-legal-link" />
-                  </div>
+                    🔴 카드는 `/apply` 와 **같은 `LandingConsentCard`** 를 쓴다(31차 리뷰) —
+                       두 화면이 갈리면 같은 동의가 화면마다 다르게 보인다.
+                    🔴 여기 링크는 **개인정보처리방침 하나뿐이다**(사용자 지시 2026-09-01).
+                       `/quote` 는 약관 동의를 받지 않으므로(14차·18차 확정) 약관·이메일
+                       무단수집거부 전문을 여기에 걸어두면 받지 않은 동의처럼 읽힌다. */}
+                <div style={{ marginTop: 20 }}>
+                  <LandingConsentCard
+                    checked={agreed}
+                    onChange={setAgreed}
+                    title={QUOTE_CONSENT.label}
+                    desc={QUOTE_CONSENT.detail}
+                    doc="privacy"
+                  />
                 </div>
               </div>
 
