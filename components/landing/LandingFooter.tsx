@@ -1,6 +1,6 @@
 import CompanyNameMark from "@/components/CompanyNameMark";
 import ObfuscatedEmail from "@/components/ObfuscatedEmail";
-import { COMPANY_SUPPORT_HOURS, COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
+import { COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
 import {
   COMPANY_ADDRESS,
   COMPANY_BIZ_REG_NO,
@@ -34,14 +34,11 @@ export default function LandingFooter() {
               {COMPANY_SUPPORT_PHONE}
             </a>
           </div>
+          {/* 🔴 운영시간 줄을 뺐다(사용자 지시 2026-09-01 — "고객센터에서 시간 내용도
+              빼자"). 되살리지 말 것. ⚠️ 운영시간 자체는 없어진 값이 아니다 —
+              `COMPANY_SUPPORT_HOURS` 는 /about 푸터(`SiteFooter`)·화주포털·로그인 화면이
+              계속 쓴다. 랜딩 푸터에서만 감춘 것이다. */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 16.8, color: "#6C6B65" }}>
-              <svg width="26" height="26" viewBox="0 0 20 20" fill="none" style={{ flex: "0 0 auto", display: "block" }}>
-                <circle cx="10" cy="10" r="7" stroke="#A8A79F" strokeWidth="1.4" />
-                <path d="M10 6.4V10l2.6 1.6" stroke="#A8A79F" strokeWidth="1.4" strokeLinecap="round" />
-              </svg>
-              <span>{COMPANY_SUPPORT_HOURS} (주말·공휴일 휴무)</span>
-            </div>
             <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 16.8 }}>
               <svg width="26" height="26" viewBox="0 0 20 20" fill="none" style={{ flex: "0 0 auto", display: "block" }}>
                 <rect x="3" y="5" width="14" height="10" rx="2" stroke="#A8A79F" strokeWidth="1.4" />
@@ -64,10 +61,14 @@ export default function LandingFooter() {
           <div>통신판매업 신고 {COMPANY_ECOMMERCE_LICENSE}</div>
           <div>화물자동차 운송주선사업 허가 {COMPANY_FREIGHT_BROKER_LICENSE}</div>
           <div>{COMPANY_ADDRESS}</div>
-          {/* 🔴 아래 두 줄은 시안에 없지만 뺄 수 없다 — 전자상거래법 제10조 표시사항인
-              **호스팅사업자**와, 개인정보처리방침이 지정한 **개인정보 보호책임자**다
-              (30차 `SiteFooter` 가 같은 이유로 담고 있다). */}
-          <div>개인정보 보호책임자 {COMPANY_CEO} · 호스팅 제공 Vercel Inc.</div>
+          {/* 🔴 **개인정보 보호책임자는 뺐고 호스팅사업자는 남겼다**(사용자 지시
+              2026-09-01 — "개인정보 보호책임자 · 호스팅 제공 Vercel Inc. 는 빼자").
+              보호책임자는 개인정보처리방침 제9조가 같은 값을 이미 고지하므로 푸터에서
+              빼도 고지 의무가 유지된다.
+              🔴 **호스팅사업자 상호는 뺄 수 없다** — 전자상거래법 제10조 1항이
+                 **초기화면**에 표시하도록 정한 항목이고, 랜딩이 그 초기화면이다.
+                 이 한 줄을 지우려면 그 조문부터 확인할 것. */}
+          <div>호스팅 제공 Vercel Inc.</div>
           <div style={{ marginTop: 10, fontSize: 12.5, color: "#9C9B95" }}>© {new Date().getFullYear()} {COMPANY_LEGAL_NAME}. All rights reserved.</div>
         </div>
       </div>
