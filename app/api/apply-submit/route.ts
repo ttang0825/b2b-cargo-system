@@ -29,6 +29,12 @@ export async function POST(req: Request) {
     notes,
     agreed,
     termsAgreed,
+    // 🔴 아래 셋은 **저장하지 않는다** — 현장 정보는 컬럼이 없어 `notes` 에 접혀서 오고,
+    //    여기서는 **제3자 동의를 요구해야 하는지 판단**하는 데만 쓴다. 화면이 보낸 boolean
+    //    하나만 믿으면 콘솔에서 우회되므로(원칙 25번) 값 자체를 받아 서버가 직접 본다.
+    origin_contact_phone,
+    destination_contact_phone,
+    thirdPartyAgreed,
   } = body;
 
   if (!company_name?.trim() || !contact_name?.trim() || !contact_phone?.trim()) {
@@ -48,6 +54,18 @@ export async function POST(req: Request) {
   if (agreed !== true) {
     return NextResponse.json(
       { error: "개인정보 수집·이용에 동의해주셔야 신청을 접수할 수 있습니다." },
+      { status: 400 }
+    );
+  }
+
+  // 🔴 현장 담당자 연락처를 적었으면 **제3자 동의를 반드시 받는다.** 안 적었으면 그 동의를
+  //    요구하지도, 기록하지도 않는다(`CONDITIONAL_CONSENT_TYPES_BY_SOURCE`). 조건이 맞는데
+  //    체크가 없으면 접수를 막는다 — 화면에서 이미 막지만 서버에서도 본다(원칙 25번).
+  const hasSiteContact =
+    !!origin_contact_phone?.trim() || !!destination_contact_phone?.trim();
+  if (hasSiteContact && thirdPartyAgreed !== true) {
+    return NextResponse.json(
+      { error: "현장 담당자 정보 제공에 동의해주셔야 신청을 접수할 수 있습니다." },
       { status: 400 }
     );
   }
@@ -137,6 +155,9 @@ export async function POST(req: Request) {
     subjectType: "application",
     subjectId: inserted.id,
     source: "/apply",
+    // 🔴 현장 담당자 정보를 실제로 받은 건에만 제3자 동의 행을 남긴다 — 안 그러면
+    //    현장 정보를 한 글자도 안 적은 신청서에도 동의 행이 생겨 그 기록이 거짓이 된다.
+    extraTypes: hasSiteContact ? ["third_party"] : [],
   });
 
   if (consentError) {

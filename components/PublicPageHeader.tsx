@@ -4,11 +4,14 @@ import Link from "next/link";
 import BrandLogo from "@/components/BrandLogo";
 import { useScrolled } from "@/lib/useScrolled";
 
-// 공개 하위 화면(`/quote`, `/apply`, `/status`, `/quote/status`, `/apply/status`)의 공용 헤더.
+// 공개 하위 화면의 공용 헤더. 🔴 **지금 쓰는 곳은 `CustomerPortalShell` 의 공개 경로
+// 분기(`/customer/login` · `/customer/support-verify`) 하나뿐이다** — 원래 이 컴포넌트를
+// 쓰던 5개 화면 중 `/quote`·`/apply` 는 31차에 시안 헤더로 바뀌었고,
+// `/status`·`/quote/status`·`/apply/status` 는 31차 리뷰에 라우트째 삭제됐다.
 //
-// 이 5개 화면은 원래 **완전히 똑같은 헤더 JSX를 각자 복사해서** 갖고 있었다(2종 —
+// 그 5개 화면은 원래 **완전히 똑같은 헤더 JSX를 각자 복사해서** 갖고 있었다(2종 —
 // "로고만" / "로고 + 현황조회 링크"). PR #77에서 브랜드 로고를 통일할 때도 5곳을 각각
-// 고쳐야 했고, 스티키를 붙이려면 또 5곳을 고쳐야 해서 이번에 하나로 합쳤다.
+// 고쳐야 했고, 스티키를 붙이려면 또 5곳을 고쳐야 해서 하나로 합친 것이다.
 // **공개 하위 화면에 헤더를 새로 만들지 말고 이 컴포넌트를 쓸 것.**
 //
 // 랜딩·회사소개·차량안내·법적 문서는 메뉴와 모바일 드롭다운이 있는
@@ -17,12 +20,10 @@ import { useScrolled } from "@/lib/useScrolled";
 // 헤더 높이·배경·그림자를 바꿀 때는 그 클래스 한 곳만 고치면 된다.
 //
 // ⚠️ 관리자(`/admin`)·운송관리(`/customer`) 화면의 `TopNav.tsx`와는 무관하다. 건드리지 말 것.
-export default function PublicPageHeader({
-  /** 우측에 "문의·신청 현황 조회" 링크를 노출할지 (`/quote`·`/apply`만 true) */
-  showStatusLink = false,
-}: {
-  showStatusLink?: boolean;
-}) {
+// 🔴 「문의·신청 현황 조회」 칩을 다시 만들지 말 것 — 사용자 지시(2026-09-01).
+// 30차 리뷰에 랜딩 CTA 하단에서 뺀 데 이어 **공개 화면 전체에서 없애기로 확정**됐고,
+// 그래서 `showStatusLink` prop 자체를 없앴다(로고만 남는 헤더 1종이다).
+export default function PublicPageHeader() {
   const scrolled = useScrolled();
 
   return (
@@ -47,15 +48,6 @@ export default function PublicPageHeader({
         >
           <BrandLogo className="landing-brand-logo" />
         </Link>
-
-        {/* 11차에 헤더가 옐로로 바뀌면서 인라인 스타일(옅은 노랑 배경 + --accent 글자)이
-            헤더 배경에 묻혔다 — 스타일을 `.public-header-status-link`(globals.css)로 옮겼다.
-            🔴 헤더 안 텍스트에 `--text-muted`를 쓰지 말 것(옐로 위 대비 부족). */}
-        {showStatusLink && (
-          <Link href="/status" className="public-header-status-link">
-            문의·신청 현황 조회
-          </Link>
-        )}
       </div>
     </header>
   );

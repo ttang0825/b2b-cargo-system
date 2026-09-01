@@ -278,12 +278,12 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
   // 🔴 색인 차단에는 영향이 없다 — noindex는 `app/customer/layout.tsx`의 metadata가
   // 결정하고 `/customer/login`에는 자체 layout이 없어 부모 설정을 그대로 상속한다.
   //
-  // ⚠️ 현황조회 칩은 끈다(showStatusLink={false}) — 로그인하러 온 사람에게
+  // ⚠️ 현황조회 칩은 31차 리뷰에 컴포넌트에서 통째로 없앴다 — 로그인하러 온 사람에게
   // 비회원 조회로 새는 링크를 주지 않기 위함.
   if (PUBLIC_PATHS.includes(pathname || "")) {
     return (
       <div className="portal-theme">
-        <PublicPageHeader showStatusLink={false} />
+        <PublicPageHeader />
         {children}
       </div>
     );

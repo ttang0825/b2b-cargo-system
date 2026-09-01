@@ -196,6 +196,11 @@
 .landing-page input:focus,
 .landing-page textarea:focus { outline: none; border-color: #17181A; background: #FFFFFF; }
 
+/* 운송 규모 4칸 — 넷의 폭이 같아야 한다(31차 리뷰). 좁아지면 2열 → 1열로 접는다. */
+@media (max-width: 1100px) and (min-width: 901px) {
+  .landing-scale-grid { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
+}
+
 @media (max-width: 900px) {
   .landing-apply-paths { grid-template-columns: minmax(0,1fr) !important; }
   .landing-main-pick-grid { grid-template-columns: minmax(0,1fr) !important; }
@@ -206,6 +211,9 @@
 }
 
 @media (max-width: 700px) {
+  /* 🔴 좁은 화면에서는 버튼을 아래로 내려 전체 폭으로 — 컴포넌트가 `nowrap` 이라
+     여기서 `wrap` 을 되돌려 줘야 한다. */
+  .landing-login-foot { flex-wrap: wrap !important; }
   .landing-login-foot a[href*="/apply"] { width: 100% !important; flex: 1 1 100% !important; box-sizing: border-box !important; padding: 17px !important; border-radius: 999px !important; font-size: 15.5px !important; font-weight: 600 !important; }
   .landing-route-grid { grid-template-columns: minmax(0,1fr) !important; }
   .landing-route-badge { display: none !important; }
@@ -263,4 +271,147 @@
   .landing-vehicle-note { font-size: 14.6px !important; }
   .landing-cta-links { gap: 14px 18px !important; font-size: 14.4px !important; }
   .landing-legal-link { font-size: 14.4px; }
+}
+
+/* ── 31차: 폼 3화면 공용 ──────────────────────────────────────────────
+   🔴 주소 입력은 공용 `AddressSearch`(원칙 37번)를 그대로 쓰되, 그 컴포넌트가
+   기본으로 다는 `.field` 대신 이 클래스를 넘겨 시안 모양으로 그린다. 컴포넌트를
+   고치면 관리자 6개 화면이 같이 바뀌므로 **원본은 한 줄도 안 건드렸다.**
+   라벨은 화면이 직접 그린다(출발지 줄에 「⇄ 바꾸기」 버튼이 함께 있어서)
+   — 그래서 컴포넌트가 그리는 빈 라벨은 숨긴다. */
+.landing-page .landing-addr > label:empty {
+  display: none;
+}
+.landing-page .landing-addr input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 15px 16px;
+  border: 1px solid #ebeae7;
+  border-radius: 12px;
+  /* 🔴 배경은 흰색이 아니라 #FAFAF8 이다 — 카드가 흰색이라 칸까지 흰색이면 경계가 사라진다
+     (31차 리뷰 "항목칸 컬러"). `fieldStyle`(Fields.tsx)과 같은 값이다. */
+  background: #fafaf8;
+  font-family: inherit;
+  /* 🔴 **16px 이다 — 15px 로 내리지 말 것.** iOS Safari 는 16px 미만 입력창에 포커스하면
+     화면을 자동 확대하고, 그러면 뷰포트가 페이지보다 좁아져 좌우로 밀리는 것처럼 보인다
+     (26차 신고). 이 선택자가 전역 `.public-form`(16px)보다 특성도가 높아 **여기서 15px 을
+     주면 그 방어가 통째로 무력화된다** — 31차에 실제로 그 상태였다(실측 15px). */
+  font-size: 16px;
+  color: #1a1a1a;
+}
+
+/* 옅은 회색(#F4F3EF) 블록 안에 놓이는 주소칸 — 그 자리에서는 시안이 칸을 흰색으로
+   뒤집는다(`/apply` 주요 출발지·도착지 하위 카드). `fieldOnTintStyle` 과 같은 규칙이다. */
+.landing-page .landing-addr-tint input {
+  background: #ffffff;
+}
+.landing-page .landing-addr input::placeholder {
+  color: #888378;
+}
+.landing-page .landing-addr input:focus {
+  outline: none;
+  border-color: #1a1a1a;
+}
+.landing-page .landing-addr > input {
+  margin-top: 8px;
+}
+.landing-page .landing-addr button {
+  flex-shrink: 0;
+  padding: 0 18px;
+  border: 1px solid #ebeae7;
+  border-radius: 12px;
+  /* 시안 실측값 — `searchBtnStyle`(Fields.tsx)과 같은 #EBEAE7 이다. */
+  background: #ebeae7;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: #4a4945;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.landing-page .landing-addr button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* 폼 화면(밝은 카드 위)의 법적 문서 링크. 🔴 랜딩 CTA 띠(어두운 배경)용
+   `.landing-legal-link` 와 색이 달라야 해서 클래스를 따로 뒀다 — 전역
+   `site-footer-link` 를 덮어쓰면 전역 클래스 재정의가 된다(30차 ⑦). */
+.landing-page .landing-form-legal-link {
+  color: #6c6b65;
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.landing-page .landing-form-legal-link:hover {
+  color: #0e0f12;
+}
+
+@media (max-width: 700px) {
+  .landing-consent-links { padding-left: 0 !important; flex-wrap: wrap !important; gap: 12px !important; }
+}
+
+/* 동의 카드의 「전문 보기」 — 30차 `LegalLinks` 모달을 여는 링크를 시안의 알약 버튼
+   모양으로 그린다. 🔴 전역 `site-footer-link` 를 덮지 않으려고 클래스를 넘겨 쓴다. */
+.landing-page .landing-consent-doc-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 9px 16px;
+  border: 1px solid #e1e0db;
+  border-radius: 999px;
+  background: #ffffff;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4a4945;
+  text-decoration: none;
+  cursor: pointer;
+}
+.landing-page .landing-consent-doc-link:hover {
+  background: #f4f3ef;
+}
+
+@media (max-width: 900px) {
+  .landing-apply-grid { grid-template-columns: minmax(0,1fr) !important; }
+}
+
+@media (max-width: 700px) {
+  /* 동의 카드의 「전문 보기」는 세 번째 자식이다(시안은 button, 우리는 링크 래퍼) */
+  .landing-consent > .landing-consent-doc { grid-column: 2 !important; grid-row: 2 !important; justify-self: start !important; }
+  .landing-page .landing-consent-doc-link { padding: 6px 12px !important; font-size: 12.5px !important; }
+  .landing-apply-tel { font-size: 34px !important; }
+}
+
+/* ── 31차 리뷰: 모바일 헤더 ─────────────────────────────────────────────────
+   사용자 신고(2026-09-01) — "모바일에서 상단 무료견적문의와 운송관리 로그인 메뉴
+   버튼이 서로 겹친다. 그리고 홈버튼 로고도 너무 작게 표시된다."
+
+   원인 둘 다 실측으로 확인했다.
+   ① 겹침 — 로그인 칩에 인라인 `marginLeft:-22` 가 있는데 1120px 이하에서 `gap` 이
+      14 로 줄어 **-8px** 이 됐다(620·430·390·360px 전부 8px 겹침). 컴포넌트에서
+      음수 마진을 없애고 gap 을 10 으로 고정해서 해결했다.
+   ② 로고 — 로고 링크가 `flex: 0 1 auto` + `min-width:0` 이라 폭이 통째로 눌렸다
+      (430px 에서 61px · 390px 21px · **360px 0px**). `flex: 0 0 auto` 로 바꿨다.
+
+   🔴 그래서 이제 폭이 안 줄어드는 대신 **버튼·로고 크기를 단계별로 줄여야** 한 줄에
+      들어간다. 아래 세 단계를 지울 거면 360px 에서 가로 오버플로우부터 다시 잴 것. */
+.landing-nav-short { display: none; }
+
+@media (max-width: 760px) {
+  .landing-header { padding-top: 12px !important; padding-bottom: 12px !important; }
+  .landing-header .landing-logo { height: 30px !important; }
+  .landing-nav { gap: 8px !important; }
+  /* 🔴 `!important` 가 필요하다 — 칩 크기는 컴포넌트의 인라인 style 이고 CSS 는 인라인을
+     `!important` 로만 이긴다. */
+  .landing-nav a { min-width: 0 !important; padding: 9px 15px !important; font-size: 13.5px !important; }
+}
+
+@media (max-width: 520px) {
+  .landing-header { padding-left: 16px !important; padding-right: 16px !important; }
+  .landing-header .landing-logo { height: 27px !important; }
+  .landing-nav { gap: 6px !important; }
+  .landing-nav a { padding: 8px 12px !important; font-size: 12.5px !important; }
+  .landing-nav-full { display: none !important; }
+  .landing-nav-short { display: inline !important; }
 }

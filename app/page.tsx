@@ -252,14 +252,19 @@ export default function LandingPage() {
       </section>
 
       {/* ── 진행 절차 ──────────────────────────────── */}
-      <section id="process" style={{ background: "#0E0F12", padding: `150px ${PAD} 160px` }}>
+      {/* 🔴 위아래 여백이 다른 섹션(150~200px)보다 짧다 — 사용자 지시(2026-09-01,
+          "「이렇게 진행합니다」와 「궁금하실 것들」의 칸이 디자인 레이아웃상 조금 벙벙해
+          보인다. 위 아래 여백을 조금만 더 줄이자"). 행 사이 간격도 40 → 30 으로 줄였다.
+          🔴 다른 섹션까지 같이 줄이지 말 것 — 지시는 이 둘만이고 "전체 디자인을 해치지
+             않는 선에서" 라는 단서가 붙어 있다. */}
+      <section id="process" style={{ background: "#0E0F12", padding: `110px ${PAD} 118px` }}>
         <h2 style={{ ...h2, margin: 0, color: "#FFFFFF" }}>이렇게 진행됩니다.</h2>
         <p style={{ margin: "16px 0 40px", fontSize: 18.6, lineHeight: 1.8, color: "rgba(255,255,255,0.55)" }}>
           각 단계의 내역이 운송관리 화면에 남습니다.
         </p>
         {process.map((p) => (
           <div key={p.no} className="landing-process-row"
-            style={{ display: "grid", gridTemplateColumns: "minmax(200px, 320px) minmax(280px, 1fr)", gap: 48, padding: "40px 0", borderTop: "1px solid rgba(255,255,255,0.14)", alignItems: "baseline" }}>
+            style={{ display: "grid", gridTemplateColumns: "minmax(200px, 320px) minmax(280px, 1fr)", gap: 48, padding: "30px 0", borderTop: "1px solid rgba(255,255,255,0.14)", alignItems: "baseline" }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 16 }}>
               <span style={{ fontSize: 15, fontWeight: 500, color: "rgba(255,255,255,0.4)" }}>{p.no}</span>
               <h3 style={{ margin: 0, fontSize: 29.2, fontWeight: 600, letterSpacing: "-0.03em", color: "#FFFFFF" }}>{p.title}</h3>
@@ -270,8 +275,9 @@ export default function LandingPage() {
       </section>
 
       {/* ── FAQ ────────────────────────────────────── */}
-      <section style={{ padding: `150px ${PAD} 170px` }}>
-        <div className="landing-faq-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(0,1fr))", gap: 64, alignItems: "start" }}>
+      {/* 위 진행 절차와 같은 이유로 여백을 줄였다(사용자 지시). */}
+      <section style={{ padding: `110px ${PAD} 120px` }}>
+        <div className="landing-faq-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(0,1fr))", gap: 52, alignItems: "start" }}>
           <div>
             <h2 style={{ ...h2, margin: "24px 0 0", fontSize: 42, lineHeight: 1.25 }}>궁금하실 것들,<br />먼저 답해드립니다.</h2>
           </div>
