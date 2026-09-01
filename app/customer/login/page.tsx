@@ -187,6 +187,11 @@ export default function CustomerLoginPage() {
                    했다 — 시안 문구(「2~3시간 이내 발급」)보다 우리 문구가 길기 때문이다.
                    ⚠️ 짧게 줄이려고 운영시간을 빼지 말 것: 그러면 주말 접수 건에도 「당일
                    발급」을 약속하는 문장이 된다(31차 ⑨(a) 가 FAQ 와 맞춘 이유).
+                🔴 **운영시간 / 발급 안내를 두 줄로 나눠 그린다**(사용자 지시 2026-09-01).
+                   자동 줄바꿈에 맡기면 폭에 따라 「평일 09:00 ~ 18:00 접수 / 기준 당일 발급」
+                   처럼 **뜻이 끊기는 자리에서** 잘린다. 폰트를 CDN 에서 받아와 폭이 달라질 수
+                   있으므로(37차) 이 자리는 **의미 단위로 고정**하는 것이 맞다 — 두 개의 블록
+                   요소로 나눴고 `<br />` 로 붙이지 않았다.
                 ⚠️ 700px 이하는 `app/landing.css` 가 버튼을 전체 폭으로 되돌린다. */}
             <div
               className="landing-login-foot"
@@ -195,7 +200,8 @@ export default function CustomerLoginPage() {
               <div style={{ flex: "1 1 auto", minWidth: 0 }}>
                 <div style={{ fontSize: 14.5, fontWeight: 600 }}>계정이 없으신가요?</div>
                 <div style={{ marginTop: 5, fontSize: 12.8, lineHeight: 1.5, color: "#8B8A85", wordBreak: "keep-all" }}>
-                  {COMPANY_SUPPORT_HOURS} 접수 기준 당일 발급
+                  <span style={{ display: "block" }}>{COMPANY_SUPPORT_HOURS}</span>
+                  <span style={{ display: "block" }}>접수 기준 당일 발급</span>
                 </div>
               </div>
               <Link

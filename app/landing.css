@@ -196,6 +196,11 @@
 .landing-page input:focus,
 .landing-page textarea:focus { outline: none; border-color: #17181A; background: #FFFFFF; }
 
+/* 운송 규모 4칸 — 넷의 폭이 같아야 한다(31차 리뷰). 좁아지면 2열 → 1열로 접는다. */
+@media (max-width: 1100px) and (min-width: 901px) {
+  .landing-scale-grid { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
+}
+
 @media (max-width: 900px) {
   .landing-apply-paths { grid-template-columns: minmax(0,1fr) !important; }
   .landing-main-pick-grid { grid-template-columns: minmax(0,1fr) !important; }

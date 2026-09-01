@@ -467,7 +467,10 @@ export default function ApplyPage() {
                       <div style={cardTitleStyle}>운송 규모</div>
                     </div>
                     <p style={{ margin: "8px 0 20px", fontSize: 13.5, lineHeight: 1.7, color: "#888378" }}>모르시는 항목은 비워두셔도 됩니다.</p>
-                    <div className="landing-scale-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 16 }}>
+                    {/* 🔴 네 칸의 폭이 같아야 한다(사용자 지시 2026-09-01) — 3열 안에서 차량
+                        두 칸을 다시 반으로 나누면 그 둘만 절반 폭이 된다. **4열 격자**로 두고
+                        톤수·형태를 각각 한 칸씩 쓴다. */}
+                    <div className="landing-scale-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 16 }}>
                       <div>
                         <label style={fieldLabel}>월 예상 운송건수</label>
                         <input
@@ -493,38 +496,39 @@ export default function ApplyPage() {
                           제조업, 유통업, 건설업, 식품업, 전자상거래, 물류업 등
                         </div>
                       </div>
+                      {/* 🔴 「주 이용 차량」은 **톤수 + 형태 두 칸**이다(31차 리뷰 지시).
+                          제출 직전에 `"5톤 윙바디"` 처럼 공백으로 이어 `preferred_vehicle`
+                          한 칸으로 보낸다 — 승인 시 `companies.recommended_vehicle` 로
+                          승계되고 운영 DB 기존 539건이 이미 그 형태다(55차 ③).
+                          🔴 라벨이 「주 이용 차량 톤수」·「주 이용 차량 형태」인 이유 — 넷을 같은
+                             폭으로 세우면서 「주로 이용하시는…」 캡션을 없앴고, 그 뜻을 라벨이
+                             대신 담는다. 「차량 톤수」로 줄이지 말 것.
+                          ⚠️ 21차의 「!」 hover 툴팁은 이미 없앴다(터치에는 hover 가 없다). */}
                       <div>
-                        {/* 🔴 「주 이용 차량」은 **톤수 + 형태 두 칸**이다(31차 리뷰 지시).
-                            제출 직전에 `"5톤 윙바디"` 처럼 공백으로 이어 `preferred_vehicle`
-                            한 칸으로 보낸다 — 승인 시 `companies.recommended_vehicle` 로
-                            승계되고 운영 DB 기존 539건이 이미 그 형태다(55차 ③).
-                            ⚠️ 21차의 「!」 hover 툴팁은 캡션으로 바꿨다(터치에는 hover 가 없다). */}
-                        <label style={fieldLabel}>주 이용 차량</label>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0,1fr))", gap: 10, marginTop: 8 }}>
-                          <Dropdown
-                            ddKey="vehicleTon"
-                            options={[...VEHICLE_TYPES_PUBLIC]}
-                            placeholder="차량 톤수"
-                            value={form.vehicle_ton}
-                            onPick={(v) => setField("vehicle_ton", v)}
-                            openKey={openKey}
-                            setOpenKey={setOpenKey}
-                            pad="14px 15px"
-                          />
-                          <Dropdown
-                            ddKey="vehicleBody"
-                            options={[...QUOTE_BODY_TYPES]}
-                            placeholder="차량 형태"
-                            value={form.vehicle_body}
-                            onPick={(v) => setField("vehicle_body", v)}
-                            openKey={openKey}
-                            setOpenKey={setOpenKey}
-                            pad="14px 15px"
-                          />
-                        </div>
-                        <div style={{ marginTop: 6, fontSize: 12.5, lineHeight: 1.6, color: "#A8A79F" }}>
-                          주로 이용하시는 차량 톤수와 형태를 골라주세요.
-                        </div>
+                        <Dropdown
+                          ddKey="vehicleTon"
+                          label="주 이용 차량 톤수"
+                          options={[...VEHICLE_TYPES_PUBLIC]}
+                          placeholder="선택 안 함"
+                          value={form.vehicle_ton}
+                          onPick={(v) => setField("vehicle_ton", v)}
+                          openKey={openKey}
+                          setOpenKey={setOpenKey}
+                          pad="14px 15px"
+                        />
+                      </div>
+                      <div>
+                        <Dropdown
+                          ddKey="vehicleBody"
+                          label="주 이용 차량 형태"
+                          options={[...QUOTE_BODY_TYPES]}
+                          placeholder="선택 안 함"
+                          value={form.vehicle_body}
+                          onPick={(v) => setField("vehicle_body", v)}
+                          openKey={openKey}
+                          setOpenKey={setOpenKey}
+                          pad="14px 15px"
+                        />
                       </div>
                     </div>
                     <div style={{ marginTop: 20 }}>
