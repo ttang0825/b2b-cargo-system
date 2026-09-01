@@ -9,10 +9,10 @@ import { COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
    시안 `components/landing/SubmitDone.tsx` 를 옮긴 것이다.
 
    🔴 **접수번호 블록을 넣지 않았다** — 시안에는 있지만 우리는 접수번호를 발급하지 않는다.
-      `/status` 조회는 **전화번호**로 하므로(`api/status-lookup`), 어디에도 쓸 수 없는
-      번호를 보여주면 화주가 그걸로 조회하려다 막힌다. 대신 조회 경로를 안내한다.
-   🔴 **`/status` 안내를 지우지 말 것** — 30차 리뷰에 랜딩 CTA 하단의 `/status` 링크가
-      빠져서, 비회원이 진행 상황을 볼 경로가 `/quote`·`/apply` 헤더 칩과 **이 화면**뿐이다.
+      어디에도 쓸 수 없는 번호를 보여주면 화주가 그걸로 조회하려다 막힌다.
+   🔴 **「문의·신청 현황 조회」(`/status`) 안내를 다시 넣지 말 것 — 사용자 지시(2026-09-01).**
+      30차 리뷰에 랜딩에서 그 링크를 뺀 데 이어, **공개 화면 전체에서 없애기로 확정**됐다.
+      진행 상황은 담당자가 남겨주신 연락처로 안내한다(`message` 가 그 말을 한다).
    🔴 로고는 `<BrandLogo />` 다(시안은 `/landing/wecarry-logo.svg` 직접 참조) — 워드마크는
       `currentColor` 를 상속하는 인라인 SVG 여야 한다(27차). 전화번호도 상수 참조다. */
 
@@ -45,14 +45,6 @@ export default function SubmitDone({
           </div>
           <div style={{ marginTop: 22, fontSize: 26, lineHeight: 1.3, fontWeight: 600, letterSpacing: "-0.03em" }}>{title}</div>
           <div style={{ marginTop: 10, fontSize: 15, lineHeight: 1.75, color: "#6C6B65", textWrap: "pretty" } as CSSProperties}>{message}</div>
-
-          <div style={{ marginTop: 24, padding: "16px 20px", border: "1px solid #EBEAE7", borderRadius: 16, background: "#FAFAF8", fontSize: 14, lineHeight: 1.75, color: "#6C6B65" }}>
-            접수하신 내용과 진행 상황은{" "}
-            <Link href="/status" style={{ fontWeight: 700, color: "#0E0F12", textDecoration: "underline", textUnderlineOffset: 3 }}>
-              문의·신청 현황 조회
-            </Link>
-            에서 <strong style={{ color: "#0E0F12" }}>연락처</strong>로 확인하실 수 있습니다.
-          </div>
 
           <Link href={href} style={{ display: "block", marginTop: 22, padding: 19, background: "#FFD834", color: "#0E0F12", borderRadius: 16, textAlign: "center", fontSize: 16, fontWeight: 600, letterSpacing: "-0.02em" }}>
             확인

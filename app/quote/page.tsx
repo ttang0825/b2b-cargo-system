@@ -494,16 +494,6 @@ export default function PublicQuotePage() {
               >
                 {saving ? "접수 중..." : "견적 문의 보내기"}
               </button>
-              {/* 🔴 `/status` 진입 경로를 남긴다(원칙 42번) — 옛 화면은 `PublicPageHeader`
-                  의 「문의·신청 현황」 칩으로 갔는데, 시안 헤더(`LandingHeader`)에는 그
-                  칩이 없고 랜딩 푸터에도 없다. 지우면 비회원이 진행 상황을 볼 경로가
-                  접수완료 팝업 하나만 남는다. */}
-              <div style={{ fontSize: 13.5, color: "#8B8A85" }}>
-                이미 문의하셨나요?{" "}
-                <Link href="/status" style={{ fontWeight: 600, color: "#4A4945", textDecoration: "underline", textUnderlineOffset: 3 }}>
-                  문의·신청 현황 조회
-                </Link>
-              </div>
             </div>
           </form>
         </div>

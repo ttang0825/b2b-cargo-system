@@ -444,14 +444,6 @@ export default function ApplyPage() {
                   견적 문의하기
                 </Link>
               </div>
-              {/* 🔴 `/status` 진입 경로를 남긴다(원칙 42번) — 옛 화면은 `PublicPageHeader` 의
-                  「문의·신청 현황」 칩으로 갔는데 시안 헤더·푸터에는 그 칩이 없다. */}
-              <div style={{ fontSize: 13.5, color: "#8B8A85" }}>
-                이미 신청하셨나요?{" "}
-                <Link href="/status" style={{ fontWeight: 600, color: "#4A4945", textDecoration: "underline", textUnderlineOffset: 3 }}>
-                  문의·신청 현황 조회
-                </Link>
-              </div>
               {/* "← 홈으로" — 🔴 헤더 로고와 동작이 다르다: 로고는 홈 맨 위로 가고, 이 링크는
                   **왔던 자리로 되돌아간다**(랜딩 운송관리 섹션이 페이지 한참 아래라, 맨 위로
                   튕기면 스크롤을 다시 내려야 했다 — 13차 PR #88 리뷰). */}
