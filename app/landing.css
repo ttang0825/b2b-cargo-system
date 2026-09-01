@@ -361,3 +361,36 @@
   .landing-page .landing-consent-doc-link { padding: 6px 12px !important; font-size: 12.5px !important; }
   .landing-apply-tel { font-size: 34px !important; }
 }
+
+/* ── 31차 리뷰: 모바일 헤더 ─────────────────────────────────────────────────
+   사용자 신고(2026-09-01) — "모바일에서 상단 무료견적문의와 운송관리 로그인 메뉴
+   버튼이 서로 겹친다. 그리고 홈버튼 로고도 너무 작게 표시된다."
+
+   원인 둘 다 실측으로 확인했다.
+   ① 겹침 — 로그인 칩에 인라인 `marginLeft:-22` 가 있는데 1120px 이하에서 `gap` 이
+      14 로 줄어 **-8px** 이 됐다(620·430·390·360px 전부 8px 겹침). 컴포넌트에서
+      음수 마진을 없애고 gap 을 10 으로 고정해서 해결했다.
+   ② 로고 — 로고 링크가 `flex: 0 1 auto` + `min-width:0` 이라 폭이 통째로 눌렸다
+      (430px 에서 61px · 390px 21px · **360px 0px**). `flex: 0 0 auto` 로 바꿨다.
+
+   🔴 그래서 이제 폭이 안 줄어드는 대신 **버튼·로고 크기를 단계별로 줄여야** 한 줄에
+      들어간다. 아래 세 단계를 지울 거면 360px 에서 가로 오버플로우부터 다시 잴 것. */
+.landing-nav-short { display: none; }
+
+@media (max-width: 760px) {
+  .landing-header { padding-top: 12px !important; padding-bottom: 12px !important; }
+  .landing-header .landing-logo { height: 30px !important; }
+  .landing-nav { gap: 8px !important; }
+  /* 🔴 `!important` 가 필요하다 — 칩 크기는 컴포넌트의 인라인 style 이고 CSS 는 인라인을
+     `!important` 로만 이긴다. */
+  .landing-nav a { min-width: 0 !important; padding: 9px 15px !important; font-size: 13.5px !important; }
+}
+
+@media (max-width: 520px) {
+  .landing-header { padding-left: 16px !important; padding-right: 16px !important; }
+  .landing-header .landing-logo { height: 27px !important; }
+  .landing-nav { gap: 6px !important; }
+  .landing-nav a { padding: 8px 12px !important; font-size: 12.5px !important; }
+  .landing-nav-full { display: none !important; }
+  .landing-nav-short { display: inline !important; }
+}
