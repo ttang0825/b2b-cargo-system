@@ -7,6 +7,18 @@ import { LEGAL_EFFECTIVE_DATE } from "@/lib/legalInfo";
 import Pv2DatePicker from "@/components/pv2/Pv2DatePicker";
 import Pv2Select from "@/components/pv2/Pv2Select";
 import Pv2DispatchCalendar from "@/components/pv2/Pv2DispatchCalendar";
+import {
+  DISPATCH_STAGE_LABELS,
+  getDispatchStage,
+  hasDispatchIssue,
+} from "@/lib/dispatchStage";
+import {
+  getCustomerBillingCycleLabel,
+  getCustomerCollectionMethodLabel,
+} from "@/lib/settlementLabels";
+import { calcInclusiveAmount, calcVatAmount } from "@/lib/vat";
+import { PORTAL_DISPATCH_EXTRA_CHARGE_FIELDS } from "@/lib/portalInvoiceFields";
+import { attributeActiveExtraCharges } from "@/lib/dashboardExtraChargeAgg";
 
 /**
  * 🔴 조회 하한은 서비스 시행일이 속한 달이다 — 그 전에는 이 시스템으로 처리한
@@ -37,6 +49,13 @@ function shortMonth(month: string, showYear: boolean) {
 
 function won(n: number) {
   return Math.round(n).toLocaleString("ko-KR") + "원";
+}
+
+/** 적재구분 — 저장값(`exclusive`/`mixable`)을 화주가 보는 말로. */
+function loadingTypeLabel(v: string | null | undefined) {
+  if (v === "mixable") return "혼적가능";
+  if (v === "exclusive") return "독차";
+  return "";
 }
 
 function manwon(n: number) {
@@ -232,48 +251,126 @@ export default function PortalStatsPage() {
     [stats.monthRows]
   );
 
+  /**
+   * 엑셀 다운로드 — 🔴 **화면이 보여주는 것과 같은 말로 내보낸다.**
+   *
+   *    ⚠️ 예전에는 운송내역에 `dispatch_status` **원본 6종**(접수중/배차확정/상차완료/
+   *    하차완료/운송완료/문제발생)을 그대로 찍고 있었다. 29차가 화주 화면을 **3단계 +
+   *    문제 발생 별도**로 확정했는데(`lib/dispatchStage.ts`) 엑셀만 안 바뀌어서, 같은
+   *    건이 화면에는 「배차완료」인데 엑셀에는 「상차완료」로 보이는 상태였다.
+   *    🔴 **원본 6종으로 되돌리지 말 것** — 화면과 엑셀이 갈린다(원칙 13·42번과 같은 결).
+   *
+   *    🔴 **차주 정보(성명·연락처·차량번호)와 차주 지급액은 어떤 열로도 넣지 말 것**
+   *    (29차 확정 9번 · 원칙 3·9번). `dispatch_extra_charges` 는 화주 안전 필드
+   *    (`PORTAL_DISPATCH_EXTRA_CHARGE_FIELDS`) 로만 읽는다 — `driver_payout_amount` 는
+   *    컬럼 GRANT 로 DB 가 막고 있어 넣으면 쿼리 자체가 권한 오류로 죽는다.
+   */
   async function handleExport() {
     setExporting(true);
     const fromIso = `${fromMonth}-01`;
     const [dispatchRes, invoiceRes] = await Promise.all([
       supabase
         .from("dispatches")
-        .select("dispatch_status,created_at,orders(order_no,origin,destination,requested_pickup_at)")
+        // 🔴 `pickup_confirmed`·`delivery_confirmed` 를 빼지 말 것 — 문제발생 건은
+        //    상태값이 덮여 있어 이 둘로만 단계를 복원한다(빼면 전부 「접수」로 보인다).
+        .select(
+          "dispatch_status,pickup_confirmed,delivery_confirmed,issue_occurred,created_at,orders(order_no,origin,destination,requested_pickup_at,item,vehicle_type,loading_type,collection_method,billing_cycle)"
+        )
         .gte("created_at", fromIso)
         .order("created_at", { ascending: false })
         .limit(2000),
       supabase
         .from("invoices")
         .select(
-          "billing_period,customer_charge_total,tax_invoice_issued,tax_invoice_date,payment_received,payment_received_date,status,created_at,orders(order_no)"
+          "id,order_id,billing_period,customer_charge_total,tax_invoice_issued,tax_invoice_date,payment_received,payment_received_date,status,collection_method,billing_cycle,created_at,orders(order_no,origin,destination,item,vehicle_type,loading_type)"
         )
         .gte("billing_period", fromMonth)
         .lte("billing_period", toMonth)
         .order("billing_period", { ascending: false })
         .limit(2000),
     ]);
+
+    const invoiceData = (invoiceRes.data || []) as any[];
+
+    // 🔴 현장 추가비는 **표시 시점 합산**이다(원칙 47번) — `customer_charge_total` 은
+    //    정산 건 생성 시점 스냅샷이라 그 뒤에 등록된 추가비가 들어 있지 않다. 정산확인
+    //    화면이 같은 3규칙으로 더해서 보여주므로, 엑셀만 빼면 화면과 금액이 갈린다.
+    let extraByInvoiceId: Record<string, { count: number; customerAmount: number }> = {};
+    const orderIds = Array.from(new Set(invoiceData.map((i) => i.order_id).filter(Boolean)));
+    if (orderIds.length > 0) {
+      const { data: dispatchRefs } = await supabase
+        .from("dispatches")
+        .select("id,order_id")
+        .in("order_id", orderIds);
+      const dispatchIds = (dispatchRefs || []).map((d: any) => d.id);
+      if (dispatchIds.length > 0) {
+        const { data: extraRows } = await supabase
+          .from("dispatch_extra_charges")
+          .select(PORTAL_DISPATCH_EXTRA_CHARGE_FIELDS)
+          .in("dispatch_id", dispatchIds);
+        // RLS 가 이미 active 만 내려주지만 한 번 더 거른다(취소 이력은 화주포털 미노출).
+        const active = (extraRows || []).filter((e: any) => e.status === "active");
+        extraByInvoiceId = attributeActiveExtraCharges(
+          active as any,
+          (dispatchRefs || []) as any,
+          invoiceData as any
+        );
+      }
+    }
+
     setExporting(false);
 
-    const dispatchRows = (dispatchRes.data || []).map((d: any) => ({
-      오더번호: d.orders?.order_no || "",
-      출발지: d.orders?.origin || "",
-      도착지: d.orders?.destination || "",
-      상차예정일시: d.orders?.requested_pickup_at
-        ? new Date(d.orders.requested_pickup_at).toLocaleString("ko-KR")
-        : "",
-      배차상태: d.dispatch_status || "",
-    }));
+    const dispatchRows = (dispatchRes.data || []).map((d: any) => {
+      const o = d.orders || {};
+      return {
+        접수일: d.created_at ? new Date(d.created_at).toLocaleDateString("ko-KR") : "",
+        오더번호: o.order_no || "",
+        운송단계: DISPATCH_STAGE_LABELS[getDispatchStage(d)],
+        문제발생: hasDispatchIssue(d) ? "예" : "",
+        출발지: o.origin || "",
+        도착지: o.destination || "",
+        상차예정일시: o.requested_pickup_at
+          ? new Date(o.requested_pickup_at).toLocaleString("ko-KR")
+          : "",
+        운송품목: o.item || "",
+        차량: o.vehicle_type || "",
+        적재구분: loadingTypeLabel(o.loading_type),
+        "운임 수금방식": getCustomerCollectionMethodLabel(o.collection_method) || "",
+        청구: getCustomerBillingCycleLabel(o.billing_cycle) || "",
+      };
+    });
 
-    const invoiceRows = (invoiceRes.data || []).map((i: any) => ({
-      오더번호: i.orders?.order_no || "",
-      정산월: i.billing_period || "",
-      청구금액: i.customer_charge_total || 0,
-      세금계산서: i.tax_invoice_issued ? "발행완료" : "미발행",
-      세금계산서발행일: i.tax_invoice_date ? new Date(i.tax_invoice_date).toLocaleDateString("ko-KR") : "",
-      입금여부: i.payment_received ? "완료" : "대기",
-      입금일: i.payment_received_date ? new Date(i.payment_received_date).toLocaleDateString("ko-KR") : "",
-      상태: i.status || "",
-    }));
+    const invoiceRows = invoiceData.map((i: any) => {
+      const o = i.orders || {};
+      const base = i.customer_charge_total || 0;
+      const extra = extraByInvoiceId[i.id]?.customerAmount || 0;
+      const total = base + extra;
+      return {
+        정산월: i.billing_period || "",
+        오더번호: o.order_no || "",
+        출발지: o.origin || "",
+        도착지: o.destination || "",
+        운송품목: o.item || "",
+        차량: o.vehicle_type || "",
+        적재구분: loadingTypeLabel(o.loading_type),
+        "확정 청구금액(부가세 별도)": base,
+        "현장 추가비(부가세 별도)": extra,
+        "청구금액 합계(부가세 별도)": total,
+        부가세: calcVatAmount(total),
+        "청구금액 합계(부가세 포함)": calcInclusiveAmount(total),
+        "운임 수금방식": getCustomerCollectionMethodLabel(i.collection_method) || "",
+        청구: getCustomerBillingCycleLabel(i.billing_cycle) || "",
+        세금계산서: i.tax_invoice_issued ? "발행완료" : "미발행",
+        세금계산서발행일: i.tax_invoice_date
+          ? new Date(i.tax_invoice_date).toLocaleDateString("ko-KR")
+          : "",
+        입금여부: i.payment_received ? "완료" : "대기",
+        입금일: i.payment_received_date
+          ? new Date(i.payment_received_date).toLocaleDateString("ko-KR")
+          : "",
+        상태: i.status || "",
+      };
+    });
 
     if (dispatchRows.length === 0 && invoiceRows.length === 0) {
       alert("선택하신 기간에 다운로드할 내역이 없습니다.");
