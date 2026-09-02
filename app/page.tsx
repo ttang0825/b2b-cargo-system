@@ -148,9 +148,16 @@ export default function LandingPage() {
           {services.map((s) => (
             <div key={s.title} className="landing-card-lift"
               style={{ display: "flex", flexDirection: "column", background: "#FFFFFF", border: "1px solid #E4E3DE", borderRadius: 18, overflow: "hidden" }}>
+              {/* ⚠️ 사진이 없는 카드가 있다(「고정화물 배차」 — 사용자 준비 중, 2026-09-02).
+                  `img` 가 없으면 **사진 자리를 회색 상자로만 남긴다** — 깨진 이미지 아이콘이
+                  뜨지 않게 `<img>` 자체를 그리지 않는다. 🔴 자리표시자 문구를 넣지 말 것
+                  (사용자가 「일단 비어보이게」로 확정했다). 사진이 오면
+                  `components/landing/data.ts` 의 `img` 만 채우면 된다. */}
               <div style={{ position: "relative", aspectRatio: "4 / 3", backgroundColor: "#E3E2DD" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={s.img} alt={s.title} loading="lazy" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                {s.img && (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={s.img} alt={s.title} loading="lazy" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                )}
               </div>
               <div style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", padding: 24 }}>
                 <div style={{ fontSize: 24, lineHeight: 1.3, fontWeight: 700, letterSpacing: "-0.03em", color: "#0E0F12", wordBreak: "keep-all" }}>{s.title}</div>
