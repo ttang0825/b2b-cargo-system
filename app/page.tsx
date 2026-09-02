@@ -9,6 +9,7 @@ import TmsShowcase from "@/components/landing/TmsShowcase";
 import FaqList from "@/components/landing/FaqList";
 import RatesModal from "@/components/landing/RatesModal";
 import LegalLinks from "@/components/LegalLinks";
+import BusinessInfoModal from "@/components/BusinessInfoModal";
 import { useReveal } from "@/components/landing/useReveal";
 import { buildReasons, IMG, process, services, vehicles } from "@/components/landing/data";
 import { INSURANCE_ENABLED } from "@/lib/insuranceInfo";
@@ -73,6 +74,7 @@ const steps = [
 
 export default function LandingPage() {
   const [ratesOpen, setRatesOpen] = useState(false);
+  const [bizOpen, setBizOpen] = useState(false);
 
   // 🔴 보험 카드·FAQ 문항은 `INSURANCE_ENABLED` 가 false 인 동안 **배열에서 빠진다** —
   //    화면에서 숨기는 것이 아니라 DOM 에 렌더링하지 않는다(미가입 상태 노출은 표시광고
@@ -349,8 +351,18 @@ export default function LandingPage() {
               시안의 `LegalModal` 은 약관·방침이 「전문 준비 중」 자리표시자였다.
               우리에겐 `lib/legal/*` 에 전문이 있고, 페이지(`/terms` 등)와 같은 데이터를
               공유하므로 한쪽만 낡는 일이 없다. `lib/legal/` 은 한 줄도 안 고쳤다. */}
+          {/* 🔴 **네 번째로 「사업자정보」를 더했다**(사용자 확정 2026-09-02).
+              30차 리뷰에 푸터에서 호스팅사업자·개인정보 보호책임자를 빼면서 전자상거래법
+              제10조 1항의 **초기화면 표시**가 충족되지 않는 상태가 됐고, 되살리는 길 둘 중
+              **「법적 문서 링크 옆에 사업자정보」로 확정**된 것이다.
+              🔴 푸터 한 줄로 되돌리지 말 것 — 뺀 이유(푸터가 길어진다)가 그대로 유효하다. */}
           <div className="landing-cta-links" style={{ display: "flex", flexWrap: "wrap", gap: 24, fontSize: 15.6, color: "rgba(255,255,255,0.6)" }}>
             <LegalLinks linkClassName="landing-legal-link" />
+            <button type="button" className="landing-legal-link"
+              style={{ border: "none", background: "transparent", padding: 0, font: "inherit", color: "inherit", cursor: "pointer" }}
+              onClick={() => setBizOpen(true)}>
+              사업자정보
+            </button>
           </div>
         </div>
       </section>
@@ -358,6 +370,7 @@ export default function LandingPage() {
       <LandingFooter />
 
       <RatesModal open={ratesOpen} onClose={() => setRatesOpen(false)} />
+      <BusinessInfoModal open={bizOpen} onClose={() => setBizOpen(false)} />
     </div>
   );
 }

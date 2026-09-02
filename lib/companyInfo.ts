@@ -134,3 +134,31 @@ export const COMPANY_GREETING_CLOSING_PARAGRAPHS: string[] = [
 ];
 
 export const COMPANY_GREETING_SIGNATURE = "주식회사 디자인에그 대표 정제원";
+
+// ── 전자상거래법 제10조 1항 표시사항 (랜딩 「사업자정보」 모달) ────────────────────
+//
+// 🔴 **여기가 값의 정의처다 — 화면에 하드코딩하지 말 것.**
+//
+// ⚠️ **왜 생겼나** — 30차 리뷰에 랜딩 푸터에서 「호스팅 제공 Vercel Inc.」와 「개인정보
+//    보호책임자」 두 줄을 뺐고(사용자 확정 2026-09-01), 그 결과 제10조 1항이 요구하는
+//    **초기화면 표시**가 충족되지 않는 상태가 됐다. 되살리는 길이 (a) 푸터에 다시 한 줄
+//    (b) 법적 문서 링크 옆에 「사업자정보」 둘이었고, **사용자가 (b) 로 확정했다**
+//    (2026-09-02). 푸터는 지금처럼 간결하게 두고 값은 모달이 전부 담는다.
+// 🔴 **푸터 한 줄로 되돌리지 말 것** — 뺀 이유(푸터가 길어진다)가 그대로 유효하다.
+//
+// ⚠️ **`components/SiteFooter.tsx` 에 같은 값 목록(`BUSINESS_INFO`)이 따로 있다.**
+//    이번 지시서가 그 파일 변경 0 을 완료조건으로 걸어 합치지 못했다 — **다음에 그
+//    파일을 열 때 이 상수를 import 하도록 합칠 것.** 두 벌로 두면 조용히 갈린다.
+//
+// 🔴 상호는 문자열이 아니라 `<CompanyNameMark />` 로 그린다(평문을 그대로 쓰면 두 조각
+//    사이 구분선이 슬래시 글자로 찍힌다, 24차) — 그래서 이 목록에 상호가 없다.
+// 🔴 이메일도 이 목록에 없다 — `<ObfuscatedEmail />` 로 그린다.
+export const COMPANY_BUSINESS_INFO: [string, string][] = [
+  ["대표", COMPANY_CEO],
+  ["사업자등록번호", COMPANY_BIZ_REG_NO],
+  ["통신판매업 신고", COMPANY_ECOMMERCE_LICENSE],
+  ["화물자동차 운송주선사업 허가", COMPANY_FREIGHT_BROKER_LICENSE],
+  ["주소", COMPANY_ADDRESS],
+  ["개인정보 보호책임자", COMPANY_CEO],
+  ["호스팅 제공", "Vercel Inc."],
+];
