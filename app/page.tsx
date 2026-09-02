@@ -106,9 +106,13 @@ export default function LandingPage() {
           <p style={{ margin: "24px 0 0", fontSize: 18.2, lineHeight: 1.85, color: "rgba(21,24,33,0.7)" }}>
             전화 주시면 가능 차량과 운임을<br />확인해 바로 안내드립니다.
           </p>
+          {/* 🔴 **히어로에서 「무료 견적 문의」 버튼을 뺐다**(사용자 지시 2026-09-02).
+              34차가 「히어로·마감 둘 다 견적 → 전화 순서로 통일」한 것을 바꾼 것이다.
+              🔴 그래서 **히어로에 남는 유일한 행동이 전화**다 — 버튼을 검정 채움으로
+                 올려 눈에 띄게 했다(뺀 견적 버튼이 쓰던 대비다). 새 버튼을 만들지 말 것.
+              🟢 `/quote` 로 가는 길은 **헤더 CTA 와 마감 CTA** 에 그대로 있다. */}
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, marginTop: 34 }}>
-            <Link href="/quote" style={heroBtn("#0E0F12", "#FFFFFF", "#0E0F12", "0 6px 27px rgba(21,24,33,0.18)")}>무료 견적 문의</Link>
-            <a href={`tel:${COMPANY_SUPPORT_PHONE.replace(/-/g, "")}`} style={heroBtn("#FFFFFF", "#0E0F12", "#FFFFFF")}>
+            <a href={`tel:${COMPANY_SUPPORT_PHONE.replace(/-/g, "")}`} style={heroBtn("#0E0F12", "#FFFFFF", "#0E0F12", "0 6px 27px rgba(21,24,33,0.18)")}>
               전화 문의 {COMPANY_SUPPORT_PHONE}
             </a>
           </div>
