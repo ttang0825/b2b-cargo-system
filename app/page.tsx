@@ -321,8 +321,12 @@ export default function LandingPage() {
         <h2 style={{ position: "relative", margin: 0, maxWidth: 820, fontSize: 58.8, lineHeight: 1.15, fontWeight: 600, letterSpacing: "-0.04em", color: "#FFFFFF", textWrap: "balance" } as CSSProperties}>
           지금 바로 견적을 받아보세요.
         </h2>
+        {/* 🔴 **운영시간을 이 화면에서만 뺐다**(사용자 지시 2026-09-02).
+            ⚠️ `COMPANY_SUPPORT_HOURS` 상수 자체는 지우지 말 것 — `/about`·화주포털·
+               로그인 화면이 같은 값을 쓴다. 여기서 안 그릴 뿐이다.
+            🟢 섹션이 `textAlign: center` 라 번호는 이미 가운데 정렬이다. */}
         <p style={{ position: "relative", margin: "22px 0 0", maxWidth: 520, fontSize: 18.2, lineHeight: 1.8, color: "rgba(255,255,255,0.78)" }}>
-          상·하차지와 연락처만 남겨주시면 확인해 안내드립니다.<br />고객센터 {COMPANY_SUPPORT_PHONE} · {COMPANY_SUPPORT_HOURS}
+          상·하차지와 연락처만 남겨주시면 확인해 안내드립니다.<br />고객센터 {COMPANY_SUPPORT_PHONE}
         </p>
         <div style={{ position: "relative", display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 12, marginTop: 36 }}>
           <Link href="/quote" style={ctaBtn("#FFFFFF")}>무료 견적 문의</Link>
