@@ -10,7 +10,7 @@ import { buildPageMetadata } from "@/lib/pageMetadata";
 export const metadata = buildPageMetadata({
   title: "차량·요금 안내 | 위캐리 운송",
   description:
-    "1톤부터 5톤 이상, 특수차량까지 차급별 시작가와 차량 형태 12종을 안내합니다. 정확한 금액은 견적 시 안내해 드립니다.",
+    "1톤부터 5톤 이상, 특수차량까지 차급별 기준가와 차량 형태 12종을 안내합니다. 정확한 금액은 견적 시 안내해 드립니다.",
   path: "/vehicles",
 });
 

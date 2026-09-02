@@ -77,7 +77,7 @@ export const REGIONS = [
 //   2. 🔴 `VEHICLE_TYPES_PUBLIC` 도 **같이 늘릴 것**(31차부터 11종으로 같은 값이다).
 //      두 배열을 합치지는 말 것 — 질문이 다르다. 아래 주석 참고.
 //   3. 🔴 `/vehicles`의 `START_PRICES` 와 랜딩 `components/landing/data.ts` 의
-//      `vehicles`·`startPrices` 도 같이 볼 것(30차에 11행이 됐다).
+//      `vehicles` 와 `lib/startPrices.ts` 도 같이 볼 것(기준가는 32차부터 운임기준표를 읽는다).
 //   4. `rate_distance_tiers`에 **차급당 15행** INSERT — 마이그레이션 파일 신규.
 //      `migrations/2026-08-26_rate_8t_15t.sql`을 본보기로 삼으면 된다(22차. 운임과
 //      대기료를 한 파일에 넣고, 11차급 통합 역전 검사를 단언으로 두었다).
@@ -146,7 +146,7 @@ export const VEHICLE_TYPES_ALL = [
 //
 // 🟢 쓰는 곳: `/quote` 톤수 · `/apply` 주 이용 차량 · `/customer/request` 희망 톤수
 //    (마지막은 21차부터 `VEHICLE_TYPES_ALL` 을 쓴다 — 그대로 두면 된다).
-// 🔴 `/vehicles` 의 `START_PRICES` 와 랜딩 `components/landing/data.ts` 의 `vehicles`
+// 🔴 `lib/startPrices.ts` 의 기준가와 랜딩 `components/landing/data.ts` 의 `vehicles`
 //    는 이 배열과 **별개**다(적재용량·시작가·이미지가 붙은 객체 배열이다).
 export const VEHICLE_TYPES_PUBLIC = [
   "1톤",

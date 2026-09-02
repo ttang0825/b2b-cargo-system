@@ -160,7 +160,32 @@
   .landing-about { padding-top: 170px !important; }
   .landing-about-grid { gap: 8px !important; }
   .landing-work-grid { grid-template-columns: minmax(0,1fr) !important; gap: 12px !important; }
-  .landing-vehicle-grid { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
+  /* 🔴 차량 형태 — 모바일은 2열 그리드가 아니라 **한 줄 가로 스와이프**다
+     (사용자 지시 2026-09-01 — "이미지가 너무 비중이 크다. 한줄로 해서 가로로
+     스와핑해서 차량을 보는걸로 바꾸자"). 12장을 2열로 쌓으면 6줄이 되어 화면을
+     통째로 먹는다. 그리드로 되돌리지 말 것.
+     ⚠️ 폭을 44% 로 둔 것은 **세 번째 카드가 오른쪽 끝에 살짝 걸치게** 하기 위해서다 —
+        그 걸침이 "옆으로 넘길 수 있다"는 유일한 신호다. 50% 로 올리면 딱 두 장만
+        보여 스와이프인 줄 모른다.
+     ⚠️ 음수 여백(풀블리드)은 쓰지 않았다 — 섹션 좌우 padding 이 20px 이라
+        가로 오버플로우가 날 여지를 만들지 않는 편이 안전하다. */
+  .landing-vehicle-grid {
+    display: flex !important;
+    grid-template-columns: none !important;
+    align-items: flex-start;
+    gap: 12px !important;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    padding-bottom: 4px;
+  }
+  .landing-vehicle-grid::-webkit-scrollbar { display: none; }
+  .landing-vehicle-grid > div { flex: 0 0 44%; min-width: 0; scroll-snap-align: start; }
+  .landing-vehicle-grid > div > div:nth-child(2) { font-size: 16px !important; }
+  .landing-vehicle-grid > div > div:nth-child(3) { font-size: 13px !important; }
   .landing-cta-bottom { flex-direction: column !important; align-items: center !important; gap: 20px !important; margin-top: 80px !important; }
   .landing-cta-bottom > div { justify-content: center !important; gap: 14px 20px !important; }
 }

@@ -72,14 +72,27 @@ export default function TmsShowcase() {
     scrollToCard(Math.min(t.children.length - 1, Math.max(0, currentIndex(t) + dir)));
   };
 
-  /* 스크롤 위치에 따라 카드 확대/축소 + 활성 아이콘 갱신 */
-  const onTrackScroll = useCallback(() => {
+  /* 스크롤 위치에 따라 카드 확대/축소 + 활성 아이콘 갱신.
+     🔴 **프레임 단위(rAF)로 한 번만 그린다 — 스크롤 이벤트마다 직접 그리지 말 것.**
+        모바일에서 손으로 넘길 때 「덜덜거린다」던 것이 이것이었다(2026-09-01 사용자 지적):
+        스크롤 이벤트는 초당 수십 번 오는데 그때마다 새 `transform` 을 쓰면
+        ① 카드에 걸린 CSS transition 이 매번 처음부터 다시 시작되고
+        ② `setPick`/`setAtStart`/`setAtEnd` 가 같은 값으로도 리렌더를 일으킨다.
+        그래서 카드의 transition 을 없애고(아래 트랙 JSX) 프레임마다 위치를 그대로
+        반영하며, state 는 **값이 실제로 바뀔 때만** 갱신한다. */
+  const rafRef = useRef(0);
+
+  const paintTrack = useCallback(() => {
+    rafRef.current = 0;
     const t = trackRef.current;
     if (!t) return;
     const center = t.scrollLeft + t.clientWidth / 2;
-    setPick(currentIndex(t));
-    setAtStart(t.scrollLeft <= 4);
-    setAtEnd(t.scrollLeft >= t.scrollWidth - t.clientWidth - 4);
+    const cur = currentIndex(t);
+    const start = t.scrollLeft <= 4;
+    const end = t.scrollLeft >= t.scrollWidth - t.clientWidth - 4;
+    setPick((v) => (v === cur ? v : cur));
+    setAtStart((v) => (v === start ? v : start));
+    setAtEnd((v) => (v === end ? v : end));
     Array.from(t.children).forEach((c) => {
       const el = c as HTMLElement;
       const d = Math.min(1, Math.abs(el.offsetLeft + el.offsetWidth / 2 - center) / (el.offsetWidth || 1));
@@ -89,18 +102,23 @@ export default function TmsShowcase() {
     });
   }, []);
 
+  const onTrackScroll = useCallback(() => {
+    if (rafRef.current) return;
+    rafRef.current = requestAnimationFrame(paintTrack);
+  }, [paintTrack]);
+
   useEffect(() => {
     const t = trackRef.current;
     if (!t) return;
 
     syncArrowBox();
-    onTrackScroll();
+    paintTrack();
 
     const ro = new ResizeObserver(() => syncArrowBox());
     ro.observe(t);
     if (t.children[0]) ro.observe(t.children[0]);
 
-    const onResize = () => { syncArrowBox(); onTrackScroll(); };
+    const onResize = () => { syncArrowBox(); paintTrack(); };
     window.addEventListener("resize", onResize);
     t.addEventListener("scroll", onTrackScroll, { passive: true });
     const timer = window.setTimeout(onResize, 400);
@@ -115,6 +133,10 @@ export default function TmsShowcase() {
     let moved = false;
     const onDragStart = (e: Event) => e.preventDefault();
     const onDown = (e: PointerEvent) => {
+      /* 🔴 **터치·펜에서는 걸지 말 것** — 브라우저 자체 스크롤이 이미 돌고 있는데
+         여기서 `scrollLeft` 를 같이 밀면 두 힘이 겹쳐 화면이 덜덜거린다.
+         이 드래그는 **마우스로 끌어 넘기기** 전용이다. */
+      if (e.pointerType !== "mouse") return;
       if (getComputedStyle(t).overflowX !== "auto") return;
       down = true; moved = false; sx = e.clientX; sl = t.scrollLeft;
       t.style.cursor = "grabbing";
@@ -138,6 +160,7 @@ export default function TmsShowcase() {
 
     return () => {
       ro.disconnect();
+      if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0; }
       window.clearTimeout(timer);
       window.removeEventListener("resize", onResize);
       t.removeEventListener("scroll", onTrackScroll);
@@ -148,7 +171,7 @@ export default function TmsShowcase() {
       t.removeEventListener("pointercancel", onUp);
       t.removeEventListener("click", onClickCapture, true);
     };
-  }, [syncArrowBox, onTrackScroll]);
+  }, [syncArrowBox, onTrackScroll, paintTrack]);
 
   const arrowStyle = (side: "left" | "right", visible: boolean): React.CSSProperties => ({
     position: "absolute",
@@ -204,9 +227,10 @@ export default function TmsShowcase() {
             </button>
 
             <div ref={trackRef} className="landing-tms-track"
-              style={{ display: "flex", gap: 16, marginTop: 28, padding: "0 max(20px, calc(50vw - min(880px, 62vw) / 2))", overflowX: "auto", overflowY: "hidden", scrollBehavior: "smooth", scrollSnapType: "x mandatory" }}>
+              style={{ display: "flex", gap: 16, marginTop: 28, padding: "0 max(20px, calc(50vw - min(880px, 62vw) / 2))", overflowX: "auto", overflowY: "hidden", overscrollBehaviorX: "contain", WebkitOverflowScrolling: "touch", scrollSnapType: "x mandatory" }}>
               {tmsCards.map((c, i) => (
-                <div key={c.no} style={{ flex: "0 0 auto", width: "min(880px, 62vw)", scrollSnapAlign: "center", transition: "transform 320ms cubic-bezier(0.22,0.61,0.36,1), opacity 320ms ease" }}>
+                /* ⚠️ transition 을 걸지 말 것 — 스크롤할 때마다 다시 시작돼 끊겨 보인다(위 paintTrack). */
+                <div key={c.no} style={{ flex: "0 0 auto", width: "min(880px, 62vw)", scrollSnapAlign: "center", willChange: "transform" }}>
                   <div style={{ position: "relative", height: "min(50vh, 600px)", width: "100%", borderRadius: 16, border: "1px solid #E4E3DE", background: "#F7F6F3", overflow: "hidden", boxShadow: "38px 44px 64px -30px rgba(66,57,24,0.20), 20px 20px 34px -18px rgba(78,67,28,0.10), 6px 6px 12px -6px rgba(42,37,18,0.05)" }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={c.img} alt={c.shot} decoding="async"

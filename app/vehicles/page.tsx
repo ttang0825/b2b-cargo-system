@@ -1,31 +1,24 @@
 import Link from "next/link";
 import LandingHeader from "@/components/LandingHeader";
 import SiteFooter from "@/components/SiteFooter";
-import { startPrices as START_PRICES, vehicles as LANDING_VEHICLES } from "@/components/landing/data";
+import { vehicles as LANDING_VEHICLES } from "@/components/landing/data";
+import { fetchStartPrices, formatStartPrice, START_PRICE_NOTE } from "@/lib/startPrices";
 
 // 차량·요금 안내. 실무 문의 1순위인 "어떤 차가 얼마나 싣고 얼마인가"에 답하는 페이지.
 //
-// ⚠️ **요금 공개 범위**: 시작가(10km 이내 최소 운임)만 공개하고 전체 운임표·추가비 기준은
+// ⚠️ **요금 공개 범위**: 기준가(10km 이내 한 칸)만 공개하고 전체 운임표·추가비 기준은
 // 공개하지 않기로 함. 그래서 아래 PRICING_NOTES(표시가격 안내 문구)가 **반드시 표 바로 아래
 // 있어야 함** — 없으면 "홈페이지에 4만원이라던데 왜 다르냐"는 분쟁 근거가 됨. 지우지 말 것.
 //
-// 🔴 **시작가는 `components/landing/data.ts` 의 `startPrices` 를 그대로 읽는다** —
-// 30차 리뷰 전에는 이 파일과 랜딩 모달에 각각 적혀 있었다. 다시 갈라 적지 말 것.
-// ⚠️ 자동 연동은 아니다(손으로 맞춘 값) — **운임기준표를 바꾸는 마이그레이션과 항상 같은
-// PR 에서 함께** 움직일 것. 30차 리뷰에 `verify` 로 11차급 전부를 실측해 맞췄다.
+// 🔴 **기준가는 32차부터 운임기준표(`rate_distance_tiers` 의 「10km 이내」)를
+// 실시간으로 읽는다** — 정의처는 `lib/startPrices.ts` 하나이고 랜딩 요금 가이드 모달도
+// 같은 값을 본다. 숫자를 이 파일에 다시 적지 말 것.
+// ⚠️ 그래서 이제 **`/admin/rates` 에서 숫자를 고치면 이 화면 게시가가 바로 바뀐다.**
+// 그 화면은 클릭이 곧 저장이고 되돌리기가 없다 — 오타가 그대로 게시된다.
 //
-// ⚠️ **「차종·적재 용량」 표는 30차 리뷰에서 뺐다**(사용자 지시 — 요금 안내는 시작가만).
+// ⚠️ **「차종·적재 용량」 표는 30차 리뷰에서 뺐다**(사용자 지시 — 요금 안내는 기준가만).
 // 되살리려면 8~25톤 5개 차급의 CBM·적재 예시를 먼저 정해야 한다(28차에 만든 6종 값은
 // 커밋 이력에 남아 있다).
-
-const PRICING_NOTES = [
-  // ⚠️ 아래 3줄은 표시가격 분쟁을 막는 필수 문구다. 지우지 말 것.
-  "표시 금액은 10km 이내 기준 최소 운임이며, 부가가치세는 별도입니다.",
-  "실제 운임은 운송 거리, 차량 종류, 상·하차 조건, 운송 시간대, 화물 특성에 따라 달라집니다.",
-  "정확한 금액은 견적 시 안내해 드립니다.",
-  // 🔴 30차에 25톤 기준으로 바뀌었다(사용자 확정). "전 차종"·"모든 차량"은 여전히 금지다.
-  "1톤부터 5톤 이상, 특수차량까지 안내드립니다. 표에 없는 조건은 문의해 주시면 확인해 드립니다.",
-];
 
 // 🔴 30차에 4종 → **12종**이 됐다(사용자 확정). 랜딩과 **같은 순서·같은 이름·같은
 // 이미지**를 써야 한다 — 랜딩에서 12개를 보고 이 화면에 들어왔는데 4개만 있으면 안 된다.
@@ -36,7 +29,14 @@ const PRICING_NOTES = [
 // 구조라 「5톤 윙바디」라는 선택지가 없다. 이름은 시안 그대로 두기로 확정됐고, 그 간극은
 // 랜딩과 이 화면의 안내 한 줄이 메운다. 폼 값으로 바꾸지 말 것.
 
-export default function VehiclesPage() {
+/* 🔴 원칙 21번 — 운임기준표를 고친 직후에도 이 화면이 새 값을 보여야 하므로
+   정적 생성으로 굳히지 않는다. `fetchStartPrices()` 안의 service client 가 fetch
+   캐시까지 끈다(둘 다 있어야 한다). */
+export const dynamic = "force-dynamic";
+
+export default async function VehiclesPage() {
+  const { prices: START_PRICES } = await fetchStartPrices();
+
   return (
     <div className="portal-theme">
       <LandingHeader />
@@ -45,48 +45,50 @@ export default function VehiclesPage() {
         <div className="page-header">
           <div>
             <h1 className="page-title">차량·요금 안내</h1>
-            <p className="page-desc">차급별 운임이 어디서부터 시작하는지, 어떤 차량 형태로 배차되는지 안내합니다.</p>
+            <p className="page-desc">차급별 기준가와 어떤 차량 형태로 배차되는지 안내합니다. 실제 운임은 조건에 따라 기준가에서 ± 됩니다.</p>
           </div>
         </div>
 
-        {/* 시작가 */}
+        {/* 기준가 */}
         <section className="card" style={{ padding: 0, marginBottom: 20, overflow: "hidden" }}>
           <h2 className="about-section-title" style={{ padding: "24px 24px 0", margin: 0 }}>
-            시작가
+            기준가
           </h2>
-          <div className="table-scroll">
+          {/* 🔴 표시가격 안내 — **표 위 설명글**로 합쳤고(사용자 지시 2026-09-01,
+              팝업과 같은 구성), 2026-09-02 에 세 줄로 줄였다. 문구는 `lib/startPrices.ts`
+              가 유일 정의처다. 지우지 말 것 — 「10km 이내」·「부가세」·「견적」·「5톤보다
+              큰 차량도 문의」 넷이 표시가격 분쟁을 막는 문장이다.
+              🔴 `whiteSpace: "pre-line"` 을 빼지 말 것 — 빼면 세 줄이 한 문단으로 붙는다. */}
+          <p style={{ margin: 0, padding: "10px 24px 0", fontSize: 13.5, lineHeight: 1.8, color: "var(--text-muted)", whiteSpace: "pre-line" }}>
+            {START_PRICE_NOTE}
+          </p>
+          {/* 🔴 값을 못 읽었으면 표를 그리지 않는다 — 위와 같은 이유(lib/startPrices.ts) */}
+          {!START_PRICES.length && (
+            <p style={{ margin: 0, padding: "10px 24px 24px", fontSize: 13.5, lineHeight: 1.8, color: "var(--text-muted)" }}>
+              기준가를 불러오지 못했습니다. 정확한 금액은 견적으로 안내드립니다.
+            </p>
+          )}
+          {START_PRICES.length > 0 && (
+          <div className="table-scroll" style={{ marginTop: 14, paddingBottom: 8 }}>
             <table>
               <thead>
                 <tr>
                   <th>차량</th>
-                  <th>시작가</th>
+                  <th>기준가</th>
                 </tr>
               </thead>
               <tbody>
                 {START_PRICES.map((p) => (
                   <tr key={p.ton}>
                     <td style={{ fontWeight: 700, whiteSpace: "nowrap" }}>{p.ton}</td>
-                    <td style={{ whiteSpace: "nowrap" }}>{p.from}</td>
+                    <td style={{ whiteSpace: "nowrap" }}>{formatStartPrice(p.amount)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          )}
 
-          {/* ⚠️ 표시가격 안내 — 표 바로 아래에 반드시 있어야 함. 지우지 말 것 */}
-          <ul
-            style={{
-              margin: 0,
-              padding: "18px 24px 24px 40px",
-              fontSize: 13,
-              lineHeight: 1.8,
-              color: "var(--text-muted)",
-            }}
-          >
-            {PRICING_NOTES.map((note) => (
-              <li key={note}>{note}</li>
-            ))}
-          </ul>
         </section>
 
         {/* 차량 형태 */}
