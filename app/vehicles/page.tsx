@@ -54,11 +54,12 @@ export default async function VehiclesPage() {
           <h2 className="about-section-title" style={{ padding: "24px 24px 0", margin: 0 }}>
             기준가
           </h2>
-          {/* 🔴 표시가격 안내 — **표 위 설명글 한 문단**으로 합쳤다(사용자 지시
-              2026-09-01, 팝업과 같은 구성). 문구는 `lib/startPrices.ts` 가 유일
-              정의처다. 지우지 말 것 — 「10km 이내」·「부가가치세」·「견적」·「5톤보다
-              큰 차량도 문의」 넷이 표시가격 분쟁을 막는 문장이다. */}
-          <p style={{ margin: 0, padding: "10px 24px 0", fontSize: 13.5, lineHeight: 1.8, color: "var(--text-muted)" }}>
+          {/* 🔴 표시가격 안내 — **표 위 설명글**로 합쳤고(사용자 지시 2026-09-01,
+              팝업과 같은 구성), 2026-09-02 에 세 줄로 줄였다. 문구는 `lib/startPrices.ts`
+              가 유일 정의처다. 지우지 말 것 — 「10km 이내」·「부가세」·「견적」·「5톤보다
+              큰 차량도 문의」 넷이 표시가격 분쟁을 막는 문장이다.
+              🔴 `whiteSpace: "pre-line"` 을 빼지 말 것 — 빼면 세 줄이 한 문단으로 붙는다. */}
+          <p style={{ margin: 0, padding: "10px 24px 0", fontSize: 13.5, lineHeight: 1.8, color: "var(--text-muted)", whiteSpace: "pre-line" }}>
             {START_PRICE_NOTE}
           </p>
           {/* 🔴 값을 못 읽었으면 표를 그리지 않는다 — 위와 같은 이유(lib/startPrices.ts) */}

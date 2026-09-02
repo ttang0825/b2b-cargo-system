@@ -33,10 +33,11 @@ export default function RatesModal({ open, onClose }: { open: boolean; onClose: 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 24 }}>
           <div>
             <div style={{ fontSize: 30.2, fontWeight: 600, letterSpacing: "-0.03em" }}>차량·요금 안내</div>
-            {/* 🔴 표 아래 안내 4줄을 **제목 아래 설명글 한 문단으로** 합쳤다
-                (사용자 지시 2026-09-01). 문구는 `lib/startPrices.ts` 가 유일 정의처이고
-                `/vehicles` 도 같은 상수를 읽는다 — 여기에 직접 적지 말 것. */}
-            <p style={{ margin: "10px 0 0", fontSize: 16.4, lineHeight: 1.85, color: "#6C6B65" }}>
+            {/* 🔴 표 아래 안내 4줄을 **제목 아래 설명글로** 합쳤고(사용자 지시 2026-09-01),
+                2026-09-02 에 **세 줄로 줄였다**. 문구는 `lib/startPrices.ts` 가 유일 정의처이고
+                `/vehicles` 도 같은 상수를 읽는다 — 여기에 직접 적지 말 것.
+                🔴 `whiteSpace: "pre-line"` 을 빼지 말 것 — 빼면 세 줄이 한 문단으로 붙는다. */}
+            <p style={{ margin: "10px 0 0", fontSize: 16.4, lineHeight: 1.85, color: "#6C6B65", whiteSpace: "pre-line" }}>
               {START_PRICE_NOTE}
             </p>
           </div>
