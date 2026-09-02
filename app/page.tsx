@@ -122,20 +122,39 @@ export default function LandingPage() {
             <h2 style={{ ...h2, margin: "24px 0 18px", fontSize: 46.2, lineHeight: 1.15 }}>위캐리를 <br />선택하는 이유</h2>
           </div>
           <div ref={reasonsRef} style={{ display: "flex", flexDirection: "column" }}>
+            {/* 🔴 **접힌 상태에 지금까지 보이던 것이 그대로 남는다** — 번호·제목·`desc`.
+                27차 ⑬-5 가 동의 접이식에서 겪은 문제다(접으면 설명이 통째로 사라져
+                무엇에 대한 항목인지 알 수 없게 됨). 펼치면 `detail` 이 더해질 뿐이다.
+                🔴 `<details name="wecarry-why">` 를 쓴다 — FAQ 와 같은 **브라우저 기본
+                배타 아코디언**이라 한 번에 하나만 열린다. 상태를 직접 관리하지 말 것.
+                ⚠️ 검증할 때 `open=true` 를 한꺼번에 걸면 **마지막 하나만** 열린다(62차) —
+                   하나씩 열어 잴 것. */}
             {reasons.map((r) => (
-              <div key={r.no} className="landing-reason-row"
-                style={{ display: "grid", gridTemplateColumns: "52px minmax(0,1fr) 132px", alignItems: "start", gap: 24, padding: "26px 0", borderTop: "1px solid #E4E3DE" }}>
-                <div style={{ fontSize: 20, lineHeight: 1.3, fontWeight: 700, letterSpacing: "-0.02em", color: "#0E0F12", paddingTop: 4 }}>{r.no}</div>
-                <div>
-                  <div style={{ fontSize: 26, lineHeight: 1.3, fontWeight: 600, letterSpacing: "-0.03em", color: "#0E0F12" }}>{r.title}</div>
-                  <div style={{ marginTop: 10, fontSize: 17.4, lineHeight: 1.8, color: "#6C6B65", whiteSpace: "pre-line", textWrap: "pretty" } as CSSProperties}>{r.desc}</div>
+              <details key={r.no} name="wecarry-why" className="landing-reason-row"
+                style={{ borderTop: "1px solid #E4E3DE" }}>
+                <summary className="landing-reason-head"
+                  style={{ display: "grid", gridTemplateColumns: "52px minmax(0,1fr) 132px", alignItems: "start", gap: 24, padding: "26px 0" }}>
+                  <div style={{ fontSize: 20, lineHeight: 1.3, fontWeight: 700, letterSpacing: "-0.02em", color: "#0E0F12", paddingTop: 4 }}>{r.no}</div>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ fontSize: 26, lineHeight: 1.3, fontWeight: 600, letterSpacing: "-0.03em", color: "#0E0F12" }}>{r.title}</div>
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flex: "0 0 auto", display: "block" }}>
+                        <path d="M3 5.5L7 9.5L11 5.5" stroke="#8B8A85" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                    <div style={{ marginTop: 10, fontSize: 17.4, lineHeight: 1.8, color: "#6C6B65", whiteSpace: "pre-line", textWrap: "pretty" } as CSSProperties}>{r.desc}</div>
+                  </div>
+                  <div style={{ position: "relative", alignSelf: "center", width: 132, height: 96 }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={r.img} alt={r.title} loading="lazy"
+                      style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", width: 132, height: 132, objectFit: "contain" }} />
+                  </div>
+                </summary>
+                <div className="landing-reason-detail"
+                  style={{ margin: "0 0 26px", padding: "18px 24px 20px", background: "#F4F3EF", borderRadius: 14, fontSize: 16.6, lineHeight: 1.85, color: "#5A5955", whiteSpace: "pre-line", textWrap: "pretty" } as CSSProperties}>
+                  {r.detail}
                 </div>
-                <div style={{ position: "relative", alignSelf: "center", width: 132, height: 96 }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={r.img} alt={r.title} loading="lazy"
-                    style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", width: 132, height: 132, objectFit: "contain" }} />
-                </div>
-              </div>
+              </details>
             ))}
           </div>
         </div>
