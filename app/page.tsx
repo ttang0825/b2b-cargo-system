@@ -13,7 +13,7 @@ import BusinessInfoModal from "@/components/BusinessInfoModal";
 import { useReveal } from "@/components/landing/useReveal";
 import { buildReasons, IMG, process, services, vehicles } from "@/components/landing/data";
 import { INSURANCE_ENABLED } from "@/lib/insuranceInfo";
-import { COMPANY_SUPPORT_HOURS, COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
+import { COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
 
 const PAD = "max(56px, calc((100% - 1200px) / 2))";
 
@@ -339,8 +339,10 @@ export default function LandingPage() {
           {/* 🔴 30차 리뷰 ④: 이 자리에 있던 이동 링크 8개(페이지 내부 앵커 4 +
               `/vehicles`·`/about`·`/status`·`/customer/login`)를 **전부 뺐다**(사용자 지시
               — "중복 기능이라 없어도 된다"). 앵커 4개와 `/vehicles`·`/about`·로그인은
-              헤더에 그대로 있고, `/status` 는 `/quote`·`/apply` 헤더 칩과 두 접수완료
-              화면에 있다. 🔴 여기에 다시 채우지 말 것.
+              헤더에 그대로 있다. 🔴 여기에 다시 채우지 말 것.
+              ⚠️ **`/status` 는 31차(62차 세션)에 라우트·조회 API·처리방침 행까지 통째로
+              없앴다** — 이 주석이 한동안 「헤더 칩과 접수완료 화면에 있다」고 적어두어
+              사실과 달랐다. 🔴 그 문장을 근거로 되살리지 말 것.
               ⚠️ 푸터의 법정 표시사항(전자상거래법 제10조)은 "중복 기능"이 아니라
               **빼면 위법 소지**라 그대로 뒀다(`LandingFooter`).
               🔴 그래서 이 줄은 `justify-content: flex-end` 다 — 링크가 하나만 남아
