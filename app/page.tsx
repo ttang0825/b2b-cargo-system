@@ -105,8 +105,12 @@ export default function LandingPage() {
           <h1 style={{ margin: 0, fontSize: "clamp(34px, 4.3vw, 68px)", lineHeight: 1.14, fontWeight: 600, letterSpacing: "-0.04em", color: "#0E0F12", whiteSpace: "nowrap" }}>
             출발부터 도착까지,<br />위캐리가 관리합니다.
           </h1>
-          <p style={{ margin: "24px 0 0", fontSize: 18.2, lineHeight: 1.85, color: "rgba(21,24,33,0.7)" }}>
-            전화 주시면 가능 차량과 운임을<br />확인해 바로 안내드립니다.
+          {/* 🔴 **한 줄로 고정한다**(사용자 지시 2026-09-02) — h1 과 같은 처리다.
+              `<br />` 로 끊으면 서체가 CDN 에서 늦게 뜰 때 줄이 어긋나므로
+              `white-space: nowrap` 으로 둔다. 🔴 모바일은 `app/landing.css` 가
+              `normal` 로 되돌린다 — 좁은 화면에서 nowrap 이면 화면 밖으로 나간다. */}
+          <p style={{ margin: "24px 0 0", fontSize: 18.2, lineHeight: 1.85, color: "rgba(21,24,33,0.7)", whiteSpace: "nowrap" }}>
+            전화 주시면 가능 차량과 운임을 확인해 바로 안내드립니다.
           </p>
           {/* 🔴 **히어로에서 「무료 견적 문의」 버튼을 뺐다**(사용자 지시 2026-09-02).
               34차가 「히어로·마감 둘 다 견적 → 전화 순서로 통일」한 것을 바꾼 것이다.
@@ -156,8 +160,15 @@ export default function LandingPage() {
                       style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", width: 132, height: 132, objectFit: "contain" }} />
                   </div>
                 </summary>
+                {/* 🔴 펼침 내용은 **부가 설명 카드**다(사용자 지시 2026-09-02) — 본문과
+                    같은 흐름으로 읽히면 접힌 상태의 `desc` 와 구분이 안 된다.
+                    ① 흰 카드 + 테두리로 띄우고 ② 왼쪽에 브랜드 옐로 막대를 세워
+                    「덧붙인 설명」임을 표시하고 ③ 제목 칼럼(52+24=76px)에 맞춰
+                    들여쓴다. 🔴 모바일은 `app/landing.css` 가 들여쓰기를 없앤다.
+                    🔴 `white-space: pre-line` 을 빼지 말 것 — `detail` 의 `\n` 이
+                    문장을 가른다(둘이 같이 있어야 성립한다). */}
                 <div className="landing-reason-detail"
-                  style={{ margin: "0 0 26px", padding: "18px 24px 20px", background: "#F4F3EF", borderRadius: 14, fontSize: 16.6, lineHeight: 1.85, color: "#5A5955", whiteSpace: "pre-line", textWrap: "pretty" } as CSSProperties}>
+                  style={{ margin: "0 0 26px 76px", padding: "20px 24px 22px", background: "#FFFFFF", border: "1px solid #E8E7E2", borderLeft: "3px solid #FFD834", borderRadius: 12, fontSize: 16.4, lineHeight: 1.9, color: "#5A5955", whiteSpace: "pre-line", textWrap: "pretty" } as CSSProperties}>
                   {r.detail}
                 </div>
               </details>

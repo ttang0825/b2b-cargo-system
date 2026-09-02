@@ -2,7 +2,7 @@ import Link from "next/link";
 import LandingHeader from "@/components/LandingHeader";
 import SiteFooter from "@/components/SiteFooter";
 import { vehicles as LANDING_VEHICLES } from "@/components/landing/data";
-import { fetchStartPrices, formatStartPrice, START_PRICE_NOTE } from "@/lib/startPrices";
+import { fetchStartPrices, formatStartPrice, START_PRICE_FOOTNOTE, START_PRICE_NOTE } from "@/lib/startPrices";
 
 // 차량·요금 안내. 실무 문의 1순위인 "어떤 차가 얼마나 싣고 얼마인가"에 답하는 페이지.
 //
@@ -54,10 +54,11 @@ export default async function VehiclesPage() {
           <h2 className="about-section-title" style={{ padding: "24px 24px 0", margin: 0 }}>
             기준가
           </h2>
-          {/* 🔴 표시가격 안내 — **표 위 설명글**로 합쳤고(사용자 지시 2026-09-01,
-              팝업과 같은 구성), 2026-09-02 에 세 줄로 줄였다. 문구는 `lib/startPrices.ts`
-              가 유일 정의처다. 지우지 말 것 — 「10km 이내」·「부가세」·「견적」·「5톤보다
-              큰 차량도 문의」 넷이 표시가격 분쟁을 막는 문장이다.
+          {/* 🔴 표시가격 안내 — **표 위 세 줄 + 표 아래 한 줄**로 나뉜다(사용자 지시
+              2026-09-02, 팝업과 같은 구성). 문구는 `lib/startPrices.ts` 가 유일
+              정의처다. 지우지 말 것 — 「10km 이내」·「부가세」·「견적」·「5톤보다
+              큰 차량도 문의」 넷이 표시가격 분쟁을 막는 문장이고, **넷이 두 상수에
+              나뉘어 있으므로 둘을 같이 봐야 한다.**
               🔴 `whiteSpace: "pre-line"` 을 빼지 말 것 — 빼면 세 줄이 한 문단으로 붙는다. */}
           <p style={{ margin: 0, padding: "10px 24px 0", fontSize: 13.5, lineHeight: 1.8, color: "var(--text-muted)", whiteSpace: "pre-line" }}>
             {START_PRICE_NOTE}
@@ -73,8 +74,11 @@ export default async function VehiclesPage() {
             <table>
               <thead>
                 <tr>
+                  {/* 🔴 「기준가」는 **금액 위에** 두고 글씨톤을 낮춘다(사용자 지시
+                      2026-09-02) — 금액이 주인공이고 이 말은 그 금액이 무엇인지
+                      알려주는 라벨이다. 행마다 반복하지 말 것(한 화면에 일곱 번이 된다). */}
                   <th>차량</th>
-                  <th>기준가</th>
+                  <th style={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.04em", color: "var(--text-muted)" }}>기준가</th>
                 </tr>
               </thead>
               <tbody>
@@ -87,6 +91,12 @@ export default async function VehiclesPage() {
               </tbody>
             </table>
           </div>
+          )}
+          {/* 🔴 표를 그린 경우에만 붙는 한 줄 — 표를 보고 난 뒤 읽어야 뜻이 산다. */}
+          {START_PRICES.length > 0 && (
+            <p style={{ margin: 0, padding: "4px 24px 22px", fontSize: 13.5, lineHeight: 1.8, color: "var(--text-muted)" }}>
+              {START_PRICE_FOOTNOTE}
+            </p>
           )}
 
         </section>

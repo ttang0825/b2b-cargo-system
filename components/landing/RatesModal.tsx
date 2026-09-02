@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { formatStartPrice, START_PRICE_NOTE, type StartPrice } from "@/lib/startPrices";
+import { formatStartPrice, START_PRICE_FOOTNOTE, START_PRICE_NOTE, type StartPrice } from "@/lib/startPrices";
 
 /* 「차량 · 요금 가이드」 버튼으로 열리는 팝업.
    🔴 **기준가는 운임기준표에서 실시간으로 읽어온다**(32차) — 열릴 때마다
@@ -33,9 +33,10 @@ export default function RatesModal({ open, onClose }: { open: boolean; onClose: 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 24 }}>
           <div>
             <div style={{ fontSize: 30.2, fontWeight: 600, letterSpacing: "-0.03em" }}>차량·요금 안내</div>
-            {/* 🔴 표 아래 안내 4줄을 **제목 아래 설명글로** 합쳤고(사용자 지시 2026-09-01),
-                2026-09-02 에 **세 줄로 줄였다**. 문구는 `lib/startPrices.ts` 가 유일 정의처이고
-                `/vehicles` 도 같은 상수를 읽는다 — 여기에 직접 적지 말 것.
+            {/* 🔴 표시가격 안내는 **제목 아래 세 줄 + 표 아래 한 줄**이다(사용자 지시
+                2026-09-02). 문구는 `lib/startPrices.ts` 가 유일 정의처이고 `/vehicles` 도
+                같은 상수를 읽는다 — 여기에 직접 적지 말 것.
+                🔴 필수 넷이 두 상수에 나뉘어 있으니 둘을 같이 볼 것.
                 🔴 `whiteSpace: "pre-line"` 을 빼지 말 것 — 빼면 세 줄이 한 문단으로 붙는다. */}
             <p style={{ margin: "10px 0 0", fontSize: 16.4, lineHeight: 1.85, color: "#6C6B65", whiteSpace: "pre-line" }}>
               {START_PRICE_NOTE}
@@ -46,7 +47,13 @@ export default function RatesModal({ open, onClose }: { open: boolean; onClose: 
         </div>
 
         <div className="landing-rate-price" style={{ marginTop: 30, background: "#FFFFFF", borderRadius: 16, padding: "26px 28px" }}>
-          <div style={{ fontSize: 18.2, fontWeight: 600 }}>기준가</div>
+          {/* 🔴 「기준가」는 **금액 위에** 두고 글씨톤을 낮춘다(사용자 지시 2026-09-02) —
+              금액이 주인공이고 이 말은 그 금액이 무엇인지 알려주는 라벨이다.
+              그래서 큰 제목이 아니라 **열 머리**다. 행마다 반복하지 말 것. */}
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 16, paddingBottom: 10, borderBottom: "1px solid #EDECE8", fontSize: 13, fontWeight: 500, letterSpacing: "0.04em", color: "#8B8A85" }}>
+            <span>차량</span>
+            <span>기준가</span>
+          </div>
           {/* 🔴 값을 못 읽었으면 표를 그리지 않는다 — 낡은 숫자를 게시하면
               게시가와 견적가가 갈려 그대로 표시가격 분쟁이 된다(lib/startPrices.ts). */}
           {!rows.length && (
@@ -61,6 +68,13 @@ export default function RatesModal({ open, onClose }: { open: boolean; onClose: 
             </div>
           ))}
         </div>
+
+        {/* 🔴 표를 그린 경우에만 붙는 한 줄 — 표를 보고 난 뒤 읽어야 뜻이 산다. */}
+        {rows.length > 0 && (
+          <p style={{ margin: "12px 2px 0", fontSize: 15.4, lineHeight: 1.8, color: "#6C6B65" }}>
+            {START_PRICE_FOOTNOTE}
+          </p>
+        )}
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 28 }}>
           <Link href="/quote" style={{ padding: "15px 30px", background: "#FFD834", color: "#0E0F12", whiteSpace: "nowrap", borderRadius: 999, fontSize: 17.4, fontWeight: 700 }}>
