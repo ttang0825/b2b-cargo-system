@@ -112,7 +112,14 @@ export default function LegalModal({
     // 나던 증상이라 더 늦게 발견됐다.
     // ⚠️ 인라인으로 둔 것은 **어떤 조상 규칙보다 확실하게 이기기 위해서다.** 모달을 어디에
     // 놓든 색이 그 자리에 좌우되면 안 된다. `var(--text)` 라 토큰은 그대로 따라간다.
-    <div className="legal-modal-overlay" style={{ color: "var(--text)" }} onMouseDown={onClose}>
+    //
+    // 🔴 **`textAlign: "left"` 도 같은 이유다 — 2026-09-03 에 같은 함정이 한 번 더 났다.**
+    // 랜딩 마감 CTA 섹션이 `textAlign: center` 라(64차에 「번호를 가운데로」가 이미 되어 있던
+    // 그 줄이다) 모달이 그것까지 물려받아 **조문이 통째로 가운데 정렬**로 읽혔다.
+    // 실측 — 랜딩 모달 `center` / `/about` 모달 `start` / `/terms` 페이지 `start`.
+    // 🔴 **색과 정렬을 한 벌로 볼 것.** 어두운 배경·가운데 정렬 안에서 모달을 여는 새 화면을
+    //    만들 때도 같은 함정이 있다 — 모달은 자기 글자색과 정렬을 스스로 선언해야 한다.
+    <div className="legal-modal-overlay" style={{ color: "var(--text)", textAlign: "left" }} onMouseDown={onClose}>
       <div
         ref={dialogRef}
         className="legal-modal"

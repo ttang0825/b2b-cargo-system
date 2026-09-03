@@ -76,7 +76,11 @@ export default function BusinessInfoModal({ open, onClose }: { open: boolean; on
   if (!open) return null;
 
   return (
-    <div className="legal-modal-overlay" style={{ color: "var(--text)" }} onMouseDown={onClose}>
+    // 🔴 **`color` 와 `textAlign` 을 여기서 직접 정한다 — 지우지 말 것.**
+    // 이 모달은 부르는 화면의 DOM 안에 렌더링되어 **조상의 글자색·정렬을 상속한다.**
+    // 지금은 랜딩 최상위에 붙어 있어 멀쩡하지만, 어두운 배경이나 가운데 정렬 띠 안으로
+    // 옮기는 순간 `LegalModal` 이 두 번 겪은 함정에 그대로 걸린다(65차 ⑤ · 2026-09-03).
+    <div className="legal-modal-overlay" style={{ color: "var(--text)", textAlign: "left" }} onMouseDown={onClose}>
       <div
         ref={dialogRef}
         className="legal-modal"
