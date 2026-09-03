@@ -160,7 +160,16 @@
   .landing-page section, .landing-page footer { padding-left: 20px !important; padding-right: 20px !important; }
   .landing-about-head h2 { margin-bottom: 0 !important; }
   .landing-hero-copy > div:last-child { flex-direction: column !important; align-items: stretch !important; gap: 10px !important; }
-  .landing-hero-copy > div:last-child > a { width: 100% !important; box-sizing: border-box !important; justify-content: center !important; text-align: center !important; }
+  /* 🔴 히어로 전화 버튼은 **모바일에서 마감 CTA 와 같은 크기**로 내린다
+     (사용자 지시 2026-09-03 — 「너무 크다」). 데스크탑 시안 값(26px · 세로
+     23px · min-width 330)을 그대로 두면 모바일에서 **350×83px** 이 되어
+     첫 화면을 버튼 하나가 먹는다. 마감 CTA 가 350×56 · 18px 이므로 그 값에
+     맞춘다(같은 페이지 안에서 버튼 크기가 갈리지 않게).
+     ⚠️ 세로 15px 인 것은 이 버튼만 1px 테두리가 있어서다 — 15+15+24+2 = 56px
+        으로 마감 CTA(16+16+24, 테두리 없음)와 **실측 높이가 같아진다**.
+     🔴 `min-width: 0` 을 빼지 말 것 — 330px 이 남아 있으면 360px 화면에서
+        버튼이 본문 칼럼(320px)보다 넓어진다. ⚠️ 데스크탑 값은 건드리지 않았다. */
+  .landing-hero-copy > div:last-child > a { width: 100% !important; box-sizing: border-box !important; justify-content: center !important; text-align: center !important; min-width: 0 !important; padding: 15px 28px !important; font-size: 18px !important; }
   .landing-hero { padding-top: 96px !important; }
   .landing-page section h2 { font-size: 32.4px !important; }
   .landing-tms-lead div:first-child { font-size: 25.1px !important; }
