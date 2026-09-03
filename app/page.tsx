@@ -9,10 +9,11 @@ import TmsShowcase from "@/components/landing/TmsShowcase";
 import FaqList from "@/components/landing/FaqList";
 import RatesModal from "@/components/landing/RatesModal";
 import LegalLinks from "@/components/LegalLinks";
+import BusinessInfoModal from "@/components/BusinessInfoModal";
 import { useReveal } from "@/components/landing/useReveal";
 import { buildReasons, IMG, process, services, vehicles } from "@/components/landing/data";
 import { INSURANCE_ENABLED } from "@/lib/insuranceInfo";
-import { COMPANY_SUPPORT_HOURS, COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
+import { COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
 
 const PAD = "max(56px, calc((100% - 1200px) / 2))";
 
@@ -73,6 +74,7 @@ const steps = [
 
 export default function LandingPage() {
   const [ratesOpen, setRatesOpen] = useState(false);
+  const [bizOpen, setBizOpen] = useState(false);
 
   // 🔴 보험 카드·FAQ 문항은 `INSURANCE_ENABLED` 가 false 인 동안 **배열에서 빠진다** —
   //    화면에서 숨기는 것이 아니라 DOM 에 렌더링하지 않는다(미가입 상태 노출은 표시광고
@@ -103,12 +105,20 @@ export default function LandingPage() {
           <h1 style={{ margin: 0, fontSize: "clamp(34px, 4.3vw, 68px)", lineHeight: 1.14, fontWeight: 600, letterSpacing: "-0.04em", color: "#0E0F12", whiteSpace: "nowrap" }}>
             출발부터 도착까지,<br />위캐리가 관리합니다.
           </h1>
-          <p style={{ margin: "24px 0 0", fontSize: 18.2, lineHeight: 1.85, color: "rgba(21,24,33,0.7)" }}>
-            전화 주시면 가능 차량과 운임을<br />확인해 바로 안내드립니다.
+          {/* 🔴 **한 줄로 고정한다**(사용자 지시 2026-09-02) — h1 과 같은 처리다.
+              `<br />` 로 끊으면 서체가 CDN 에서 늦게 뜰 때 줄이 어긋나므로
+              `white-space: nowrap` 으로 둔다. 🔴 모바일은 `app/landing.css` 가
+              `normal` 로 되돌린다 — 좁은 화면에서 nowrap 이면 화면 밖으로 나간다. */}
+          <p style={{ margin: "24px 0 0", fontSize: 18.2, lineHeight: 1.85, color: "rgba(21,24,33,0.7)", whiteSpace: "nowrap" }}>
+            전화 주시면 가능 차량과 운임을 확인해 바로 안내드립니다.
           </p>
+          {/* 🔴 **히어로에서 「무료 견적 문의」 버튼을 뺐다**(사용자 지시 2026-09-02).
+              34차가 「히어로·마감 둘 다 견적 → 전화 순서로 통일」한 것을 바꾼 것이다.
+              🔴 그래서 **히어로에 남는 유일한 행동이 전화**다 — 버튼을 검정 채움으로
+                 올려 눈에 띄게 했다(뺀 견적 버튼이 쓰던 대비다). 새 버튼을 만들지 말 것.
+              🟢 `/quote` 로 가는 길은 **헤더 CTA 와 마감 CTA** 에 그대로 있다. */}
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, marginTop: 34 }}>
-            <Link href="/quote" style={heroBtn("#0E0F12", "#FFFFFF", "#0E0F12", "0 6px 27px rgba(21,24,33,0.18)")}>무료 견적 문의</Link>
-            <a href={`tel:${COMPANY_SUPPORT_PHONE.replace(/-/g, "")}`} style={heroBtn("#FFFFFF", "#0E0F12", "#FFFFFF")}>
+            <a href={`tel:${COMPANY_SUPPORT_PHONE.replace(/-/g, "")}`} style={heroBtn("#0E0F12", "#FFFFFF", "#0E0F12", "0 6px 27px rgba(21,24,33,0.18)")}>
               전화 문의 {COMPANY_SUPPORT_PHONE}
             </a>
           </div>
@@ -122,20 +132,47 @@ export default function LandingPage() {
             <h2 style={{ ...h2, margin: "24px 0 18px", fontSize: 46.2, lineHeight: 1.15 }}>위캐리를 <br />선택하는 이유</h2>
           </div>
           <div ref={reasonsRef} style={{ display: "flex", flexDirection: "column" }}>
+            {/* 🔴 **접힌 상태에 지금까지 보이던 것이 그대로 남는다** — 번호·제목·`desc`.
+                27차 ⑬-5 가 동의 접이식에서 겪은 문제다(접으면 설명이 통째로 사라져
+                무엇에 대한 항목인지 알 수 없게 됨). 펼치면 `detail` 이 더해질 뿐이다.
+                🔴 `<details name="wecarry-why">` 를 쓴다 — FAQ 와 같은 **브라우저 기본
+                배타 아코디언**이라 한 번에 하나만 열린다. 상태를 직접 관리하지 말 것.
+                ⚠️ 검증할 때 `open=true` 를 한꺼번에 걸면 **마지막 하나만** 열린다(62차) —
+                   하나씩 열어 잴 것. */}
             {reasons.map((r) => (
-              <div key={r.no} className="landing-reason-row"
-                style={{ display: "grid", gridTemplateColumns: "52px minmax(0,1fr) 132px", alignItems: "start", gap: 24, padding: "26px 0", borderTop: "1px solid #E4E3DE" }}>
-                <div style={{ fontSize: 20, lineHeight: 1.3, fontWeight: 700, letterSpacing: "-0.02em", color: "#0E0F12", paddingTop: 4 }}>{r.no}</div>
-                <div>
-                  <div style={{ fontSize: 26, lineHeight: 1.3, fontWeight: 600, letterSpacing: "-0.03em", color: "#0E0F12" }}>{r.title}</div>
-                  <div style={{ marginTop: 10, fontSize: 17.4, lineHeight: 1.8, color: "#6C6B65", whiteSpace: "pre-line", textWrap: "pretty" } as CSSProperties}>{r.desc}</div>
+              <details key={r.no} name="wecarry-why" className="landing-reason-row"
+                style={{ borderTop: "1px solid #E4E3DE" }}>
+                <summary className="landing-reason-head"
+                  style={{ display: "grid", gridTemplateColumns: "52px minmax(0,1fr) 132px", alignItems: "start", gap: 24, padding: "26px 0" }}>
+                  <div style={{ fontSize: 20, lineHeight: 1.3, fontWeight: 700, letterSpacing: "-0.02em", color: "#0E0F12", paddingTop: 4 }}>{r.no}</div>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ fontSize: 26, lineHeight: 1.3, fontWeight: 600, letterSpacing: "-0.03em", color: "#0E0F12" }}>{r.title}</div>
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flex: "0 0 auto", display: "block" }}>
+                        <path d="M3 5.5L7 9.5L11 5.5" stroke="#8B8A85" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                    <div style={{ marginTop: 10, fontSize: 17.4, lineHeight: 1.8, color: "#6C6B65", whiteSpace: "pre-line", textWrap: "pretty" } as CSSProperties}>{r.desc}</div>
+                  </div>
+                  <div style={{ position: "relative", alignSelf: "center", width: 132, height: 96 }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={r.img} alt={r.title} loading="lazy"
+                      style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", width: 132, height: 132, objectFit: "contain" }} />
+                  </div>
+                </summary>
+                {/* 🔴 펼침 내용은 **부가 설명 카드**다(사용자 지시 2026-09-02) — 본문과
+                    같은 흐름으로 읽히면 접힌 상태의 `desc` 와 구분이 안 된다.
+                    ① 흰 카드 + 옅은 테두리로만 띄우고 ② 제목 칼럼(52+24=76px)에
+                    맞춰 들여쓴다. 🔴 모바일은 `app/landing.css` 가 들여쓰기를 없앤다.
+                    🔴 **왼쪽 옐로 막대를 다시 넣지 말 것**(사용자 지시 2026-09-02 —
+                       한 번 넣었다가 「깔끔하게 흰 카드로만」으로 확정됐다).
+                    🔴 `white-space: pre-line` 을 빼지 말 것 — `detail` 의 `\n` 이
+                    문장을 가른다(둘이 같이 있어야 성립한다). */}
+                <div className="landing-reason-detail"
+                  style={{ margin: "0 0 26px 76px", padding: "20px 24px 22px", background: "#FFFFFF", border: "1px solid #E8E7E2", borderRadius: 12, fontSize: 16.4, lineHeight: 1.9, color: "#5A5955", whiteSpace: "pre-line", textWrap: "pretty" } as CSSProperties}>
+                  {r.detail}
                 </div>
-                <div style={{ position: "relative", alignSelf: "center", width: 132, height: 96 }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={r.img} alt={r.title} loading="lazy"
-                    style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", width: 132, height: 132, objectFit: "contain" }} />
-                </div>
-              </div>
+              </details>
             ))}
           </div>
         </div>
@@ -148,9 +185,16 @@ export default function LandingPage() {
           {services.map((s) => (
             <div key={s.title} className="landing-card-lift"
               style={{ display: "flex", flexDirection: "column", background: "#FFFFFF", border: "1px solid #E4E3DE", borderRadius: 18, overflow: "hidden" }}>
+              {/* ⚠️ 사진이 없는 카드가 있다(「고정화물 배차」 — 사용자 준비 중, 2026-09-02).
+                  `img` 가 없으면 **사진 자리를 회색 상자로만 남긴다** — 깨진 이미지 아이콘이
+                  뜨지 않게 `<img>` 자체를 그리지 않는다. 🔴 자리표시자 문구를 넣지 말 것
+                  (사용자가 「일단 비어보이게」로 확정했다). 사진이 오면
+                  `components/landing/data.ts` 의 `img` 만 채우면 된다. */}
               <div style={{ position: "relative", aspectRatio: "4 / 3", backgroundColor: "#E3E2DD" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={s.img} alt={s.title} loading="lazy" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                {s.img && (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={s.img} alt={s.title} loading="lazy" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                )}
               </div>
               <div style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", padding: 24 }}>
                 <div style={{ fontSize: 24, lineHeight: 1.3, fontWeight: 700, letterSpacing: "-0.03em", color: "#0E0F12", wordBreak: "keep-all" }}>{s.title}</div>
@@ -291,8 +335,12 @@ export default function LandingPage() {
         <h2 style={{ position: "relative", margin: 0, maxWidth: 820, fontSize: 58.8, lineHeight: 1.15, fontWeight: 600, letterSpacing: "-0.04em", color: "#FFFFFF", textWrap: "balance" } as CSSProperties}>
           지금 바로 견적을 받아보세요.
         </h2>
+        {/* 🔴 **운영시간을 이 화면에서만 뺐다**(사용자 지시 2026-09-02).
+            ⚠️ `COMPANY_SUPPORT_HOURS` 상수 자체는 지우지 말 것 — `/about`·화주포털·
+               로그인 화면이 같은 값을 쓴다. 여기서 안 그릴 뿐이다.
+            🟢 섹션이 `textAlign: center` 라 번호는 이미 가운데 정렬이다. */}
         <p style={{ position: "relative", margin: "22px 0 0", maxWidth: 520, fontSize: 18.2, lineHeight: 1.8, color: "rgba(255,255,255,0.78)" }}>
-          상·하차지와 연락처만 남겨주시면 확인해 안내드립니다.<br />고객센터 {COMPANY_SUPPORT_PHONE} · {COMPANY_SUPPORT_HOURS}
+          상·하차지와 연락처만 남겨주시면 확인해 안내드립니다.<br />고객센터 {COMPANY_SUPPORT_PHONE}
         </p>
         <div style={{ position: "relative", display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 12, marginTop: 36 }}>
           <Link href="/quote" style={ctaBtn("#FFFFFF")}>무료 견적 문의</Link>
@@ -303,8 +351,10 @@ export default function LandingPage() {
           {/* 🔴 30차 리뷰 ④: 이 자리에 있던 이동 링크 8개(페이지 내부 앵커 4 +
               `/vehicles`·`/about`·`/status`·`/customer/login`)를 **전부 뺐다**(사용자 지시
               — "중복 기능이라 없어도 된다"). 앵커 4개와 `/vehicles`·`/about`·로그인은
-              헤더에 그대로 있고, `/status` 는 `/quote`·`/apply` 헤더 칩과 두 접수완료
-              화면에 있다. 🔴 여기에 다시 채우지 말 것.
+              헤더에 그대로 있다. 🔴 여기에 다시 채우지 말 것.
+              ⚠️ **`/status` 는 31차(62차 세션)에 라우트·조회 API·처리방침 행까지 통째로
+              없앴다** — 이 주석이 한동안 「헤더 칩과 접수완료 화면에 있다」고 적어두어
+              사실과 달랐다. 🔴 그 문장을 근거로 되살리지 말 것.
               ⚠️ 푸터의 법정 표시사항(전자상거래법 제10조)은 "중복 기능"이 아니라
               **빼면 위법 소지**라 그대로 뒀다(`LandingFooter`).
               🔴 그래서 이 줄은 `justify-content: flex-end` 다 — 링크가 하나만 남아
@@ -315,8 +365,18 @@ export default function LandingPage() {
               시안의 `LegalModal` 은 약관·방침이 「전문 준비 중」 자리표시자였다.
               우리에겐 `lib/legal/*` 에 전문이 있고, 페이지(`/terms` 등)와 같은 데이터를
               공유하므로 한쪽만 낡는 일이 없다. `lib/legal/` 은 한 줄도 안 고쳤다. */}
+          {/* 🔴 **네 번째로 「사업자정보」를 더했다**(사용자 확정 2026-09-02).
+              30차 리뷰에 푸터에서 호스팅사업자·개인정보 보호책임자를 빼면서 전자상거래법
+              제10조 1항의 **초기화면 표시**가 충족되지 않는 상태가 됐고, 되살리는 길 둘 중
+              **「법적 문서 링크 옆에 사업자정보」로 확정**된 것이다.
+              🔴 푸터 한 줄로 되돌리지 말 것 — 뺀 이유(푸터가 길어진다)가 그대로 유효하다. */}
           <div className="landing-cta-links" style={{ display: "flex", flexWrap: "wrap", gap: 24, fontSize: 15.6, color: "rgba(255,255,255,0.6)" }}>
             <LegalLinks linkClassName="landing-legal-link" />
+            <button type="button" className="landing-legal-link"
+              style={{ border: "none", background: "transparent", padding: 0, font: "inherit", color: "inherit", cursor: "pointer" }}
+              onClick={() => setBizOpen(true)}>
+              사업자정보
+            </button>
           </div>
         </div>
       </section>
@@ -324,6 +384,7 @@ export default function LandingPage() {
       <LandingFooter />
 
       <RatesModal open={ratesOpen} onClose={() => setRatesOpen(false)} />
+      <BusinessInfoModal open={bizOpen} onClose={() => setBizOpen(false)} />
     </div>
   );
 }

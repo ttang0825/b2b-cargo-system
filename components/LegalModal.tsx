@@ -101,7 +101,18 @@ export default function LegalModal({
 
   return (
     // 배경(오버레이) 클릭 시 닫힘 — 모달 본체 클릭은 onClick 전파를 막아 닫히지 않게 함
-    <div className="legal-modal-overlay" onMouseDown={onClose}>
+    //
+    // 🔴 **`color` 를 여기서 직접 정한다 — 지우지 말 것.**
+    // 이 모달은 그 자리(부르는 화면의 DOM) 안에 렌더링되므로 **조상의 글자색을 상속한다.**
+    // 랜딩은 이 링크가 **어두운 마감 CTA 띠 안**(`div.landing-cta-links`, 인라인
+    // `color: rgba(255,255,255,0.6)`)에 있어서, 상속하면 **흰 배경 위 흰 글씨**가 되어
+    // 조문이 통째로 안 보였다(사용자 신고 2026-09-02 「법적 문서가 비어 있다」 —
+    // 실측: 모달 DOM 에 약관 6,483자가 들어 있는데 color 가 rgba(255,255,255,0.6) 이었다).
+    // `/about`·`/vehicles`·법적 문서 페이지는 조상이 평범한 푸터라 멀쩡했다 — **랜딩에서만**
+    // 나던 증상이라 더 늦게 발견됐다.
+    // ⚠️ 인라인으로 둔 것은 **어떤 조상 규칙보다 확실하게 이기기 위해서다.** 모달을 어디에
+    // 놓든 색이 그 자리에 좌우되면 안 된다. `var(--text)` 라 토큰은 그대로 따라간다.
+    <div className="legal-modal-overlay" style={{ color: "var(--text)" }} onMouseDown={onClose}>
       <div
         ref={dialogRef}
         className="legal-modal"

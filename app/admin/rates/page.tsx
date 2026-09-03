@@ -16,6 +16,10 @@ import {
   type MixedLoadingDiscountSettingsRow,
 } from "@/lib/mixedLoadingDiscountSettings";
 import { VEHICLE_TYPES_ALL } from "@/lib/constants";
+import {
+  PUBLISHED_START_PRICE_TONS,
+  START_PRICE_DISTANCE_LABEL,
+} from "@/lib/startPrices";
 
 const RATE_TABS = [
   { key: "base", label: "기본운임" },
@@ -374,6 +378,18 @@ export default function RatesPage() {
     excludeId: string;
   } | null>(null);
 
+  // 🔴 게시되는 칸(「10km 이내」 × 게시 차급)을 고칠 때만 뜨는 확인 창.
+  // 64차가 기준가를 DB 실시간 연동으로 바꿔서, 이 칸은 **저장하는 순간 랜딩과 /vehicles
+  // 에 그대로 게시된다.** 이 화면은 클릭이 곧 저장이고 되돌리기가 없어서 오타 하나가
+  // 그대로 공개된다 — 45차 (6)이 「자동 연동을 하려면 저장 전 확인 단계를 같이 넣으라」고
+  // 적어둔 것이 이것이다.
+  const [pendingPublish, setPendingPublish] = useState<{
+    id: string;
+    vehicleType: string;
+    oldValue: number;
+    newValue: number;
+  } | null>(null);
+
   async function load() {
     setLoading(true);
     const [t, s, e] = await Promise.all([
@@ -417,7 +433,38 @@ export default function RatesPage() {
     setTimeout(() => setSavedFlash(false), 1200);
   }
 
+  /** 이 칸이 공개 화면에 그대로 게시되는가 —
+   *  🔴 판단 기준을 여기에 다시 적지 말 것. `lib/startPrices.ts` 가 유일 정의처이고,
+   *     게시 차급이 늘면 이 확인 창도 저절로 따라온다. */
+  function isPublishedCell(id: string) {
+    const tier = tiers.find((t) => t.id === id);
+    if (!tier) return false;
+    return (
+      tier.distance_label === START_PRICE_DISTANCE_LABEL &&
+      (PUBLISHED_START_PRICE_TONS as readonly string[]).includes(tier.vehicle_type)
+    );
+  }
+
   async function updateTierFare(id: string, base_fare: number) {
+    // 🔴 게시되는 칸은 곧바로 저장하지 않고 확인을 한 번 받는다.
+    //    🔴 **전 구간에 걸지 말 것** — 담당자가 매번 눌러야 해서 실무가 막힌다.
+    //    취소하면 `tiers` 를 안 건드렸으니 화면에 옛 값이 그대로 남는다(별도 복원 불필요).
+    if (isPublishedCell(id)) {
+      const tier = tiers.find((t) => t.id === id);
+      if (tier && (tier.base_fare ?? 0) !== base_fare) {
+        setPendingPublish({
+          id,
+          vehicleType: tier.vehicle_type,
+          oldValue: tier.base_fare ?? 0,
+          newValue: base_fare,
+        });
+        return;
+      }
+    }
+    await commitTierFare(id, base_fare);
+  }
+
+  async function commitTierFare(id: string, base_fare: number) {
     const oldTier = tiers.find((t) => t.id === id);
     const oldValue = oldTier?.base_fare ?? 0;
 
@@ -570,6 +617,86 @@ export default function RatesPage() {
           </button>
         ))}
       </div>
+
+      {/* 🔴 게시되는 칸(「10km 이내」 × 게시 차급) 저장 전 확인.
+          바뀌기 전 값 → 바뀐 값을 나란히 보여준다 — 오타는 「자릿수가 다르다」로
+          알아채는 것이라 두 값이 같이 보여야 한다. */}
+      {pendingPublish && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.35)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 60,
+          }}
+        >
+          <div
+            className="card"
+            style={{ padding: 24, maxWidth: 420, background: "var(--surface)" }}
+          >
+            <h3 style={{ fontSize: 15, marginTop: 0, marginBottom: 8 }}>
+              이 값이 랜딩과 차량안내에 바로 게시됩니다
+            </h3>
+            <p
+              style={{
+                fontSize: 13,
+                color: "var(--text-muted)",
+                marginBottom: 14,
+                lineHeight: 1.7,
+              }}
+            >
+              {START_PRICE_DISTANCE_LABEL} 기준가는 공개 화면이 실시간으로 읽어 갑니다.
+              저장하면 되돌릴 수 없으니 금액을 한 번 더 확인해 주세요.
+            </p>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "12px 14px",
+                borderRadius: "var(--radius)",
+                background: "var(--bg)",
+                marginBottom: 18,
+                flexWrap: "wrap",
+              }}
+            >
+              <strong style={{ fontSize: 13.5 }}>
+                {pendingPublish.vehicleType} · {START_PRICE_DISTANCE_LABEL}
+              </strong>
+              <span style={{ fontSize: 14, color: "var(--text-muted)" }}>
+                {pendingPublish.oldValue.toLocaleString("ko-KR")}원
+              </span>
+              <span style={{ fontSize: 14, color: "var(--text-muted)" }}>→</span>
+              <span style={{ fontSize: 16, fontWeight: 700 }}>
+                {pendingPublish.newValue.toLocaleString("ko-KR")}원
+              </span>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                className="btn"
+                style={{ flex: 1 }}
+                onClick={() => {
+                  const next = pendingPublish;
+                  setPendingPublish(null);
+                  if (next) void commitTierFare(next.id, next.newValue);
+                }}
+              >
+                게시하기
+              </button>
+              <button
+                className="btn btn-ghost"
+                style={{ flex: 1 }}
+                onClick={() => setPendingPublish(null)}
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {pendingScale && (
         <div
