@@ -159,7 +159,7 @@
 @media (max-width: 700px) {
   .landing-page section, .landing-page footer { padding-left: 20px !important; padding-right: 20px !important; }
   .landing-about-head h2 { margin-bottom: 0 !important; }
-  .landing-hero-copy > div:last-child { flex-direction: column !important; align-items: stretch !important; gap: 10px !important; }
+  .landing-hero-copy > div:last-child { flex-direction: column !important; align-items: flex-start !important; gap: 10px !important; }
   /* 🔴 히어로 전화 버튼은 **모바일에서 마감 CTA 와 같은 크기**로 내린다
      (사용자 지시 2026-09-03 — 「너무 크다」). 데스크탑 시안 값(26px · 세로
      23px · min-width 330)을 그대로 두면 모바일에서 **350×83px** 이 되어
@@ -168,8 +168,14 @@
      ⚠️ 세로 15px 인 것은 이 버튼만 1px 테두리가 있어서다 — 15+15+24+2 = 56px
         으로 마감 CTA(16+16+24, 테두리 없음)와 **실측 높이가 같아진다**.
      🔴 `min-width: 0` 을 빼지 말 것 — 330px 이 남아 있으면 360px 화면에서
-        버튼이 본문 칼럼(320px)보다 넓어진다. ⚠️ 데스크탑 값은 건드리지 않았다. */
-  .landing-hero-copy > div:last-child > a { width: 100% !important; box-sizing: border-box !important; justify-content: center !important; text-align: center !important; min-width: 0 !important; padding: 15px 28px !important; font-size: 18px !important; }
+        버튼이 본문 칼럼(320px)보다 넓어진다. ⚠️ 데스크탑 값은 건드리지 않았다.
+     🔴 **가로도 글자 폭에 맞춘다**(사용자 지시 2026-09-03) — `width: auto` +
+        부모 `align-items: flex-start`. 꽉 채우면 검은 칸이 화면을 가로질러
+        첫 화면을 덮는다. ⚠️ **부모의 `flex-start` 와 쌍이다** — `stretch` 로
+        되돌리면 `width: auto` 여도 다시 꽉 찬다.
+     ⚠️ 마감 CTA · 계정신청 버튼은 그대로 꽉 채운다(아래 별도 규칙) —
+        거기는 선택지가 둘이라 나란히 꽉 차는 편이 누르기 쉽다. */
+  .landing-hero-copy > div:last-child > a { width: auto !important; box-sizing: border-box !important; justify-content: center !important; text-align: center !important; min-width: 0 !important; padding: 15px 28px !important; font-size: 18px !important; }
   .landing-hero { padding-top: 96px !important; }
   .landing-page section h2 { font-size: 32.4px !important; }
   .landing-tms-lead div:first-child { font-size: 25.1px !important; }
