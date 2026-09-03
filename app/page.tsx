@@ -162,13 +162,14 @@ export default function LandingPage() {
                 </summary>
                 {/* 🔴 펼침 내용은 **부가 설명 카드**다(사용자 지시 2026-09-02) — 본문과
                     같은 흐름으로 읽히면 접힌 상태의 `desc` 와 구분이 안 된다.
-                    ① 흰 카드 + 테두리로 띄우고 ② 왼쪽에 브랜드 옐로 막대를 세워
-                    「덧붙인 설명」임을 표시하고 ③ 제목 칼럼(52+24=76px)에 맞춰
-                    들여쓴다. 🔴 모바일은 `app/landing.css` 가 들여쓰기를 없앤다.
+                    ① 흰 카드 + 옅은 테두리로만 띄우고 ② 제목 칼럼(52+24=76px)에
+                    맞춰 들여쓴다. 🔴 모바일은 `app/landing.css` 가 들여쓰기를 없앤다.
+                    🔴 **왼쪽 옐로 막대를 다시 넣지 말 것**(사용자 지시 2026-09-02 —
+                       한 번 넣었다가 「깔끔하게 흰 카드로만」으로 확정됐다).
                     🔴 `white-space: pre-line` 을 빼지 말 것 — `detail` 의 `\n` 이
                     문장을 가른다(둘이 같이 있어야 성립한다). */}
                 <div className="landing-reason-detail"
-                  style={{ margin: "0 0 26px 76px", padding: "20px 24px 22px", background: "#FFFFFF", border: "1px solid #E8E7E2", borderLeft: "3px solid #FFD834", borderRadius: 12, fontSize: 16.4, lineHeight: 1.9, color: "#5A5955", whiteSpace: "pre-line", textWrap: "pretty" } as CSSProperties}>
+                  style={{ margin: "0 0 26px 76px", padding: "20px 24px 22px", background: "#FFFFFF", border: "1px solid #E8E7E2", borderRadius: 12, fontSize: 16.4, lineHeight: 1.9, color: "#5A5955", whiteSpace: "pre-line", textWrap: "pretty" } as CSSProperties}>
                   {r.detail}
                 </div>
               </details>
