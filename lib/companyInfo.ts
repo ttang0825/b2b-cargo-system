@@ -85,10 +85,17 @@ export const COMPANY_ADDRESS = COMPANY_INFO.address;
 // ⚠️ 위 `COMPANY_INFO.email`(견적서 PDF용, 현재 빈 값)과는 별개다 — 견적서에 이메일을
 // 넣을지는 아직 정해지지 않았고, 그쪽을 채우면 발행되는 견적서 모양이 바뀌므로 건드리지 않음.
 //
+// 🔴 **전용 도메인 메일이다**(2026-09-03 개통 — `wecarrylogis.co.kr`, 카페24 웹메일).
+// **역할 이름 주소라 담당자가 바뀌어도 처리방침을 다시 고칠 필요가 없다** — 🔴 개인 이름
+// 주소나 다른 법인 도메인을 법적 문서에 다시 넣지 말 것.
+// 🔴 **개인정보 전용 주소(`privacy@` 등)를 만들지 않기로 확정했다**(2026-09-03) — 보호책임자
+// 창구도 이 주소 하나다. 개인정보보호법은 연락처 공개를 요구할 뿐 전용 주소를 요구하지
+// 않는다. **이메일 상수를 둘로 나누지 말 것.**
+//
 // **푸터에서는 반드시 `components/ObfuscatedEmail.tsx`로 감싸서 표시할 것**(스크래핑 방지).
 // 반대로 **약관·개인정보처리방침 본문 안에서는 평문 그대로** 써야 한다 — 법정 고지사항이라
 // 난독화하면 고지 효력에 문제가 생길 수 있음.
-export const COMPANY_CONTACT_EMAIL = "director@designegg.tv";
+export const COMPANY_CONTACT_EMAIL = "biz@wecarrylogis.co.kr";
 
 // 보유 자격
 export const COMPANY_FREIGHT_BROKER_LICENSE = "제180254호"; // 화물자동차 운송주선사업 허가
