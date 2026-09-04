@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type CSSProperties } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 import "./landing.css";
 import LandingHeader from "@/components/landing/LandingHeader";
 import LandingFooter from "@/components/landing/LandingFooter";
@@ -86,10 +86,14 @@ export default function LandingPage() {
   const servicesRef = useReveal<HTMLDivElement>();
   const tmsImgRef = useReveal<HTMLImageElement>();
   const vehiclesRef = useReveal<HTMLDivElement>();
-  // 🔴 **모바일 차량 목록 자동 슬라이드**(사용자 지시 2026-09-04) — `useReveal` 이 만든
-  //    같은 ref 를 그대로 넘긴다(요소 하나에 ref 를 둘 달 수 없다).
+  // 🔴 **모바일 차량 목록 자동 슬라이드**(사용자 지시 2026-09-04).
+  //    바깥(`vehiclesRef`)이 스크롤되는 상자이고 안쪽(`vehicleTrackRef`)이 실제로
+  //    미끄러지는 줄이다 — 정수 픽셀은 스크롤이, 소수 픽셀은 안쪽 줄의 transform 이
+  //    나눠 싣는다(`useAutoMarquee` 주석 참고. 둘로 나누지 않으면 덜덜거린다).
+  //    🔴 `useReveal` 은 바깥에 걸려 있다 — 같은 요소에 두면 transform 이 서로 덮어쓴다.
   //    한 바퀴 기준점은 **사본 목록의 첫 장**이라 `vehicles.length` 다.
-  useAutoMarquee(vehiclesRef, vehicles.length);
+  const vehicleTrackRef = useRef<HTMLDivElement>(null);
+  useAutoMarquee(vehiclesRef, vehicleTrackRef, vehicles.length);
 
   return (
     <div className="landing-page" style={{ width: "100%", margin: "0 auto", overflowX: "clip", background: "#F4F3F0", color: "#0E0F12" }}>
@@ -287,7 +291,11 @@ export default function LandingPage() {
                이다(`app/landing.css`) — 안 그러면 그리드가 2줄에서 4줄이 된다.
             🟢 `src` 가 앞쪽과 같아서 내려받는 이미지가 늘지 않는다(캐시).
             🔴 사본에는 `aria-hidden` 을 건다 — 스크린리더가 같은 차량을 두 번 읽는다. */}
+        {/* 🔴 안쪽 `.landing-vehicle-track` 은 **데스크탑에서 `display: contents`** 라
+            상자를 만들지 않는다 — 그래서 카드 24장이 바깥 6열 그리드에 그대로 들어간다.
+            모바일에서만 flex 줄이 되어 transform 으로 미끄러진다. 지우지 말 것. */}
         <div ref={vehiclesRef} className="landing-vehicle-grid" style={{ marginTop: 48, display: "grid", gridTemplateColumns: "repeat(6, minmax(0,1fr))", gap: 12 }}>
+          <div ref={vehicleTrackRef} className="landing-vehicle-track">
           {[...vehicles, ...vehicles].map((v, i) => (
             <div key={`${v.name}-${i}`}
               className={i >= vehicles.length ? "landing-vehicle-dup" : undefined}
@@ -300,6 +308,7 @@ export default function LandingPage() {
               <div style={{ marginTop: 5, fontSize: 14, lineHeight: 1.5, color: "#6C6B65", wordBreak: "keep-all" }}>{v.desc}</div>
             </div>
           ))}
+          </div>
         </div>
         {/* 🔴 랜딩 이름(「5톤 윙바디」)과 발주 폼 선택지가 다르다 — 폼은 차급과 형태를
             **각각** 고르는 구조라 그 이름이 통째로 있지는 않다. 이름은 시안 그대로

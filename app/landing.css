@@ -60,6 +60,9 @@
    데스크탑 그리드에서는 그리지 않는다. 없애면 6열 그리드가 2줄에서 4줄이 된다.
    🔴 모바일(≤700px)에서만 되살아난다 — 아래 블록. */
 .landing-vehicle-dup { display: none; }
+/* 🔴 안쪽 줄은 **데스크탑에서 상자를 만들지 않는다** — 그래야 카드 24장이 바깥
+   6열 그리드에 직접 들어간다. 모바일에서만 flex 줄이 되어 transform 을 받는다. */
+.landing-vehicle-track { display: contents; }
 
 /* ── TMS 아이콘 선택 상태 ───────────────────────────── */
 .landing-tms-features > div { cursor: pointer; }
@@ -207,11 +210,13 @@
         보여 스와이프인 줄 모른다.
      ⚠️ 음수 여백(풀블리드)은 쓰지 않았다 — 섹션 좌우 padding 이 20px 이라
         가로 오버플로우가 날 여지를 만들지 않는 편이 안전하다. */
+  /* 🔴 바깥은 **스크롤되는 상자**, 안쪽(`.landing-vehicle-track`)이 **미끄러지는 줄**이다.
+     자동 슬라이드가 정수 픽셀은 이 상자의 스크롤로, 소수 픽셀은 안쪽 줄의 transform 으로
+     나눠 싣는다(`useAutoMarquee`) — 하나로 합치면 브라우저가 스크롤을 정수로 반올림해서
+     덜덜거린다(사용자 지적 2026-09-04, 실측으로 확인). 둘을 합치지 말 것. */
   .landing-vehicle-grid {
-    display: flex !important;
+    display: block !important;
     grid-template-columns: none !important;
-    align-items: flex-start;
-    gap: 12px !important;
     overflow-x: auto;
     overflow-y: hidden;
     overscroll-behavior-x: contain;
@@ -220,6 +225,13 @@
     padding-bottom: 4px;
   }
   .landing-vehicle-grid::-webkit-scrollbar { display: none; }
+  /* ⚠️ 바깥이 `display:block` 이라 인라인 `gap: 12` 이 무시된다 — 줄이 직접 갖는다. */
+  .landing-vehicle-track {
+    display: flex !important;
+    align-items: flex-start;
+    gap: 12px;
+    will-change: transform;
+  }
   /* 🔴 사본 12장을 되살린다 — 자동 슬라이드가 끊김 없이 한 바퀴 돌기 위한 것이다. */
   .landing-vehicle-dup { display: block; }
   /* 🔴 **스크롤 스냅을 쓰지 않는다**(2026-09-04) — 자동 슬라이드가 매 프레임 미는
@@ -227,9 +239,9 @@
      아예 움직이지 않는다. `proximity` 여도 그렇다(실측: 400 을 넣으면 332 로 튕겼다).
      64차가 TMS 캐러셀에서 겪은 것과 같은 함정이다. 되살리지 말 것 —
      넘길 수 있다는 신호는 이제 자동 슬라이드 자체가 준다. */
-  .landing-vehicle-grid > div { flex: 0 0 44%; min-width: 0; }
-  .landing-vehicle-grid > div > div:nth-child(2) { font-size: 16px !important; }
-  .landing-vehicle-grid > div > div:nth-child(3) { font-size: 13px !important; }
+  .landing-vehicle-track > div { flex: 0 0 44%; min-width: 0; }
+  .landing-vehicle-track > div > div:nth-child(2) { font-size: 16px !important; }
+  .landing-vehicle-track > div > div:nth-child(3) { font-size: 13px !important; }
   .landing-cta-bottom { flex-direction: column !important; align-items: center !important; gap: 20px !important; margin-top: 52px !important; }
   .landing-cta-bottom > div { justify-content: center !important; gap: 14px 20px !important; }
 
