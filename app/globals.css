@@ -6463,3 +6463,113 @@ tbody tr:hover {
     max-height: 260px;
   }
 }
+
+/* ── 담당자 정보 ─────────────────────────────────────────
+   🔴 시안은 카드가 **하나**다 — 이름·상호·「수정」이 카드 머리에 모여 있고 나머지
+      세 항목이 그 아래 구분선으로 나뉜 행이다. 이름을 다시 행으로 내리지 말 것.
+   🔴 값은 **오른쪽 정렬**이라 라벨(왼쪽)과 시선이 갈린다 — `.pv2-qkv` 계열(고정폭
+      라벨 + 왼쪽 정렬)을 재사용하지 않은 이유다. 이메일처럼 긴 값이 라벨 폭에
+      눌리지 않는다. */
+.pv2-prof-card {
+  background: var(--pv2-surface);
+  border-radius: var(--pv2-r-card);
+  padding: 24px 28px;
+}
+.pv2-prof-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--pv2-border-soft);
+}
+/* 🔴 원형은 옐로 + 검정 글자다(사이드바 선택 표시·진행 번호와 같은 어휘) — 다른 색을
+   새로 만들지 말 것. `aria-hidden` 인 이유는 바로 옆에 이름 전체가 있어서다. */
+.pv2-prof-avatar {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--pv2-yellow);
+  color: var(--pv2-text);
+  font-size: 21px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pv2-prof-ident {
+  min-width: 0;
+}
+.pv2-prof-name {
+  font-size: 19px;
+  font-weight: 700;
+  word-break: keep-all;
+}
+.pv2-prof-company {
+  margin-top: 2px;
+  font-size: 13.5px;
+  color: var(--pv2-text-3);
+  word-break: keep-all;
+}
+.pv2-prof-row {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 15px 0;
+  border-bottom: 1px solid var(--pv2-border-soft);
+}
+.pv2-prof-row:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+.pv2-prof-k {
+  flex: none;
+  font-size: 14px;
+  color: var(--pv2-text-3);
+}
+/* 🔴 `overflow-wrap: anywhere` 를 빼지 말 것 — 이메일은 공백이 없어서 좁은 화면에서
+   칸을 그대로 뚫고 나간다(가로 넘침의 흔한 원인). */
+.pv2-prof-v {
+  margin-left: auto;
+  text-align: right;
+  font-size: 15px;
+  font-weight: 600;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.pv2-prof-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 20px;
+}
+/* ⚠️ `.pv2-btn-dark`·`.pv2-btn-ghost` 는 세로로 쌓이는 폼용이라 각자 위 여백을 갖고
+   있다 — 나란히 두면 두 버튼의 높이가 어긋나므로 여기서만 0 으로 눌러 준다. */
+.pv2-prof-actions {
+  display: flex;
+  gap: 8px;
+}
+.pv2-prof-actions > button {
+  margin-top: 0;
+  flex: 1;
+}
+
+@media (max-width: 700px) {
+  .pv2-prof-card {
+    padding: 20px 18px;
+  }
+  .pv2-prof-avatar {
+    width: 46px;
+    height: 46px;
+    font-size: 19px;
+  }
+  .pv2-prof-name {
+    font-size: 17.5px;
+  }
+  .pv2-prof-k {
+    font-size: 13.5px;
+  }
+  .pv2-prof-v {
+    font-size: 14.5px;
+  }
+}
