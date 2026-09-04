@@ -7,7 +7,6 @@ import {
   COMPANY_CEO,
   COMPANY_ECOMMERCE_LICENSE,
   COMPANY_FREIGHT_BROKER_LICENSE,
-  COMPANY_LEGAL_NAME,
 } from "@/lib/companyInfo";
 
 /* 랜딩 푸터.
@@ -71,7 +70,7 @@ export default function LandingFooter() {
               ⚠️ 다만 **랜딩(초기화면)에서는 안 보인다** — 제10조 1항이 요구하는 것은
                  초기화면 표시이므로 그 요건은 지금 충족되지 않는다. 되살리려면 이 자리에
                  한 줄을 두거나, 법적 문서 링크 옆에 「사업자정보」를 두면 된다. */}
-          <div style={{ marginTop: 10, fontSize: 12.5, color: "#9C9B95" }}>© {new Date().getFullYear()} {COMPANY_LEGAL_NAME}. All rights reserved.</div>
+          <div style={{ marginTop: 10, fontSize: 12.5, color: "#9C9B95" }}>© {new Date().getFullYear()} <CompanyNameMark separatorColor="currentColor" separatorGap={7} />. All rights reserved.</div>
         </div>
       </div>
     </footer>

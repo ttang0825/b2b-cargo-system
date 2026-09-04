@@ -1,21 +1,33 @@
 import { COMPANY_INFO_NAME_PARTS } from "@/lib/companyInfo";
 
 /**
- * 견적서 발행업체 상호 표기 — `법인명 │ 브랜드명`.
+ * 상호 표기 — `법인명 │ 브랜드명`.
  *
  * 🔴 슬래시 글자(`/`) 대신 **세로 구분선**으로 그린다(사용자 확정 2026-08-26).
  *    `COMPANY_INFO.name` 평문을 그대로 렌더링하면 슬래시가 글자로 찍힌다 —
  *    화면·인쇄에 그릴 때는 반드시 이 컴포넌트를 쓸 것.
  *
- * 🔴 구분선을 `background` 로 그리지 말 것 — 이 컴포넌트가 쓰이는 곳은 **인쇄(PDF)**
- *    화면이고, 브라우저는 인쇄 시 배경색을 기본으로 지운다(`print-color-adjust`).
+ * 🔴 구분선을 `background` 로 그리지 말 것 — 이 컴포넌트가 쓰이는 곳에 **인쇄(PDF)**
+ *    화면이 있고, 브라우저는 인쇄 시 배경색을 기본으로 지운다(`print-color-adjust`).
  *    `borderLeft` 는 배경이 아니라 테두리라 그대로 인쇄된다. 그래서 폭 0 + 왼쪽
  *    테두리 1px 로 만들었다.
  *
  * 🔴 두 이름은 **같은 서체·같은 크기**다 — 어느 한쪽도 강조하지 않는다.
  *    크기·굵기는 감싸는 쪽에서 정하고 여기서는 상속만 받는다.
+ *
+ * ⚠️ **기본값은 견적서(14px·굵게·흰 배경) 기준이다** — 구분선이 글자보다 옅은
+ *    `#c4c4c4` 이고 좌우 여백이 9px 이다. 카피라이트 줄처럼 **작고 흐린 글자**에
+ *    그대로 쓰면 구분선이 글자보다 진해 보이고 여백도 헐렁하므로,
+ *    `separatorColor="currentColor"` 로 글자색을 그대로 물려받고 여백을 줄여 쓴다.
+ *    🔴 **기본값을 바꾸지 말 것** — 바꾸면 견적서 PDF 4곳의 모양이 같이 바뀐다.
  */
-export default function CompanyNameMark() {
+export default function CompanyNameMark({
+  separatorColor = "#c4c4c4",
+  separatorGap = 9,
+}: {
+  separatorColor?: string;
+  separatorGap?: number;
+} = {}) {
   const [legal, brand] = COMPANY_INFO_NAME_PARTS;
   return (
     <span style={{ whiteSpace: "nowrap" }}>
@@ -26,8 +38,8 @@ export default function CompanyNameMark() {
           display: "inline-block",
           width: 0,
           height: "0.92em",
-          borderLeft: "1px solid #c4c4c4",
-          margin: "0 9px",
+          borderLeft: `1px solid ${separatorColor}`,
+          margin: `0 ${separatorGap}px`,
           verticalAlign: "-0.14em",
         }}
       />
