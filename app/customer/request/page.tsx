@@ -106,6 +106,16 @@ export default function PortalRequestPage() {
   const [surcharges, setSurcharges] = useState<Surcharge[]>([]);
   const [cargoPresets, setCargoPresets] = useState<CustomerPreset<CargoPresetPayload>[]>([]);
   const [notePresets, setNotePresets] = useState<CustomerPreset<RequestPresetPayload>[]>([]);
+  // 🔴 방금 불러온 프리셋 이름 — 드롭다운 옆에 보조로 띄운다(26차 리뷰 2라운드).
+  //    불러오기 드롭다운은 값을 고르는 칸이 아니라 **동작 버튼**이라 `value=""` 로 고정돼
+  //    있고(고른 뒤 아래 칸을 자유롭게 고칠 수 있으니 값으로 붙잡아 두면 폼과 어긋난다),
+  //    그래서 무엇을 불러왔는지가 화면에 하나도 안 남아 있었다.
+  // 🔴 **아래 칸을 고쳐도 지우지 않는다**(사용자 확정 2026-09-04) — 이 라벨은 저장도
+  //    제출도 되지 않는 순수 표시라 값이 달라져도 담당자에게 가는 것은 실제 입력값이다.
+  //    고칠 때마다 지우려면 6칸 변화를 전부 감시해야 하는데 그만한 이득이 없다.
+  //    지우는 순간은 **다른 프리셋을 불러올 때**(교체) 하나뿐이다.
+  const [cargoPresetName, setCargoPresetName] = useState<string | null>(null);
+  const [notePresetName, setNotePresetName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -808,19 +818,27 @@ export default function PortalRequestPage() {
               자주 쓰는 화물로 저장
             </button>
           </div>
-          <div className="pv2-load-slot" style={{ marginBottom: 16 }}>
+          {/* 🔴 바깥을 `pv2-load-row`(flex + wrap)로 두고 드롭다운에 `wrapClassName` 을 준다 —
+              요청사항 블록과 같은 구조다. 이래야 이름 라벨이 옆에 서고, 모바일(≤700px)에서
+              드롭다운이 100% 폭이 될 때 라벨이 **저절로 아래로 접힌다**(가로 넘침 방지). */}
+          <div className="pv2-load-row" style={{ marginBottom: 16 }}>
             <Pv2Select
               className="pv2-select-load"
+              wrapClassName="pv2-load-slot"
               value=""
               onChange={(v) => {
                 const found = cargoPresets.find((p) => p.id === v);
-                if (found) applyCargoPreset(found);
+                if (found) {
+                  applyCargoPreset(found);
+                  setCargoPresetName(found.name);
+                }
               }}
               ariaLabel="자주 쓰는 화물 불러오기"
               placeholder="자주 쓰는 화물 불러오기"
               emptyLabel="저장된 화물이 없습니다"
               options={cargoPresets.map((p) => ({ value: p.id, label: p.name }))}
             />
+            {cargoPresetName && <span className="pv2-load-current">{cargoPresetName}</span>}
           </div>
           <div className="pv2-grid-4">
             {renderSelect("희망 톤수", "vehicle_type", VEHICLE_TYPES_ALL)}
@@ -992,13 +1010,17 @@ export default function PortalRequestPage() {
               value=""
               onChange={(v) => {
                 const found = notePresets.find((p) => p.id === v);
-                if (found) setField("notes", found.payload?.notes || "");
+                if (found) {
+                  setField("notes", found.payload?.notes || "");
+                  setNotePresetName(found.name);
+                }
               }}
               ariaLabel="자주 쓰는 요청 불러오기"
               placeholder="자주 쓰는 요청 불러오기"
               emptyLabel="저장된 요청이 없습니다"
               options={notePresets.map((p) => ({ value: p.id, label: p.name }))}
             />
+            {notePresetName && <span className="pv2-load-current">{notePresetName}</span>}
           </div>
           <textarea
             className="pv2-textarea"

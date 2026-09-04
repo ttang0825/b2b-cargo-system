@@ -3809,6 +3809,14 @@ tbody tr:hover {
     width: 100%;
     min-width: 0;
   }
+  /* 🔴 **두 클래스로 특성도를 맞춰야 이 규칙이 먹는다**(원칙 58번). 미디어쿼리는 특성도를
+     올려주지 않아서, 위 한 클래스 규칙(0,0,1,0)만으로는 `.pv2-selectwrap.pv2-load-slot`
+     (0,0,2,0)을 못 이겨 모바일에서도 190px 로 남는다 — 그러면 옆의 이름 라벨이 아래로
+     접히지 못하고 드롭다운을 눌러 버린다. **순서를 바꿔 고치지 말 것.** */
+  .pv2-selectwrap.pv2-load-slot {
+    width: 100%;
+    min-width: 0;
+  }
 }
 @media (max-width: 480px) {
   .pv2-grid-4 {
@@ -4309,6 +4317,19 @@ tbody tr:hover {
   flex-wrap: wrap;
 }
 
+
+/* 방금 불러온 프리셋 이름 — 불러오기 드롭다운 옆 보조 표시(26차 리뷰 2라운드).
+   🔴 `--pv2-text-2` 인 것이 요점이다. 더 흐린 `-3`(3.77:1)·`-4`(1.96:1) 는 흰 배경에서
+      WCAG AA(4.5:1) 미달이라 못 쓴다 — 이 값만 5.66:1 로 통과한다. 사이트 전역
+      `--text-muted` 를 3.0 → 5.4:1 로 진하게 고쳤던 것과 같은 이유이니 흐리게 하지 말 것.
+   🔴 부모 `.pv2-load-row` 가 `flex-wrap: wrap` 이라 모바일에서 저절로 아래로 접힌다 —
+      폭을 고정하거나 `white-space: nowrap` 을 주면 그 접힘이 깨져 가로로 넘친다. */
+.pv2-load-current {
+  font-size: 13px;
+  color: var(--pv2-text-2);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 
 /* 저장된 배송지·화물 수정(PR #103 리뷰 13번) — 삭제 옆에 나란히 선다.
    🔴 `margin-left:auto` 는 이 버튼이 갖는다(둘 중 먼저 오는 쪽) — 삭제에만 두면
