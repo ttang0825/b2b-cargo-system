@@ -49,7 +49,20 @@
    있다**(2026-09-02). 선택자를 행에 걸면 빗나간다 — 행의 직계 자식은 summary 와
    펼침 카드 둘뿐이다. 모바일 규칙(아래)도 같은 이유로 head 를 가리킨다. */
 .landing-reason-head > div > div { word-break: keep-all; }
+/* 🔴 **펼치면 `summary` 의 아래 여백을 없앤다**(2026-09-04) — 펼침 글이 카드가 아니라
+   `desc` 의 이어지는 부분이 되면서, 그 사이에 26px 여백이 남으면 두 글이 끊겨 보인다.
+   🔴 `!important` 는 **인라인 style 을 이기기 위한 것**이다(`padding: "26px 0"`) —
+   클래스 규칙으로는 인라인을 못 이긴다. 빼면 조용히 되돌아간다.
+   🟢 접힌 상태에는 그대로 26px 이 남는다 — 행 사이 간격이다. */
+.landing-reason-row[open] > .landing-reason-head { padding-bottom: 0 !important; }
 .landing-lead-text br { display: none; }
+/* 🔴 차량 목록 뒤쪽 12장은 **모바일 자동 슬라이드용 사본**이다(`app/page.tsx`) —
+   데스크탑 그리드에서는 그리지 않는다. 없애면 6열 그리드가 2줄에서 4줄이 된다.
+   🔴 모바일(≤700px)에서만 되살아난다 — 아래 블록. */
+.landing-vehicle-dup { display: none; }
+/* 🔴 안쪽 줄은 **데스크탑에서 상자를 만들지 않는다** — 그래야 카드 24장이 바깥
+   6열 그리드에 직접 들어간다. 모바일에서만 flex 줄이 되어 transform 을 받는다. */
+.landing-vehicle-track { display: contents; }
 
 /* ── TMS 아이콘 선택 상태 ───────────────────────────── */
 .landing-tms-features > div { cursor: pointer; }
@@ -128,8 +141,9 @@
   .landing-reason-head > div:nth-child(2) { grid-column: 1 !important; }
   .landing-reason-head > div:last-child { grid-column: 2 !important; grid-row: 2 !important; width: 92px !important; }
   .landing-reason-head > div:last-child img { width: 92px !important; height: 92px !important; }
-  /* 펼침 카드는 모바일에서 들여쓰기를 없앤다 — 좁은 화면에서 본문이 더 눌린다. */
-  .landing-reason-detail { margin-left: 0 !important; padding: 16px 18px !important; }
+  /* 펼침 글은 모바일에서 들여쓰기를 없앤다 — 좁은 화면에서 본문이 더 눌린다.
+     ⚠️ 카드가 아니게 되면서(2026-09-04) 안쪽 여백도 함께 없앴다. */
+  .landing-reason-detail { margin-left: 0 !important; }
   .landing-work-grid { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
   .landing-faq-grid { grid-template-columns: minmax(0,1fr) !important; gap: 28px !important; }
 
@@ -196,25 +210,70 @@
         보여 스와이프인 줄 모른다.
      ⚠️ 음수 여백(풀블리드)은 쓰지 않았다 — 섹션 좌우 padding 이 20px 이라
         가로 오버플로우가 날 여지를 만들지 않는 편이 안전하다. */
+  /* 🔴 바깥은 **스크롤되는 상자**, 안쪽(`.landing-vehicle-track`)이 **미끄러지는 줄**이다.
+     자동 슬라이드가 정수 픽셀은 이 상자의 스크롤로, 소수 픽셀은 안쪽 줄의 transform 으로
+     나눠 싣는다(`useAutoMarquee`) — 하나로 합치면 브라우저가 스크롤을 정수로 반올림해서
+     덜덜거린다(사용자 지적 2026-09-04, 실측으로 확인). 둘을 합치지 말 것. */
   .landing-vehicle-grid {
-    display: flex !important;
+    display: block !important;
     grid-template-columns: none !important;
-    align-items: flex-start;
-    gap: 12px !important;
     overflow-x: auto;
     overflow-y: hidden;
     overscroll-behavior-x: contain;
     -webkit-overflow-scrolling: touch;
-    scroll-snap-type: x proximity;
     scrollbar-width: none;
     padding-bottom: 4px;
   }
   .landing-vehicle-grid::-webkit-scrollbar { display: none; }
-  .landing-vehicle-grid > div { flex: 0 0 44%; min-width: 0; scroll-snap-align: start; }
-  .landing-vehicle-grid > div > div:nth-child(2) { font-size: 16px !important; }
-  .landing-vehicle-grid > div > div:nth-child(3) { font-size: 13px !important; }
-  .landing-cta-bottom { flex-direction: column !important; align-items: center !important; gap: 20px !important; margin-top: 80px !important; }
+  /* ⚠️ 바깥이 `display:block` 이라 인라인 `gap: 12` 이 무시된다 — 줄이 직접 갖는다. */
+  .landing-vehicle-track {
+    display: flex !important;
+    align-items: flex-start;
+    gap: 12px;
+    will-change: transform;
+  }
+  /* 🔴 사본 12장을 되살린다 — 자동 슬라이드가 끊김 없이 한 바퀴 돌기 위한 것이다. */
+  .landing-vehicle-dup { display: block; }
+  /* 🔴 **스크롤 스냅을 쓰지 않는다**(2026-09-04) — 자동 슬라이드가 매 프레임 미는
+     `scrollLeft`(0.4px 남짓)를 스냅이 **가장 가까운 카드로 즉시 되돌려서** 목록이
+     아예 움직이지 않는다. `proximity` 여도 그렇다(실측: 400 을 넣으면 332 로 튕겼다).
+     64차가 TMS 캐러셀에서 겪은 것과 같은 함정이다. 되살리지 말 것 —
+     넘길 수 있다는 신호는 이제 자동 슬라이드 자체가 준다. */
+  .landing-vehicle-track > div { flex: 0 0 44%; min-width: 0; }
+  .landing-vehicle-track > div > div:nth-child(2) { font-size: 16px !important; }
+  .landing-vehicle-track > div > div:nth-child(3) { font-size: 13px !important; }
+  .landing-cta-bottom { flex-direction: column !important; align-items: center !important; gap: 20px !important; margin-top: 52px !important; }
   .landing-cta-bottom > div { justify-content: center !important; gap: 14px 20px !important; }
+
+  /* ── 🔴 모바일 세로 여백 축소 (사용자 지시 2026-09-04) ──────────────────
+     「메뉴당 빈 여백이 유독 벙벙해 보인다 … 좀더 타이트하게, 그렇다고 너무
+     타이트하면 안 된다」. 데스크탑 값(150~200px)이 모바일에도 그대로 걸려 있어서
+     390px 화면에서 섹션 사이가 화면 높이의 4분의 1씩을 먹고 있었다.
+     🔴 **데스크탑 값은 한 곳도 건드리지 않았다** — 전부 이 미디어쿼리 안이다.
+     🔴 40~45%만 줄였다. 더 줄이면 섹션 경계가 사라져 한 덩어리로 읽힌다.
+     ⚠️ 62차가 「이렇게 진행합니다」·「궁금하실 것들」을 150/160 → 110/118 로 이미
+        줄여 둔 상태였다(그건 데스크탑·모바일 공통 인라인 값이다) — 여기서는 그
+        위에 모바일만 한 번 더 줄인 것이라 **되돌리면 두 지시가 같이 풀린다.** */
+  .landing-about { padding-top: 88px !important; }
+  #work { padding-top: 84px !important; }
+  #manage { padding-top: 88px !important; }
+  #vehicles { padding-top: 84px !important; padding-bottom: 84px !important; }
+  #process { padding-top: 80px !important; padding-bottom: 84px !important; }
+  .landing-faq-section { padding-top: 80px !important; padding-bottom: 84px !important; }
+  .landing-cta { padding-top: 112px !important; }
+  .landing-page footer { padding-top: 60px !important; padding-bottom: 44px !important; }
+
+  /* 섹션 안쪽 큰 여백도 같은 비율로 */
+  /* ⚠️ `#process` 는 h2 가 `margin: 0` 이라 제외한다 — 넣으면 오히려 14px 이 붙는다. */
+  .landing-page section:not(#process) h2 { margin-top: 14px !important; }
+  #work h2 { margin-bottom: 26px !important; }
+  .landing-tms-lead { margin-top: 64px !important; }
+  .landing-tms-foot { margin-top: 40px !important; margin-bottom: 44px !important; }
+  .landing-vehicle-grid { margin-top: 28px !important; }
+  #vehicles > div:last-child { margin-top: 32px !important; }
+  /* 🔴 `>` 를 빼지 말 것 — 그냥 `#process p` 로 쓰면 **각 단계 행의 설명 문단
+     (margin 0)에도 26px 이 붙어** 섹션이 오히려 90px 길어진다(실측으로 잡았다). */
+  #process > p { margin-bottom: 26px !important; }
 }
 
 @media (max-width: 620px) {
