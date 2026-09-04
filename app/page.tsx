@@ -185,11 +185,11 @@ export default function LandingPage() {
           {services.map((s) => (
             <div key={s.title} className="landing-card-lift"
               style={{ display: "flex", flexDirection: "column", background: "#FFFFFF", border: "1px solid #E4E3DE", borderRadius: 18, overflow: "hidden" }}>
-              {/* ⚠️ 사진이 없는 카드가 있다(「고정화물 배차」 — 사용자 준비 중, 2026-09-02).
-                  `img` 가 없으면 **사진 자리를 회색 상자로만 남긴다** — 깨진 이미지 아이콘이
-                  뜨지 않게 `<img>` 자체를 그리지 않는다. 🔴 자리표시자 문구를 넣지 말 것
-                  (사용자가 「일단 비어보이게」로 확정했다). 사진이 오면
-                  `components/landing/data.ts` 의 `img` 만 채우면 된다. */}
+              {/* 🟢 2026-09-03 에 「고정화물 배차」 사진이 들어와 **4장 모두 `img` 가 있다.**
+                  ⚠️ 그래도 이 분기를 지우지 말 것 — `img` 가 없으면 **사진 자리를 회색 상자로만
+                  남기고** 깨진 이미지 아이콘이 뜨지 않게 `<img>` 자체를 그리지 않는 장치다.
+                  카드를 새로 늘릴 때 사진이 늦게 오는 상황이 다시 생긴다.
+                  🔴 자리표시자 문구를 넣지 말 것(사용자가 「일단 비어보이게」로 확정했다). */}
               <div style={{ position: "relative", aspectRatio: "4 / 3", backgroundColor: "#E3E2DD" }}>
                 {s.img && (
                   /* eslint-disable-next-line @next/next/no-img-element */
