@@ -49,6 +49,12 @@
    있다**(2026-09-02). 선택자를 행에 걸면 빗나간다 — 행의 직계 자식은 summary 와
    펼침 카드 둘뿐이다. 모바일 규칙(아래)도 같은 이유로 head 를 가리킨다. */
 .landing-reason-head > div > div { word-break: keep-all; }
+/* 🔴 **펼치면 `summary` 의 아래 여백을 없앤다**(2026-09-04) — 펼침 글이 카드가 아니라
+   `desc` 의 이어지는 부분이 되면서, 그 사이에 26px 여백이 남으면 두 글이 끊겨 보인다.
+   🔴 `!important` 는 **인라인 style 을 이기기 위한 것**이다(`padding: "26px 0"`) —
+   클래스 규칙으로는 인라인을 못 이긴다. 빼면 조용히 되돌아간다.
+   🟢 접힌 상태에는 그대로 26px 이 남는다 — 행 사이 간격이다. */
+.landing-reason-row[open] > .landing-reason-head { padding-bottom: 0 !important; }
 .landing-lead-text br { display: none; }
 
 /* ── TMS 아이콘 선택 상태 ───────────────────────────── */
@@ -128,8 +134,9 @@
   .landing-reason-head > div:nth-child(2) { grid-column: 1 !important; }
   .landing-reason-head > div:last-child { grid-column: 2 !important; grid-row: 2 !important; width: 92px !important; }
   .landing-reason-head > div:last-child img { width: 92px !important; height: 92px !important; }
-  /* 펼침 카드는 모바일에서 들여쓰기를 없앤다 — 좁은 화면에서 본문이 더 눌린다. */
-  .landing-reason-detail { margin-left: 0 !important; padding: 16px 18px !important; }
+  /* 펼침 글은 모바일에서 들여쓰기를 없앤다 — 좁은 화면에서 본문이 더 눌린다.
+     ⚠️ 카드가 아니게 되면서(2026-09-04) 안쪽 여백도 함께 없앴다. */
+  .landing-reason-detail { margin-left: 0 !important; }
   .landing-work-grid { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
   .landing-faq-grid { grid-template-columns: minmax(0,1fr) !important; gap: 28px !important; }
 

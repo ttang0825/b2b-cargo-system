@@ -146,13 +146,16 @@ export default function LandingPage() {
                   style={{ display: "grid", gridTemplateColumns: "52px minmax(0,1fr) 132px", alignItems: "start", gap: 24, padding: "26px 0" }}>
                   <div style={{ fontSize: 20, lineHeight: 1.3, fontWeight: 700, letterSpacing: "-0.02em", color: "#0E0F12", paddingTop: 4 }}>{r.no}</div>
                   <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{ fontSize: 26, lineHeight: 1.3, fontWeight: 600, letterSpacing: "-0.03em", color: "#0E0F12" }}>{r.title}</div>
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flex: "0 0 auto", display: "block" }}>
-                        <path d="M3 5.5L7 9.5L11 5.5" stroke="#8B8A85" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </div>
+                    <div style={{ fontSize: 26, lineHeight: 1.3, fontWeight: 600, letterSpacing: "-0.03em", color: "#0E0F12" }}>{r.title}</div>
                     <div style={{ marginTop: 10, fontSize: 17.4, lineHeight: 1.8, color: "#6C6B65", whiteSpace: "pre-line", textWrap: "pretty" } as CSSProperties}>{r.desc}</div>
+                    {/* 🔴 **화살표는 제목 옆이 아니라 설명글 바로 아래다**(사용자 지시
+                        2026-09-04 — 「설명 연장보기가 직관적」). 제목 옆에 있으면 제목을
+                        펼치는 것처럼 읽히는데, 실제로 펼쳐지는 것은 **설명글의 뒷부분**이다.
+                        🔴 `<summary>` 안에 있어야 클릭이 먹는다 — 밖으로 빼지 말 것.
+                        🟢 열리면 `app/landing.css` 가 180° 돌려 ⌃ 로 바꾼다. */}
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ display: "block", marginTop: 8 }}>
+                      <path d="M3 5.5L7 9.5L11 5.5" stroke="#8B8A85" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
                   </div>
                   <div style={{ position: "relative", alignSelf: "center", width: 132, height: 96 }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -160,16 +163,22 @@ export default function LandingPage() {
                       style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", width: 132, height: 132, objectFit: "contain" }} />
                   </div>
                 </summary>
-                {/* 🔴 펼침 내용은 **부가 설명 카드**다(사용자 지시 2026-09-02) — 본문과
-                    같은 흐름으로 읽히면 접힌 상태의 `desc` 와 구분이 안 된다.
-                    ① 흰 카드 + 옅은 테두리로만 띄우고 ② 제목 칼럼(52+24=76px)에
-                    맞춰 들여쓴다. 🔴 모바일은 `app/landing.css` 가 들여쓰기를 없앤다.
-                    🔴 **왼쪽 옐로 막대를 다시 넣지 말 것**(사용자 지시 2026-09-02 —
-                       한 번 넣었다가 「깔끔하게 흰 카드로만」으로 확정됐다).
+                {/* 🔴 **펼침 내용은 카드가 아니라 설명글의 이어지는 부분이다**
+                    (사용자 지시 2026-09-04 — 「원래 설명글 규격과 레이아웃대로 이어져서」).
+                    ⚠️ **2026-09-02 의 「부가 설명 카드」 확정을 뒤집은 것이다** — 그때는
+                    흰 카드 + 옅은 테두리로 띄워 `desc` 와 구분했는데, 구분이 되는 만큼
+                    **다른 글처럼 보여서 「설명이 이어진다」는 느낌이 없었다.**
+                    🔴 옛 기록(흰 카드 · 옐로 막대)을 근거로 되살리지 말 것.
+                    🔴 **글자 규격을 `desc` 와 같게 유지할 것**(17.4 / 1.8 / #6C6B65) —
+                       하나라도 다르면 다시 「다른 글」로 보인다.
+                    🔴 들여쓰기 76px 은 `desc` 칼럼 시작점이다(번호 52 + gap 24) —
+                       이게 있어야 두 글의 왼쪽 끝이 맞는다. 모바일은 아래 CSS 가 없앤다.
+                    🔴 여는 순간 `summary` 의 아래 여백이 사라져야 두 글이 붙는다 —
+                       `app/landing.css` 의 `[open]` 규칙이 그 일을 한다. 지우지 말 것.
                     🔴 `white-space: pre-line` 을 빼지 말 것 — `detail` 의 `\n` 이
                     문장을 가른다(둘이 같이 있어야 성립한다). */}
                 <div className="landing-reason-detail"
-                  style={{ margin: "0 0 26px 76px", padding: "20px 24px 22px", background: "#FFFFFF", border: "1px solid #E8E7E2", borderRadius: 12, fontSize: 16.4, lineHeight: 1.9, color: "#5A5955", whiteSpace: "pre-line", textWrap: "pretty" } as CSSProperties}>
+                  style={{ margin: "6px 0 26px 76px", fontSize: 17.4, lineHeight: 1.8, color: "#6C6B65", whiteSpace: "pre-line", textWrap: "pretty" } as CSSProperties}>
                   {r.detail}
                 </div>
               </details>
