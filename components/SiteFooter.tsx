@@ -2,14 +2,7 @@ import Link from "next/link";
 import ObfuscatedEmail from "@/components/ObfuscatedEmail";
 import LegalLinks from "@/components/LegalLinks";
 import { COMPANY_SUPPORT_PHONE, COMPANY_SUPPORT_HOURS } from "@/lib/contactInfo";
-import {
-  COMPANY_ADDRESS,
-  COMPANY_BIZ_REG_NO,
-  COMPANY_CEO,
-  COMPANY_ECOMMERCE_LICENSE,
-  COMPANY_FREIGHT_BROKER_LICENSE,
-  COMPANY_LEGAL_NAME,
-} from "@/lib/companyInfo";
+import { COMPANY_BUSINESS_INFO, COMPANY_LEGAL_NAME } from "@/lib/companyInfo";
 
 // 공개 화면 공용 푸터.
 //
@@ -44,15 +37,16 @@ const FOOTER_LINKS: { href: string; label: string }[] = [
 ];
 
 // 사업자 표시사항. [라벨, 값] 쌍으로 두고 한 줄씩 렌더링한다.
+// 🔴 **표시사항의 정의처는 `lib/companyInfo.ts` 의 `COMPANY_BUSINESS_INFO` 하나다** —
+//    여기에 항목을 다시 나열하지 말 것. 예전에는 이 파일이 같은 목록을 따로 들고 있었고
+//    65차가 「두 벌이면 조용히 갈린다」며 합치라고 남긴 것을 이행한 것이다.
+//    「사업자정보」 모달(`components/BusinessInfoModal.tsx`)도 같은 배열을 읽는다.
+// ⚠️ **「상호」만 여기서 앞에 붙인다** — 모달은 상호를 `CompanyNameMark`(로고형 표기)로
+//    따로 그리므로 `COMPANY_BUSINESS_INFO` 에 상호가 들어 있지 않다. 푸터는 평문 한 줄이라
+//    이 자리에서 채운다. 🔴 상호를 그 배열로 옮기면 모달에 상호가 두 번 나온다.
 const BUSINESS_INFO: [string, string][] = [
   ["상호", COMPANY_LEGAL_NAME],
-  ["대표", COMPANY_CEO],
-  ["사업자등록번호", COMPANY_BIZ_REG_NO],
-  ["통신판매업 신고", COMPANY_ECOMMERCE_LICENSE],
-  ["화물자동차 운송주선사업 허가", COMPANY_FREIGHT_BROKER_LICENSE],
-  ["주소", COMPANY_ADDRESS],
-  ["개인정보 보호책임자", COMPANY_CEO],
-  ["호스팅 제공", "Vercel Inc."],
+  ...COMPANY_BUSINESS_INFO,
 ];
 
 export default function SiteFooter() {
