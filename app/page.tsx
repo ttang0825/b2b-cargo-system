@@ -11,6 +11,7 @@ import RatesModal from "@/components/landing/RatesModal";
 import LegalLinks from "@/components/LegalLinks";
 import BusinessInfoModal from "@/components/BusinessInfoModal";
 import { useReveal } from "@/components/landing/useReveal";
+import { useAutoMarquee } from "@/components/landing/useAutoMarquee";
 import { buildReasons, IMG, process, services, vehicles } from "@/components/landing/data";
 import { INSURANCE_ENABLED } from "@/lib/insuranceInfo";
 import { COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
@@ -85,6 +86,10 @@ export default function LandingPage() {
   const servicesRef = useReveal<HTMLDivElement>();
   const tmsImgRef = useReveal<HTMLImageElement>();
   const vehiclesRef = useReveal<HTMLDivElement>();
+  // 🔴 **모바일 차량 목록 자동 슬라이드**(사용자 지시 2026-09-04) — `useReveal` 이 만든
+  //    같은 ref 를 그대로 넘긴다(요소 하나에 ref 를 둘 달 수 없다).
+  //    한 바퀴 기준점은 **사본 목록의 첫 장**이라 `vehicles.length` 다.
+  useAutoMarquee(vehiclesRef, vehicles.length);
 
   return (
     <div className="landing-page" style={{ width: "100%", margin: "0 auto", overflowX: "clip", background: "#F4F3F0", color: "#0E0F12" }}>
@@ -276,9 +281,17 @@ export default function LandingPage() {
             </p>
           </div>
         </div>
+        {/* 🔴 **목록을 두 벌 이어 붙인다** — 모바일 자동 슬라이드가 한 바퀴 돌 때
+            뒤쪽 사본이 이어져 **끊김이 보이지 않게** 하려는 것이다(`useAutoMarquee`).
+            🔴 뒤쪽 12장은 `.landing-vehicle-dup` 이고 **데스크탑에서는 `display:none`**
+               이다(`app/landing.css`) — 안 그러면 그리드가 2줄에서 4줄이 된다.
+            🟢 `src` 가 앞쪽과 같아서 내려받는 이미지가 늘지 않는다(캐시).
+            🔴 사본에는 `aria-hidden` 을 건다 — 스크린리더가 같은 차량을 두 번 읽는다. */}
         <div ref={vehiclesRef} className="landing-vehicle-grid" style={{ marginTop: 48, display: "grid", gridTemplateColumns: "repeat(6, minmax(0,1fr))", gap: 12 }}>
-          {vehicles.map((v) => (
-            <div key={v.name}>
+          {[...vehicles, ...vehicles].map((v, i) => (
+            <div key={`${v.name}-${i}`}
+              className={i >= vehicles.length ? "landing-vehicle-dup" : undefined}
+              aria-hidden={i >= vehicles.length ? true : undefined}>
               <div className="landing-card-lift" style={{ position: "relative", aspectRatio: "1 / 1", borderRadius: 16, overflow: "hidden", background: "#ECEBE6" }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={v.img} alt={v.name} loading="lazy" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
@@ -329,7 +342,7 @@ export default function LandingPage() {
 
       {/* ── FAQ ────────────────────────────────────── */}
       {/* 위 진행 절차와 같은 이유로 여백을 줄였다(사용자 지시). */}
-      <section style={{ padding: `110px ${PAD} 120px` }}>
+      <section className="landing-faq-section" style={{ padding: `110px ${PAD} 120px` }}>
         <div className="landing-faq-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(0,1fr))", gap: 52, alignItems: "start" }}>
           <div>
             <h2 style={{ ...h2, margin: "24px 0 0", fontSize: 42, lineHeight: 1.25 }}>궁금하실 것들,<br />먼저 답해드립니다.</h2>
