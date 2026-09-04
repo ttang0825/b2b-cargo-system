@@ -168,7 +168,7 @@ export default function LandingPage() {
                   </div>
                   <div style={{ position: "relative", alignSelf: "center", width: 132, height: 96 }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={r.img} alt={r.title} loading="lazy"
+                    <img src={r.img} alt={r.title} loading="lazy" decoding="async"
                       style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", width: 132, height: 132, objectFit: "contain" }} />
                   </div>
                 </summary>
@@ -200,9 +200,17 @@ export default function LandingPage() {
       <section id="work" style={{ padding: `150px ${PAD} 0` }}>
         <h2 style={{ ...h2, margin: "24px 0 40px" }}>위캐리 서비스</h2>
         <div ref={servicesRef} className="landing-work-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 16 }}>
-          {services.map((s) => (
+          {services.map((s, i) => (
             <div key={s.title} className="landing-card-lift"
               style={{ display: "flex", flexDirection: "column", background: "#FFFFFF", border: "1px solid #E4E3DE", borderRadius: 18, overflow: "hidden" }}>
+              {/* 🔴 **첫 카드 사진만 `loading="eager"` 다 — `lazy` 로 되돌리지 말 것.**
+                  모바일에서 이 섹션이 y=2161px 에 있는데 그 거리가 브라우저 지연로딩
+                  경계(약 1250px)와 거의 겹쳐서, **스크롤해서 카드가 보이는 순간에야 사진을
+                  받기 시작한다.** 4G 실측에서 회색 상자가 평균 371ms 보였다(사용자 신고
+                  「고정화물 배차 이미지가 나올 때 살짝 버벅임」의 정체다).
+                  ⚠️ `fetchPriority="low"` 를 같이 준 것은 히어로 배경과 대역폭을 다투지
+                     않게 하려는 것이다 — 빼면 첫 화면 그리기가 늦어질 수 있다.
+                  🔴 둘째 카드부터는 그대로 `lazy` 다 — 넷 다 eager 로 만들지 말 것. */}
               {/* 🟢 2026-09-03 에 「고정화물 배차」 사진이 들어와 **4장 모두 `img` 가 있다.**
                   ⚠️ 그래도 이 분기를 지우지 말 것 — `img` 가 없으면 **사진 자리를 회색 상자로만
                   남기고** 깨진 이미지 아이콘이 뜨지 않게 `<img>` 자체를 그리지 않는 장치다.
@@ -211,7 +219,8 @@ export default function LandingPage() {
               <div style={{ position: "relative", aspectRatio: "4 / 3", backgroundColor: "#E3E2DD" }}>
                 {s.img && (
                   /* eslint-disable-next-line @next/next/no-img-element */
-                  <img src={s.img} alt={s.title} loading="lazy" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                  <img src={s.img} alt={s.title} loading={i === 0 ? "eager" : "lazy"}
+                    fetchPriority={i === 0 ? "low" : undefined} decoding="async" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
                 )}
               </div>
               <div style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", padding: 24 }}>
@@ -233,7 +242,7 @@ export default function LandingPage() {
         </div>
 
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img ref={tmsImgRef} src={IMG.tmsOverview} alt="위캐리 운송관리 프로그램 PC·모바일 화면"
+        <img ref={tmsImgRef} src={IMG.tmsOverview} alt="위캐리 운송관리 프로그램 PC·모바일 화면" decoding="async"
           style={{ display: "block", width: "100%", maxWidth: 1200, height: "auto", margin: "36px auto 0" }} />
 
         <div className="landing-tms-lead" style={{ margin: "120px auto 0", textAlign: "center" }}>
@@ -302,7 +311,7 @@ export default function LandingPage() {
               aria-hidden={i >= vehicles.length ? true : undefined}>
               <div className="landing-card-lift" style={{ position: "relative", aspectRatio: "1 / 1", borderRadius: 16, overflow: "hidden", background: "#ECEBE6" }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={v.img} alt={v.name} loading="lazy" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                <img src={v.img} alt={v.name} loading="lazy" decoding="async" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
               </div>
               <div style={{ marginTop: 14, fontSize: 18, fontWeight: 700, letterSpacing: "-0.03em", color: "#0E0F12", wordBreak: "keep-all" }}>{v.name}</div>
               <div style={{ marginTop: 5, fontSize: 14, lineHeight: 1.5, color: "#6C6B65", wordBreak: "keep-all" }}>{v.desc}</div>

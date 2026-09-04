@@ -2,6 +2,7 @@ import Link from "next/link";
 import ObfuscatedEmail from "@/components/ObfuscatedEmail";
 import LegalLinks from "@/components/LegalLinks";
 import { COMPANY_SUPPORT_PHONE, COMPANY_SUPPORT_HOURS } from "@/lib/contactInfo";
+import CompanyNameMark from "@/components/CompanyNameMark";
 import { COMPANY_BUSINESS_INFO, COMPANY_LEGAL_NAME } from "@/lib/companyInfo";
 
 // 공개 화면 공용 푸터.
@@ -94,7 +95,7 @@ export default function SiteFooter() {
           <LegalLinks />
         </nav>
 
-        <div className="site-footer-copy">© 2026 {COMPANY_LEGAL_NAME}. All rights reserved.</div>
+        <div className="site-footer-copy">© 2026 <CompanyNameMark separatorColor="currentColor" separatorGap={7} />. All rights reserved.</div>
       </div>
     </footer>
   );

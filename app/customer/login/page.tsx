@@ -9,7 +9,7 @@ import BrandLogo from "@/components/BrandLogo";
 import { syntheticLoginEmail } from "@/lib/portalAccountCredentials";
 import BackToHomeLink from "@/components/BackToHomeLink";
 import { COMPANY_SUPPORT_HOURS, COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
-import { COMPANY_LEGAL_NAME } from "@/lib/companyInfo";
+import CompanyNameMark from "@/components/CompanyNameMark";
 import "@/app/landing.css";
 
 // 운송관리 로그인 — 31차에 시안(디자인팀 Next 변환본)으로 껍데기를 갈아끼웠다.
@@ -225,7 +225,7 @@ export default function CustomerLoginPage() {
         <div>
           고객센터 {COMPANY_SUPPORT_PHONE} · {COMPANY_SUPPORT_HOURS} (주말·공휴일 휴무)
         </div>
-        <div>© {new Date().getFullYear()} {COMPANY_LEGAL_NAME}. All rights reserved.</div>
+        <div>© {new Date().getFullYear()} <CompanyNameMark separatorColor="currentColor" separatorGap={7} />. All rights reserved.</div>
       </footer>
     </div>
   );
