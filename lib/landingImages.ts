@@ -38,6 +38,12 @@ export const LANDING_IMAGES = {
 
 /** 위캐리 서비스 4종 — 키 순서가 노출 순서 */
 export const LANDING_SERVICE_IMAGES = {
+  /** ⚠️ 파일명만 `00` 이다 — 30차 zip 에 없던 사진이라 뒤늦게 들어왔고(사용자 제작,
+   *  2026-09-03), 노출 순서가 맨 앞이라 그 자리에 맞춰 번호를 붙였다.
+   *  🔴 원본은 1536×1024(3:2)로 왔고 **왼쪽 171px 을 잘라 576×432(4:3)로 맞춘 것**이다.
+   *  카드가 `objectFit: cover` 라 3:2 를 그대로 두면 브라우저가 가운데를 잘라
+   *  **트럭 앞범퍼가 날아간다.** 사진을 교체할 때도 4:3 으로 맞춰서 넣을 것. */
+  fixed: `${BASE}/service-00-fixed.jpg`,
   personal: `${BASE}/service-01-personal.jpg`,
   nationwide: `${BASE}/service-02-nationwide.jpg`,
   mixed: `${BASE}/service-03-mixed.jpg`,
