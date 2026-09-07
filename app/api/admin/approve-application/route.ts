@@ -151,6 +151,10 @@ export async function POST(req: Request) {
       status: "승인됨",
       company_id: company.id,
       processed_by: processed_by || null,
+      // ⚠️ 승인 건은 `company_id` 가 붙어 파기 대상에서 빠지므로 이 값이 파기 판정에
+      //    쓰이지는 않는다. 그래도 채우는 것은 「처리 완료 시각」이라는 컬럼의 뜻을
+      //    승인·거절·보류 셋에서 같게 유지하려는 것이다(비어 있으면 다음에 헷갈린다).
+      processed_at: new Date().toISOString(),
       updated_by: staff?.id || null,
     })
     .eq("id", application_id);
