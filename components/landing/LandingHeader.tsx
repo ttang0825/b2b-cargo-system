@@ -21,11 +21,28 @@ const pill = (bg: string, fg: string): CSSProperties => ({
 export default function LandingHeader() {
   const [scrolled, setScrolled] = useState(false);
 
+  // 🔴 **임계값은 8px 이다**(2026-09-07, 60px 에서 내렸다) — 조금만 내려도 헤더가
+  //    경계를 갖게 해서 「띄워져 있다」는 인상을 준다.
+  // 🔴 **높이·로고 크기는 바꾸지 않는다** — 레이아웃이 움직이면 아래 내용이 밀려
+  //    올라가 어지럽다. **경계선과 배경만** 바뀐다.
+  // ⚠️ 리스너는 `passive: true` 이고 `requestAnimationFrame` 으로 묶는다 — 스크롤마다
+  //    setState 를 부르면 프레임을 먹는다.
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 60);
-    onScroll();
+    let raf = 0;
+    const read = () => {
+      raf = 0;
+      setScrolled(window.scrollY > 8);
+    };
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(read);
+    };
+    read();
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", onScroll);
+    };
   }, []);
 
   return (
@@ -41,7 +58,10 @@ export default function LandingHeader() {
         background: scrolled ? "rgba(255,255,255,0.94)" : "transparent",
         borderBottom: scrolled ? "1px solid rgba(21,24,33,0.08)" : "1px solid transparent",
         backdropFilter: "blur(28px) saturate(1.05)",
-        transition: "background 0.25s ease, border-color 0.25s ease",
+        // 🔴 **시작이 `transparent` 인 것을 유지한다 — 불투명하게 만들지 말 것.**
+        //    히어로가 전면 사진 띠라, 첫 화면에서 헤더가 흰 판이 되면 그 구도가 깨진다.
+        //    지시서 3-2 의 「0.92 → 1」은 헤더가 원래 불투명한 화면을 전제한 값이다.
+        transition: "background var(--mo-fast, 160ms) var(--mo-inout, ease), border-color var(--mo-fast, 160ms) var(--mo-inout, ease)",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",

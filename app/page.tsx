@@ -10,7 +10,7 @@ import FaqList from "@/components/landing/FaqList";
 import RatesModal from "@/components/landing/RatesModal";
 import LegalLinks from "@/components/LegalLinks";
 import BusinessInfoModal from "@/components/BusinessInfoModal";
-import { useReveal } from "@/components/landing/useReveal";
+import { useRevealAll } from "@/components/landing/useReveal";
 import { useAutoMarquee } from "@/components/landing/useAutoMarquee";
 import { buildReasons, IMG, process, services, vehicles } from "@/components/landing/data";
 import { INSURANCE_ENABLED } from "@/lib/insuranceInfo";
@@ -82,10 +82,16 @@ export default function LandingPage() {
   //    문제이고 `display:none` 은 페이지 소스에 남는다).
   const reasons = buildReasons(INSURANCE_ENABLED);
 
-  const reasonsRef = useReveal<HTMLDivElement>();
-  const servicesRef = useReveal<HTMLDivElement>();
-  const tmsImgRef = useReveal<HTMLImageElement>();
-  const vehiclesRef = useReveal<HTMLDivElement>();
+  // 🔴 **리빌 관찰자는 랜딩 전체에 하나다**(2026-09-07) — 요소마다 훅을 부르던 것을
+  //    바꿨다. 대상은 마크업의 `landing-reveal` 클래스로 정하고, 훅은 루트 아래를
+  //    한 번 훑어 그 요소들만 관찰한다. 리빌 대상을 늘리려면 **클래스만 붙이면 된다.**
+  //    🔴 히어로에는 붙이지 않는다 — 첫 화면은 로드 즉시 완성돼 있어야 한다(LCP).
+  const rootRef = useRef<HTMLDivElement>(null);
+  useRevealAll(rootRef);
+
+  // 🔴 이 ref 는 리빌용이 아니라 **자동 슬라이드 전용**이다 — 아래 `useAutoMarquee` 가
+  //    바깥 상자로 쓴다. 리빌은 같은 요소의 `landing-reveal` 클래스가 담당한다.
+  const vehiclesRef = useRef<HTMLDivElement>(null);
   // 🔴 **모바일 차량 목록 자동 슬라이드**(사용자 지시 2026-09-04).
   //    바깥(`vehiclesRef`)이 스크롤되는 상자이고 안쪽(`vehicleTrackRef`)이 실제로
   //    미끄러지는 줄이다 — 정수 픽셀은 스크롤이, 소수 픽셀은 안쪽 줄의 transform 이
@@ -96,7 +102,16 @@ export default function LandingPage() {
   useAutoMarquee(vehiclesRef, vehicleTrackRef, vehicles.length);
 
   return (
-    <div className="landing-page" style={{ width: "100%", margin: "0 auto", overflowX: "clip", background: "#F4F3F0", color: "#0E0F12" }}>
+    <div ref={rootRef} className="landing-page" style={{ width: "100%", margin: "0 auto", overflowX: "clip", background: "#F4F3F0", color: "#0E0F12" }}>
+      {/* 🔴 **JS 실패 대비 두 겹 중 첫 겹이다 — 지우지 말 것.**
+          마크업이 `.landing-reveal` 을 들고 시작하므로 CSS 가 처음부터 숨긴다.
+          JS 가 아예 꺼져 있으면 아무도 `.is-in` 을 붙여주지 않아 **내용이 영영
+          안 보인다.** 두 번째 겹은 `useReveal.ts` 의 `try/catch` 다(관찰자가 없거나
+          던지는 경우). 🔴 **하나만 남기지 말 것 — 막는 경우가 서로 다르다.** */}
+      <noscript>
+        <style>{`.landing-page .landing-reveal{opacity:1;transform:none}`}</style>
+      </noscript>
+
       <LandingHeader />
 
       {/* ── 히어로 ─────────────────────────────────── */}
@@ -140,7 +155,7 @@ export default function LandingPage() {
           <div className="landing-about-head" style={{ position: "sticky", top: 110, alignSelf: "start" }}>
             <h2 style={{ ...h2, margin: "24px 0 18px", fontSize: 46.2, lineHeight: 1.15 }}>위캐리를 <br />선택하는 이유</h2>
           </div>
-          <div ref={reasonsRef} style={{ display: "flex", flexDirection: "column" }}>
+          <div style={{ display: "flex", flexDirection: "column" }}>
             {/* 🔴 **접힌 상태에 지금까지 보이던 것이 그대로 남는다** — 번호·제목·`desc`.
                 27차 ⑬-5 가 동의 접이식에서 겪은 문제다(접으면 설명이 통째로 사라져
                 무엇에 대한 항목인지 알 수 없게 됨). 펼치면 `detail` 이 더해질 뿐이다.
@@ -148,9 +163,12 @@ export default function LandingPage() {
                 배타 아코디언**이라 한 번에 하나만 열린다. 상태를 직접 관리하지 말 것.
                 ⚠️ 검증할 때 `open=true` 를 한꺼번에 걸면 **마지막 하나만** 열린다(62차) —
                    하나씩 열어 잴 것. */}
-            {reasons.map((r) => (
-              <details key={r.no} name="wecarry-why" className="landing-reason-row"
-                style={{ borderTop: "1px solid #E4E3DE" }}>
+            {reasons.map((r, i) => (
+              /* 🔴 리빌은 **컨테이너가 아니라 행 5개 각각**에 건다(2026-09-07) —
+                 컨테이너에 걸면 5행이 한꺼번에 떠서 「티가 안 난다」는 지적의
+                 원인이 된다. `--i` 는 5를 넘기지 않는다. */
+              <details key={r.no} name="wecarry-why" className="landing-reason-row landing-reveal"
+                style={{ ["--i" as string]: i, borderTop: "1px solid #E4E3DE" } as CSSProperties}>
                 <summary className="landing-reason-head"
                   style={{ display: "grid", gridTemplateColumns: "52px minmax(0,1fr) 132px", alignItems: "start", gap: 24, padding: "26px 0" }}>
                   <div style={{ fontSize: 20, lineHeight: 1.3, fontWeight: 700, letterSpacing: "-0.02em", color: "#0E0F12", paddingTop: 4 }}>{r.no}</div>
@@ -186,9 +204,22 @@ export default function LandingPage() {
                        `app/landing.css` 의 `[open]` 규칙이 그 일을 한다. 지우지 말 것.
                     🔴 `white-space: pre-line` 을 빼지 말 것 — `detail` 의 `\n` 이
                     문장을 가른다(둘이 같이 있어야 성립한다). */}
-                <div className="landing-reason-detail"
-                  style={{ margin: "6px 0 26px 76px", fontSize: 17.4, lineHeight: 1.8, color: "#6C6B65", whiteSpace: "pre-line", textWrap: "pretty" } as CSSProperties}>
-                  {r.detail}
+                {/* 🔴 **높이 전환용 래퍼 두 겹이다 — 기존 `.landing-reason-detail` 은 한 글자도
+                    바꾸지 않았다**(클래스명·인라인 style 그대로). `<details>` 는 높이가 기본으로
+                    애니메이션되지 않아서 `grid-template-rows: 0fr → 1fr` 로 편다.
+                    🔴 **안쪽 한 겹(`landing-acc-clip`)이 반드시 필요하다** — `landing-reason-detail`
+                       이 `margin: 6px 0 26px 76px` 를 갖고 있어서, 그 요소를 직접 자르면
+                       **여백이 클리핑 밖에 남아 닫힌 상태에도 32px 틈이 생긴다.**
+                    🔴 **닫힘은 애니메이션되지 않는다 — 그게 맞다.** `open` 이 떨어지는 순간
+                       브라우저가 내용을 감춘다. JS 로 `open` 제거를 늦추면 배타 아코디언
+                       (`name="wecarry-why"`)의 열림·닫힘이 겹쳐 오히려 어지러워진다. */}
+                <div className="landing-acc-body">
+                  <div className="landing-acc-clip">
+                    <div className="landing-reason-detail"
+                      style={{ margin: "6px 0 26px 76px", fontSize: 17.4, lineHeight: 1.8, color: "#6C6B65", whiteSpace: "pre-line", textWrap: "pretty" } as CSSProperties}>
+                      {r.detail}
+                    </div>
+                  </div>
                 </div>
               </details>
             ))}
@@ -198,11 +229,14 @@ export default function LandingPage() {
 
       {/* ── 위캐리 서비스 ──────────────────────────── */}
       <section id="work" style={{ padding: `150px ${PAD} 0` }}>
-        <h2 style={{ ...h2, margin: "24px 0 40px" }}>위캐리 서비스</h2>
-        <div ref={servicesRef} className="landing-work-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 16 }}>
+        <h2 className="landing-reveal" style={{ ...h2, margin: "24px 0 40px" }}>위캐리 서비스</h2>
+        <div className="landing-work-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 16 }}>
           {services.map((s, i) => (
-            <div key={s.title} className="landing-card-lift"
-              style={{ display: "flex", flexDirection: "column", background: "#FFFFFF", border: "1px solid #E4E3DE", borderRadius: 18, overflow: "hidden" }}>
+            /* 🔴 리빌은 **그리드가 아니라 카드 4장 각각**에 건다 — 그래야 `--i` 로
+               차례차례 나타난다(컨테이너에 걸면 넷이 한꺼번에 뜬다).
+               🔴 `--i` 는 5를 넘기지 말 것 — 마지막 것이 나타나기까지 너무 오래 걸린다. */
+            <div key={s.title} className="landing-card-lift landing-reveal"
+              style={{ ["--i" as string]: i, display: "flex", flexDirection: "column", background: "#FFFFFF", border: "1px solid #E4E3DE", borderRadius: 18, overflow: "hidden" } as CSSProperties}>
               {/* 🔴 **첫 카드 사진만 `loading="eager"` 다 — `lazy` 로 되돌리지 말 것.**
                   모바일에서 이 섹션이 y=2161px 에 있는데 그 거리가 브라우저 지연로딩
                   경계(약 1250px)와 거의 겹쳐서, **스크롤해서 카드가 보이는 순간에야 사진을
@@ -234,7 +268,7 @@ export default function LandingPage() {
 
       {/* ── 운송관리 시스템 ────────────────────────── */}
       <section id="manage" style={{ padding: `200px ${PAD} 0`, paddingBottom: 0 }}>
-        <div style={{ textAlign: "center" }}>
+        <div className="landing-reveal" style={{ textAlign: "center" }}>
           <h2 style={{ ...h2, margin: "24px 0 0", textWrap: "balance" } as CSSProperties}>운송 발주부터 정산까지, 위캐리 운송관리 시스템</h2>
           <p style={{ margin: "18px auto 0", maxWidth: 640, fontSize: 18.6, lineHeight: 1.8, color: "#6C6B65", textWrap: "pretty" } as CSSProperties}>
             발주 요청부터 견적 확인, 배차 조회, 정산까지 한 화면에서 관리합니다.<br />PC와 모바일 모두 같은 화면으로 확인할 수 있습니다.
@@ -242,10 +276,10 @@ export default function LandingPage() {
         </div>
 
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img ref={tmsImgRef} src={IMG.tmsOverview} alt="위캐리 운송관리 프로그램 PC·모바일 화면" decoding="async"
+        <img className="landing-reveal" src={IMG.tmsOverview} alt="위캐리 운송관리 프로그램 PC·모바일 화면" decoding="async"
           style={{ display: "block", width: "100%", maxWidth: 1200, height: "auto", margin: "36px auto 0" }} />
 
-        <div className="landing-tms-lead" style={{ margin: "120px auto 0", textAlign: "center" }}>
+        <div className="landing-tms-lead landing-reveal" style={{ margin: "120px auto 0", textAlign: "center" }}>
           <div className="landing-lead-text" style={{ fontSize: 32.4, lineHeight: 1.3, fontWeight: 600, letterSpacing: "-0.03em", color: "#0E0F12" }}>
             발주부터 정산까지, <br />한 화면에서 관리하세요
           </div>
@@ -253,7 +287,7 @@ export default function LandingPage() {
 
         <TmsShowcase />
 
-        <div className="landing-tms-foot"
+        <div className="landing-tms-foot landing-reveal"
           style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 36, maxWidth: 1200, margin: "112px auto 0", padding: "72px 56px 76px", borderRadius: 28, background: "#0E0F12", textAlign: "center" }}>
           <div>
             <div style={{ fontSize: 34, lineHeight: 1.3, fontWeight: 600, letterSpacing: "-0.035em", color: "#FFFFFF", wordBreak: "keep-all" }}>
@@ -280,7 +314,7 @@ export default function LandingPage() {
 
       {/* ── 차량 형태 ──────────────────────────────── */}
       <section id="vehicles" style={{ padding: `150px ${PAD}` }}>
-        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-end", gap: 24 }}>
+        <div className="landing-reveal" style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-end", gap: 24 }}>
           <div>
             {/* 🔴 30차 리뷰: **시안 문구 그대로 되돌렸다**(사용자 지시). 30차 본작업에서
                 「1톤부터 25톤까지」로 바꾸고 「특수차량」을 뺐던 자리다.
@@ -303,7 +337,7 @@ export default function LandingPage() {
         {/* 🔴 안쪽 `.landing-vehicle-track` 은 **데스크탑에서 `display: contents`** 라
             상자를 만들지 않는다 — 그래서 카드 24장이 바깥 6열 그리드에 그대로 들어간다.
             모바일에서만 flex 줄이 되어 transform 으로 미끄러진다. 지우지 말 것. */}
-        <div ref={vehiclesRef} className="landing-vehicle-grid" style={{ marginTop: 48, display: "grid", gridTemplateColumns: "repeat(6, minmax(0,1fr))", gap: 12 }}>
+        <div ref={vehiclesRef} className="landing-vehicle-grid landing-reveal" style={{ marginTop: 48, display: "grid", gridTemplateColumns: "repeat(6, minmax(0,1fr))", gap: 12 }}>
           <div ref={vehicleTrackRef} className="landing-vehicle-track">
           {[...vehicles, ...vehicles].map((v, i) => (
             <div key={`${v.name}-${i}`}
@@ -322,12 +356,12 @@ export default function LandingPage() {
         {/* 🔴 랜딩 이름(「5톤 윙바디」)과 발주 폼 선택지가 다르다 — 폼은 차급과 형태를
             **각각** 고르는 구조라 그 이름이 통째로 있지는 않다. 이름은 시안 그대로
             두기로 확정됐으므로(사용자), 그 간극을 이 한 줄이 메운다. 지우지 말 것. */}
-        <p className="landing-vehicle-note"
+        <p className="landing-vehicle-note landing-reveal"
           style={{ margin: "28px 0 0", fontSize: 16.2, lineHeight: 1.8, color: "#6C6B65", wordBreak: "keep-all" }}>
           발주 요청에서는 <strong style={{ fontWeight: 700, color: "#0E0F12" }}>차량 크기와 형태를 각각 선택</strong>합니다.
           예를 들어 「5톤 윙바디」는 <strong style={{ fontWeight: 700, color: "#0E0F12" }}>5톤 + 윙바디</strong>로 고르시면 됩니다.
         </p>
-        <div style={{ display: "flex", justifyContent: "center", marginTop: 56 }}>
+        <div className="landing-reveal" style={{ display: "flex", justifyContent: "center", marginTop: 56 }}>
           <button type="button" onClick={() => setRatesOpen(true)}
             style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "19px 40px", border: "none", borderRadius: 999, background: "#0E0F12", fontFamily: "inherit", fontSize: 20, fontWeight: 600, letterSpacing: "-0.02em", color: "#FFFFFF", cursor: "pointer" }}>
             차량 · 요금 가이드 <span style={{ fontSize: 18 }}>›</span>
@@ -342,13 +376,13 @@ export default function LandingPage() {
           🔴 다른 섹션까지 같이 줄이지 말 것 — 지시는 이 둘만이고 "전체 디자인을 해치지
              않는 선에서" 라는 단서가 붙어 있다. */}
       <section id="process" style={{ background: "#0E0F12", padding: `110px ${PAD} 118px` }}>
-        <h2 style={{ ...h2, margin: 0, color: "#FFFFFF" }}>이렇게 진행됩니다.</h2>
+        <h2 className="landing-reveal" style={{ ...h2, margin: 0, color: "#FFFFFF" }}>이렇게 진행됩니다.</h2>
         <p style={{ margin: "16px 0 40px", fontSize: 18.6, lineHeight: 1.8, color: "rgba(255,255,255,0.55)" }}>
           각 단계의 내역이 운송관리 화면에 남습니다.
         </p>
-        {process.map((p) => (
-          <div key={p.no} className="landing-process-row"
-            style={{ display: "grid", gridTemplateColumns: "minmax(200px, 320px) minmax(280px, 1fr)", gap: 48, padding: "30px 0", borderTop: "1px solid rgba(255,255,255,0.14)", alignItems: "baseline" }}>
+        {process.map((p, i) => (
+          <div key={p.no} className="landing-process-row landing-reveal"
+            style={{ ["--i" as string]: Math.min(i, 4), display: "grid", gridTemplateColumns: "minmax(200px, 320px) minmax(280px, 1fr)", gap: 48, padding: "30px 0", borderTop: "1px solid rgba(255,255,255,0.14)", alignItems: "baseline" } as CSSProperties}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 16 }}>
               <span style={{ fontSize: 15, fontWeight: 500, color: "rgba(255,255,255,0.4)" }}>{p.no}</span>
               <h3 style={{ margin: 0, fontSize: 29.2, fontWeight: 600, letterSpacing: "-0.03em", color: "#FFFFFF" }}>{p.title}</h3>
@@ -363,7 +397,7 @@ export default function LandingPage() {
       <section className="landing-faq-section" style={{ padding: `110px ${PAD} 120px` }}>
         <div className="landing-faq-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(0,1fr))", gap: 52, alignItems: "start" }}>
           <div>
-            <h2 style={{ ...h2, margin: "24px 0 0", fontSize: 42, lineHeight: 1.25 }}>궁금하실 것들,<br />먼저 답해드립니다.</h2>
+            <h2 className="landing-reveal" style={{ ...h2, margin: "24px 0 0", fontSize: 42, lineHeight: 1.25 }}>궁금하실 것들,<br />먼저 답해드립니다.</h2>
           </div>
           <FaqList />
         </div>
@@ -372,17 +406,17 @@ export default function LandingPage() {
       {/* ── CTA ────────────────────────────────────── */}
       <section className="landing-cta"
         style={{ position: "relative", backgroundColor: "#0B0D12", backgroundImage: `url('${IMG.ctaBg}')`, backgroundSize: "cover", backgroundPosition: "center 42%", backgroundRepeat: "no-repeat", padding: `190px ${PAD} 56px`, display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
-        <h2 style={{ position: "relative", margin: 0, maxWidth: 820, fontSize: 58.8, lineHeight: 1.15, fontWeight: 600, letterSpacing: "-0.04em", color: "#FFFFFF", textWrap: "balance" } as CSSProperties}>
+        <h2 className="landing-reveal" style={{ position: "relative", margin: 0, maxWidth: 820, fontSize: 58.8, lineHeight: 1.15, fontWeight: 600, letterSpacing: "-0.04em", color: "#FFFFFF", textWrap: "balance" } as CSSProperties}>
           지금 바로 견적을 받아보세요.
         </h2>
         {/* 🔴 **운영시간을 이 화면에서만 뺐다**(사용자 지시 2026-09-02).
             ⚠️ `COMPANY_SUPPORT_HOURS` 상수 자체는 지우지 말 것 — `/about`·화주포털·
                로그인 화면이 같은 값을 쓴다. 여기서 안 그릴 뿐이다.
             🟢 섹션이 `textAlign: center` 라 번호는 이미 가운데 정렬이다. */}
-        <p style={{ position: "relative", margin: "22px 0 0", maxWidth: 520, fontSize: 18.2, lineHeight: 1.8, color: "rgba(255,255,255,0.78)" }}>
+        <p className="landing-reveal" style={{ ["--i" as string]: 1, position: "relative", margin: "22px 0 0", maxWidth: 520, fontSize: 18.2, lineHeight: 1.8, color: "rgba(255,255,255,0.78)" } as CSSProperties}>
           상·하차지와 연락처만 남겨주시면 확인해 안내드립니다.<br />고객센터 {COMPANY_SUPPORT_PHONE}
         </p>
-        <div style={{ position: "relative", display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 12, marginTop: 36 }}>
+        <div className="landing-reveal" style={{ ["--i" as string]: 2, position: "relative", display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 12, marginTop: 36 } as CSSProperties}>
           <Link href="/quote" style={ctaBtn("#FFFFFF")}>무료 견적 문의</Link>
           <Link href="/apply" style={ctaBtn("#FFD834")}>운송관리 계정 신청</Link>
         </div>
