@@ -70,6 +70,16 @@ const HEADER_LINE_HEIGHT = 15;
  */
 const HEADER_WRAP_LINES = 2;
 /**
+ * 🔴 데이터 기준 너비에서 **이만큼만 더 주면 머리글이 한 줄에 들어가는** 열은
+ *    접지 않고 한 줄로 맞춘다(실사용 지적 2026-09-07 — 「세금계산서발행일」).
+ *
+ * 몇 칸 차이로 두 줄이 되는 열은 접는 이득보다 읽기 나쁜 쪽이 크다. 반대로
+ * 「청구금액 합계(부가세 별도)」처럼 차이가 큰 열은 그대로 접는다 — 한 줄로 펴면
+ * 칸 하나가 26칸이 되어 이 작업이 없애려던 문제로 돌아간다.
+ * 🔴 이 값을 크게 올리지 말 것. 올릴수록 머리글이 다시 너비를 끈다.
+ */
+const HEADER_ONE_LINE_SLACK = 4;
+/**
  * 시트 전체 글자 크기(pt). 엑셀 기본 11pt 보다 낮춰 **같은 칸에 더 많은 글자**가
  * 들어가게 한다(실사용 지적 2026-09-07). 열 너비 단위(`wch`)는 통합문서 기본 폰트
  * 기준이라 이 값을 낮춰도 바뀌지 않으므로, 위 폭 계산이 그만큼 보수적이 되어 안전하다.
@@ -96,8 +106,13 @@ function autoFitColumns(worksheet: XLSX.WorkSheet, rows: Record<string, any>[]) 
     // 🔴 너비를 **끄는** 것은 데이터뿐이다 — `displayWidth(key)` 를 그대로 넣지 말 것.
     //    머리글은 하한으로만 관여한다(HEADER_WRAP_LINES 주석 참고).
     const maxLen = Math.max(0, ...rows.map((r) => displayWidth(String(r[key] ?? ""))));
-    const headerMin = Math.ceil(displayWidth(key) / HEADER_WRAP_LINES);
-    return Math.min(Math.max(maxLen + 2, COL_WIDTH_MIN, headerMin), COL_WIDTH_MAX);
+    const headerWidth = displayWidth(key);
+    const dataWidth = Math.max(maxLen + 2, COL_WIDTH_MIN);
+    const headerMin =
+      headerWidth - dataWidth <= HEADER_ONE_LINE_SLACK
+        ? headerWidth // 조금만 넓히면 한 줄에 들어간다 — 접지 않는다
+        : Math.ceil(headerWidth / HEADER_WRAP_LINES);
+    return Math.min(Math.max(dataWidth, headerMin), COL_WIDTH_MAX);
   });
   worksheet["!cols"] = widths.map((wch) => ({ wch }));
 
