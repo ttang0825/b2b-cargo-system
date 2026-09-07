@@ -57,8 +57,24 @@ function displayWidth(s: string) {
 
 /** 머리글이 그 너비 안에서 차지하는 줄 수(줄바꿈된 뒤). 상한 3줄. */
 const HEADER_MAX_LINES = 3;
-/** 엑셀 기본 행 높이(pt). 두 줄이면 이 값의 두 배가 필요하다. */
+/** 한 줄 높이(pt). 글자를 10pt 로 낮춰도 여유를 두려고 넉넉히 잡는다. */
 const HEADER_LINE_HEIGHT = 15;
+/**
+ * 🔴 머리글이 이 줄 수 안에 들어갈 만큼은 **하한으로 보장한다**.
+ *
+ * 머리글을 너비 계산에서 완전히 빼 봤더니, 데이터가 짧은 금액 열이 하한 8칸까지
+ * 좁아져 **접힌 머리글이 그 안에서 다시 잘려 보였다**(실사용 지적 2026-09-07).
+ * 엑셀의 줄바꿈은 공백을 우선 끊어서 계산보다 줄이 더 늘기도 한다.
+ * 그래서 「머리글이 너비를 끈다」와 「머리글이 안 보인다」 사이를 이 값으로 가른다.
+ * 🔴 2를 1로 내리면 머리글이 다시 너비를 끌어 칸이 넓어진다.
+ */
+const HEADER_WRAP_LINES = 2;
+/**
+ * 시트 전체 글자 크기(pt). 엑셀 기본 11pt 보다 낮춰 **같은 칸에 더 많은 글자**가
+ * 들어가게 한다(실사용 지적 2026-09-07). 열 너비 단위(`wch`)는 통합문서 기본 폰트
+ * 기준이라 이 값을 낮춰도 바뀌지 않으므로, 위 폭 계산이 그만큼 보수적이 되어 안전하다.
+ */
+const BODY_FONT_SIZE = 10;
 
 /**
  * 열 너비 — 🔴 **머리글이 아니라 데이터 기준**이다.
@@ -77,17 +93,20 @@ function autoFitColumns(worksheet: XLSX.WorkSheet, rows: Record<string, any>[]) 
   if (rows.length === 0) return;
   const headers = Object.keys(rows[0]);
   const widths = headers.map((key) => {
-    // 🔴 `displayWidth(key)` 를 여기 넣지 말 것 — 그게 칸이 넓어지던 원인이다.
+    // 🔴 너비를 **끄는** 것은 데이터뿐이다 — `displayWidth(key)` 를 그대로 넣지 말 것.
+    //    머리글은 하한으로만 관여한다(HEADER_WRAP_LINES 주석 참고).
     const maxLen = Math.max(0, ...rows.map((r) => displayWidth(String(r[key] ?? ""))));
-    return Math.min(Math.max(maxLen + 2, COL_WIDTH_MIN), COL_WIDTH_MAX);
+    const headerMin = Math.ceil(displayWidth(key) / HEADER_WRAP_LINES);
+    return Math.min(Math.max(maxLen + 2, COL_WIDTH_MIN, headerMin), COL_WIDTH_MAX);
   });
   worksheet["!cols"] = widths.map((wch) => ({ wch }));
 
-  // 1행 높이 — 가장 많이 접히는 머리글에 맞춘다(접힌 글자가 잘리면 소용이 없다)
-  const lines = Math.max(
-    1,
-    ...headers.map((h, i) => Math.min(Math.ceil(displayWidth(h) / widths[i]), HEADER_MAX_LINES))
-  );
+  // 1행 높이 — 가장 많이 접히는 머리글에 맞춘다(접힌 글자가 잘리면 소용이 없다).
+  // 🔴 접히는 열이 하나라도 있으면 한 줄 더 준다 — 엑셀이 공백에서 먼저 끊어
+  //    계산보다 줄이 늘어나는 경우가 있고, 그때 마지막 줄이 잘린다.
+  const wrapped = headers.some((h, i) => displayWidth(h) > widths[i]);
+  const rawLines = Math.max(1, ...headers.map((h, i) => Math.ceil(displayWidth(h) / widths[i])));
+  const lines = Math.min(rawLines + (wrapped ? 1 : 0), HEADER_MAX_LINES);
   worksheet["!rows"] = [{ hpt: lines * HEADER_LINE_HEIGHT + 4 }];
 }
 
@@ -99,7 +118,7 @@ function styleHeaderAndFreeze(worksheet: XLSX.WorkSheet, rows: Record<string, an
     const cellRef = XLSX.utils.encode_cell({ r: 0, c: col });
     if (!worksheet[cellRef]) return;
     worksheet[cellRef].s = {
-      font: { bold: true, color: { rgb: "1A1A1A" } },
+      font: { bold: true, sz: BODY_FONT_SIZE, color: { rgb: "1A1A1A" } },
       fill: { fgColor: { rgb: "FFF3C4" } }, // 브랜드 톤에 맞춘 은은한 옐로우
       // 🔴 머리글만 접는다 — 데이터 셀까지 `wrapText` 를 걸면 행 높이가 제각각이
       //    되어 오히려 읽기 어려워진다.
@@ -116,6 +135,22 @@ function styleHeaderAndFreeze(worksheet: XLSX.WorkSheet, rows: Record<string, an
   };
 }
 
+/**
+ * 데이터 셀 글자 크기 — 머리글은 `styleHeaderAndFreeze` 가 따로 준다.
+ * 🔴 값(`v`)·타입(`t`)·서식(`z`)은 건드리지 않는다 — 금액이 숫자로 남아야 한다.
+ */
+function applyBodyFont(worksheet: XLSX.WorkSheet, rows: Record<string, any>[]) {
+  if (rows.length === 0) return;
+  const headers = Object.keys(rows[0]);
+  for (let r = 1; r <= rows.length; r += 1) {
+    headers.forEach((_, c) => {
+      const cell = worksheet[XLSX.utils.encode_cell({ r, c })];
+      if (!cell) return;
+      cell.s = { ...(cell.s || {}), font: { ...((cell.s || {}).font || {}), sz: BODY_FONT_SIZE } };
+    });
+  }
+}
+
 // 시트 하나짜리 파일
 export function exportRowsToExcel(
   filename: string,
@@ -125,6 +160,7 @@ export function exportRowsToExcel(
   const worksheet = XLSX.utils.json_to_sheet(rows);
   autoFitColumns(worksheet, rows);
   styleHeaderAndFreeze(worksheet, rows);
+  applyBodyFont(worksheet, rows);
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
   XLSX.writeFile(workbook, filename);
@@ -226,6 +262,7 @@ export function exportMultiSheetExcel(
     const worksheet = XLSX.utils.json_to_sheet(rows);
     autoFitColumns(worksheet, rows);
     styleHeaderAndFreeze(worksheet, rows);
+    applyBodyFont(worksheet, rows);
     XLSX.utils.book_append_sheet(workbook, worksheet, name);
   });
   XLSX.writeFile(workbook, filename);
