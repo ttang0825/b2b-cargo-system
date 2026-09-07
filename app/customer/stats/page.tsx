@@ -453,7 +453,12 @@ export default function PortalStatsPage() {
         </div>
         {/* 🔴 「PDF 전체 다운로드」를 만들지 말 것(사용자 확정 12번) — 엑셀 하나뿐이다. */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          {/* 🔴 아이콘은 견적 확인·견적 상세와 **같은 정의처**(`/portal/excel-icon.svg`)를
+              쓴다 — 인라인 SVG 로 복사하지 말 것(한쪽만 고치면 조용히 갈린다).
+              `.pv2-sbtn` 은 `.pv2-qd-dl` 과 같은 `gap: 7px` 이라 간격이 저절로 맞는다. */}
           <button type="button" className="pv2-sbtn" onClick={handleExport} disabled={exporting}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/portal/excel-icon.svg" alt="" style={{ width: 16, height: 16 }} />
             {exporting ? "내려받는 중..." : "엑셀 다운로드"}
           </button>
         </div>
