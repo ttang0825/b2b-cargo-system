@@ -29,6 +29,66 @@
   100% { opacity: 0; }
 }
 
+/* ── 🔴 모션 토큰 (2026-09-07) ──────────────────────────────────────────
+   🔴 **`app/globals.css` 가 아니라 여기다** — 관리자 31화면이 그 파일을 공유한다.
+      스코프는 `.landing-page` 이고 지시서의 `.landing-root` 는 **이 저장소에 없는
+      이름이었다**(실측). 랜딩 루트 클래스는 처음부터 `.landing-page` 다.
+   🔴 **`--mo-out` 을 `ease`·`ease-in-out` 으로 바꾸지 말 것** — 빠르게 출발해
+      부드럽게 멈추는 이 곡선이 「좋은 느낌」의 대부분이다. 바꾸면 밋밋해진다.
+   🔴 **`--mo-rise` 를 20px 이상으로 올리지 말 것** — 그 위부터 「움직인다」가
+      인식되기 시작하고, 30px 를 넘으면 스크롤이 무거워 보인다.
+   ⚠️ 기존 규칙(`.landing-card-lift` · `.landing-tms-features`)이 쓰는
+      `cubic-bezier(0.22,0.61,0.36,1)` 은 그대로 뒀다 — 이번 차수의 범위가 아니다. */
+.landing-page {
+  --mo-fast: 160ms;     /* 버튼·칩 상태 */
+  --mo-base: 420ms;     /* 스크롤 진입 · 데스크탑 */
+  --mo-mob: 320ms;      /* 스크롤 진입 · 모바일 */
+  --mo-open: 280ms;     /* 아코디언 펼침 */
+  --mo-modal: 180ms;    /* 모달 */
+
+  --mo-out: cubic-bezier(0.22, 1, 0.36, 1);      /* 진입 */
+  --mo-inout: cubic-bezier(0.65, 0, 0.35, 1);    /* 상태 전환 */
+
+  --mo-rise: 14px;      /* 데스크탑 상승 거리 */
+  --mo-rise-mob: 8px;   /* 모바일 */
+
+  --mo-step: 60ms;      /* 형제 간 지연 · 데스크탑 */
+  --mo-step-mob: 40ms;  /* 모바일 */
+}
+
+/* ── 스크롤 진입 리빌 ─────────────────────────────────────────────────
+   🔴 **대상은 마크업이 `landing-reveal` 로 정한다** — 훅(`useReveal.ts`)은 루트
+      아래를 한 번 훑어 **관찰자 하나로** 전부 본다. 요소마다 훅을 부르지 말 것.
+   🔴 **움직이는 것은 `opacity` 와 `transform` 뿐이다** — `height`·`margin` 을
+      애니메이션하면 레이아웃이 매 프레임 다시 계산된다.
+   🔴 **`translateX` 를 쓰지 말 것** — 360px 에서 가로 오버플로우가 생긴다.
+   ⚠️ `.is-in` 은 한 번만 붙고 `unobserve` 된다 — 스크롤을 되돌려도 재생되지 않는다. */
+.landing-page .landing-reveal {
+  opacity: 0;
+  transform: translateY(var(--mo-rise));
+  transition: opacity var(--mo-base) var(--mo-out),
+              transform var(--mo-base) var(--mo-out);
+  /* 🔴 `--i` 는 5를 넘기지 말 것 — 마지막 것이 나타나기까지 너무 오래 걸린다. */
+  transition-delay: calc(var(--i, 0) * var(--mo-step));
+}
+.landing-page .landing-reveal.is-in { opacity: 1; transform: none; }
+
+/* ── `<details>` 펼침 높이 전환 ───────────────────────────────────────
+   🔴 **안쪽 `clip` 한 겹이 반드시 필요하다** — 자식이 `margin` 을 갖고 있으면
+      그 여백은 클리핑 밖에 남아 **닫힌 상태에도 틈이 생긴다.**
+   🟢 `grid-template-rows` 는 레이아웃 속성이지만 **아코디언에서만·짧게** 쓴다 —
+      이 한 곳이 예외다(높이 애니메이션의 다른 방법이 전부 JS 를 부른다).
+   ⚠️ **닫힘은 애니메이션되지 않는다.** `open` 이 떨어지면 브라우저가 내용을
+      감춰서 보간할 것이 없다. 🔴 JS 로 `open` 제거를 늦춰 억지로 만들지 말 것 —
+      배타 아코디언이라 열림·닫힘이 겹쳐 오히려 어지럽다. */
+.landing-page .landing-acc-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--mo-open) var(--mo-inout);
+}
+.landing-page details[open] > .landing-acc-body { grid-template-rows: 1fr; }
+.landing-page .landing-acc-clip { overflow: hidden; }
+
 .landing-page { word-break: keep-all; }
 .landing-page summary { list-style: none; cursor: pointer; }
 .landing-page summary::-webkit-details-marker { display: none; }
@@ -40,11 +100,29 @@
 .landing-page section h2,
 .landing-page section h3 { word-break: keep-all; }
 
-.landing-card-lift { transition: transform 420ms cubic-bezier(0.22,0.61,0.36,1), box-shadow 420ms ease; }
-.landing-card-lift:hover { transform: translateY(-4px); box-shadow: 0 14px 34px rgba(20,20,18,0.10); }
-.landing-faq-item:hover { background: #E4E3DE !important; }
 .landing-page a { color: inherit; text-decoration: none; }
-.landing-page a:hover { opacity: 0.7; }
+
+/* 🔴 **호버 규칙은 전부 이 가드 안에 있어야 한다**(2026-09-07) — 가드가 없으면
+   터치로 누른 뒤 **호버 상태가 그대로 남는다**(64차 ⑧ 덜덜거림과 같은 뿌리다).
+   ⚠️ `.landing-card-lift` 의 들어올림은 30차부터 있던 것이라 **없애지 않았다** —
+      64차 ⑧ 이 뺀 `transition` 은 **TMS 캐러셀 카드**(`TmsShowcase`)의 것이고
+      이 서비스 카드와는 다른 요소다. 🔴 둘을 혼동해 이 규칙을 지우지 말 것. */
+@media (hover: hover) and (pointer: fine) {
+  .landing-card-lift { transition: transform 420ms cubic-bezier(0.22,0.61,0.36,1), box-shadow 420ms ease; }
+  .landing-card-lift:hover { transform: translateY(-4px); box-shadow: 0 14px 34px rgba(20,20,18,0.10); }
+  .landing-faq-item:hover { background: #E4E3DE !important; }
+  .landing-page a:hover { opacity: 0.7; }
+}
+
+/* ── 탭 피드백 ────────────────────────────────────────────────────────
+   🔴 **버튼과 링크에만 건다 — 카드에는 넣지 말 것**(64차 ⑧). 카드는 나타나기만 하고
+      그 뒤로는 가만히 있는다.
+   🟢 `<summary>`(WHY·FAQ)는 `a`·`button` 이 아니라 여기 안 걸린다 — 의도한 것이다.
+      아코디언은 높이 전환이 이미 피드백 노릇을 한다. */
+.landing-page a,
+.landing-page button { transition: transform var(--mo-fast) var(--mo-inout); }
+.landing-page a:active,
+.landing-page button:active { transform: scale(0.985); }
 /* 🔴 WHY 행은 `<details>` 이고 **grid 는 `<summary class="landing-reason-head">` 에
    있다**(2026-09-02). 선택자를 행에 걸면 빗나간다 — 행의 직계 자식은 summary 와
    펼침 카드 둘뿐이다. 모바일 규칙(아래)도 같은 이유로 head 를 가리킨다. */
@@ -171,6 +249,13 @@
 }
 
 @media (max-width: 700px) {
+  /* 🔴 **모바일은 거리도 시간도 짧다** — 한 손으로 빠르게 내리기 때문이다.
+     데스크탑 값을 그대로 쓰면 스크롤이 모션을 기다리는 느낌이 된다. */
+  .landing-page {
+    --mo-base: var(--mo-mob);
+    --mo-rise: var(--mo-rise-mob);
+    --mo-step: var(--mo-step-mob);
+  }
   .landing-page section, .landing-page footer { padding-left: 20px !important; padding-right: 20px !important; }
   .landing-about-head h2 { margin-bottom: 0 !important; }
   .landing-hero-copy > div:last-child { flex-direction: column !important; align-items: flex-start !important; gap: 10px !important; }
@@ -342,11 +427,6 @@
   .landing-consent > button { grid-column: 2 !important; grid-row: 2 !important; justify-self: start !important; margin: 0 !important; padding: 6px 12px !important; font-size: 12.5px !important; }
   .landing-detail-head { font-size: 21px !important; }
   .landing-submit-bar button { width: 100% !important; min-width: 0 !important; padding: 18px 20px !important; white-space: normal !important; font-size: 15.5px !important; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .landing-hero-fade { animation: none !important; opacity: 0 !important; }
-  .landing-page * { transition-duration: 0.01ms !important; }
 }
 
 /* ── 30차에 더한 것 (시안에 없던 자리) ─────────────────────────────────────
@@ -525,4 +605,59 @@
   .landing-nav a { padding: 8px 12px !important; font-size: 12.5px !important; }
   .landing-nav-full { display: none !important; }
   .landing-nav-short { display: inline !important; }
+}
+
+
+/* ── 🔴 모달 3종 — 열릴 때만 (2026-09-07) ────────────────────────────────
+   세 모달(요금·법적문서·사업자정보)은 전부 **조건부 렌더**(`if (!open) return null`)라
+   닫힐 때는 DOM 에서 사라진다. 그래서 `transition` 이 아니라 **마운트 `animation`** 이다.
+   🔴 **닫힘 애니메이션을 만들지 말 것** — 조건부 렌더에 닫힘을 붙이려면 상태 관리가
+      따라붙는다(언마운트를 늦춰야 한다). 값어치에 비해 복잡하다.
+   🔴 **`color: var(--text)` · `textAlign: "left"` 인라인을 지우지 말 것**(65차 ⑤ ·
+      66차 ⑯-3) — 모달이 부르는 화면의 DOM 안에 그려져 조상의 색·정렬을 상속한다.
+   ⚠️ 랜딩 스코프 안에서만 건다 — `.legal-modal-overlay` 는 `/about`·`/terms` 도 쓴다. */
+@keyframes landingModalIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes landingPanelIn {
+  from { opacity: 0; transform: scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+.landing-page .landing-rates-overlay,
+.landing-page .legal-modal-overlay { animation: landingModalIn var(--mo-modal) var(--mo-out) both; }
+.landing-page .landing-rates-modal,
+.landing-page .legal-modal {
+  transform-origin: center;
+  animation: landingPanelIn var(--mo-modal) var(--mo-out) both;
+}
+
+/* ── 앵커 이동 ────────────────────────────────────────────────────────
+   🔴 **`no-preference` 안에 둔다** — `html` 에 무조건 걸면 reduced-motion 사용자에게도
+      부드러운 스크롤이 적용된다.
+   ⚠️ 헤더가 `position: fixed` 라 `scroll-margin-top` 이 없으면 제목이 헤더 밑에 가린다.
+      값은 헤더 실측 높이다 — 데스크탑 18+18+46=82 / 760px 이하 12+12+30=54. */
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+}
+.landing-page section[id] { scroll-margin-top: 96px; }
+@media (max-width: 760px) {
+  .landing-page section[id] { scroll-margin-top: 70px; }
+}
+
+/* ── 🔴 접근성 — 예외 없다. **이 블록은 반드시 파일 맨 끝이어야 한다** ──────────
+   앞에 두면 뒤 규칙이 이긴다. 🔴 원칙 58번(「순서로 고치지 말고 특성도로 이겨라」)과
+   어긋나 보이지만, `!important` 로 전부 덮는 이 블록은 예외다.
+   🟢 히어로의 `animation: none` 은 위 전역 규칙이 덮지만 명시적인 편이 안전하다.
+   ⚠️ `useReveal.ts` 와 `useAutoMarquee.ts` 도 각자 이 설정을 보고 아무것도 하지 않는다 —
+      CSS 와 JS 두 겹이다. */
+@media (prefers-reduced-motion: reduce) {
+  .landing-page *,
+  .landing-page *::before,
+  .landing-page *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+  .landing-hero-fade { animation: none !important; opacity: 0 !important; }
+  .landing-page .landing-reveal { opacity: 1 !important; transform: none !important; }
 }

@@ -21,14 +21,21 @@ export default function FaqList() {
               <path d="M3 5.5L7 9.5L11 5.5" stroke="#8B8A85" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </summary>
-          <p style={{ margin: "0 26px 22px", paddingTop: 18, borderTop: "1px solid #DFDED8", fontSize: 17.4, lineHeight: 1.85, color: "#5A5955", textWrap: "pretty" } as CSSProperties}>
-            {f.a}
-          </p>
-          {f.cta && (
-            <Link href="/apply" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 236, margin: "0 26px 24px", padding: "14px 32px", background: "#FFD834", color: "#0E0F12", borderRadius: 999, fontSize: 16.8, fontWeight: 700, whiteSpace: "nowrap" }}>
-              운송관리 계정 신청
-            </Link>
-          )}
+          {/* 🔴 **높이 전환용 래퍼 두 겹**(2026-09-07, WHY 와 같은 구조) — 안쪽 `clip` 이
+              없으면 `<p>` 와 버튼의 `margin` 이 클리핑 밖에 남아 닫힌 상태에도 틈이 생긴다.
+              🔴 답과 버튼을 **한 래퍼 안에** 넣어야 둘이 같이 열린다. */}
+          <div className="landing-acc-body">
+            <div className="landing-acc-clip">
+              <p style={{ margin: "0 26px 22px", paddingTop: 18, borderTop: "1px solid #DFDED8", fontSize: 17.4, lineHeight: 1.85, color: "#5A5955", textWrap: "pretty" } as CSSProperties}>
+                {f.a}
+              </p>
+              {f.cta && (
+                <Link href="/apply" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 236, margin: "0 26px 24px", padding: "14px 32px", background: "#FFD834", color: "#0E0F12", borderRadius: 999, fontSize: 16.8, fontWeight: 700, whiteSpace: "nowrap" }}>
+                  운송관리 계정 신청
+                </Link>
+              )}
+            </div>
+          </div>
         </details>
       ))}
     </div>
