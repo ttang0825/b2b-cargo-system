@@ -6540,18 +6540,70 @@ tbody tr:hover {
 .pv2-prof-form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  margin-top: 20px;
 }
-/* ⚠️ `.pv2-btn-dark`·`.pv2-btn-ghost` 는 세로로 쌓이는 폼용이라 각자 위 여백을 갖고
-   있다 — 나란히 두면 두 버튼의 높이가 어긋나므로 여기서만 0 으로 눌러 준다. */
+/* 🔴 수정 카드의 머리는 아바타가 아니라 **제목 한 줄**이다(시안) — 제목 옆에 흐린 안내가
+   같은 줄에 붙고 구분선이 없다. 보기 카드(`.pv2-prof-head`)와 다른 규칙이니 합치지 말 것. */
+.pv2-prof-edithead {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.pv2-prof-edittitle {
+  margin: 0;
+  font-size: 17.5px;
+  font-weight: 700;
+  word-break: keep-all;
+}
+.pv2-prof-edithint {
+  font-size: 13.5px;
+  color: var(--pv2-text-3);
+  word-break: keep-all;
+}
+/* 🔴 입력은 데스크탑 **2열**이다(시안) — 이름·직책 / 휴대폰·이메일. 1열로 되돌리면
+   카드가 두 배로 길어진다. `.pv2-field` 가 `min-width: 0` 이라 칸이 눌리지 않는다. */
+.pv2-prof-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 20px;
+  margin-top: 18px;
+}
+/* ⚠️ `.pv2-btn-ghost` 는 세로로 쌓이는 폼용이라 위 여백을 갖고 있다 — 나란히 두면 두
+   버튼의 높이가 어긋나므로 여기서만 0 으로 눌러 준다.
+   🔴 `flex: none` 이라 글자 폭이다 — 데스크탑에서 반반으로 늘리지 말 것(시안). */
 .pv2-prof-actions {
   display: flex;
   gap: 8px;
+  margin-top: 20px;
 }
 .pv2-prof-actions > button {
   margin-top: 0;
-  flex: 1;
+  flex: none;
+}
+/* 🔴 저장은 **옐로**다(시안) — 발주요청 제출(`.pv2-submit`)과 같은 어휘이고, 검정으로
+   되돌리면 이 카드에서 취소보다 지나치게 무겁게 읽힌다. 모양(9px·12px)은
+   `.pv2-btn-dark` 와 맞춰 두 버튼의 높이가 같아진다. */
+.pv2-prof-save {
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  background: var(--pv2-yellow);
+  color: var(--pv2-text);
+  font-size: 15.5px;
+  font-weight: 700;
+  padding: 12px 26px;
+  border-radius: 9px;
+}
+.pv2-prof-save:hover:not(:disabled) {
+  filter: brightness(0.97);
+}
+.pv2-prof-save:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.pv2-prof-actions .pv2-btn-ghost {
+  padding: 12px 20px;
+  font-size: 15.5px;
 }
 
 @media (max-width: 700px) {
@@ -6571,5 +6623,14 @@ tbody tr:hover {
   }
   .pv2-prof-v {
     font-size: 14.5px;
+  }
+  .pv2-prof-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  /* 🔴 두 클래스로 특성도를 올려야 위 `.pv2-prof-actions > button { flex: none }` 을
+     이긴다(원칙 58번) — 순서로 고치지 말 것. 저장이 남는 폭을 먹고 취소는 글자 폭이다. */
+  .pv2-prof-actions > .pv2-prof-save {
+    flex: 1;
   }
 }
