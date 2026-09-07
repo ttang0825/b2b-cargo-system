@@ -127,6 +127,24 @@ Direct connection을 넣으면 실행이 `Network is unreachable` 로 끝납니�
   반영돼 있는데 파일은 새 내용이 되어 둘이 어긋납니다. 값을 바꾸려면 **새 파일**을
   만드십시오. (주석만 고치는 것은 괜찮습니다 — 워크플로가 경고만 하고 넘어갑니다)
 
+## 🔴 파기(retention)는 마이그레이션이 아닙니다
+
+보유기간이 지난 개인정보를 지우는 일은 **매일 반복**되므로 이 폴더에 두면 안 됩니다.
+`migrations/` 의 파일은 `_migrations` 에 기록되어 **한 번만** 돕니다.
+
+| 무엇 | 어디 | 언제 |
+|---|---|---|
+| 파기 조건과 SQL | `scripts/purge-expired.sql` | 매일 |
+| 실행 | `.github/workflows/purge.yml` (「보유기간 만료 파기」) | 예약 + 수동 |
+| 준비(컬럼·이력 표) | `migrations/2026-09-07_retention_purge.sql` | 한 번 |
+
+🔴 **조건을 손대기 전에 `scripts/purge-expired.sql` 의 주석을 읽으십시오** —
+`quote_id is null`(견적 전환된 문의) 과 `company_id is null`(승인된 신청) 을 빼면
+**5년 보관 대상인 거래 기록이 지워집니다.**
+
+확인은 Actions 탭 → 「보유기간 만료 파기」 → `dry-run` 으로 하십시오. 대상 건수만
+세고 아무것도 지우지 않으며, 그 사실도 `retention_purge_logs` 에 남습니다.
+
 ## 운임 값을 바꿀 때
 
 16차에서 정한 것이 그대로 유효합니다.

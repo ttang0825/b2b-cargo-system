@@ -123,6 +123,9 @@ export async function POST(req: Request) {
       status,
       staff_note: staff_note || null,
       processed_by: processed_by || null,
+      // 🔴 보유기간(미승인·거절 건 6개월)의 기산점이다 — `updated_at` 은 메모만
+      //    고쳐도 밀려서 못 쓴다. 상태를 바꾸는 이 순간에만 찍는다.
+      processed_at: new Date().toISOString(),
       updated_by: staff?.id || null,
     })
     .eq("id", id)

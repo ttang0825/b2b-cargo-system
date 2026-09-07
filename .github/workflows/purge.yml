@@ -1,0 +1,70 @@
+# 보유기간 만료 파기 — 매일 자동으로 돕니다
+#
+# 🔴 `migrate.yml` 과 달리 **사람이 안 눌러도 돕니다.** 처리방침 제3조가 고지한
+#    보유기간(견적 문의 1년 · 미승인 신청 6개월)을 실제로 지키려면 자동이어야 하고,
+#    제7조가 "보유기간 종료일로부터 **5일 이내**" 파기를 약속해서 주 1회로는
+#    부족합니다(최대 7일 밀림). 그래서 매일입니다.
+#
+# 🔴 지우는 조건은 `scripts/purge-expired.sql` 안에 있고, 거기 달린 주석을 먼저
+#    읽으십시오 — `quote_id is null` / `company_id is null` 을 빼면 5년 보관 대상인
+#    거래 기록이 지워집니다.
+#
+# 손으로 돌릴 때 (Actions 탭 → "보유기간 만료 파기" → Run workflow)
+#   dry-run  대상 건수만 세고 아무것도 지우지 않음  ← 확인은 항상 이것으로
+#   apply    실제로 삭제
+#
+# ⚠️ GitHub 은 저장소가 60일간 아무 활동이 없으면 예약 실행을 자동으로 끕니다.
+#    오래 손대지 않는 시기가 오면 Actions 탭에서 다시 켜졌는지 확인하십시오.
+
+name: 보유기간 만료 파기
+
+on:
+  schedule:
+    # 매일 18:10 UTC = 한국시간 03:10. 정각을 피한 것은 그 시각에 러너가 몰려
+    # 실행이 밀리기 때문입니다.
+    - cron: "10 18 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "무엇을 할지"
+        required: true
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - apply
+
+concurrency:
+  group: db-retention-purge
+  cancel-in-progress: false
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: psql 준비
+        run: |
+          if ! command -v psql >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq postgresql-client
+          fi
+          psql --version
+
+      - name: 파기 실행
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+          # 예약 실행(schedule)에는 inputs 가 없습니다 — 그때는 실제 삭제가 목적이라
+          # apply 로 떨어집니다. 손으로 누를 때만 dry-run 이 기본입니다.
+          MODE: ${{ inputs.mode || 'apply' }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::Secret 'SUPABASE_DB_URL' 이 등록되지 않았습니다."
+            exit 1
+          fi
+          if [ "$MODE" = "apply" ]; then DRY=false; else DRY=true; fi
+          echo "mode=$MODE (dry_run=$DRY)"
+          # 🔴 --single-transaction — 상한 가드에 걸리면 아무것도 지워지지 않습니다.
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 --no-psqlrc --single-transaction \
+               -v dry_run=$DRY -f scripts/purge-expired.sql
