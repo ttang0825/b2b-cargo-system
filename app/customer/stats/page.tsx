@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import { exportMultiSheetExcel, buildExportFilename } from "@/lib/exportExcel";
-import { LEGAL_EFFECTIVE_DATE } from "@/lib/legalInfo";
 import Pv2DatePicker from "@/components/pv2/Pv2DatePicker";
 import Pv2Select from "@/components/pv2/Pv2Select";
 import Pv2DispatchCalendar from "@/components/pv2/Pv2DispatchCalendar";
@@ -21,21 +20,23 @@ import { PORTAL_DISPATCH_EXTRA_CHARGE_FIELDS } from "@/lib/portalInvoiceFields";
 import { attributeActiveExtraCharges } from "@/lib/dashboardExtraChargeAgg";
 
 /**
- * 🔴 조회 하한은 서비스 시행일이 속한 달이다 — 그 전에는 이 시스템으로 처리한
- *    운송 자체가 없어서 빈 달만 늘어난다. 날짜를 하드코딩하지 말 것
- *    (`lib/legalInfo.ts` 의 `LEGAL_EFFECTIVE_DATE` 가 정본이다).
+ * 🔴 조회 하한을 「시행일이 속한 달」로 누르던 장치를 걷어냈다 — 그것이
+ *    「최근 3·6·12개월·전체」가 넷 다 빈 화면이 되던 원인이다.
+ *
+ *    시행월(2026-09)이 이번 달과 같아지는 순간 하한 = 이번 달이 되어 **어떤 기간을
+ *    골라도 시작월이 이번 달로 눌렸고**, 끝월도 이번 달이라 넷이 전부 「이번 달 ~
+ *    이번 달」로 붕괴했다. 이번 달 실적이 없으면 화면이 통째로 빈다.
+ *
+ * 🔴 그 장치가 막던 것(구간이 거꾸로 잡히는 사고)은 없애지 않고 **자리를 옮겼다**:
+ *      끝월   = min(이번 달, 고른 끝월)        ← 미래 달을 조회하지 않는다
+ *      시작월 = 고른 기간만큼 끝월에서 뺀 달    ← 🔴 여기는 누르지 않는다
+ *      안전장치 시작월 > 끝월 이면 시작월 = 끝월
+ *    아래 `fromMonth`/`toMonth` 파생 계산이 그 셋을 담고 있다 — 지우지 말 것.
+ *
+ * 🔴 하한은 이제 **실제 데이터가 있는 가장 오래된 달**이다(`dataMinMonth`).
+ *    「시행일 전에는 빈 달만 늘어난다」는 원래 취지를 더 정확하게 달성하고,
+ *    시행일 전에 접수된 건이 있어도 잘리지 않는다. 날짜는 여전히 하드코딩하지 않는다.
  */
-const EFFECTIVE_MONTH = LEGAL_EFFECTIVE_DATE.slice(0, 7);
-
-/**
- * 🔴 하한을 「시행일이 속한 달」로 **그대로** 두면 시행일 전에는 조회 구간이
- *    거꾸로(시작 > 끝) 잡혀 화면이 통째로 빈다 — 55차 ⑩ 이 발주 폼에서 겪은 것과
- *    같은 함정이다(`max(오늘, 시행일)` 로 두었더니 시행일 전까지 발주가 아예 안 됐다).
- *    그래서 **이번 달을 넘지 않게** 한 번 더 눌러준다. 날짜는 여전히 하드코딩하지 않는다.
- */
-function floorMonth(thisMonth: string) {
-  return EFFECTIVE_MONTH <= thisMonth ? EFFECTIVE_MONTH : thisMonth;
-}
 
 function monthLabel(month: string) {
   const [y, m] = month.split("-");
@@ -113,9 +114,33 @@ export default function PortalStatsPage() {
   const [exporting, setExporting] = useState(false);
 
   const thisMonth = new Date().toISOString().slice(0, 7);
-  const MIN_MONTH = floorMonth(thisMonth);
+
+  /**
+   * 🔴 실제 데이터가 있는 가장 오래된 달. 없으면 **이번 달 하나로 떨어진다**(무한이 아니다).
+   *    「전체」의 하한이자 아래 선택기 하한의 근거다. 미래 정산월이 섞여 있어도
+   *    이번 달을 넘지 않는다.
+   */
+  const dataMinMonth = useMemo(() => {
+    let min: string | null = null;
+    invoices.forEach((i) => {
+      const m: string | null = i.billing_period;
+      if (m && (min === null || m < min)) min = m;
+    });
+    return min !== null && min < thisMonth ? min : thisMonth;
+  }, [invoices, thisMonth]);
+
+  /**
+   * 🔴 날짜 선택기·월 드롭다운의 하한 — 데이터 하한과 「최근 12개월」 하한 중 **이른 쪽**.
+   *    프리셋이 만든 시작월을 선택기가 표시하지 못하는 모순을 막는다(둘 중 하나만
+   *    쓰면 「최근 12개월」을 고른 순간 선택기 값이 하한 밖으로 나간다).
+   */
+  const MIN_MONTH = useMemo(() => {
+    const m12 = addMonths(thisMonth, -11);
+    return dataMinMonth < m12 ? dataMinMonth : m12;
+  }, [dataMinMonth, thisMonth]);
   const MIN_DATE = `${MIN_MONTH}-01`;
-  const [fromDate, setFromDate] = useState(`${addMonths(thisMonth, -5) < MIN_MONTH ? MIN_MONTH : addMonths(thisMonth, -5)}-01`);
+
+  const [fromDate, setFromDate] = useState(`${addMonths(thisMonth, -5)}-01`);
   const [toDate, setToDate] = useState(`${thisMonth}-28`);
   const [preset, setPreset] = useState<PresetKey | null>("m6");
 
@@ -134,13 +159,17 @@ export default function PortalStatsPage() {
       return;
     }
     if (key === "all") {
-      setFromDate(MIN_DATE);
+      // 🔴 「전체」의 하한은 **실제 데이터의 가장 오래된 달**이다. 조회에 쓰는 값은
+      //    아래 `fromMonth` 가 preset 을 보고 다시 정하므로, 데이터가 늦게 도착해도
+      //    자동으로 맞는다 — 여기서는 선택기에 보이는 값만 맞춘다.
+      setFromDate(`${dataMinMonth}-01`);
       setToDate(end);
       return;
     }
+    // 🔴 시작월을 하한으로 누르지 말 것 — 그것이 「최근 3·6·12개월·전체」가 넷 다
+    //    「이번 달 ~ 이번 달」로 붕괴해 빈 화면이 되던 원인이다.
     const back = key === "m3" ? 2 : key === "m6" ? 5 : 11;
-    const start = addMonths(thisMonth, -back);
-    setFromDate(`${start < MIN_MONTH ? MIN_MONTH : start}-01`);
+    setFromDate(`${addMonths(thisMonth, -back)}-01`);
     setToDate(end);
   }
 
@@ -175,8 +204,18 @@ export default function PortalStatsPage() {
     load();
   }, []);
 
-  const fromMonth = fromDate.slice(0, 7);
-  const toMonth = toDate.slice(0, 7);
+  /**
+   * 🔴 조회 구간 — 위 파일 머리 주석의 셋을 그대로 담는다. 지우지 말 것.
+   *      ① 끝월은 이번 달을 넘지 않는다(미래 달 조회 0)
+   *      ② 시작월은 누르지 않는다(프리셋이 정한 그대로)
+   *      ③ 시작월 > 끝월 이면 끝월로 맞춘다 — 구간이 거꾸로 잡혀 화면이 통째로
+   *         비던 사고를 막는 안전장치다(60차 ⑨(a) 가 막던 것이 이것이다)
+   *    「전체」만 데이터 하한을 따라가므로, 로드가 끝나면 자동으로 다시 맞는다.
+   */
+  const rawToMonth = toDate.slice(0, 7);
+  const toMonth = rawToMonth > thisMonth ? thisMonth : rawToMonth;
+  const rawFromMonth = preset === "all" ? dataMinMonth : fromDate.slice(0, 7);
+  const fromMonth = rawFromMonth > toMonth ? toMonth : rawFromMonth;
 
   const stats = useMemo(() => {
     const paid = invoices.filter(
@@ -187,7 +226,9 @@ export default function PortalStatsPage() {
         i.billing_period <= toMonth
     );
 
-    const months = monthsBetween(fromMonth < MIN_MONTH ? MIN_MONTH : fromMonth, toMonth);
+    // 🔴 여기서 다시 누르지 말 것 — 위 파생 계산이 이미 역전을 막았다. 눌러두면
+    //    「지난달」처럼 하한보다 이른 구간이 빈 배열이 되어 그래프가 통째로 사라진다.
+    const months = monthsBetween(fromMonth, toMonth);
     const byMonth: Record<string, { total: number; count: number }> = {};
     months.forEach((m) => {
       byMonth[m] = { total: 0, count: 0 };
@@ -397,7 +438,7 @@ export default function PortalStatsPage() {
       cur = addMonths(cur, 1);
     }
     return out.reverse();
-  }, [thisMonth]);
+  }, [MIN_MONTH, thisMonth]);
 
   const gridRatios = [1, 0.75, 0.5, 0.25];
 
@@ -407,7 +448,7 @@ export default function PortalStatsPage() {
         <div>
           <h1 className="pv2-page-title">월별 통계</h1>
           <p className="pv2-page-desc">
-            입금이 확인된 정산 건만 실적으로 집계합니다. {monthLabel(EFFECTIVE_MONTH)} 이후의 이력을 볼 수 있습니다.
+            입금이 확인된 정산 건만 실적으로 집계합니다. {monthLabel(MIN_MONTH)} 이후의 이력을 볼 수 있습니다.
           </p>
         </div>
         {/* 🔴 「PDF 전체 다운로드」를 만들지 말 것(사용자 확정 12번) — 엑셀 하나뿐이다. */}
