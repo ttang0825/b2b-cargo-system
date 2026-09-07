@@ -11,10 +11,12 @@ export default function FaqList() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {faqs.map((f) => (
-        /* name 속성으로 한 번에 하나만 열립니다 (배타적 아코디언). */
-        <details key={f.q} name="wecarry-faq" className="landing-faq-item"
-          style={{ background: "#ECEBE6", borderRadius: 16, overflow: "hidden", transition: "background 320ms ease" }}>
+      {faqs.map((f, i) => (
+        /* name 속성으로 한 번에 하나만 열립니다 (배타적 아코디언).
+           🔴 `--i` 는 5를 넘기지 않는다 — 보험 문항이 켜지면 6문항이 되므로
+              `Math.min` 으로 자른다. 넘기면 마지막 것이 나타나기까지 너무 오래 걸린다. */
+        <details key={f.q} name="wecarry-faq" className="landing-faq-item landing-reveal"
+          style={{ ["--i" as string]: Math.min(i, 4), background: "#ECEBE6", borderRadius: 16, overflow: "hidden", transition: "background 320ms ease" } as CSSProperties}>
           <summary style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 20, padding: "22px 26px", fontSize: 19.4, fontWeight: 500, letterSpacing: "-0.02em" }}>
             <span>{f.q}</span>
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flex: "0 0 auto", display: "block" }}>

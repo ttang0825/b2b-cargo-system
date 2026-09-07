@@ -35,25 +35,29 @@
       이름이었다**(실측). 랜딩 루트 클래스는 처음부터 `.landing-page` 다.
    🔴 **`--mo-out` 을 `ease`·`ease-in-out` 으로 바꾸지 말 것** — 빠르게 출발해
       부드럽게 멈추는 이 곡선이 「좋은 느낌」의 대부분이다. 바꾸면 밋밋해진다.
-   🔴 **`--mo-rise` 를 20px 이상으로 올리지 말 것** — 그 위부터 「움직인다」가
-      인식되기 시작하고, 30px 를 넘으면 스크롤이 무거워 보인다.
+   ⚠️ **`--mo-rise` 26px 은 지시서의 상한(20px)을 넘긴 값이다 — 의도한 것이다.**
+      지시서는 「눈치채지 못하지만 없으면 허전한 정도」를 목표로 14px 을 적었는데,
+      사용자가 Preview 를 보고 **「모션 움직임이 너무 티가 나지 않는다」**(2026-09-07)로
+      기준을 올려잡았다. 🔴 **그 상한을 근거로 14px 로 되돌리지 말 것.**
+      🔴 **그래도 30px 은 넘기지 말 것** — 그 위부터는 스크롤이 무거워 보인다.
    ⚠️ 기존 규칙(`.landing-card-lift` · `.landing-tms-features`)이 쓰는
       `cubic-bezier(0.22,0.61,0.36,1)` 은 그대로 뒀다 — 이번 차수의 범위가 아니다. */
 .landing-page {
   --mo-fast: 160ms;     /* 버튼·칩 상태 */
-  --mo-base: 420ms;     /* 스크롤 진입 · 데스크탑 */
-  --mo-mob: 320ms;      /* 스크롤 진입 · 모바일 */
+  --mo-base: 620ms;     /* 스크롤 진입 · 데스크탑 */
+  --mo-mob: 460ms;      /* 스크롤 진입 · 모바일 */
   --mo-open: 280ms;     /* 아코디언 펼침 */
   --mo-modal: 180ms;    /* 모달 */
 
   --mo-out: cubic-bezier(0.22, 1, 0.36, 1);      /* 진입 */
   --mo-inout: cubic-bezier(0.65, 0, 0.35, 1);    /* 상태 전환 */
 
-  --mo-rise: 14px;      /* 데스크탑 상승 거리 */
-  --mo-rise-mob: 8px;   /* 모바일 */
+  --mo-rise: 26px;      /* 데스크탑 상승 거리 */
+  --mo-rise-mob: 15px;  /* 모바일 */
+  --mo-scale: 0.975;    /* 진입 시작 배율 */
 
-  --mo-step: 60ms;      /* 형제 간 지연 · 데스크탑 */
-  --mo-step-mob: 40ms;  /* 모바일 */
+  --mo-step: 95ms;      /* 형제 간 지연 · 데스크탑 */
+  --mo-step-mob: 65ms;  /* 모바일 */
 }
 
 /* ── 스크롤 진입 리빌 ─────────────────────────────────────────────────
@@ -65,7 +69,10 @@
    ⚠️ `.is-in` 은 한 번만 붙고 `unobserve` 된다 — 스크롤을 되돌려도 재생되지 않는다. */
 .landing-page .landing-reveal {
   opacity: 0;
-  transform: translateY(var(--mo-rise));
+  /* 🔴 `scale` 은 61차 훅이 원래 갖고 있던 성분이다(0.982) — 상승만으로는 눈에
+     덜 띈다는 지적(2026-09-07)에 되살렸다. 🔴 0.95 아래로 내리지 말 것 —
+     넓은 블록에서 가장자리가 눈에 띄게 찌그러진다. */
+  transform: translateY(var(--mo-rise)) scale(var(--mo-scale));
   transition: opacity var(--mo-base) var(--mo-out),
               transform var(--mo-base) var(--mo-out);
   /* 🔴 `--i` 는 5를 넘기지 말 것 — 마지막 것이 나타나기까지 너무 오래 걸린다. */
