@@ -28,25 +28,67 @@ export function sanitizeFilename(s: string) {
   return s.replace(/[\\/:*?"<>|]/g, "").trim();
 }
 
-// 한글(전각 문자)은 영문보다 넓게 보이므로 2배로 계산해서 더 정확한 너비를 구함
+/**
+ * 엑셀의 `wch` 는 대략 **반각 문자 수**라, 한글·한자·전각·이모지를 한 글자로 세면
+ * 칸이 좁아 글자가 잘린다. East Asian Width 의 Wide/Fullwidth 구간을 2로 센다.
+ * 🔴 **한 칸으로 되돌리지 말 것.**
+ */
+function isWideChar(cp: number) {
+  return (
+    (cp >= 0x1100 && cp <= 0x115f) || // 한글 자모
+    (cp >= 0x2e80 && cp <= 0xa4cf) || // CJK 부수·한자·가나·한글 호환자모
+    (cp >= 0xac00 && cp <= 0xd7a3) || // 한글 음절
+    (cp >= 0xf900 && cp <= 0xfaff) || // CJK 호환 한자
+    (cp >= 0xfe30 && cp <= 0xfe6f) || // CJK 세로쓰기 형태
+    (cp >= 0xff00 && cp <= 0xff60) || // 전각 영숫자·기호
+    (cp >= 0xffe0 && cp <= 0xffe6) ||
+    (cp >= 0x1f300 && cp <= 0x1faff) || // 이모지
+    (cp >= 0x20000 && cp <= 0x3fffd) // CJK 확장
+  );
+}
+
 function displayWidth(s: string) {
   let width = 0;
   for (const ch of s) {
-    width += /[\u3131-\uD79D\uAC00-\uD7A3]/.test(ch) ? 2 : 1;
+    width += isWideChar(ch.codePointAt(0) ?? 0) ? 2 : 1;
   }
   return width;
 }
 
+/** 머리글이 그 너비 안에서 차지하는 줄 수(줄바꿈된 뒤). 상한 3줄. */
+const HEADER_MAX_LINES = 3;
+/** 엑셀 기본 행 높이(pt). 두 줄이면 이 값의 두 배가 필요하다. */
+const HEADER_LINE_HEIGHT = 15;
+
+/**
+ * 열 너비 — 🔴 **머리글이 아니라 데이터 기준**이다.
+ *
+ * 머리글을 계산에 넣으면 「청구금액 합계(부가세 별도)」처럼 긴 제목 하나 때문에
+ * 그 열이 쓸데없이 넓어지고, 화면을 옆으로 한참 밀어야 나머지가 보인다.
+ * 머리글은 대신 **줄바꿈으로 접는다**(`styleHeaderAndFreeze`).
+ *
+ * 🔴 상한 40 — 「특이사항」처럼 긴 자유 입력이 있으면 칸 하나가 화면을 통째로 먹는다.
+ * 🔴 하한 8 — 그보다 좁으면 머리글이 세 줄로도 안 접혀 오히려 나빠진다.
+ */
+const COL_WIDTH_MIN = 8;
+const COL_WIDTH_MAX = 40;
+
 function autoFitColumns(worksheet: XLSX.WorkSheet, rows: Record<string, any>[]) {
   if (rows.length === 0) return;
   const headers = Object.keys(rows[0]);
-  worksheet["!cols"] = headers.map((key) => {
-    const maxLen = Math.max(
-      displayWidth(key),
-      ...rows.map((r) => displayWidth(String(r[key] ?? "")))
-    );
-    return { wch: Math.min(Math.max(maxLen + 2, 8), 45) };
+  const widths = headers.map((key) => {
+    // 🔴 `displayWidth(key)` 를 여기 넣지 말 것 — 그게 칸이 넓어지던 원인이다.
+    const maxLen = Math.max(0, ...rows.map((r) => displayWidth(String(r[key] ?? ""))));
+    return Math.min(Math.max(maxLen + 2, COL_WIDTH_MIN), COL_WIDTH_MAX);
   });
+  worksheet["!cols"] = widths.map((wch) => ({ wch }));
+
+  // 1행 높이 — 가장 많이 접히는 머리글에 맞춘다(접힌 글자가 잘리면 소용이 없다)
+  const lines = Math.max(
+    1,
+    ...headers.map((h, i) => Math.min(Math.ceil(displayWidth(h) / widths[i]), HEADER_MAX_LINES))
+  );
+  worksheet["!rows"] = [{ hpt: lines * HEADER_LINE_HEIGHT + 4 }];
 }
 
 // 1행(헤더)에 은은한 배경색 + 굵은 글씨 적용, 1행 틀고정
@@ -59,7 +101,9 @@ function styleHeaderAndFreeze(worksheet: XLSX.WorkSheet, rows: Record<string, an
     worksheet[cellRef].s = {
       font: { bold: true, color: { rgb: "1A1A1A" } },
       fill: { fgColor: { rgb: "FFF3C4" } }, // 브랜드 톤에 맞춘 은은한 옐로우
-      alignment: { vertical: "center" },
+      // 🔴 머리글만 접는다 — 데이터 셀까지 `wrapText` 를 걸면 행 높이가 제각각이
+      //    되어 오히려 읽기 어려워진다.
+      alignment: { wrapText: true, vertical: "center", horizontal: "center" },
     };
   });
   // 1행 고정 (스크롤해도 헤더가 계속 보임)
