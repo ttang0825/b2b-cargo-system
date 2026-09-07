@@ -28,25 +28,101 @@ export function sanitizeFilename(s: string) {
   return s.replace(/[\\/:*?"<>|]/g, "").trim();
 }
 
-// 한글(전각 문자)은 영문보다 넓게 보이므로 2배로 계산해서 더 정확한 너비를 구함
+/**
+ * 엑셀의 `wch` 는 대략 **반각 문자 수**라, 한글·한자·전각·이모지를 한 글자로 세면
+ * 칸이 좁아 글자가 잘린다. East Asian Width 의 Wide/Fullwidth 구간을 2로 센다.
+ * 🔴 **한 칸으로 되돌리지 말 것.**
+ */
+function isWideChar(cp: number) {
+  return (
+    (cp >= 0x1100 && cp <= 0x115f) || // 한글 자모
+    (cp >= 0x2e80 && cp <= 0xa4cf) || // CJK 부수·한자·가나·한글 호환자모
+    (cp >= 0xac00 && cp <= 0xd7a3) || // 한글 음절
+    (cp >= 0xf900 && cp <= 0xfaff) || // CJK 호환 한자
+    (cp >= 0xfe30 && cp <= 0xfe6f) || // CJK 세로쓰기 형태
+    (cp >= 0xff00 && cp <= 0xff60) || // 전각 영숫자·기호
+    (cp >= 0xffe0 && cp <= 0xffe6) ||
+    (cp >= 0x1f300 && cp <= 0x1faff) || // 이모지
+    (cp >= 0x20000 && cp <= 0x3fffd) // CJK 확장
+  );
+}
+
 function displayWidth(s: string) {
   let width = 0;
   for (const ch of s) {
-    width += /[\u3131-\uD79D\uAC00-\uD7A3]/.test(ch) ? 2 : 1;
+    width += isWideChar(ch.codePointAt(0) ?? 0) ? 2 : 1;
   }
   return width;
 }
 
+/** 머리글이 그 너비 안에서 차지하는 줄 수(줄바꿈된 뒤). 상한 3줄. */
+const HEADER_MAX_LINES = 3;
+/** 한 줄 높이(pt). 글자를 10pt 로 낮춰도 여유를 두려고 넉넉히 잡는다. */
+const HEADER_LINE_HEIGHT = 15;
+/**
+ * 🔴 머리글이 이 줄 수 안에 들어갈 만큼은 **하한으로 보장한다**.
+ *
+ * 머리글을 너비 계산에서 완전히 빼 봤더니, 데이터가 짧은 금액 열이 하한 8칸까지
+ * 좁아져 **접힌 머리글이 그 안에서 다시 잘려 보였다**(실사용 지적 2026-09-07).
+ * 엑셀의 줄바꿈은 공백을 우선 끊어서 계산보다 줄이 더 늘기도 한다.
+ * 그래서 「머리글이 너비를 끈다」와 「머리글이 안 보인다」 사이를 이 값으로 가른다.
+ * 🔴 2를 1로 내리면 머리글이 다시 너비를 끌어 칸이 넓어진다.
+ */
+const HEADER_WRAP_LINES = 2;
+/**
+ * 🔴 데이터 기준 너비에서 **이만큼만 더 주면 머리글이 한 줄에 들어가는** 열은
+ *    접지 않고 한 줄로 맞춘다(실사용 지적 2026-09-07 — 「세금계산서발행일」).
+ *
+ * 몇 칸 차이로 두 줄이 되는 열은 접는 이득보다 읽기 나쁜 쪽이 크다. 반대로
+ * 「청구금액 합계(부가세 별도)」처럼 차이가 큰 열은 그대로 접는다 — 한 줄로 펴면
+ * 칸 하나가 26칸이 되어 이 작업이 없애려던 문제로 돌아간다.
+ * 🔴 이 값을 크게 올리지 말 것. 올릴수록 머리글이 다시 너비를 끈다.
+ */
+const HEADER_ONE_LINE_SLACK = 4;
+/**
+ * 시트 전체 글자 크기(pt). 엑셀 기본 11pt 보다 낮춰 **같은 칸에 더 많은 글자**가
+ * 들어가게 한다(실사용 지적 2026-09-07). 열 너비 단위(`wch`)는 통합문서 기본 폰트
+ * 기준이라 이 값을 낮춰도 바뀌지 않으므로, 위 폭 계산이 그만큼 보수적이 되어 안전하다.
+ */
+const BODY_FONT_SIZE = 10;
+
+/**
+ * 열 너비 — 🔴 **머리글이 아니라 데이터 기준**이다.
+ *
+ * 머리글을 계산에 넣으면 「청구금액 합계(부가세 별도)」처럼 긴 제목 하나 때문에
+ * 그 열이 쓸데없이 넓어지고, 화면을 옆으로 한참 밀어야 나머지가 보인다.
+ * 머리글은 대신 **줄바꿈으로 접는다**(`styleHeaderAndFreeze`).
+ *
+ * 🔴 상한 40 — 「특이사항」처럼 긴 자유 입력이 있으면 칸 하나가 화면을 통째로 먹는다.
+ * 🔴 하한 8 — 그보다 좁으면 머리글이 세 줄로도 안 접혀 오히려 나빠진다.
+ */
+const COL_WIDTH_MIN = 8;
+const COL_WIDTH_MAX = 40;
+
 function autoFitColumns(worksheet: XLSX.WorkSheet, rows: Record<string, any>[]) {
   if (rows.length === 0) return;
   const headers = Object.keys(rows[0]);
-  worksheet["!cols"] = headers.map((key) => {
-    const maxLen = Math.max(
-      displayWidth(key),
-      ...rows.map((r) => displayWidth(String(r[key] ?? "")))
-    );
-    return { wch: Math.min(Math.max(maxLen + 2, 8), 45) };
+  const widths = headers.map((key) => {
+    // 🔴 너비를 **끄는** 것은 데이터뿐이다 — `displayWidth(key)` 를 그대로 넣지 말 것.
+    //    머리글은 하한으로만 관여한다(HEADER_WRAP_LINES 주석 참고).
+    const maxLen = Math.max(0, ...rows.map((r) => displayWidth(String(r[key] ?? ""))));
+    const headerWidth = displayWidth(key);
+    const dataWidth = Math.max(maxLen + 2, COL_WIDTH_MIN);
+    const headerMin =
+      headerWidth - dataWidth <= HEADER_ONE_LINE_SLACK
+        ? headerWidth // 조금만 넓히면 한 줄에 들어간다 — 접지 않는다
+        : Math.ceil(headerWidth / HEADER_WRAP_LINES);
+    return Math.min(Math.max(dataWidth, headerMin), COL_WIDTH_MAX);
   });
+  worksheet["!cols"] = widths.map((wch) => ({ wch }));
+
+  // 1행 높이 — 가장 많이 접히는 머리글에 맞춘다(접힌 글자가 잘리면 소용이 없다).
+  // 🔴 접히는 열이 하나라도 있으면 한 줄 더 준다 — 엑셀이 공백에서 먼저 끊어
+  //    계산보다 줄이 늘어나는 경우가 있고, 그때 마지막 줄이 잘린다.
+  const wrapped = headers.some((h, i) => displayWidth(h) > widths[i]);
+  const rawLines = Math.max(1, ...headers.map((h, i) => Math.ceil(displayWidth(h) / widths[i])));
+  const lines = Math.min(rawLines + (wrapped ? 1 : 0), HEADER_MAX_LINES);
+  worksheet["!rows"] = [{ hpt: lines * HEADER_LINE_HEIGHT + 4 }];
 }
 
 // 1행(헤더)에 은은한 배경색 + 굵은 글씨 적용, 1행 틀고정
@@ -57,9 +133,11 @@ function styleHeaderAndFreeze(worksheet: XLSX.WorkSheet, rows: Record<string, an
     const cellRef = XLSX.utils.encode_cell({ r: 0, c: col });
     if (!worksheet[cellRef]) return;
     worksheet[cellRef].s = {
-      font: { bold: true, color: { rgb: "1A1A1A" } },
+      font: { bold: true, sz: BODY_FONT_SIZE, color: { rgb: "1A1A1A" } },
       fill: { fgColor: { rgb: "FFF3C4" } }, // 브랜드 톤에 맞춘 은은한 옐로우
-      alignment: { vertical: "center" },
+      // 🔴 머리글만 접는다 — 데이터 셀까지 `wrapText` 를 걸면 행 높이가 제각각이
+      //    되어 오히려 읽기 어려워진다.
+      alignment: { wrapText: true, vertical: "center", horizontal: "center" },
     };
   });
   // 1행 고정 (스크롤해도 헤더가 계속 보임)
@@ -72,6 +150,22 @@ function styleHeaderAndFreeze(worksheet: XLSX.WorkSheet, rows: Record<string, an
   };
 }
 
+/**
+ * 데이터 셀 글자 크기 — 머리글은 `styleHeaderAndFreeze` 가 따로 준다.
+ * 🔴 값(`v`)·타입(`t`)·서식(`z`)은 건드리지 않는다 — 금액이 숫자로 남아야 한다.
+ */
+function applyBodyFont(worksheet: XLSX.WorkSheet, rows: Record<string, any>[]) {
+  if (rows.length === 0) return;
+  const headers = Object.keys(rows[0]);
+  for (let r = 1; r <= rows.length; r += 1) {
+    headers.forEach((_, c) => {
+      const cell = worksheet[XLSX.utils.encode_cell({ r, c })];
+      if (!cell) return;
+      cell.s = { ...(cell.s || {}), font: { ...((cell.s || {}).font || {}), sz: BODY_FONT_SIZE } };
+    });
+  }
+}
+
 // 시트 하나짜리 파일
 export function exportRowsToExcel(
   filename: string,
@@ -81,6 +175,7 @@ export function exportRowsToExcel(
   const worksheet = XLSX.utils.json_to_sheet(rows);
   autoFitColumns(worksheet, rows);
   styleHeaderAndFreeze(worksheet, rows);
+  applyBodyFont(worksheet, rows);
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
   XLSX.writeFile(workbook, filename);
@@ -182,6 +277,7 @@ export function exportMultiSheetExcel(
     const worksheet = XLSX.utils.json_to_sheet(rows);
     autoFitColumns(worksheet, rows);
     styleHeaderAndFreeze(worksheet, rows);
+    applyBodyFont(worksheet, rows);
     XLSX.utils.book_append_sheet(workbook, worksheet, name);
   });
   XLSX.writeFile(workbook, filename);
