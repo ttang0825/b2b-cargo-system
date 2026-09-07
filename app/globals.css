@@ -6463,3 +6463,174 @@ tbody tr:hover {
     max-height: 260px;
   }
 }
+
+/* ── 담당자 정보 ─────────────────────────────────────────
+   🔴 시안은 카드가 **하나**다 — 이름·상호·「수정」이 카드 머리에 모여 있고 나머지
+      세 항목이 그 아래 구분선으로 나뉜 행이다. 이름을 다시 행으로 내리지 말 것.
+   🔴 값은 **오른쪽 정렬**이라 라벨(왼쪽)과 시선이 갈린다 — `.pv2-qkv` 계열(고정폭
+      라벨 + 왼쪽 정렬)을 재사용하지 않은 이유다. 이메일처럼 긴 값이 라벨 폭에
+      눌리지 않는다. */
+.pv2-prof-card {
+  background: var(--pv2-surface);
+  border-radius: var(--pv2-r-card);
+  padding: 24px 28px;
+}
+.pv2-prof-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--pv2-border-soft);
+}
+/* 🔴 원형은 옐로 + 검정 글자다(사이드바 선택 표시·진행 번호와 같은 어휘) — 다른 색을
+   새로 만들지 말 것. `aria-hidden` 인 이유는 바로 옆에 이름 전체가 있어서다. */
+.pv2-prof-avatar {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--pv2-yellow);
+  color: var(--pv2-text);
+  font-size: 21px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pv2-prof-ident {
+  min-width: 0;
+}
+.pv2-prof-name {
+  font-size: 19px;
+  font-weight: 700;
+  word-break: keep-all;
+}
+.pv2-prof-company {
+  margin-top: 2px;
+  font-size: 13.5px;
+  color: var(--pv2-text-3);
+  word-break: keep-all;
+}
+.pv2-prof-row {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 15px 0;
+  border-bottom: 1px solid var(--pv2-border-soft);
+}
+.pv2-prof-row:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+.pv2-prof-k {
+  flex: none;
+  font-size: 14px;
+  color: var(--pv2-text-3);
+}
+/* 🔴 `overflow-wrap: anywhere` 를 빼지 말 것 — 이메일은 공백이 없어서 좁은 화면에서
+   칸을 그대로 뚫고 나간다(가로 넘침의 흔한 원인). */
+.pv2-prof-v {
+  margin-left: auto;
+  text-align: right;
+  font-size: 15px;
+  font-weight: 600;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.pv2-prof-form {
+  display: flex;
+  flex-direction: column;
+}
+/* 🔴 수정 카드의 머리는 아바타가 아니라 **제목 한 줄**이다(시안) — 제목 옆에 흐린 안내가
+   같은 줄에 붙고 구분선이 없다. 보기 카드(`.pv2-prof-head`)와 다른 규칙이니 합치지 말 것. */
+.pv2-prof-edithead {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.pv2-prof-edittitle {
+  margin: 0;
+  font-size: 17.5px;
+  font-weight: 700;
+  word-break: keep-all;
+}
+.pv2-prof-edithint {
+  font-size: 13.5px;
+  color: var(--pv2-text-3);
+  word-break: keep-all;
+}
+/* 🔴 입력은 데스크탑 **2열**이다(시안) — 이름·직책 / 휴대폰·이메일. 1열로 되돌리면
+   카드가 두 배로 길어진다. `.pv2-field` 가 `min-width: 0` 이라 칸이 눌리지 않는다. */
+.pv2-prof-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 20px;
+  margin-top: 18px;
+}
+/* ⚠️ `.pv2-btn-ghost` 는 세로로 쌓이는 폼용이라 위 여백을 갖고 있다 — 나란히 두면 두
+   버튼의 높이가 어긋나므로 여기서만 0 으로 눌러 준다.
+   🔴 `flex: none` 이라 글자 폭이다 — 데스크탑에서 반반으로 늘리지 말 것(시안). */
+.pv2-prof-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 20px;
+}
+.pv2-prof-actions > button {
+  margin-top: 0;
+  flex: none;
+}
+/* 🔴 저장은 **옐로**다(시안) — 발주요청 제출(`.pv2-submit`)과 같은 어휘이고, 검정으로
+   되돌리면 이 카드에서 취소보다 지나치게 무겁게 읽힌다. 모양(9px·12px)은
+   `.pv2-btn-dark` 와 맞춰 두 버튼의 높이가 같아진다. */
+.pv2-prof-save {
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  background: var(--pv2-yellow);
+  color: var(--pv2-text);
+  font-size: 15.5px;
+  font-weight: 700;
+  padding: 12px 26px;
+  border-radius: 9px;
+}
+.pv2-prof-save:hover:not(:disabled) {
+  filter: brightness(0.97);
+}
+.pv2-prof-save:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.pv2-prof-actions .pv2-btn-ghost {
+  padding: 12px 20px;
+  font-size: 15.5px;
+}
+
+@media (max-width: 700px) {
+  .pv2-prof-card {
+    padding: 20px 18px;
+  }
+  .pv2-prof-avatar {
+    width: 46px;
+    height: 46px;
+    font-size: 19px;
+  }
+  .pv2-prof-name {
+    font-size: 17.5px;
+  }
+  .pv2-prof-k {
+    font-size: 13.5px;
+  }
+  .pv2-prof-v {
+    font-size: 14.5px;
+  }
+  .pv2-prof-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  /* 🔴 두 클래스로 특성도를 올려야 위 `.pv2-prof-actions > button { flex: none }` 을
+     이긴다(원칙 58번) — 순서로 고치지 말 것. 저장이 남는 폭을 먹고 취소는 글자 폭이다. */
+  .pv2-prof-actions > .pv2-prof-save {
+    flex: 1;
+  }
+}
