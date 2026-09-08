@@ -133,9 +133,12 @@ export default function LandingHeader() {
                 검정 테두리)으로 전용 클래스를 뒀다.
                 🔴 모바일에는 이 버튼을 노출하지 않는다 — 360px 헤더 여유가 15px뿐이라
                 자리가 없다. 모바일에서는 위 드롭다운 첫 항목이 같은 역할을 한다. */}
-            <Link href={withReturn("/customer/login")} className="landing-nav-login">
+            {/* 🔴 `<Link>` 가 아니라 `<a>` 다 — `components/landing/LandingHeader.tsx`
+                와 같은 이유다(설치형 앱 구역 밖에서 클라이언트 전환으로 들어가면
+                서비스워커가 그 문서를 못 맡아 설치가 조용히 망가진다). 되돌리지 말 것. */}
+            <a href={withReturn("/customer/login")} className="landing-nav-login">
               운송관리 로그인
-            </Link>
+            </a>
           </div>
 
           {/* 모바일: 햄버거 버튼 + 드롭다운 (760px 초과에서는 CSS로 숨김) */}
@@ -152,6 +155,19 @@ export default function LandingHeader() {
             {menuOpen && (
               <div className="landing-nav-dropdown">
                 {MOBILE_LINKS.map((link) => (
+                  // 🔴 운송관리 로그인만 `<a>` 로 문서를 새로 받는다 — 설치형 앱
+                  //    구역 밖에서 클라이언트 전환으로 들어가면 서비스워커가 그 문서를
+                  //    못 맡아 설치가 조용히 망가진다(위 데스크탑 버튼과 같은 이유).
+                  link.href === "/customer/login" ? (
+                    <a
+                      key={link.href}
+                      href={withReturn(link.href)}
+                      className="landing-nav-dropdown-item"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      {link.label}
+                    </a>
+                  ) : (
                   <Link
                     key={link.href}
                     href={withReturn(link.href)}
@@ -161,6 +177,7 @@ export default function LandingHeader() {
                   >
                     {link.label}
                   </Link>
+                  )
                 ))}
               </div>
             )}

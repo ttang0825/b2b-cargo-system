@@ -44,6 +44,30 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   letter-spacing: -0.003em;
+  /* 🔴 **안드로이드 크롬이 모든 탭에 그리는 파란 사각형을 끈다**(2026-09-08 신고).
+     그 색은 브라우저 기본값(연한 파랑)이라 우리 색과 무관하게 뜨고, 모서리가
+     동그란 버튼에도 **각진 네모로** 입혀서 누를 때마다 모양이 깨진다.
+     ⚠️ 상속되는 속성이라 **여기 한 줄이면 전 화면에 닿는다** — 버튼마다 붙이지 말 것.
+     🔴 **대신 아래 `:active` 를 같이 두었다 — 둘을 한 벌로 볼 것.** 하이라이트만
+     지우면 눌렀는지 알 길이 없어 버튼이 죽은 것처럼 느껴진다. */
+  -webkit-tap-highlight-color: transparent;
+}
+/* 탭 피드백 — 파란 사각형 대신 쓰는 **자연스러운 눌림 반응**(2026-09-08).
+   🔴 **`@media (hover: none)` 안에만 둔다** — 마우스가 있는 화면은 hover 가 이미
+      반응을 주고 있어서, 거기까지 걸면 누를 때 두 반응이 겹친다.
+   ⚠️ 랜딩은 `app/landing.css` 에 자기 `:active`(scale 0.985)가 따로 있다 — 같이
+      걸려도 무해하다(크기와 투명도라 서로 다른 속성이다). */
+@media (hover: none) {
+  a:active,
+  button:active,
+  [role="button"]:active,
+  summary:active {
+    opacity: 0.6;
+  }
+  a[aria-disabled="true"]:active,
+  button:disabled:active {
+    opacity: 1;
+  }
 }
 a {
   color: inherit;
