@@ -12,7 +12,10 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       // 이메일무단수집거부 경로는 5차에서 `/email-policy`로 확정함
-      allow: ["/", "/about", "/vehicles", "/quote", "/apply", "/terms", "/privacy", "/email-policy"],
+      // ⚠️ `/about`·`/vehicles` 는 2026-09-08 에 화면째 삭제해서 여기서도 뺐다
+      //    (사용자 확정 — "나중에 필요하면 새로 다시 만들면 된다").
+      //    되살릴 때는 이 목록에 다시 넣을 것.
+      allow: ["/", "/quote", "/apply", "/terms", "/privacy", "/email-policy"],
       disallow: ["/admin", "/customer"],
     },
     sitemap: `${SITE_URL}/sitemap.xml`,

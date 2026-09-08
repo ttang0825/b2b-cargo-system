@@ -1,4 +1,3 @@
-import Link from "next/link";
 import ObfuscatedEmail from "@/components/ObfuscatedEmail";
 import LegalLinks from "@/components/LegalLinks";
 import { COMPANY_SUPPORT_PHONE, COMPANY_SUPPORT_HOURS } from "@/lib/contactInfo";
@@ -23,19 +22,16 @@ import { COMPANY_BUSINESS_INFO, COMPANY_LEGAL_NAME } from "@/lib/companyInfo";
 // **브랜드 옐로(#8a6d00 계열)는 고객센터 번호에만 사용** — 사이트 전반 적용은 아직
 // 미결정이라 다른 요소로 번지지 않게 할 것.
 
-// 일반 페이지 링크. `/about`·`/vehicles`는 4차에서 신설된 페이지라 4-1 시안(그 전에
-// 작성됨)에는 없었으나 지시서 지침대로 함께 노출한다.
+// 🔴 **푸터에 일반 페이지 링크가 없다 — 이 자리에 배열을 다시 만들지 말 것.**
+// 원래 「회사소개」(`/about`)·「차량·요금 안내」(`/vehicles`) 두 개가 있었는데,
+// **2026-09-08 에 그 두 화면을 통째로 삭제**해서 가리킬 곳이 없어졌다(사용자 확정 —
+// "나중에 필요하면 새로 다시 만들면 된다"). 화면을 다시 만들면 그때 배열도 다시 만들 것.
+// 🔴 「문의·신청 현황」(`/status`)도 넣지 말 것 — 사용자 지시(2026-09-01)로 공개 화면
+// 전체에서 없앴고 31차 리뷰에 라우트째 삭제됐다.
 //
-// ⚠️ 법적 문서 3종(이용약관·개인정보처리방침·이메일무단수집거부)은 여기가 아니라
-// `components/LegalLinks.tsx`가 담당한다 — 그쪽은 클릭 시 모달로 열어야 해서
-// 클라이언트 컴포넌트여야 하기 때문(이 푸터는 서버 컴포넌트로 두는 편이 가볍다).
-const FOOTER_LINKS: { href: string; label: string }[] = [
-  { href: "/about", label: "회사소개" },
-  { href: "/vehicles", label: "차량·요금 안내" },
-  // 🔴 「문의·신청 현황」(`/status`)을 여기에 다시 넣지 말 것 — 사용자 지시(2026-09-01).
-  // 30차 리뷰에 랜딩 CTA 하단에서 뺀 데 이어 **공개 화면 전체에서 없애기로 확정**됐다.
-  // 라우트 자체는 살아 있지만(직접 주소로만 닿는다) 어느 화면도 링크하지 않는다.
-];
+// ⚠️ 법적 문서 3종(이용약관·개인정보처리방침·이메일무단수집거부)은 아래 `LegalLinks` 가
+// 담당한다 — 그쪽은 클릭 시 모달로 열어야 해서 클라이언트 컴포넌트여야 하기 때문
+// (이 푸터는 서버 컴포넌트로 두는 편이 가볍다).
 
 // 사업자 표시사항. [라벨, 값] 쌍으로 두고 한 줄씩 렌더링한다.
 // 🔴 **표시사항의 정의처는 `lib/companyInfo.ts` 의 `COMPANY_BUSINESS_INFO` 하나다** —
@@ -50,17 +46,10 @@ const BUSINESS_INFO: [string, string][] = [
   ...COMPANY_BUSINESS_INFO,
 ];
 
-/**
- * @param showPageLinks 일반 페이지 링크(「회사소개」·「차량·요금 안내」) 노출 여부.
- *   🔴 **법적 문서 3종 화면(`components/LegalDoc.tsx`)만 `false` 로 끈다** — 사용자 지시
- *   (2026-09-08). 그 화면들은 랜딩 푸터의 모달에서 들어오는 자리라 다른 화면으로 가는
- *   길이 필요 없고, 헤더에서만 빼면 같은 항목이 푸터에 그대로 남는다.
- *   ⚠️ **기본값은 `true` 다** — `/about`·`/vehicles` 는 그대로 노출한다(30차 리뷰 ④ 로
- *   랜딩에서 두 화면으로 가는 길이 이미 없어져서, 이 링크가 둘 사이를 오가는 유일한 길이다).
- *   🔴 법적 문서 3종 링크(`LegalLinks`)는 이 플래그와 무관하게 항상 나온다 —
- *   전자상거래법 제10조 표시사항이다.
- */
-export default function SiteFooter({ showPageLinks = true }: { showPageLinks?: boolean } = {}) {
+// ⚠️ **`showPageLinks` prop 은 없어졌다** — 2026-09-08 에 잠깐 있었지만(법적 문서 화면만
+// 일반 페이지 링크를 끄려던 것) 같은 날 `/about`·`/vehicles` 가 삭제되면서 켤 링크 자체가
+// 없어졌다. 🔴 **다시 만들지 말 것** — 화면을 되살릴 때는 위 주석대로 배열부터 만들면 된다.
+export default function SiteFooter() {
   return (
     <footer className="site-footer">
       <div className="container site-footer-inner">
@@ -96,13 +85,8 @@ export default function SiteFooter({ showPageLinks = true }: { showPageLinks?: b
 
         {/* 링크 */}
         <nav className="site-footer-links">
-          {showPageLinks &&
-            FOOTER_LINKS.map((link) => (
-              <Link key={link.href} href={link.href} className="site-footer-link">
-                {link.label}
-              </Link>
-            ))}
-          {/* 법적 문서 3종 — 클릭하면 모달로 열리고, URL은 그대로 살아 있음 */}
+          {/* 법적 문서 3종 — 클릭하면 모달로 열리고, URL은 그대로 살아 있음.
+              🔴 전자상거래법 제10조 표시사항이라 빼지 말 것. */}
           <LegalLinks />
         </nav>
 

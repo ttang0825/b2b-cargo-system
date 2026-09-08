@@ -182,11 +182,13 @@ export default function LegalDoc({
 }) {
   return (
     <div className="portal-theme">
-      {/* 🔴 **로고만 있는 헤더다 — `LandingHeader` 로 되돌리지 말 것**(사용자 지시 2026-09-08).
-          법적 문서는 랜딩 푸터의 모달에서 들어오는 화면이라 메뉴가 필요 없고, 그 헤더가
-          들고 있던 「회사소개」·「차량·요금 안내」는 30차 리뷰 ④ 에 랜딩에서 이미 뺀
-          항목이라 여기만 옛 모습으로 남아 있었다(사용자 표현 「예전 폐기하기로 했던
-          상단메뉴」). `/about`·`/vehicles` 는 그대로 `LandingHeader` 를 쓴다. */}
+      {/* 🔴 **로고만 있는 헤더다 — 메뉴가 있는 헤더로 되돌리지 말 것**(사용자 지시 2026-09-08).
+          법적 문서는 랜딩 푸터의 모달에서 들어오는 화면이라 메뉴가 필요 없다. 원래 쓰던
+          `components/LandingHeader.tsx`(37차)가 들고 있던 「회사소개」·「차량·요금 안내」는
+          30차 리뷰 ④ 에 랜딩에서 이미 뺀 항목이라 여기만 옛 모습으로 남아 있었다(사용자 표현
+          「예전 폐기하기로 했던 상단메뉴」).
+          ⚠️ 같은 날 `/about`·`/vehicles` 가 삭제되면서 **그 헤더 파일 자체가 없어졌다** —
+          공개 화면 헤더는 이제 이것과 랜딩 전용(`components/landing/LandingHeader.tsx`) 둘뿐이다. */}
       <PublicPageHeader />
 
       <main className="container legal-main">
@@ -200,11 +202,11 @@ export default function LegalDoc({
         <LegalDocBody intro={intro} sections={sections} />
       </main>
 
-      {/* 🔴 **푸터의 「회사소개」·「차량·요금 안내」도 감춘다**(같은 지시 — 헤더에서만 빼면
-          같은 항목이 화면 아래에 그대로 남는다). 고객센터·사업자 표시사항·법적 문서 3종은
-          그대로 나온다(전자상거래법 제10조 표시사항이라 뺄 수 없다).
-          ⚠️ `/about`·`/vehicles` 의 푸터에는 계속 나온다 — 그 두 화면끼리 오가는 유일한 길이다. */}
-      <SiteFooter showPageLinks={false} />
+      {/* 푸터는 고객센터·사업자 표시사항·법적 문서 3종만 나온다(전자상거래법 제10조).
+          ⚠️ 2026-09-08 오전에 「회사소개」·「차량·요금 안내」를 이 화면에서만 끄는
+          `showPageLinks` prop 을 잠깐 뒀었는데, 같은 날 그 두 화면이 삭제되면서
+          푸터 자체에서 없어져 prop 도 함께 걷어냈다. */}
+      <SiteFooter />
     </div>
   );
 }
