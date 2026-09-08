@@ -89,8 +89,8 @@ export default function CustomerLoginPage() {
 
   return (
     <div
-      className="landing-page public-form"
-      style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#F4F3EF", color: "#0E0F12" }}
+      className="landing-page public-form screen-fit"
+      style={{ display: "flex", flexDirection: "column", background: "#F4F3EF", color: "#0E0F12" }}
     >
       <header className="landing-login-header" style={{ padding: "18px 56px", display: "flex", alignItems: "center" }}>
         <Link href="/" aria-label="위캐리 운송 홈" style={{ display: "flex", alignItems: "center", color: "#0E0F12" }}>
@@ -98,7 +98,7 @@ export default function CustomerLoginPage() {
         </Link>
       </header>
 
-      <main style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "64px 24px 96px" }}>
+      <main className="landing-login-main" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "64px 24px 96px" }}>
         <div style={{ width: "100%", maxWidth: 440 }}>
           <div className="landing-login-card" style={{ background: "#FFFFFF", borderRadius: 22, padding: "48px 44px 42px", boxShadow: "0 1px 3px rgba(20,20,18,0.06)" }}>
             <h1 style={{ margin: 0, fontSize: 28, fontWeight: 600, letterSpacing: "-0.03em" }}>운송관리 로그인</h1>
@@ -226,7 +226,7 @@ export default function CustomerLoginPage() {
         </div>
       </main>
 
-      <footer style={{ padding: "28px 56px 40px", textAlign: "center", fontSize: 12.5, lineHeight: 2, color: "#9C9B95" }}>
+      <footer className="landing-login-footer" style={{ padding: "28px 56px 40px", textAlign: "center", fontSize: 12.5, lineHeight: 2, color: "#9C9B95" }}>
         <div>
           고객센터 {COMPANY_SUPPORT_PHONE} · {COMPANY_SUPPORT_HOURS} (주말·공휴일 휴무)
         </div>
