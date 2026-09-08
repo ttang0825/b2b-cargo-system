@@ -8,6 +8,7 @@ import PasswordInput from "@/components/PasswordInput";
 import BrandLogo from "@/components/BrandLogo";
 import { syntheticLoginEmail } from "@/lib/portalAccountCredentials";
 import BackToHomeLink from "@/components/BackToHomeLink";
+import InstallAppButton from "@/components/InstallAppButton";
 import { COMPANY_SUPPORT_HOURS, COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
 import CompanyNameMark from "@/components/CompanyNameMark";
 import "@/app/landing.css";
@@ -215,7 +216,11 @@ export default function CustomerLoginPage() {
 
           {/* 🔴 헤더 로고와 동작이 다르다 — 로고는 홈 맨 위로, 이 링크는 **왔던 자리로**
               되돌아간다(13차 리뷰). `BackToHomeLink` 주석 참고. */}
-          <div style={{ marginTop: 24, textAlign: "center" }}>
+          <div style={{ marginTop: 20, textAlign: "center" }}>
+            <InstallAppButton appName="운송관리" className="pv2-install-btn" />
+          </div>
+
+          <div style={{ marginTop: 16, textAlign: "center" }}>
             <BackToHomeLink />
           </div>
         </div>

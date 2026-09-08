@@ -4,12 +4,27 @@ import type { NextRequest } from "next/server";
 
 // 로그인 페이지 자체는 항상 통과시켜야 무한 리다이렉트가 발생하지 않습니다.
 //
-// `/admin/icon.svg`는 Next.js App Router 파일 컨벤션(app/admin/icon.svg)이 만들어내는
-// **파비콘 파일**이라 로그인과 무관하게 항상 내려가야 합니다. matcher가 `/admin/:path*`라
-// 이 파일까지 걸려서, 빼지 않으면 브라우저가 파비콘을 요청할 때 로그인 페이지 HTML이
-// 대신 내려와 관리자 탭 아이콘이 아예 표시되지 않습니다(28차 PR #77 리뷰에서 실제로 겪음).
-// 인증 정보가 담긴 파일이 아니라 단순 이미지이므로 공개해도 문제 없습니다.
-const PUBLIC_PATHS = ["/admin/login", "/admin/icon.svg"];
+// 🔴 **이 목록을 줄이면 설치형 앱이 조용히 망가진다.** 아래 정적 자원은 로그인과
+// 무관하게 항상 내려가야 하는데, matcher 가 이 세그먼트 전체를 잡아서 빼면
+// 브라우저 요청에 로그인 화면이 대신 내려온다(응답이 307 이라 화면으로는 안 보이고
+// 「아이콘이 안 뜬다」·「설치 버튼이 안 뜬다」로만 나타나 원인을 찾기 어렵다).
+// 인증 정보가 담긴 파일이 아니라 단순 정적 자원이므로 공개해도 문제 없다.
+//
+//   icon.svg        탭 파비콘. 28차 PR #77 리뷰에서 실제로 겪은 사고다
+//   apple-icon.png  아이폰 홈 화면 아이콘. 파일 컨벤션이라 이 세그먼트에만 둘 수 있다
+//   sw.js           설치형 앱의 서비스워커. 스크립트 위치가 곧 담당 구역이라
+//                   루트로 옮길 수 없다(옮기면 구역이 사이트 전체가 된다)
+//
+// 🔴 이 세그먼트 아래에 파일 컨벤션 에셋(opengraph-image 등)이나 정적 파일을 더 두면
+//    **여기에 함께 추가할 것.** 반대로 화면·API 경로는 절대 넣지 말 것 — 그 순간
+//    로그인 없이 열린다.
+// 🟢 manifest 는 이 목록에 없다. 루트(`public/`)에 두어 matcher 자체를 피했다.
+const PUBLIC_PATHS = [
+  "/admin/login",
+  "/admin/icon.svg",
+  "/admin/apple-icon.png",
+  "/admin/sw.js",
+];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

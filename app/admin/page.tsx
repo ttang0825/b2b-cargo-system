@@ -1,4 +1,5 @@
 import Link from "next/link";
+import InstallAppButton from "@/components/InstallAppButton";
 
 const MENU = [
   {
@@ -71,8 +72,15 @@ export default function AdminHomePage() {
         ))}
       </div>
 
-      <div style={{ textAlign: "right", marginTop: 16 }}>
-        <Link href="/admin/guide" className="guide-link">
+      <div
+        style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          gap: 12, flexWrap: "wrap", marginTop: 16,
+        }}
+      >
+        {/* 설치 가능할 때만 그려진다 — 아니면 이 자리는 비고 이용가이드만 남는다. */}
+        <InstallAppButton appName="내부관리" className="install-app-btn" />
+        <Link href="/admin/guide" className="guide-link" style={{ marginLeft: "auto" }}>
           이용가이드
         </Link>
       </div>
