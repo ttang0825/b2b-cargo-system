@@ -10,6 +10,20 @@ export const metadata = {
   //    noindex 는 여기서 물려받아 그대로 유지한다(두 축은 서로 독립이다).
   openGraph: null,
   twitter: null,
+  // ── 설치형 앱(PWA) ────────────────────────────────────────────────────────
+  // 🔴 manifest 는 `public/` 에 있다. Next 의 `manifest` 파일 컨벤션은 **루트 전용**이라
+  //    (`app/manifest.ts` 만 인식된다 — 세그먼트에 두면 라우트로 잡히지도 않는다)
+  //    세그먼트별로 내려면 Route Handler 나 정적 파일뿐이고, 정적 파일을 골랐다.
+  //    ⚠️ manifest 위치는 scope 와 무관하다 — scope 는 아래 파일 안의 값이 정한다.
+  // 🔴 `appleWebApp` 이 iOS 메타태그 3종을 만든다. 아이폰에는 설치 프롬프트가 없어
+  //    「홈 화면에 추가」로만 설치되는데, 이 값이 없으면 주소창이 남는다.
+  //    홈 화면 아이콘은 같은 폴더의 `apple-icon.png`(파일 컨벤션)가 담당한다.
+  manifest: "/manifest-customer.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "운송관리",
+    statusBarStyle: "default",
+  },
 };
 
 export default function CustomerLayout({ children }: { children: React.ReactNode }) {

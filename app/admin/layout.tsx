@@ -9,6 +9,19 @@ export const metadata = {
   //    사이트 미리보기가 뜬다. noindex(검색 색인)와는 별개 축이니 둘 다 유지할 것.
   openGraph: null,
   twitter: null,
+  // ── 설치형 앱(PWA) ────────────────────────────────────────────────────────
+  // 🔴 manifest 를 `/admin/` 아래가 아니라 `public/`(루트)에 둔 것이 핵심이다 —
+  //    `middleware.ts` 의 matcher 가 이 세그먼트 전체를 가로채서, 여기 두면 브라우저가
+  //    manifest 를 요청할 때 **로그인 화면으로 307** 이 오고 설치 버튼이 원인 불명으로
+  //    안 뜬다(28차 파비콘 사고와 같은 뿌리 — 실측으로 재현했다).
+  //    반면 `apple-icon.png` 는 파일 컨벤션이라 이 세그먼트에 둘 수밖에 없어서
+  //    middleware 의 통과 목록에 따로 넣어 두었다.
+  manifest: "/manifest-admin.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "내부관리",
+    statusBarStyle: "default",
+  },
 };
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
