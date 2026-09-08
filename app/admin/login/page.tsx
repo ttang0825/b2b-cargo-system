@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import PasswordInput from "@/components/PasswordInput";
 import { supabaseAdminAuth } from "@/lib/supabaseAdminAuthClient";
+import InstallAppButton from "@/components/InstallAppButton";
 
 const ERROR_MESSAGES: Record<string, string> = {
   inactive: "이 계정은 비활성화되어 있습니다. 관리자에게 문의해주세요.",
@@ -123,6 +124,11 @@ function LoginInner() {
             {loading ? "확인 중..." : "로그인"}
           </button>
         </form>
+
+        {/* 설치 가능할 때만 그려진다(이미 설치했거나 방법이 없으면 렌더링 0). */}
+        <div style={{ marginTop: 20, textAlign: "center" }}>
+          <InstallAppButton appName="내부관리" className="install-app-btn" />
+        </div>
       </div>
     </main>
   );

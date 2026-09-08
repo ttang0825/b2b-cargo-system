@@ -6634,3 +6634,50 @@ tbody tr:hover {
     flex: 1;
   }
 }
+
+/* ── 설치형 앱(PWA) 설치 버튼 ──────────────────────────────────────────────
+   화주 운송관리와 내부관리가 서로 다른 클래스를 쓴다 — 두 화면의 색 팔레트가
+   다르기 때문이다. 🔴 `--pv2-*` 변수를 쓰지 않고 값을 직접 적은 것이 의도다:
+   `/customer/login` 은 `.portal-v2` 가 아니라 `.portal-theme` 스코프라 그 변수가
+   닿지 않는다(포털 홈과 로그인이 같은 버튼을 써야 해서 자족적으로 두었다).
+   🔴 버튼이 보이는 조건은 CSS 가 아니라 컴포넌트가 정한다 — 이미 설치했거나
+   설치할 방법이 없으면 아예 렌더링되지 않는다(`components/InstallAppButton.tsx`). */
+.pv2-install-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #ffffff;
+  color: #2f2e2b;
+  border: 1px solid #e8e7e2;
+  border-radius: 999px;
+  padding: 8px 15px;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.pv2-install-btn:hover {
+  background: #f7f6f2;
+}
+.install-app-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #ffffff;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-family: inherit;
+  font-size: 12.8px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.install-app-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}

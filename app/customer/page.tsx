@@ -11,6 +11,7 @@ import {
 } from "@/lib/dispatchStage";
 import { calcInclusiveAmount } from "@/lib/vat";
 import { getLastSeen } from "@/lib/portalNotifications";
+import InstallAppButton from "@/components/InstallAppButton";
 
 function won(n: number | null | undefined) {
   if (!n) return "-";
@@ -193,6 +194,12 @@ export default function CustomerHomePage() {
       {/* ① 인사 */}
       <h1 className="pv2-h1">{companyName || "위캐리 운송관리"}</h1>
       <p className="pv2-sub">안녕하세요, 새 운송이 필요하신가요?</p>
+
+      {/* 🔴 이미 설치했거나 설치할 방법이 없으면 **아무것도 그리지 않는다** — 버튼이
+          눌러도 반응 없는 상태를 만들지 않기 위해서다(아이폰은 안내 화면이 뜬다). */}
+      <div style={{ margin: "-4px 0 18px" }}>
+        <InstallAppButton appName="운송관리" className="pv2-install-btn" />
+      </div>
 
       {/* ② 발주 CTA + 응답 확인하기 */}
       <div className="pv2-home-top">
