@@ -1,4 +1,5 @@
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
+import { INSTALL_PROMPT_CAPTURE } from "@/lib/installPromptCapture";
 
 export const metadata = {
   title: "내부관리 | WeCarry 운송 운영 시스템",
@@ -37,6 +38,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <>
       {/* 🔴 `/admin/sw.js` 는 middleware 통과 목록에 들어가 있다 — 빼면 등록 요청에
           로그인 화면이 내려와 서비스워커가 조용히 등록되지 않는다. */}
+      {/* 🔴 설치 신호는 리액트가 붙기 전에 지나갈 수 있어 여기서 먼저 잡는다.
+          `lib/installPromptCapture.ts` 주석 참고 — 옮기거나 지우면 설치 버튼이
+          떴다 안 떴다 한다. */}
+      <script dangerouslySetInnerHTML={{ __html: INSTALL_PROMPT_CAPTURE }} />
       <ServiceWorkerRegister scriptUrl="/admin/sw.js" scope="/admin" />
       {children}
     </>

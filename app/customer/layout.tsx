@@ -1,5 +1,6 @@
 import CustomerPortalShell from "./CustomerPortalShell";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
+import { INSTALL_PROMPT_CAPTURE } from "@/lib/installPromptCapture";
 
 export const metadata = {
   title: "운송관리 | 위캐리 운송",
@@ -38,6 +39,10 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
     <>
       {/* 🔴 스크립트 위치가 곧 담당 구역이다 — 루트로 옮기면 한 서비스워커가
           내부관리와 랜딩까지 삼킨다. `components/ServiceWorkerRegister.tsx` 주석 참고. */}
+      {/* 🔴 설치 신호는 리액트가 붙기 전에 지나갈 수 있어 여기서 먼저 잡는다.
+          `lib/installPromptCapture.ts` 주석 참고 — 옮기거나 지우면 설치 버튼이
+          떴다 안 떴다 한다. */}
+      <script dangerouslySetInnerHTML={{ __html: INSTALL_PROMPT_CAPTURE }} />
       <ServiceWorkerRegister scriptUrl="/customer/sw.js" scope="/customer" />
       <CustomerPortalShell>{children}</CustomerPortalShell>
     </>

@@ -6642,6 +6642,29 @@ tbody tr:hover {
    닿지 않는다(포털 홈과 로그인이 같은 버튼을 써야 해서 자족적으로 두었다).
    🔴 버튼이 보이는 조건은 CSS 가 아니라 컴포넌트가 정한다 — 이미 설치했거나
    설치할 방법이 없으면 아예 렌더링되지 않는다(`components/InstallAppButton.tsx`). */
+/* 포털 홈 제목 줄 — 왼쪽에 인사말, 🔴 **오른쪽 끝에 설치 버튼**(실사용 지적, PR #127).
+   설치할 수 없으면 버튼이 아예 안 그려지므로 그때는 제목만 있는 한 덩이가 된다.
+   `align-items: flex-end` 라 제목이 두 줄이 되어도 버튼은 아랫줄에 맞춰 정렬된다. */
+.pv2-page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+/* 🔴 `margin-left: auto` 를 빼지 말 것 — 좁은 화면에서 줄이 접히면 버튼이 아랫줄
+   **왼쪽 끝**으로 가버린다(관리자 홈 390px 에서 실측했다). 접히더라도 오른쪽 끝을
+   지켜야 넓은 화면과 위치가 갈리지 않는다. 관리자 홈도 같은 규칙을 쓴다. */
+.pv2-page-head > .pv2-install-btn,
+.page-header > .install-app-btn {
+  margin-left: auto;
+}
+@media (max-width: 700px) {
+  .pv2-page-head {
+    gap: 10px;
+  }
+}
 .pv2-install-btn {
   display: inline-flex;
   align-items: center;
