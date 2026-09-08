@@ -72,6 +72,31 @@ function warnAboutPlaceholders() {
 warnAboutPlaceholders();
 
 /** @type {import('next').NextConfig} */
-const nextConfig = {};
+const nextConfig = {
+  async headers() {
+    return [
+      // 설치형 앱(PWA)의 서비스워커가 **자기 스크립트가 놓인 폴더보다 넓은 구역**을
+      // 맡도록 서버가 허락하는 헤더.
+      //
+      // 🔴 **없으면 등록 자체가 거부된다.** 스크립트는 `/admin/sw.js` 에 있어서 기본
+      //    구역이 `/admin/` 인데, 우리가 맡아야 하는 홈 주소는 **`/admin`(슬래시 없음)**
+      //    이다(Next 가 `/admin/` 을 `/admin` 으로 308 리다이렉트한다). 구역을 `/admin/`
+      //    로 두면 **홈 화면이 구역 밖으로 빠져** 오프라인 안내가 안 뜨고, 설치형 앱
+      //    창에도 주소 띠가 남는다.
+      //
+      // 🔴 **`components/ServiceWorkerRegister.tsx` 의 `scope` 와 한 벌이다** — 한쪽만
+      //    고치면 등록이 조용히 실패한다. 🔴 **여기서 구역을 더 넓히지 말 것**(`/` 로
+      //    넓히면 한 서비스워커가 두 앱과 랜딩까지 삼킨다).
+      {
+        source: "/customer/sw.js",
+        headers: [{ key: "Service-Worker-Allowed", value: "/customer" }],
+      },
+      {
+        source: "/admin/sw.js",
+        headers: [{ key: "Service-Worker-Allowed", value: "/admin" }],
+      },
+    ];
+  },
+};
 
 export default nextConfig;
