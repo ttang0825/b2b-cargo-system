@@ -94,10 +94,23 @@ export default function LandingHeader() {
           <span className="landing-nav-full" aria-hidden>무료 견적 문의</span>
           <span className="landing-nav-short" aria-hidden>견적 문의</span>
         </Link>
-        <Link href="/customer/login" aria-label="운송관리 로그인" style={pill("#FFD834", "#0E0F12")}>
+        {/* 🔴 **여기만 `<Link>` 가 아니라 `<a>` 다 — 원칙 31 번의 의도된 예외다.**
+            운송관리는 설치형 앱이고 서비스워커 구역이 `/customer` 인데, 랜딩(`/`)은
+            그 **구역 밖**이다. `<Link>` 로 넘어가면 문서를 새로 받지 않아서
+            **그 문서는 영영 서비스워커의 제어를 못 받는다**(실측: `controller` 가
+            `null`). 그러면 크롬이 설치 조건 미달로 보아
+              · 설치 신호(`beforeinstallprompt`)를 아예 안 쏘고 → 설치 버튼이 안내창으로 떨어지고
+              · 「홈 화면에 추가」가 **앱 설치가 아니라 바로가기**를 만들어
+                manifest 아이콘(흰 배경) 대신 **랜딩의 노란 파비콘**이 붙는다
+            둘 다 2026-09-08 에 실제로 신고된 증상이다. `<a>` 로 문서를 새로 받으면
+            그 문서가 구역 안에서 만들어져 서비스워커가 맡는다.
+            🔴 **`<Link>` 로 되돌리지 말 것** — 화면은 멀쩡해 보이고 설치만 조용히
+            망가진다. ⚠️ 대가는 전환 한 번의 새로고침인데, 여기는 마케팅 화면에서
+            앱으로 넘어가는 자리라 원래 문맥이 끊기는 지점이다. */}
+        <a href="/customer/login" aria-label="운송관리 로그인" style={pill("#FFD834", "#0E0F12")}>
           <span className="landing-nav-full" aria-hidden>운송관리 로그인</span>
           <span className="landing-nav-short" aria-hidden>로그인</span>
-        </Link>
+        </a>
       </nav>
     </header>
   );
