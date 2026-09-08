@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
-import Link from "next/link";
 import { LegalDocBody, type LegalBlock, type LegalSection } from "@/components/LegalDoc";
 
 // 법적 문서를 페이지 이동 없이 그 자리에서 보여주는 모달.
@@ -10,9 +9,14 @@ import { LegalDocBody, type LegalBlock, type LegalSection } from "@/components/L
 // `/terms`·`/privacy`·`/email-policy` URL은 그대로 살아 있어야 한다:
 //   - URL이 없으면 외부에서 링크할 수 없어 분쟁 시 "어느 시점 약관"을 지목할 수 없음
 //   - `robots.ts`에서 Allow로 열어둔 것이 무의미해짐
-//   - 다음 세션(동의 절차)의 동의 모달에서 "약관 보기"가 갈 곳이 필요함
+//   - 49차 `/apply` 동의 블록의 「약관 보기」·「처리방침 보기」가 이 문서들을 가리킨다
 //   - 개인정보처리방침은 정보주체가 쉽게 확인할 수 있어야 하는 문서라 직접 경로가 안전
-// 그래서 모달 하단에 **"전체 페이지에서 보기" 링크를 반드시 둔다.**
+//
+// 🔴 **모달 하단의 "전체 페이지에서 보기" 링크는 없앴다(사용자 지시 2026-09-08) —
+//    다시 만들지 말 것.** 31차가 그 링크를 「반드시 둔다」로 정했었지만, 그때의 근거는
+//    **URL 이 살아 있어야 한다**는 것이었고 그건 라우트를 남기는 것으로 이미 지켜진다.
+//    화면에 링크를 노출할 필요까지는 없다는 것이 이번 판단이다.
+// 🔴 **그렇다고 라우트를 지우지 말 것** — 위 네 가지 이유는 그대로 유효하다.
 //
 // 조문 내용은 `lib/legal/*.ts`, 본문 렌더링은 `LegalDocBody`(페이지와 공유)를 그대로 쓴다.
 // **이 파일은 껍데기(모달 동작·접근성)만 담당** — 조문을 고칠 일이 있으면 여기가 아니라
@@ -36,7 +40,8 @@ export default function LegalModal({
   title: string;
   /** 예: "시행일 2026년 9월 1일" — 값은 lib/legalInfo.ts에서 오며 하드코딩하지 말 것 */
   effectiveLabel: string;
-  /** 전체 페이지 경로 (`/terms` 등) */
+  /** 전체 페이지 경로 (`/terms` 등). 화면에 링크로 나가지 않고 **제목 id 를 문서마다
+   * 다르게 만드는 데만 쓴다**(같은 화면에 두 모달이 있어도 `aria-labelledby` 가 안 겹치게). */
   href: string;
   intro?: LegalBlock[];
   sections: LegalSection[];
@@ -146,12 +151,6 @@ export default function LegalModal({
         {/* 조문 본문 — 이 영역만 스크롤된다(배경 본문은 위에서 잠갔음) */}
         <div className="legal-modal-body">
           <LegalDocBody intro={intro} sections={sections} />
-        </div>
-
-        <div className="legal-modal-foot">
-          <Link href={href} className="legal-modal-fullpage" onClick={onClose}>
-            전체 페이지에서 보기 →
-          </Link>
         </div>
       </div>
     </div>
