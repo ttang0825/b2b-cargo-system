@@ -16,6 +16,16 @@ import { COMPANY_SUPPORT_PHONE, COMPANY_SUPPORT_HOURS } from "@/lib/contactInfo"
 
 const PUBLIC_PATHS = ["/customer/login", "/customer/support-verify"];
 
+// 🔴 **이 화면들은 자기 헤더를 스스로 그린다 — 공용 헤더를 얹지 말 것.**
+//    `/customer/login` 은 31차에 시안으로 갈아끼우면서 로고가 든 헤더를 자체적으로
+//    갖게 됐는데, 12차에 넣어둔 공용 헤더가 그대로 남아 **같은 로고가 위아래로 두 번**
+//    그려지고 있었다(노란 띠 + 흰 띠, 합쳐 147px). 첫 화면의 3분의 1을 로고 두 개가
+//    쓰고 있었던 것이라 모바일에서 특히 크게 걸린다(2026-09-08 실측·신고).
+//    🟢 브랜드 연속성(12차가 공용 헤더를 넣은 이유)은 그 화면 자체 헤더가 이미
+//       같은 로고·같은 링크로 지키고 있다 — 잃는 것이 없다.
+//    ⚠️ `/customer/support-verify` 는 자체 헤더가 없으므로 계속 공용 헤더를 받는다.
+const PATHS_WITH_OWN_HEADER = ["/customer/login"];
+
 type NotifyKey = "quotes" | "dispatches" | "invoices";
 
 type NavItem = { href: string; label: string; icon: PortalIconName; key?: NotifyKey };
@@ -283,7 +293,7 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
   if (PUBLIC_PATHS.includes(pathname || "")) {
     return (
       <div className="portal-theme">
-        <PublicPageHeader />
+        {!PATHS_WITH_OWN_HEADER.includes(pathname || "") && <PublicPageHeader />}
         {children}
       </div>
     );

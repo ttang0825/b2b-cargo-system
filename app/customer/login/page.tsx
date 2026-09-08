@@ -89,8 +89,8 @@ export default function CustomerLoginPage() {
 
   return (
     <div
-      className="landing-page public-form"
-      style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#F4F3EF", color: "#0E0F12" }}
+      className="landing-page public-form screen-fit"
+      style={{ display: "flex", flexDirection: "column", background: "#F4F3EF", color: "#0E0F12" }}
     >
       <header className="landing-login-header" style={{ padding: "18px 56px", display: "flex", alignItems: "center" }}>
         <Link href="/" aria-label="위캐리 운송 홈" style={{ display: "flex", alignItems: "center", color: "#0E0F12" }}>
@@ -98,7 +98,7 @@ export default function CustomerLoginPage() {
         </Link>
       </header>
 
-      <main style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "64px 24px 96px" }}>
+      <main className="landing-login-main" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "64px 24px 96px" }}>
         <div style={{ width: "100%", maxWidth: 440 }}>
           <div className="landing-login-card" style={{ background: "#FFFFFF", borderRadius: 22, padding: "48px 44px 42px", boxShadow: "0 1px 3px rgba(20,20,18,0.06)" }}>
             <h1 style={{ margin: 0, fontSize: 28, fontWeight: 600, letterSpacing: "-0.03em" }}>운송관리 로그인</h1>
@@ -107,7 +107,7 @@ export default function CustomerLoginPage() {
             </p>
 
             <form onSubmit={handleSubmit}>
-              <label htmlFor="portal-login-id" style={{ ...labelStyle, marginTop: 34 }}>아이디</label>
+              <label htmlFor="portal-login-id" className="landing-login-label" style={{ ...labelStyle, marginTop: 34 }}>아이디</label>
               <input
                 id="portal-login-id"
                 type="text"
@@ -119,7 +119,7 @@ export default function CustomerLoginPage() {
                 style={inputStyle}
               />
 
-              <label style={{ ...labelStyle, marginTop: 20 }}>비밀번호</label>
+              <label className="landing-login-label" style={{ ...labelStyle, marginTop: 20 }}>비밀번호</label>
               <div style={{ marginTop: 9 }}>
                 <PasswordInput
                   value={password}
@@ -128,7 +128,7 @@ export default function CustomerLoginPage() {
                 />
               </div>
 
-              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 18 }}>
+              <div className="landing-login-options" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 18 }}>
                 <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13.5, color: "#6C6B65", cursor: "pointer" }}>
                   <input
                     type="checkbox"
@@ -156,6 +156,7 @@ export default function CustomerLoginPage() {
 
               <button
                 type="submit"
+                className="landing-login-submit"
                 disabled={loading}
                 style={{
                   width: "100%",
@@ -215,18 +216,23 @@ export default function CustomerLoginPage() {
           </div>
 
           {/* 🔴 헤더 로고와 동작이 다르다 — 로고는 홈 맨 위로, 이 링크는 **왔던 자리로**
-              되돌아간다(13차 리뷰). `BackToHomeLink` 주석 참고. */}
-          <div style={{ marginTop: 20, textAlign: "center" }}>
-            <InstallAppButton appName="운송관리" className="pv2-install-btn" />
-          </div>
+              되돌아간다(13차 리뷰). `BackToHomeLink` 주석 참고.
+              🔴 두 줄을 한 묶음으로 감싼 것은 **모바일에서 한 줄로 붙이기 위해서다** —
+                 위아래로 쌓으면 그것만 60px 을 쓴다(2026-09-08, 첫 화면 맞추기).
+                 데스크탑은 지금까지처럼 두 줄 그대로다. */}
+          <div className="landing-login-actions">
+            <div style={{ marginTop: 20, textAlign: "center" }}>
+              <InstallAppButton appName="운송관리" className="pv2-install-btn" />
+            </div>
 
-          <div style={{ marginTop: 16, textAlign: "center" }}>
-            <BackToHomeLink />
+            <div style={{ marginTop: 16, textAlign: "center" }}>
+              <BackToHomeLink />
+            </div>
           </div>
         </div>
       </main>
 
-      <footer style={{ padding: "28px 56px 40px", textAlign: "center", fontSize: 12.5, lineHeight: 2, color: "#9C9B95" }}>
+      <footer className="landing-login-footer" style={{ padding: "28px 56px 40px", textAlign: "center", fontSize: 12.5, lineHeight: 2, color: "#9C9B95" }}>
         <div>
           고객센터 {COMPANY_SUPPORT_PHONE} · {COMPANY_SUPPORT_HOURS} (주말·공휴일 휴무)
         </div>
