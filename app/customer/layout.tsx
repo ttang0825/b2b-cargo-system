@@ -1,4 +1,5 @@
 import CustomerPortalShell from "./CustomerPortalShell";
+import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 
 export const metadata = {
   title: "운송관리 | 위캐리 운송",
@@ -27,5 +28,12 @@ export const metadata = {
 };
 
 export default function CustomerLayout({ children }: { children: React.ReactNode }) {
-  return <CustomerPortalShell>{children}</CustomerPortalShell>;
+  return (
+    <>
+      {/* 🔴 스크립트 위치가 곧 담당 구역이다 — 루트로 옮기면 한 서비스워커가
+          내부관리와 랜딩까지 삼킨다. `components/ServiceWorkerRegister.tsx` 주석 참고. */}
+      <ServiceWorkerRegister scriptUrl="/customer/sw.js" />
+      <CustomerPortalShell>{children}</CustomerPortalShell>
+    </>
+  );
 }

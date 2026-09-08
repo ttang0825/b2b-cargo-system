@@ -1,3 +1,5 @@
+import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
+
 export const metadata = {
   title: "내부관리 | WeCarry 운송 운영 시스템",
   // 내부 관리 화면은 검색엔진에 색인되면 안 됨(프라이버시). robots.txt는 크롤 차단일
@@ -25,5 +27,12 @@ export const metadata = {
 };
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
+  return (
+    <>
+      {/* 🔴 `/admin/sw.js` 는 middleware 통과 목록에 들어가 있다 — 빼면 등록 요청에
+          로그인 화면이 내려와 서비스워커가 조용히 등록되지 않는다. */}
+      <ServiceWorkerRegister scriptUrl="/admin/sw.js" />
+      {children}
+    </>
+  );
 }

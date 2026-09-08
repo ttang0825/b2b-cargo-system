@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>연결이 끊겼습니다</title>
+<!--
+  설치형 앱이 오프라인일 때 대신 보여주는 화면.
+
+  🔴 **화면(app/**)이 아니라 정적 HTML 인 것이 의도다.** 서비스워커가 설치될 때
+     미리 받아 두어야 하는데, Next 화면은 데이터를 읽으므로 미리 받을 수 없다.
+  🔴 **운송관리·내부관리가 같은 파일을 쓴다** — 그래서 문구에 어느 쪽인지 적지 않았다.
+     루트에 있어 middleware 에도 걸리지 않는다.
+  🔴 여기에 업무 데이터를 넣지 말 것. 오프라인에 남아 있는 화면이라 낡은 값이 된다.
+-->
+<style>
+  :root { color-scheme: light; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: #f2f4f6; color: #191f28; padding: 24px;
+    font-family: "SUIT Variable", "Pretendard", -apple-system, BlinkMacSystemFont,
+      "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  }
+  .box {
+    background: #fff; border-radius: 16px; padding: 40px 28px; max-width: 380px; width: 100%;
+    text-align: center; box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  }
+  .mark { width: 52px; height: 52px; margin: 0 auto 20px; }
+  h1 { font-size: 19px; margin: 0 0 10px; letter-spacing: -0.01em; }
+  p { font-size: 14.5px; line-height: 1.75; color: #5f6b78; margin: 0 0 24px; }
+  button {
+    font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
+    background: #191f28; color: #fff; border: none; border-radius: 10px; padding: 13px 26px;
+  }
+</style>
+</head>
+<body>
+  <div class="box">
+    <svg class="mark" viewBox="0 0 512 512" aria-hidden="true">
+      <rect x="1.06" y=".54" width="510.73" height="510.73" rx="106.14" ry="106.14" fill="#f2f4f6"/>
+      <g fill="#c4c9d0">
+        <polygon points="274.99 319.22 237.03 214.9 198.98 319.22 149.02 319.22 71.72 106.88 130.49 106.88 173.97 231.95 218.35 106.88 255.7 106.88 300.08 231.95 343.54 106.88 402.32 106.88 325.04 319.22 274.99 319.22"/>
+        <polygon points="406.71 309.17 389.49 356.49 82.12 356.49 62.29 410.96 427.52 410.96 464.67 309.17 434.73 226.91 376.77 226.91 406.71 309.17"/>
+      </g>
+    </svg>
+    <h1>연결이 끊겼습니다</h1>
+    <p>네트워크에 연결되어 있지 않아 화면을 불러오지 못했습니다.<br>연결을 확인한 뒤 다시 시도해 주세요.</p>
+    <button type="button" onclick="location.reload()">다시 시도</button>
+  </div>
+</body>
+</html>
