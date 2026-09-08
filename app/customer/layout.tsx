@@ -1,5 +1,6 @@
 import CustomerPortalShell from "./CustomerPortalShell";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
+import { INSTALL_PROMPT_CAPTURE } from "@/lib/installPromptCapture";
 
 export const metadata = {
   title: "운송관리 | 위캐리 운송",
@@ -19,6 +20,12 @@ export const metadata = {
   // 🔴 `appleWebApp` 이 iOS 메타태그 3종을 만든다. 아이폰에는 설치 프롬프트가 없어
   //    「홈 화면에 추가」로만 설치되는데, 이 값이 없으면 주소창이 남는다.
   //    홈 화면 아이콘은 같은 폴더의 `apple-icon.png`(파일 컨벤션)가 담당한다.
+  // 설치형 앱(PWA) 설정. 🔴 **세그먼트별 manifest 는 Next 가 지원하지 않아**(루트 전용)
+  // `public/` 정적 파일로 두고 여기서 잇는다.
+  // 🔴 **그 파일의 `scope`·`start_url` 에 끝 슬래시를 붙이지 말 것**(`/customer` 이어야 한다).
+  //    Next 가 `/customer/` 를 `/customer` 로 308 리다이렉트하므로, `/customer/` 로 적으면 앱이
+  //    켜지자마자 **자기 구역 밖으로 나가** 창에 주소 띠가 남는다(PR #126 에서 실제로
+  //    겪었다). `.webmanifest` 는 JSON 이라 주석을 못 달아서 여기에 적어 둔다.
   manifest: "/manifest-customer.webmanifest",
   appleWebApp: {
     capable: true,
@@ -32,7 +39,11 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
     <>
       {/* 🔴 스크립트 위치가 곧 담당 구역이다 — 루트로 옮기면 한 서비스워커가
           내부관리와 랜딩까지 삼킨다. `components/ServiceWorkerRegister.tsx` 주석 참고. */}
-      <ServiceWorkerRegister scriptUrl="/customer/sw.js" />
+      {/* 🔴 설치 신호는 리액트가 붙기 전에 지나갈 수 있어 여기서 먼저 잡는다.
+          `lib/installPromptCapture.ts` 주석 참고 — 옮기거나 지우면 설치 버튼이
+          떴다 안 떴다 한다. */}
+      <script dangerouslySetInnerHTML={{ __html: INSTALL_PROMPT_CAPTURE }} />
+      <ServiceWorkerRegister scriptUrl="/customer/sw.js" scope="/customer" />
       <CustomerPortalShell>{children}</CustomerPortalShell>
     </>
   );

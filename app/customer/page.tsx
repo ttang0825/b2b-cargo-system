@@ -191,13 +191,15 @@ export default function CustomerHomePage() {
 
   return (
     <>
-      {/* ① 인사 */}
-      <h1 className="pv2-h1">{companyName || "위캐리 운송관리"}</h1>
-      <p className="pv2-sub">안녕하세요, 새 운송이 필요하신가요?</p>
-
-      {/* 🔴 이미 설치했거나 설치할 방법이 없으면 **아무것도 그리지 않는다** — 버튼이
-          눌러도 반응 없는 상태를 만들지 않기 위해서다(아이폰은 안내 화면이 뜬다). */}
-      <div style={{ margin: "-4px 0 18px" }}>
+      {/* ① 인사 — 🔴 설치 버튼은 제목 줄 **오른쪽 끝**이다(실사용 지적, PR #127).
+          본문 흐름 중간에 두면 자리가 애매해서 눈에 안 들어온다.
+          이미 설치했거나 설치할 방법이 아예 없으면 **아무것도 그리지 않으므로**
+          그때는 이 줄이 제목만 있는 예전 모습 그대로가 된다. */}
+      <div className="pv2-page-head">
+        <div>
+          <h1 className="pv2-h1">{companyName || "위캐리 운송관리"}</h1>
+          <p className="pv2-sub">안녕하세요, 새 운송이 필요하신가요?</p>
+        </div>
         <InstallAppButton appName="운송관리" className="pv2-install-btn" />
       </div>
 

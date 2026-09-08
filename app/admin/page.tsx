@@ -55,11 +55,15 @@ const MENU = [
 export default function AdminHomePage() {
   return (
     <main className="container">
+      {/* 🔴 설치 버튼은 제목 줄 **오른쪽 끝**이다(실사용 지적, PR #127).
+          `.page-header` 가 이미 좌우로 벌리는 줄이라 두 번째 자식으로 두면 된다.
+          설치할 수 없으면 아무것도 안 그려서 예전 모습 그대로가 된다. */}
       <div className="page-header">
         <div>
           <h1 className="page-title">WeCarry 운송 통합 운영 시스템</h1>
           <p className="page-desc">원하는 업무를 선택해 바로 이동하세요.</p>
         </div>
+        <InstallAppButton appName="내부관리" className="install-app-btn" />
       </div>
 
       <div className="home-grid">
@@ -72,15 +76,8 @@ export default function AdminHomePage() {
         ))}
       </div>
 
-      <div
-        style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          gap: 12, flexWrap: "wrap", marginTop: 16,
-        }}
-      >
-        {/* 설치 가능할 때만 그려진다 — 아니면 이 자리는 비고 이용가이드만 남는다. */}
-        <InstallAppButton appName="내부관리" className="install-app-btn" />
-        <Link href="/admin/guide" className="guide-link" style={{ marginLeft: "auto" }}>
+      <div style={{ textAlign: "right", marginTop: 16 }}>
+        <Link href="/admin/guide" className="guide-link">
           이용가이드
         </Link>
       </div>

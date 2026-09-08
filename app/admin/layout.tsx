@@ -1,4 +1,5 @@
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
+import { INSTALL_PROMPT_CAPTURE } from "@/lib/installPromptCapture";
 
 export const metadata = {
   title: "내부관리 | WeCarry 운송 운영 시스템",
@@ -18,6 +19,12 @@ export const metadata = {
   //    안 뜬다(28차 파비콘 사고와 같은 뿌리 — 실측으로 재현했다).
   //    반면 `apple-icon.png` 는 파일 컨벤션이라 이 세그먼트에 둘 수밖에 없어서
   //    middleware 의 통과 목록에 따로 넣어 두었다.
+  // 설치형 앱(PWA) 설정. 🔴 **세그먼트별 manifest 는 Next 가 지원하지 않아**(루트 전용)
+  // `public/` 정적 파일로 두고 여기서 잇는다.
+  // 🔴 **그 파일의 `scope`·`start_url` 에 끝 슬래시를 붙이지 말 것**(`/admin` 이어야 한다).
+  //    Next 가 `/admin/` 를 `/admin` 로 308 리다이렉트하므로, `/admin/` 로 적으면 앱이
+  //    켜지자마자 **자기 구역 밖으로 나가** 창에 주소 띠가 남는다(PR #126 에서 실제로
+  //    겪었다). `.webmanifest` 는 JSON 이라 주석을 못 달아서 여기에 적어 둔다.
   manifest: "/manifest-admin.webmanifest",
   appleWebApp: {
     capable: true,
@@ -31,7 +38,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <>
       {/* 🔴 `/admin/sw.js` 는 middleware 통과 목록에 들어가 있다 — 빼면 등록 요청에
           로그인 화면이 내려와 서비스워커가 조용히 등록되지 않는다. */}
-      <ServiceWorkerRegister scriptUrl="/admin/sw.js" />
+      {/* 🔴 설치 신호는 리액트가 붙기 전에 지나갈 수 있어 여기서 먼저 잡는다.
+          `lib/installPromptCapture.ts` 주석 참고 — 옮기거나 지우면 설치 버튼이
+          떴다 안 떴다 한다. */}
+      <script dangerouslySetInnerHTML={{ __html: INSTALL_PROMPT_CAPTURE }} />
+      <ServiceWorkerRegister scriptUrl="/admin/sw.js" scope="/admin" />
       {children}
     </>
   );
