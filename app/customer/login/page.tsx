@@ -107,7 +107,7 @@ export default function CustomerLoginPage() {
             </p>
 
             <form onSubmit={handleSubmit}>
-              <label htmlFor="portal-login-id" style={{ ...labelStyle, marginTop: 34 }}>아이디</label>
+              <label htmlFor="portal-login-id" className="landing-login-label" style={{ ...labelStyle, marginTop: 34 }}>아이디</label>
               <input
                 id="portal-login-id"
                 type="text"
@@ -119,7 +119,7 @@ export default function CustomerLoginPage() {
                 style={inputStyle}
               />
 
-              <label style={{ ...labelStyle, marginTop: 20 }}>비밀번호</label>
+              <label className="landing-login-label" style={{ ...labelStyle, marginTop: 20 }}>비밀번호</label>
               <div style={{ marginTop: 9 }}>
                 <PasswordInput
                   value={password}
@@ -128,7 +128,7 @@ export default function CustomerLoginPage() {
                 />
               </div>
 
-              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 18 }}>
+              <div className="landing-login-options" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 18 }}>
                 <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13.5, color: "#6C6B65", cursor: "pointer" }}>
                   <input
                     type="checkbox"
@@ -156,6 +156,7 @@ export default function CustomerLoginPage() {
 
               <button
                 type="submit"
+                className="landing-login-submit"
                 disabled={loading}
                 style={{
                   width: "100%",
@@ -215,13 +216,18 @@ export default function CustomerLoginPage() {
           </div>
 
           {/* 🔴 헤더 로고와 동작이 다르다 — 로고는 홈 맨 위로, 이 링크는 **왔던 자리로**
-              되돌아간다(13차 리뷰). `BackToHomeLink` 주석 참고. */}
-          <div style={{ marginTop: 20, textAlign: "center" }}>
-            <InstallAppButton appName="운송관리" className="pv2-install-btn" />
-          </div>
+              되돌아간다(13차 리뷰). `BackToHomeLink` 주석 참고.
+              🔴 두 줄을 한 묶음으로 감싼 것은 **모바일에서 한 줄로 붙이기 위해서다** —
+                 위아래로 쌓으면 그것만 60px 을 쓴다(2026-09-08, 첫 화면 맞추기).
+                 데스크탑은 지금까지처럼 두 줄 그대로다. */}
+          <div className="landing-login-actions">
+            <div style={{ marginTop: 20, textAlign: "center" }}>
+              <InstallAppButton appName="운송관리" className="pv2-install-btn" />
+            </div>
 
-          <div style={{ marginTop: 16, textAlign: "center" }}>
-            <BackToHomeLink />
+            <div style={{ marginTop: 16, textAlign: "center" }}>
+              <BackToHomeLink />
+            </div>
           </div>
         </div>
       </main>
