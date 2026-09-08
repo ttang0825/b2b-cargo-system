@@ -666,6 +666,15 @@ tbody tr:hover {
   display: block;
 }
 
+/* 🔴 **아래 `.landing-nav-*` 규칙들은 2026-09-08 부터 쓰이지 않는다 — 지우기 전에 읽을 것.**
+   유일한 사용처였던 `components/LandingHeader.tsx`(37차 헤더)가 회사소개·차량안내 화면과
+   함께 삭제됐다. 지우지 않고 남긴 이유는 (a) 규칙이 이 파일 네 자리에 흩어져 있고 미디어
+   쿼리 안에도 있어 옆 규칙(`.public-header-status-link` 등)을 건드릴 위험이 있고, (b) 화면을
+   다시 만들면 그대로 쓸 수 있기 때문이다. **지금 이 파일을 손볼 일이 있으면 그때 같이 정리할 것.**
+   대상: `.landing-nav-desktop` · `.landing-nav-mobile` · `.landing-nav-toggle` ·
+        `.landing-nav-dropdown`(+`-item`) · `.landing-nav-login` · `.landing-nav-cta`
+   ⚠️ `.landing-brand-logo` · `.public-header` · `.guide-link` 은 **계속 쓰인다**(각각
+      `PublicPageHeader` · 포털 셸 · `TopNav`/관리자 홈). 같이 지우지 말 것. */
 /* 랜딩(/) 전용 헤더 — TopNav의 .nav-* 클래스와 완전히 분리(원칙 11번).
    데스크탑에서는 링크 3개를 그대로 보여주고 햄버거는 숨김 */
 .landing-nav-mobile {

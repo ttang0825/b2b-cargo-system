@@ -4,9 +4,10 @@ import Link from "next/link";
 import BrandLogo from "@/components/BrandLogo";
 import { useScrolled } from "@/lib/useScrolled";
 
-// 공개 하위 화면의 공용 헤더. 🔴 **지금 쓰는 곳은 `CustomerPortalShell` 의 공개 경로
-// 분기(`/customer/login` · `/customer/support-verify`) 하나뿐이다** — 원래 이 컴포넌트를
-// 쓰던 5개 화면 중 `/quote`·`/apply` 는 31차에 시안 헤더로 바뀌었고,
+// 공개 하위 화면의 공용 헤더. 🔴 **지금 쓰는 곳은 둘이다** — `CustomerPortalShell` 의
+// 공개 경로 분기(`/customer/login` · `/customer/support-verify`)와 **법적 문서 3종**
+// (`components/LegalDoc.tsx`, 2026-09-08 에 메뉴 있는 헤더에서 이쪽으로 옮겼다).
+// 원래 이 컴포넌트를 쓰던 5개 화면 중 `/quote`·`/apply` 는 31차에 시안 헤더로 바뀌었고,
 // `/status`·`/quote/status`·`/apply/status` 는 31차 리뷰에 라우트째 삭제됐다.
 //
 // 그 5개 화면은 원래 **완전히 똑같은 헤더 JSX를 각자 복사해서** 갖고 있었다(2종 —
@@ -14,10 +15,12 @@ import { useScrolled } from "@/lib/useScrolled";
 // 고쳐야 했고, 스티키를 붙이려면 또 5곳을 고쳐야 해서 하나로 합친 것이다.
 // **공개 하위 화면에 헤더를 새로 만들지 말고 이 컴포넌트를 쓸 것.**
 //
-// 랜딩·회사소개·차량안내·법적 문서는 메뉴와 모바일 드롭다운이 있는
-// `components/LandingHeader.tsx`를 쓴다(내용이 달라 일부러 합치지 않음).
-// **다만 스티키 동작과 겉모습은 `.public-header` CSS 클래스를 양쪽이 공유**하므로
-// 헤더 높이·배경·그림자를 바꿀 때는 그 클래스 한 곳만 고치면 된다.
+// 랜딩·`/quote`·`/apply` 는 메뉴와 모바일 드롭다운이 있는
+// `components/landing/LandingHeader.tsx`(31차 시안 헤더)를 쓴다 — 내용이 달라 일부러
+// 합치지 않았다. **다만 스티키 동작과 겉모습은 `.public-header` CSS 클래스를 양쪽이
+// 공유**하므로 헤더 높이·배경·그림자를 바꿀 때는 그 클래스 한 곳만 고치면 된다.
+// ⚠️ 예전에는 세 번째로 `components/LandingHeader.tsx`(37차, 회사소개·차량·요금 안내
+// 메뉴가 있던 헤더)가 있었는데, **2026-09-08 에 그 두 화면이 삭제되면서 파일째 없어졌다.**
 //
 // ⚠️ 관리자(`/admin`)·운송관리(`/customer`) 화면의 `TopNav.tsx`와는 무관하다. 건드리지 말 것.
 // 🔴 「문의·신청 현황 조회」 칩을 다시 만들지 말 것 — 사용자 지시(2026-09-01).

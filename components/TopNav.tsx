@@ -159,13 +159,13 @@ function TopNavInner() {
 
   // ⚠️ **새 공개 경로(admin도 customer도 아닌 최상위 경로)를 추가하면 여기에도 반드시
   // 추가할 것**(원칙 11번). 빠뜨리면 관리자 메뉴가 그 공개 페이지 위에 그대로 얹혀서
-  // 나타난다 — 28차에 `/about`·`/vehicles`를 만들면서 실제로 또 겪었음.
+  // 나타난다 — 28차에 회사소개·차량안내 화면을 만들면서, 30차에 법적 문서 3종을
+  // 만들면서 실제로 두 번 겪었음.
+  // ⚠️ 그 두 화면(`/about`·`/vehicles`)은 2026-09-08 에 삭제돼서 이 목록에서도 뺐다.
   const isPublicPath =
     pathname === "/admin/login" ||
     pathname?.startsWith("/customer") ||
     pathname === "/" ||
-    pathname?.startsWith("/about") ||
-    pathname?.startsWith("/vehicles") ||
     pathname?.startsWith("/quote") ||
     pathname?.startsWith("/apply") ||
     pathname?.startsWith("/terms") ||
