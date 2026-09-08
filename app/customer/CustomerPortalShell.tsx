@@ -280,6 +280,15 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
     router.push("/customer/login");
   }
 
+  // 🔴 설치형 앱(홈 화면 추가)으로 열면 브라우저 뒤로가기 단추가 아예 없다 —
+  // 그래서 화면 안에 뒤로가기를 둔다(2026-09-08 신고). 데스크탑은 브라우저 단추가
+  // 있으므로 CSS로 숨긴다(.pv2-mobile-header 자체가 태블릿·모바일 전용이다).
+  // ⚠️ 히스토리가 없으면(앱을 이 화면에서 바로 켠 경우) 뒤로 갈 곳이 없으므로 홈으로 보낸다.
+  function handleBack() {
+    if (typeof window !== "undefined" && window.history.length > 1) router.back();
+    else router.push("/customer");
+  }
+
   // 로그인 전 화면(로그인·지원접속 확인)은 포털 셸(사이드바·알림 배지)을 건너뛴다.
   // 다만 **공개 화면 공용 헤더는 붙인다**(12차) — 랜딩의 옐로 헤더를 보고 넘어왔는데
   // 여기서 헤더가 사라지면 브랜드 연속성이 끊기고, 헤더 로고가 홈으로 돌아가는 길도 된다.
@@ -334,11 +343,29 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
     <div className="portal-v2">
       {/* 태블릿·모바일 상단 로고 헤더 */}
       <header className="pv2-mobile-header">
-        <Link href="/customer" aria-label="위캐리 운송관리 홈">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/portal/wecarry-system-logo.svg" alt="위캐리 운송관리" className="pv2-mobile-logo" />
-        </Link>
-        <span className="pv2-mobile-company">{companyName}</span>
+        <div className="pv2-mobile-side">
+          {/* 🔴 홈(/customer)에서는 뒤로가기를 그리지 않는다 — 갈 곳이 없다. */}
+          {pathname !== "/customer" && (
+            <button
+              type="button"
+              className="pv2-mobile-icon-btn"
+              onClick={handleBack}
+              aria-label="뒤로 가기"
+            >
+              ←
+            </button>
+          )}
+          <Link href="/customer" aria-label="위캐리 운송관리 홈">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/portal/wecarry-system-logo.svg" alt="위캐리 운송관리" className="pv2-mobile-logo" />
+          </Link>
+        </div>
+        <div className="pv2-mobile-side pv2-mobile-side-end">
+          <span className="pv2-mobile-company">{companyName}</span>
+          <button type="button" className="pv2-mobile-logout" onClick={handleLogout}>
+            로그아웃
+          </button>
+        </div>
       </header>
 
       <div className="pv2-shell">

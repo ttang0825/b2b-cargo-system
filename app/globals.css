@@ -531,6 +531,12 @@ tbody tr:hover {
   display: none;
 }
 
+/* 관리자 상단바 모바일 액션 묶음 — 뒤로 · 로그아웃 · 메뉴.
+   데스크탑에서는 통째로 숨긴다(우측 .nav-desktop-group에 로그아웃이 이미 있다). */
+.nav-mobile-actions {
+  display: none;
+}
+
 /* 비회원이 도달하는 공개 화면 전용 — iOS Safari는 입력창 font-size가 16px 미만이면
    포커스 시 화면을 자동 확대해서(입력할 때마다 화면이 커지고 좌우로 밀림) 유입 폼에서
    특히 문제가 됨. `.field input`(14px)과 클래스 없는 맨 input(브라우저 기본 13.33px)
@@ -538,13 +544,37 @@ tbody tr:hover {
    금지라 각 페이지 최상위의 `.public-form` 래퍼 안에서만 16px로 올림(`.field` 바깥에
    있는 AddressSearch·DateTimePicker·맨 input까지 함께 덮도록 요소 선택자로 지정).
    적용 대상: /quote, /apply, /status, /quote/status, /apply/status, /customer/login
-   (로그인 이후의 화주포털 내부 화면은 포털 전체 톤과 함께 별도로 다룰 항목이라 제외,
-   관리자 화면은 내부용이라 14px 유지).
-   `.field input`과 특성도가 같으므로 반드시 그 규칙보다 아래에 있어야 적용됨. */
+   `.field input`과 특성도가 같으므로 반드시 그 규칙보다 아래에 있어야 적용됨.
+   ⚠️ **「관리자·로그인 이후 화면은 제외」라고 적혀 있던 것은 2026-09-08 에 뒤집혔다** —
+      아래 모바일 전역 규칙이 폰에서는 전 화면을 16px 로 올린다. 여기(`.public-form`)는
+      **데스크탑에서도 16px 인 공개 유입 폼**이라는 뜻만 남는다. */
 .public-form input,
 .public-form select,
 .public-form textarea {
   font-size: 16px;
+}
+
+/* 🔴 **모바일에서는 입력창 글자를 16px 아래로 두지 않는다.**
+   아이폰 사파리는 16px 미만 입력창에 포커스하면 화면을 확대하는데, **한 번 확대되면
+   스스로 되돌아가지 않는다** — 그래서 로그인 창을 눌러 커진 화면이 로그인한 뒤 내부
+   화면까지 커진 채로 남는다(2026-09-08 신고, 내부관리·운송관리 공통).
+   위 `.public-form` 은 공개 유입 화면만 덮어서 **`/admin/login`(`.field input` 14px)과
+   로그인 이후의 모든 화면(`.pv2-input` 15px · `.pv2-input-sm` 14.5px)이 빠져 있었다.**
+   🔴 **화면별로 예외를 두지 말 것** — 폰에서 16px 미만이어야 할 입력창은 하나도 없다.
+      한 곳만 빠져도 거기를 누르는 순간 화면 전체가 커진 채로 남는다.
+   ⚠️ 체크박스·라디오·슬라이더는 글자가 없어 제외한다(크기가 바뀌면 배치가 틀어진다).
+   ⚠️ 데스크탑은 한 곳도 안 바뀐다 — 관리자 화면의 14px 은 그대로다. */
+@media (max-width: 700px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    /* 🔴 `!important` 를 빼지 말 것 — 이 규칙은 요소 선택자(0,0,1)라 클래스
+       (`.pv2-input` 0,1,0)와 **인라인 style**(`/admin/orders` 검색·정렬칸의
+       `fontSize: 12.5`)에 그냥 진다. 실제로 빼고 재보니 그 세 곳이 그대로 12.5~15px
+       였다(2026-09-08 실측). 폰에서 16px 미만이어야 할 입력창은 하나도 없으므로
+       이 자리에서는 `!important` 가 맞다. */
+    font-size: 16px !important;
+  }
 }
 
 /* 관리자 상단바 로고 — 아래 .brand-sub("내부 관리자 (admin)")와 함께 놓이므로
@@ -1146,12 +1176,51 @@ tbody tr:hover {
   .nav-desktop-group {
     display: none !important;
   }
+  .nav-mobile-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  /* 🔴 폭이 좁으니 좌우 여백을 줄인다 — 로고 + 뒤로 + 로그아웃 + 메뉴가 한 줄에 들어가야 한다 */
+  .top-nav-inner {
+    padding: 14px 14px;
+  }
+  .nav-mobile-icon-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 17px;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .nav-mobile-logout {
+    height: 36px;
+    padding: 0 11px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
   .nav-mobile-toggle {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     border-radius: 10px;
     border: 1px solid var(--border);
     background: var(--surface);
@@ -2771,10 +2840,63 @@ tbody tr:hover {
     color: var(--pv2-text-2);
     white-space: nowrap;
     text-align: right;
+    /* 🔴 뒤로·로그아웃이 들어오면서 자리가 좁아졌다 — 상호가 길면 밀어내지 말고
+       스스로 줄여서 말줄임하도록 둔다(안 그러면 로그아웃이 화면 밖으로 나간다). */
     min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* 헤더 좌·우 묶음 — 왼쪽은 뒤로+로고, 오른쪽은 상호+로그아웃 */
+  .pv2-mobile-side {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+  .pv2-mobile-side-end {
+    justify-content: flex-end;
+  }
+  .pv2-mobile-icon-btn {
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    border: 1px solid var(--pv2-border);
+    background: var(--pv2-surface);
+    color: var(--pv2-text);
+    font-size: 17px;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .pv2-mobile-logout {
+    flex-shrink: 0;
+    height: 34px;
+    padding: 0 12px;
+    border-radius: 10px;
+    border: 1px solid var(--pv2-border);
+    background: var(--pv2-surface);
+    color: var(--pv2-text-2);
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    white-space: nowrap;
   }
   .pv2-main {
     padding: 20px 16px 96px;
+  }
+  @media (max-width: 430px) {
+    /* 360~430px — 좌우 여백을 줄여 로고·상호·로그아웃이 한 줄에 들어가게 한다 */
+    .pv2-mobile-header {
+      padding: 8px 12px 12px;
+      gap: 8px;
+    }
+    .pv2-mobile-side {
+      gap: 8px;
+    }
   }
   .pv2-tabbar {
     display: flex;

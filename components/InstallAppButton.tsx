@@ -15,7 +15,7 @@ import { useEffect, useState } from "react";
  *    「설치할 길을 알려줌」은 다르다. 네 갈래로 갈린다:
  *      앱 안 브라우저(카톡 등)   → **먼저 기본 브라우저로 넘겨준다**(아래 참고)
  *      설치 신호를 잡았다        → 눌러서 바로 설치
- *      아이폰                    → 「공유 → 홈 화면에 추가」 안내
+ *      아이폰                    → 「⋯(더보기) → 공유 → 홈 화면에 추가」 안내
  *      크로미움인데 신호가 없다   → **주소창 설치 아이콘·메뉴 위치 안내**
  *    마지막 갈래가 없으면 **설치했다 지운 사람이 다시 설치할 길을 잃는다** — 크롬은
  *    지운 뒤 한동안 신호를 다시 쏘지 않는데, 그때도 주소창으로는 설치가 된다
@@ -289,6 +289,15 @@ export default function InstallAppButton({
                     ? "버튼이 동작하지 않으면 오른쪽 아래 메뉴에서 「다른 브라우저로 열기」를 눌러 주세요."
                     : "복사한 주소를 브라우저 주소창에 붙여 넣어 열어 주세요."}
                 </p>
+                {/* 🔴 이 안내를 지우지 말 것 — 「카톡에서 로그인했는데 브라우저로 넘어가니
+                    다시 로그인하라고 한다」는 문의가 실제로 있었다(2026-09-08).
+                    브라우저가 다르면 저장 공간(쿠키·로그인 정보)도 별개라 세션을 넘길
+                    방법이 아예 없다. 🔴 「넘길 수 있는 방법이 있나」를 다시 찾지 말 것 —
+                    로그인 상태를 주소에 실어 넘기는 것은 그 주소가 새면 계정이 새는 것이다. */}
+                <p style={{ margin: "8px 0 0", fontSize: 13, lineHeight: 1.6, color: "#8b95a1" }}>
+                  브라우저는 {inAppName}과 저장 공간이 따로라 <strong>로그인이 풀려 있습니다</strong> —
+                  한 번 더 로그인해 주세요. 홈 화면에 추가한 뒤에는 그 창에서 로그인이 유지됩니다.
+                </p>
               </div>
             )}
 
@@ -298,8 +307,13 @@ export default function InstallAppButton({
             <ol style={{ margin: 0, paddingLeft: 20, fontSize: 14.5, lineHeight: 1.95 }}>
               {ios ? (
                 <>
+                  {/* 🔴 아이폰 최신 사파리는 아래 막대가 접혀 있어 **공유 단추가 바로 안 보인다** —
+                      주소창 오른쪽 ⋯(더보기)를 먼저 눌러야 공유가 나온다(사용자 실사용 신고
+                      2026-09-08). 예전 iOS 는 공유가 아래 막대에 그대로 있으므로 **두 경우를
+                      한 단계 안에 같이 적는다.** 🔴 ⋯ 를 빼지 말 것 — 빼면 최신 아이폰에서
+                      「없는 단추를 누르라」는 안내가 된다. */}
                   <li>
-                    아래쪽 <strong>공유</strong> 단추(
+                    주소창 오른쪽 <strong>⋯</strong>(더보기)를 누른 뒤 <strong>공유</strong>(
                     <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"
                       style={{ verticalAlign: "-2px" }}>
                       <path d="M12 3v12M12 3 8 7M12 3l4 4" fill="none" stroke="currentColor"
@@ -308,6 +322,9 @@ export default function InstallAppButton({
                         strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                     )를 누릅니다.
+                    <span style={{ display: "block", fontSize: 13, color: "#8b95a1", lineHeight: 1.6 }}>
+                      공유 단추가 화면 아래에 바로 보이면 그것을 눌러도 됩니다.
+                    </span>
                   </li>
                   <li>
                     목록을 내려 <strong>홈 화면에 추가</strong>를 누릅니다.

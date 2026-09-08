@@ -78,13 +78,17 @@ export default function CustomerLoginPage() {
       email: syntheticLoginEmail(trimmedId),
       password: password.trim(),
     });
-    setLoading(false);
     if (error) {
+      setLoading(false);
       setError("아이디 또는 비밀번호가 올바르지 않습니다.");
       return;
     }
+    // 🔴 성공했을 때는 `setLoading(false)` 를 부르지 말 것 — 화면이 넘어가기 전에 단추가
+    // 「로그인」으로 되돌아갔다가 잠시 뒤 이동해서, 폰에서 「눌렀는데 아무 일도 안 난다」로
+    // 읽힌다(2026-09-08 신고). 이동할 때까지 「로그인 중...」을 유지한다.
+    // 🔴 `router.refresh()` 를 되살리지 말 것 — 화주포털 세션은 쿠키가 아니라
+    // localStorage(`customer-portal-auth`)라 서버가 다시 그릴 것이 없다. 왕복만 한 번 더 늘린다.
     router.push("/customer");
-    router.refresh();
   }
 
   return (
