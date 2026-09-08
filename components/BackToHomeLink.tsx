@@ -26,7 +26,16 @@ import { useRouter } from "next/navigation";
 //    - `history.length <= 1`이면 가로채지 않는다 — 새 탭으로 열린 경우 뒤로 갈 곳이 없다.
 //    - Ctrl/Cmd/Shift/가운데 버튼은 가로채지 않는다 — 새 탭 열기·주소 복사가 그대로
 //      동작해야 한다(31차 법적 문서 모달에서 쓴 것과 같은 기준).
-export default function BackToHomeLink() {
+// 🔴 `className`·`style` 은 **자리를 옮길 수 있게 하려고** 받는다 — 운송관리 로그인은
+//    이 링크를 상단 헤더 오른쪽 끝에 두므로 기본 `marginTop: 28` 을 0 으로 덮어야 한다
+//    (사용자 지시 2026-09-08). 기본값 자체는 바꾸지 말 것 — `/apply` 는 지금도 폼 하단이다.
+export default function BackToHomeLink({
+  className,
+  style,
+}: {
+  className?: string;
+  style?: React.CSSProperties;
+} = {}) {
   const router = useRouter();
   // 랜딩에서 넘어온 경우인지. 서버 렌더 결과와 어긋나지 않도록 마운트 후에만 판정한다.
   const [cameFromLanding, setCameFromLanding] = useState(false);
@@ -37,7 +46,7 @@ export default function BackToHomeLink() {
   }, []);
 
   return (
-    <div style={{ marginTop: 28, textAlign: "center" }}>
+    <div className={className} style={{ marginTop: 28, textAlign: "center", ...style }}>
       <Link
         href="/"
         className="back-to-home-link"

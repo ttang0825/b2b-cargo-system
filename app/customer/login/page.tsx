@@ -96,10 +96,16 @@ export default function CustomerLoginPage() {
       className="landing-page public-form screen-fit"
       style={{ display: "flex", flexDirection: "column", background: "#F4F3EF", color: "#0E0F12" }}
     >
+      {/* 🔴 「홈으로」는 헤더 오른쪽 끝이다(사용자 지시 2026-09-08) — 로고 옆.
+          🔴 헤더 로고와 동작이 다르다 — 로고는 홈 맨 위로, 이 링크는 **왔던 자리로**
+             되돌아간다(13차 리뷰). 같은 줄에 나란히 있지만 겹치는 기능이 아니다.
+          🔴 `marginTop: 0` 을 빼지 말 것 — 컴포넌트 기본값이 폼 하단용 28px 이라
+             그대로 두면 헤더 안에서 링크가 아래로 내려앉는다. */}
       <header className="landing-login-header" style={{ padding: "18px 56px", display: "flex", alignItems: "center" }}>
         <Link href="/" aria-label="위캐리 운송 홈" style={{ display: "flex", alignItems: "center", color: "#0E0F12" }}>
           <BrandLogo style={{ height: 46, width: "auto", display: "block" }} />
         </Link>
+        <BackToHomeLink className="landing-login-home" style={{ marginTop: 0, marginLeft: "auto" }} />
       </header>
 
       <main className="landing-login-main" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "64px 24px 96px" }}>
@@ -219,18 +225,12 @@ export default function CustomerLoginPage() {
             </div>
           </div>
 
-          {/* 🔴 헤더 로고와 동작이 다르다 — 로고는 홈 맨 위로, 이 링크는 **왔던 자리로**
-              되돌아간다(13차 리뷰). `BackToHomeLink` 주석 참고.
-              🔴 두 줄을 한 묶음으로 감싼 것은 **모바일에서 한 줄로 붙이기 위해서다** —
-                 위아래로 쌓으면 그것만 60px 을 쓴다(2026-09-08, 첫 화면 맞추기).
-                 데스크탑은 지금까지처럼 두 줄 그대로다. */}
+          {/* 🔴 「홈 화면에 추가」는 카드 아래 가운데다(사용자 지시 2026-09-08).
+              「홈으로」는 위 헤더로 올라갔으므로 여기는 단추 하나뿐이다 —
+              🔴 두 단추를 다시 한 줄로 묶지 말 것. */}
           <div className="landing-login-actions">
             <div style={{ marginTop: 20, textAlign: "center" }}>
               <InstallAppButton appName="운송관리" className="pv2-install-btn" />
-            </div>
-
-            <div style={{ marginTop: 16, textAlign: "center" }}>
-              <BackToHomeLink />
             </div>
           </div>
         </div>

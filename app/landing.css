@@ -438,36 +438,16 @@
   .landing-login-submit { margin-top: 18px !important; padding: 14px !important; }
   .landing-login-foot { margin-top: 20px !important; padding-top: 18px !important; }
 
-  /* 🔴 설치 버튼과 「홈으로」를 한 줄로 — 쌓아 두면 그것만 60px 을 쓴다.
-     둘 중 하나만 그려질 때도(설치할 방법이 없으면 버튼이 아예 없다) 가운데 정렬이라
-     모양이 무너지지 않는다. */
-  .landing-login-actions { display: flex !important; align-items: center !important;
-    justify-content: center !important; gap: 18px !important; margin-top: 14px !important; }
-  /* 🔴 `nowrap` 을 빼지 말 것 — 한 줄로 붙이면 폭이 좁아져 「← 홈으로」가 두 줄로
-     접힌다(실측 37px → 72px). 접히는 순간 한 화면 맞춤이 그만큼 깨진다. */
-  .landing-login-actions > div { margin-top: 0 !important; white-space: nowrap !important; }
-  /* 🔴 한 겹 더 지워야 한다 — `BackToHomeLink` 가 **자기 안에서 다시** `marginTop: 28`
-     짜리 div 로 감싸기 때문에, 바깥 div 만 0 으로 만들면 링크가 그 안에서 28px 내려앉아
-     두 단추의 세로 중심이 14px 어긋난다(실측 713 vs 727).
-     🟢 설치 안내창은 `position: fixed` 라 이 여백과 무관하다. */
-  .landing-login-actions > div > div { margin-top: 0 !important; }
-  /* 🔴 두 단추의 모양·높이를 맞춘다(사용자 지적 2026-09-08 — 「정렬이 되어 있지 않다」).
-     원래 「앱으로 설치」는 알약(높이 37px)이고 「← 홈으로」는 맨 글자 링크(44px)라
-     같은 줄에 놓으면 크기도 테두리도 어긋나 보였다. 둘 다 44px 알약으로 통일한다.
-     🔴 44px 아래로 줄이지 말 것 — 터치 영역 최소치다(`.back-to-home-link` 주석 참고).
-     ⚠️ 글자색은 일부러 다르다 — 설치가 이 자리의 주 동작이라 진하게 두고 홈으로는 흐리게. */
-  .landing-login-actions .pv2-install-btn,
-  .landing-login-actions .back-to-home-link {
-    height: 44px !important;
-    min-height: 44px !important;
-    padding: 0 16px !important;
-    border: 1px solid #e8e7e2 !important;
-    border-radius: 999px !important;
-    background: #ffffff !important;
-    font-size: 13.5px !important;
-    font-weight: 700 !important;
-    box-sizing: border-box !important;
-  }
+  /* 🔴 이 자리에는 「홈 화면에 추가」 하나만 남는다 — 「홈으로」는 헤더 오른쪽 끝으로
+     올라갔다(사용자 지시 2026-09-08). 🔴 둘을 다시 한 줄로 묶지 말 것.
+     ⚠️ **예전에 있던 `white-space: nowrap` 을 되살리지 말 것** — 설치 안내창이 이 안에서
+        열리는데(버튼과 형제다) 그 값을 물려받아 안내 글이 한 줄로 늘어나면서
+        **팝업이 옆으로 끌리게 된다**(사용자 신고 2026-09-08). */
+  .landing-login-actions { margin-top: 14px !important; text-align: center !important; }
+  .landing-login-actions > div { margin-top: 0 !important; }
+  /* 헤더의 「홈으로」 — 터치 영역은 남기되 헤더 높이를 늘리지 않을 만큼만 줄인다
+     (모바일 로고가 34px 이라 44px 그대로면 헤더가 그만큼 두꺼워진다). */
+  .landing-login-home .back-to-home-link { min-height: 36px !important; }
 
   /* 🔴 푸터는 모바일에서만 감춘다(사용자 지시 2026-09-08) — 데스크탑은 그대로다.
      🟢 고객센터 번호는 카드 안 「비밀번호 문의 1661-2403」이 같은 번호로 이미 안내한다.

@@ -15,7 +15,7 @@ import { useEffect, useState } from "react";
  *    「설치할 길을 알려줌」은 다르다. 네 갈래로 갈린다:
  *      앱 안 브라우저(카톡 등)   → **먼저 기본 브라우저로 넘겨준다**(아래 참고)
  *      설치 신호를 잡았다        → 눌러서 바로 설치
- *      아이폰                    → 「⋯(더보기) → 공유 → 홈 화면에 추가」 안내
+ *      아이폰                    → 「···(더보기) → 공유 → 홈 화면에 추가」 안내
  *      크로미움인데 신호가 없다   → **주소창 설치 아이콘·메뉴 위치 안내**
  *    마지막 갈래가 없으면 **설치했다 지운 사람이 다시 설치할 길을 잃는다** — 크롬은
  *    지운 뒤 한동안 신호를 다시 쏘지 않는데, 그때도 주소창으로는 설치가 된다
@@ -231,9 +231,13 @@ export default function InstallAppButton({
             position: "fixed", inset: 0, zIndex: 200, display: "flex",
             alignItems: "center", justifyContent: "center", padding: 20,
             background: "rgba(0,0,0,0.45)",
-            // 🔴 모달은 자기 글자색과 정렬을 스스로 선언한다 — 어두운 배경이나 가운데
-            //    정렬 안에서 열리면 상속으로 글자가 안 보이거나 가운데로 밀린다(65차·66차).
-            color: "#191f28", textAlign: "left",
+            // 🔴 모달은 자기 글자색·정렬·줄바꿈을 스스로 선언한다 — 부르는 자리의 값이
+            //    그대로 흘러들어온다. 어두운 배경이면 글자가 안 보이고(65차·66차),
+            //    가운데 정렬이면 밀리고, `white-space: nowrap` 이면 **안내 글이 한 줄로
+            //    늘어나 팝업을 옆으로 끌어야 한다**(사용자 신고 2026-09-08 — 운송관리
+            //    로그인의 단추 묶음이 실제로 nowrap 이었다).
+            //    🔴 이 세 줄을 지우지 말 것 — 지운 자리에서 바로 증상이 되살아난다.
+            color: "#191f28", textAlign: "left", whiteSpace: "normal",
           }}
         >
           <div
@@ -245,6 +249,10 @@ export default function InstallAppButton({
               // ⚠️ 인라인 style 은 같은 속성을 두 번 못 써서 `dvh` 폴백을 둘 수 없다 —
               //    어디서나 도는 `vh` 를 쓰되 주소창 높이를 감안해 82%로 잡았다.
               maxHeight: "82vh", overflowY: "auto",
+              // 🔴 가로로는 절대 끌리지 않게 한다 — 긴 낱말이 있어도 그 자리에서 접는다.
+              //    (`.landing-page` 의 `word-break: keep-all` 은 그대로 두고, 칸을
+              //    넘길 때만 이 값이 끼어든다.)
+              overflowX: "hidden", overflowWrap: "anywhere",
             }}
           >
             <h2 style={{ margin: "0 0 6px", fontSize: 17.5, letterSpacing: "-0.01em" }}>
@@ -313,7 +321,10 @@ export default function InstallAppButton({
                       한 단계 안에 같이 적는다.** 🔴 ⋯ 를 빼지 말 것 — 빼면 최신 아이폰에서
                       「없는 단추를 누르라」는 안내가 된다. */}
                   <li>
-                    주소창 오른쪽 <strong>⋯</strong>(더보기)를 누른 뒤 <strong>공유</strong>(
+                    {/* ⚠️ 글자는 `···`(가운뎃점 셋)다 — `⋯`(U+22EF)는 수학 기호라
+                        빠진 서체가 있어 네모로 나올 수 있다(검증 환경에서 실제로 그랬다).
+                        가운뎃점은 어느 서체에나 있고 사파리 단추 모양과도 같다. */}
+                    주소창 오른쪽 <strong>···</strong>(더보기)를 누른 뒤 <strong>공유</strong>(
                     <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"
                       style={{ verticalAlign: "-2px" }}>
                       <path d="M12 3v12M12 3 8 7M12 3l4 4" fill="none" stroke="currentColor"
