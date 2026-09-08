@@ -123,17 +123,26 @@ export default function CustomerLoginPage() {
                 type="text"
                 value={loginId}
                 onChange={(e) => setLoginId(e.target.value)}
+                name="username"
                 autoComplete="username"
                 autoFocus
                 placeholder="발급받은 아이디"
                 style={inputStyle}
               />
 
-              <label className="landing-login-label" style={{ ...labelStyle, marginTop: 20 }}>비밀번호</label>
+              <label htmlFor="portal-login-password" className="landing-login-label" style={{ ...labelStyle, marginTop: 20 }}>비밀번호</label>
               <div style={{ marginTop: 9 }}>
+                {/* 🔴 `autoComplete="current-password"` 와 `name` 을 빼지 말 것 —
+                    아이폰은 **홈 화면에 추가한 앱 창이 사파리와 저장 공간이 분리**되어
+                    거기서는 로그인이 처음부터 다시다(2026-09-08 신고). 비밀번호
+                    저장소(키체인)만은 기기 전체가 공유하므로, 이 두 값이 있어야
+                    앱 창에서도 아이디·비밀번호가 자동으로 채워진다. */}
                 <PasswordInput
                   value={password}
                   onChange={setPassword}
+                  id="portal-login-password"
+                  name="password"
+                  autoComplete="current-password"
                   inputStyle={{ ...inputStyle, marginTop: 0 }}
                 />
               </div>

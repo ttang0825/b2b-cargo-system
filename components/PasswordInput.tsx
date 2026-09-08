@@ -6,6 +6,17 @@ import { useState } from "react";
  * @param inputStyle 입력창 인라인 스타일. 🔴 31차 `/customer/login` 이 `.field` 래퍼 없이
  *   시안 스타일을 입히려고 더했다(추가만 하는 방식 — `BrandLogo` 의 `style` 과 같다).
  *   ⚠️ `paddingRight` 는 눈 아이콘 자리라 덮어쓰지 말 것.
+ *
+ * @param autoComplete 🔴 **로그인 화면에서는 반드시 `"current-password"` 를 넘길 것.**
+ *   빠져 있으면 아이폰·안드로이드 비밀번호 저장소가 이 칸을 비밀번호로 확신하지 못해
+ *   **저장 제안도 자동 채우기도 잘 뜨지 않는다.** 아이폰은 홈 화면에 추가한 앱 창이
+ *   사파리와 **저장 공간이 완전히 분리**되어 로그인이 처음부터 다시라(2026-09-08 신고),
+ *   그 창에서 자동 채우기가 뜨는지가 실사용 편의를 가른다 — 비밀번호 저장소(키체인)는
+ *   기기 전체가 공유하므로 이 한 가지는 칸막이를 넘어간다.
+ *   ⚠️ 비밀번호 **변경** 화면에는 `"new-password"` 를 넘길 것 — 안 그러면 새 비밀번호
+ *   칸에 옛 비밀번호가 채워진다.
+ *   🔴 기본값을 두지 말 것 — 로그인과 변경 화면의 올바른 값이 서로 다르다.
+ * @param name/@param id 비밀번호 저장소가 아이디 칸과 짝을 짓는 데 쓴다. 로그인 화면에서만 넘긴다.
  */
 export default function PasswordInput({
   value,
@@ -13,12 +24,18 @@ export default function PasswordInput({
   placeholder,
   autoFocus,
   inputStyle,
+  autoComplete,
+  name,
+  id,
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   autoFocus?: boolean;
   inputStyle?: React.CSSProperties;
+  autoComplete?: string;
+  name?: string;
+  id?: string;
 }) {
   const [show, setShow] = useState(false);
 
@@ -30,6 +47,9 @@ export default function PasswordInput({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         autoFocus={autoFocus}
+        autoComplete={autoComplete}
+        name={name}
+        id={id}
         style={{ ...inputStyle, paddingRight: 42 }}
       />
       <button

@@ -167,15 +167,15 @@ export default function MyAccountPage() {
         <form onSubmit={handleChangePassword} onKeyDown={handleFormKeyDown}>
           <div className="field" style={{ marginBottom: 12 }}>
             <label>현재 비밀번호</label>
-            <PasswordInput value={currentPassword} onChange={setCurrentPassword} />
+            <PasswordInput value={currentPassword} onChange={setCurrentPassword} autoComplete="current-password" />
           </div>
           <div className="field" style={{ marginBottom: 12 }}>
             <label>새 비밀번호 (8자 이상)</label>
-            <PasswordInput value={newPassword} onChange={setNewPassword} />
+            <PasswordInput value={newPassword} onChange={setNewPassword} autoComplete="new-password" />
           </div>
           <div className="field" style={{ marginBottom: 16 }}>
             <label>새 비밀번호 확인</label>
-            <PasswordInput value={confirmPassword} onChange={setConfirmPassword} />
+            <PasswordInput value={confirmPassword} onChange={setConfirmPassword} autoComplete="new-password" />
           </div>
           {passwordError && <div className="error-box" style={{ marginBottom: 12 }}>{passwordError}</div>}
           <button className="btn" type="submit" disabled={changingPassword}>

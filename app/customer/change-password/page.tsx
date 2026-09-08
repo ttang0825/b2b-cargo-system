@@ -128,16 +128,16 @@ export default function ChangePasswordPage() {
           {!isForced && (
             <div className="field" style={{ marginBottom: 12 }}>
               <label>기존 비밀번호</label>
-              <PasswordInput value={currentPassword} onChange={setCurrentPassword} autoFocus />
+              <PasswordInput value={currentPassword} onChange={setCurrentPassword} autoComplete="current-password" autoFocus />
             </div>
           )}
           <div className="field" style={{ marginBottom: 12 }}>
             <label>새 비밀번호 (8자 이상)</label>
-            <PasswordInput value={password} onChange={setPassword} autoFocus={isForced} />
+            <PasswordInput value={password} onChange={setPassword} autoComplete="new-password" autoFocus={isForced} />
           </div>
           <div className="field" style={{ marginBottom: 16 }}>
             <label>새 비밀번호 확인</label>
-            <PasswordInput value={confirm} onChange={setConfirm} />
+            <PasswordInput value={confirm} onChange={setConfirm} autoComplete="new-password" />
           </div>
           {error && <div className="error-box">{error}</div>}
           <button

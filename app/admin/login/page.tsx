@@ -90,11 +90,27 @@ function LoginInner() {
         <form onSubmit={handleSubmit}>
           <div className="field" style={{ marginBottom: 12 }}>
             <label>이메일</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
+            <input
+              id="admin-login-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              name="username"
+              autoComplete="username"
+              autoFocus
+            />
           </div>
           <div className="field" style={{ marginBottom: 12 }}>
             <label>비밀번호</label>
-            <PasswordInput value={password} onChange={setPassword} />
+            {/* 🔴 `autoComplete`·`name` 을 빼지 말 것 — 비밀번호 저장소가 이 칸을
+                비밀번호로 확신해야 저장 제안과 자동 채우기가 뜬다(화주포털과 같은 이유). */}
+            <PasswordInput
+              value={password}
+              onChange={setPassword}
+              id="admin-login-password"
+              name="password"
+              autoComplete="current-password"
+            />
           </div>
           <label
             style={{
