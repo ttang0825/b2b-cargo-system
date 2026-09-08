@@ -15,7 +15,7 @@ import { useEffect, useState } from "react";
  *    「설치할 길을 알려줌」은 다르다. 네 갈래로 갈린다:
  *      앱 안 브라우저(카톡 등)   → **먼저 기본 브라우저로 넘겨준다**(아래 참고)
  *      설치 신호를 잡았다        → 눌러서 바로 설치
- *      아이폰                    → 「공유 → 홈 화면에 추가」 안내
+ *      아이폰                    → 「···(더보기) → 공유 → 홈 화면에 추가」 안내
  *      크로미움인데 신호가 없다   → **주소창 설치 아이콘·메뉴 위치 안내**
  *    마지막 갈래가 없으면 **설치했다 지운 사람이 다시 설치할 길을 잃는다** — 크롬은
  *    지운 뒤 한동안 신호를 다시 쏘지 않는데, 그때도 주소창으로는 설치가 된다
@@ -231,9 +231,13 @@ export default function InstallAppButton({
             position: "fixed", inset: 0, zIndex: 200, display: "flex",
             alignItems: "center", justifyContent: "center", padding: 20,
             background: "rgba(0,0,0,0.45)",
-            // 🔴 모달은 자기 글자색과 정렬을 스스로 선언한다 — 어두운 배경이나 가운데
-            //    정렬 안에서 열리면 상속으로 글자가 안 보이거나 가운데로 밀린다(65차·66차).
-            color: "#191f28", textAlign: "left",
+            // 🔴 모달은 자기 글자색·정렬·줄바꿈을 스스로 선언한다 — 부르는 자리의 값이
+            //    그대로 흘러들어온다. 어두운 배경이면 글자가 안 보이고(65차·66차),
+            //    가운데 정렬이면 밀리고, `white-space: nowrap` 이면 **안내 글이 한 줄로
+            //    늘어나 팝업을 옆으로 끌어야 한다**(사용자 신고 2026-09-08 — 운송관리
+            //    로그인의 단추 묶음이 실제로 nowrap 이었다).
+            //    🔴 이 세 줄을 지우지 말 것 — 지운 자리에서 바로 증상이 되살아난다.
+            color: "#191f28", textAlign: "left", whiteSpace: "normal",
           }}
         >
           <div
@@ -245,18 +249,45 @@ export default function InstallAppButton({
               // ⚠️ 인라인 style 은 같은 속성을 두 번 못 써서 `dvh` 폴백을 둘 수 없다 —
               //    어디서나 도는 `vh` 를 쓰되 주소창 높이를 감안해 82%로 잡았다.
               maxHeight: "82vh", overflowY: "auto",
+              // 🔴 가로로는 절대 끌리지 않게 한다 — 긴 낱말이 있어도 그 자리에서 접는다.
+              //    (`.landing-page` 의 `word-break: keep-all` 은 그대로 두고, 칸을
+              //    넘길 때만 이 값이 끼어든다.)
+              overflowX: "hidden", overflowWrap: "anywhere",
             }}
           >
             <h2 style={{ margin: "0 0 6px", fontSize: 17.5, letterSpacing: "-0.01em" }}>
               {inApp ? `${inAppName} 안에서는 추가할 수 없습니다` : `${appName} ${buttonLabel}`}
             </h2>
-            <p style={{ margin: "0 0 18px", fontSize: 14, lineHeight: 1.7, color: "#5f6b78" }}>
+            {/* ⚠️ 머리말은 한 줄이다 — 안내창이 길다는 지적(2026-09-08)에 줄였다.
+                제목이 이미 상황을 말하므로 여기서는 **다음에 할 일**만 적는다.
+                🔴 문장을 다시 늘리지 말 것. */}
+            <p style={{ margin: "0 0 16px", fontSize: 14, lineHeight: 1.65, color: "#5f6b78" }}>
               {inApp
-                ? `${inAppName}으로 링크를 열면 ${inAppName} 자체 브라우저가 뜨는데, 여기에는 홈 화면에 추가하는 메뉴가 없습니다. 먼저 ${ios ? "사파리" : "크롬"} 같은 기본 브라우저로 연 뒤 추가해 주세요.`
+                ? `여기에는 홈 화면에 추가하는 메뉴가 없습니다. ${ios ? "사파리" : "크롬"}로 먼저 열어 주세요.`
                 : ios
-                ? "아이폰·아이패드는 사파리에서 직접 추가합니다. 추가하면 주소창 없는 개별 창으로 열립니다."
-                : "한 번 설치했다 지운 뒤에는 브라우저가 설치 안내를 다시 띄우지 않기도 합니다. 그럴 때는 아래 방법으로 설치하시면 됩니다."}
+                ? "추가하면 주소창 없는 개별 창으로 열립니다."
+                : "설치 안내가 다시 뜨지 않을 때는 아래 방법으로 설치하시면 됩니다."}
             </p>
+
+            {/* 🔴 이 안내를 지우지 말 것 — 「사파리에서 로그인해 두고 홈 화면에 추가했더니
+                앱에서는 로그아웃 상태로 시작한다」는 문의가 실제로 있었다(2026-09-08).
+                아이폰은 홈 화면 앱 창을 **사파리와 완전히 분리된 저장 공간**에서 돌린다 —
+                애플이 그렇게 만든 것이라 세션을 넘길 방법이 없다(「아이디 저장」도 같이
+                안 넘어간다). 🔴 「넘길 수 있는 방법이 있나」를 다시 찾지 말 것.
+                🟢 대신 비밀번호 저장소(키체인)는 기기 전체가 공유하므로, 로그인 칸의
+                `autoComplete` 가 제대로 붙어 있으면 앱 창에서도 자동으로 채워진다.
+                ⚠️ 안드로이드는 해당 없다 — 크롬과 저장 공간을 같이 쓴다. */}
+            {/* ⚠️ `!inApp` 으로 가른다 — 앱 안 브라우저에서는 아래에 같은 뜻의 안내가
+                이미 있어서 둘 다 그리면 같은 말이 두 번 나온다. */}
+            {ios && !inApp && (
+              <p style={{
+                margin: "0 0 16px", fontSize: 13.5, lineHeight: 1.65, color: "#5f6b78",
+                background: "#F4F3EF", borderRadius: 10, padding: "10px 12px",
+              }}>
+                앱 창은 사파리와 저장 공간이 따로라 <strong>처음 한 번만 다시 로그인</strong>하면
+                그 뒤로는 유지됩니다.
+              </p>
+            )}
 
             {inApp && (
               <div style={{ marginBottom: 18 }}>
@@ -286,8 +317,16 @@ export default function InstallAppButton({
                 </button>
                 <p style={{ margin: "10px 0 0", fontSize: 13, lineHeight: 1.6, color: "#8b95a1" }}>
                   {inApp === "kakao"
-                    ? "버튼이 동작하지 않으면 오른쪽 아래 메뉴에서 「다른 브라우저로 열기」를 눌러 주세요."
-                    : "복사한 주소를 브라우저 주소창에 붙여 넣어 열어 주세요."}
+                    ? "안 열리면 오른쪽 아래 메뉴 → 「다른 브라우저로 열기」."
+                    : "복사한 주소를 브라우저에 붙여 넣어 열어 주세요."}
+                </p>
+                {/* 🔴 이 안내를 지우지 말 것 — 「카톡에서 로그인했는데 브라우저로 넘어가니
+                    다시 로그인하라고 한다」는 문의가 실제로 있었다(2026-09-08).
+                    브라우저가 다르면 저장 공간(쿠키·로그인 정보)도 별개라 세션을 넘길
+                    방법이 아예 없다. 🔴 「넘길 수 있는 방법이 있나」를 다시 찾지 말 것 —
+                    로그인 상태를 주소에 실어 넘기는 것은 그 주소가 새면 계정이 새는 것이다. */}
+                <p style={{ margin: "6px 0 0", fontSize: 13, lineHeight: 1.6, color: "#8b95a1" }}>
+                  저장 공간이 따로라 <strong>로그인은 다시 하셔야 합니다.</strong>
                 </p>
               </div>
             )}
@@ -298,8 +337,16 @@ export default function InstallAppButton({
             <ol style={{ margin: 0, paddingLeft: 20, fontSize: 14.5, lineHeight: 1.95 }}>
               {ios ? (
                 <>
+                  {/* 🔴 아이폰 최신 사파리는 아래 막대가 접혀 있어 **공유 단추가 바로 안 보인다** —
+                      주소창 오른쪽 ⋯(더보기)를 먼저 눌러야 공유가 나온다(사용자 실사용 신고
+                      2026-09-08). 예전 iOS 는 공유가 아래 막대에 그대로 있으므로 **두 경우를
+                      한 단계 안에 같이 적는다.** 🔴 ⋯ 를 빼지 말 것 — 빼면 최신 아이폰에서
+                      「없는 단추를 누르라」는 안내가 된다. */}
                   <li>
-                    아래쪽 <strong>공유</strong> 단추(
+                    {/* ⚠️ 글자는 `···`(가운뎃점 셋)다 — `⋯`(U+22EF)는 수학 기호라
+                        빠진 서체가 있어 네모로 나올 수 있다(검증 환경에서 실제로 그랬다).
+                        가운뎃점은 어느 서체에나 있고 사파리 단추 모양과도 같다. */}
+                    주소창 오른쪽 <strong>···</strong>(더보기)를 누른 뒤 <strong>공유</strong>(
                     <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"
                       style={{ verticalAlign: "-2px" }}>
                       <path d="M12 3v12M12 3 8 7M12 3l4 4" fill="none" stroke="currentColor"
@@ -308,6 +355,9 @@ export default function InstallAppButton({
                         strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                     )를 누릅니다.
+                    <span style={{ display: "block", fontSize: 13, color: "#8b95a1", lineHeight: 1.5 }}>
+                      공유가 아래에 보이면 바로 눌러도 됩니다.
+                    </span>
                   </li>
                   <li>
                     목록을 내려 <strong>홈 화면에 추가</strong>를 누릅니다.

@@ -438,14 +438,16 @@
   .landing-login-submit { margin-top: 18px !important; padding: 14px !important; }
   .landing-login-foot { margin-top: 20px !important; padding-top: 18px !important; }
 
-  /* 🔴 설치 버튼과 「홈으로」를 한 줄로 — 쌓아 두면 그것만 60px 을 쓴다.
-     둘 중 하나만 그려질 때도(설치할 방법이 없으면 버튼이 아예 없다) 가운데 정렬이라
-     모양이 무너지지 않는다. */
-  .landing-login-actions { display: flex !important; align-items: center !important;
-    justify-content: center !important; gap: 18px !important; margin-top: 14px !important; }
-  /* 🔴 `nowrap` 을 빼지 말 것 — 한 줄로 붙이면 폭이 좁아져 「← 홈으로」가 두 줄로
-     접힌다(실측 37px → 72px). 접히는 순간 한 화면 맞춤이 그만큼 깨진다. */
-  .landing-login-actions > div { margin-top: 0 !important; white-space: nowrap !important; }
+  /* 🔴 이 자리에는 「홈 화면에 추가」 하나만 남는다 — 「홈으로」는 헤더 오른쪽 끝으로
+     올라갔다(사용자 지시 2026-09-08). 🔴 둘을 다시 한 줄로 묶지 말 것.
+     ⚠️ **예전에 있던 `white-space: nowrap` 을 되살리지 말 것** — 설치 안내창이 이 안에서
+        열리는데(버튼과 형제다) 그 값을 물려받아 안내 글이 한 줄로 늘어나면서
+        **팝업이 옆으로 끌리게 된다**(사용자 신고 2026-09-08). */
+  .landing-login-actions { margin-top: 14px !important; text-align: center !important; }
+  .landing-login-actions > div { margin-top: 0 !important; }
+  /* 헤더의 「홈으로」 — 터치 영역은 남기되 헤더 높이를 늘리지 않을 만큼만 줄인다
+     (모바일 로고가 34px 이라 44px 그대로면 헤더가 그만큼 두꺼워진다). */
+  .landing-login-home .back-to-home-link { min-height: 36px !important; }
 
   /* 🔴 푸터는 모바일에서만 감춘다(사용자 지시 2026-09-08) — 데스크탑은 그대로다.
      🟢 고객센터 번호는 카드 안 「비밀번호 문의 1661-2403」이 같은 번호로 이미 안내한다.

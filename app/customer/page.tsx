@@ -105,14 +105,6 @@ export default function CustomerHomePage() {
     const {
       data: { session },
     } = await supabase.auth.getSession();
-    if (session) {
-      const { data: account } = await supabase
-        .from("customer_accounts")
-        .select("companies(name)")
-        .eq("auth_user_id", session.user.id)
-        .single();
-      setCompanyName((account?.companies as any)?.name || "");
-    }
 
     // 🔴 홈에서는 "확인함"으로 기록하지 **않는다** — 기록하면 홈을 열어본 것만으로
     //   배지가 사라져서, 화주가 어느 글이 새 글인지 끝내 못 본다.
@@ -120,7 +112,19 @@ export default function CustomerHomePage() {
     const lastSeen = getLastSeen("announcements");
     setNoticeLastSeen(lastSeen);
 
-    const [quotesRes, invoicesRes, dispatchesRes, announcementRes, unreadRes] = await Promise.all([
+    // 🔴 상호 조회를 아래 다섯 건과 **같이** 던진다 — 예전에는 이 한 건을 먼저
+    //    `await` 해서 끝난 뒤에야 나머지가 출발했다. 폰처럼 왕복이 느린 곳에서는 그
+    //    한 번이 홈 화면 전체를 그만큼 늦춘다(「로그인 뒤 로딩이 길다」, 2026-09-08).
+    //    🔴 다시 위로 빼서 먼저 기다리게 만들지 말 것 — 나머지 질의가 이 결과를
+    //    쓰지 않으므로 순서를 지킬 이유가 없다.
+    const [accountRes, quotesRes, invoicesRes, dispatchesRes, announcementRes, unreadRes] = await Promise.all([
+      session
+        ? supabase
+            .from("customer_accounts")
+            .select("companies(name)")
+            .eq("auth_user_id", session.user.id)
+            .single()
+        : Promise.resolve({ data: null }),
       // 「응답 확인하기」 — 화주가 지금 볼 것이 있는 견적(담당자가 견적을 제출한 건)
       supabase
         .from("quotes")
@@ -159,6 +163,7 @@ export default function CustomerHomePage() {
         .gt("created_at", lastSeen || "1970-01-01T00:00:00.000Z"),
     ]);
 
+    setCompanyName(((accountRes?.data as any)?.companies as any)?.name || "");
     setPendingQuotes((quotesRes.data as QuoteRow[]) || []);
     setUnpaidInvoices((invoicesRes.data as unknown as InvoiceRow[]) || []);
     setActiveDispatches((dispatchesRes.data as unknown as DispatchRow[]) || []);

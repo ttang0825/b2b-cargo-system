@@ -326,6 +326,15 @@ function TopNavInner() {
     router.refresh();
   }
 
+  // 🔴 설치형 앱(홈 화면 추가)으로 열면 브라우저 뒤로가기 단추가 아예 없다 —
+  // 그래서 화면 안에 뒤로가기를 둔다(2026-09-08 신고). 데스크탑은 브라우저 단추가
+  // 있으므로 CSS로 숨긴다.
+  // ⚠️ 히스토리가 없으면(앱을 이 화면에서 바로 켠 경우) 뒤로 갈 곳이 없으므로 홈으로 보낸다.
+  function handleBack() {
+    if (typeof window !== "undefined" && window.history.length > 1) router.back();
+    else router.push("/admin");
+  }
+
   const totalPending = counts.portalRequests + counts.publicQuotes + counts.applications;
   const visibleGroups = isAdmin ? [...NAV_GROUPS, ADMIN_ONLY_GROUP] : NAV_GROUPS;
 
@@ -376,7 +385,24 @@ function TopNavInner() {
           </button>
         </div>
 
-        <button
+        {/* 모바일 상단 액션 — 뒤로 · 로그아웃 · 메뉴. 데스크탑에서는 통째로 숨기고
+            기존 우측 메뉴(.nav-desktop-group)의 로그아웃을 그대로 쓴다.
+            🔴 뒤로가기는 홈(/admin)에서는 그리지 않는다 — 갈 곳이 없다. */}
+        <div className="nav-mobile-actions">
+          {pathname !== "/admin" && (
+            <button
+              type="button"
+              className="nav-mobile-icon-btn"
+              onClick={handleBack}
+              aria-label="뒤로 가기"
+            >
+              ←
+            </button>
+          )}
+          <button type="button" className="nav-mobile-logout" onClick={handleLogout}>
+            로그아웃
+          </button>
+          <button
           type="button"
           className="nav-mobile-toggle"
           onClick={() => setMobileMenuOpen((o) => !o)}
@@ -397,7 +423,8 @@ function TopNavInner() {
               }}
             />
           )}
-        </button>
+          </button>
+        </div>
       </div>
 
       {mobileMenuOpen && (
