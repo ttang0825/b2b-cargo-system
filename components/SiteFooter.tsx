@@ -50,7 +50,17 @@ const BUSINESS_INFO: [string, string][] = [
   ...COMPANY_BUSINESS_INFO,
 ];
 
-export default function SiteFooter() {
+/**
+ * @param showPageLinks 일반 페이지 링크(「회사소개」·「차량·요금 안내」) 노출 여부.
+ *   🔴 **법적 문서 3종 화면(`components/LegalDoc.tsx`)만 `false` 로 끈다** — 사용자 지시
+ *   (2026-09-08). 그 화면들은 랜딩 푸터의 모달에서 들어오는 자리라 다른 화면으로 가는
+ *   길이 필요 없고, 헤더에서만 빼면 같은 항목이 푸터에 그대로 남는다.
+ *   ⚠️ **기본값은 `true` 다** — `/about`·`/vehicles` 는 그대로 노출한다(30차 리뷰 ④ 로
+ *   랜딩에서 두 화면으로 가는 길이 이미 없어져서, 이 링크가 둘 사이를 오가는 유일한 길이다).
+ *   🔴 법적 문서 3종 링크(`LegalLinks`)는 이 플래그와 무관하게 항상 나온다 —
+ *   전자상거래법 제10조 표시사항이다.
+ */
+export default function SiteFooter({ showPageLinks = true }: { showPageLinks?: boolean } = {}) {
   return (
     <footer className="site-footer">
       <div className="container site-footer-inner">
@@ -86,11 +96,12 @@ export default function SiteFooter() {
 
         {/* 링크 */}
         <nav className="site-footer-links">
-          {FOOTER_LINKS.map((link) => (
-            <Link key={link.href} href={link.href} className="site-footer-link">
-              {link.label}
-            </Link>
-          ))}
+          {showPageLinks &&
+            FOOTER_LINKS.map((link) => (
+              <Link key={link.href} href={link.href} className="site-footer-link">
+                {link.label}
+              </Link>
+            ))}
           {/* 법적 문서 3종 — 클릭하면 모달로 열리고, URL은 그대로 살아 있음 */}
           <LegalLinks />
         </nav>

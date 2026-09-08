@@ -1,4 +1,4 @@
-import LandingHeader from "@/components/LandingHeader";
+import PublicPageHeader from "@/components/PublicPageHeader";
 import SiteFooter from "@/components/SiteFooter";
 
 // 법적 문서(이용약관·개인정보처리방침) 공용 렌더러.
@@ -182,7 +182,12 @@ export default function LegalDoc({
 }) {
   return (
     <div className="portal-theme">
-      <LandingHeader />
+      {/* 🔴 **로고만 있는 헤더다 — `LandingHeader` 로 되돌리지 말 것**(사용자 지시 2026-09-08).
+          법적 문서는 랜딩 푸터의 모달에서 들어오는 화면이라 메뉴가 필요 없고, 그 헤더가
+          들고 있던 「회사소개」·「차량·요금 안내」는 30차 리뷰 ④ 에 랜딩에서 이미 뺀
+          항목이라 여기만 옛 모습으로 남아 있었다(사용자 표현 「예전 폐기하기로 했던
+          상단메뉴」). `/about`·`/vehicles` 는 그대로 `LandingHeader` 를 쓴다. */}
+      <PublicPageHeader />
 
       <main className="container legal-main">
         <div className="page-header">
@@ -195,7 +200,11 @@ export default function LegalDoc({
         <LegalDocBody intro={intro} sections={sections} />
       </main>
 
-      <SiteFooter />
+      {/* 🔴 **푸터의 「회사소개」·「차량·요금 안내」도 감춘다**(같은 지시 — 헤더에서만 빼면
+          같은 항목이 화면 아래에 그대로 남는다). 고객센터·사업자 표시사항·법적 문서 3종은
+          그대로 나온다(전자상거래법 제10조 표시사항이라 뺄 수 없다).
+          ⚠️ `/about`·`/vehicles` 의 푸터에는 계속 나온다 — 그 두 화면끼리 오가는 유일한 길이다. */}
+      <SiteFooter showPageLinks={false} />
     </div>
   );
 }
