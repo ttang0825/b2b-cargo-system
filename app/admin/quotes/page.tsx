@@ -588,7 +588,6 @@ function QuotesPageInner() {
       const discounted = applyMixedDiscount(
         rawFinal,
         form.loading_type,
-        true,
         form.mixed_discount_type,
         Number(form.mixed_discount_amount) || 0,
         Number(form.mixed_discount_percent) || 0
