@@ -230,34 +230,6 @@ from pg_class c join pg_namespace n on n.oid=c.relnamespace and n.nspname='publi
 where c.relname='customer_billing_batch_candidates';
 
 \echo ''
-\echo '=== ⑪ 🔴 직원 계정 상태 (32차 착수 전) — 이름·이메일은 가려서 찍는다 ==='
--- 🔴 **이 저장소는 public 이다.** Actions 로그는 로그인 없이 누구나 읽는다.
---    직원 이름·이메일을 그대로 찍으면 그 순간 공개된다 — 반드시 마스킹할 것.
---    (사람이 누구인지 아는 것은 사용자이지 이 로그가 아니다.)
-select string_agg(column_name, ', ' order by ordinal_position) as "staff_accounts 컬럼"
-  from information_schema.columns
- where table_schema = 'public' and table_name = 'staff_accounts';
-
-\echo '--- staff_accounts RLS 정책 (🔴 anon 이 있는지가 32차 설계를 가른다) ---'
-select policyname, roles::text as 롤, cmd as 명령
-  from pg_policies where tablename = 'staff_accounts' order by policyname;
-
-\echo '--- staff_accounts 롤별 GRANT ---'
-select grantee, string_agg(distinct privilege_type, ',' order by privilege_type) as 권한
-  from information_schema.role_table_grants
- where table_schema = 'public' and table_name = 'staff_accounts'
-   and grantee in ('anon','authenticated','service_role')
- group by grantee order by grantee;
-
-\echo '--- 계정 목록 (마스킹) ---'
-select row_number() over (order by created_at) as 번호,
-       left(name, 1) || repeat('*', greatest(length(name) - 1, 0))          as 이름,
-       left(split_part(email, '@', 1), 2) || '***@'
-         || left(split_part(email, '@', 2), 1) || '***'                     as 이메일,
-       role, status, created_at::date as 등록일
-  from staff_accounts order by created_at;
-
-\echo ''
 \echo '=== ⑨ 마이그레이션 이력 ================================='
 select filename, applied_at, applied_by from _migrations order by filename;
 
@@ -331,3 +303,30 @@ select indexname, indexdef from pg_indexes
 \echo ''
 \echo '--- ⑩-h _migrations 행 수 (파일을 더할 때마다 늘어난다) ---'
 select count(*) as 마이그레이션_행수 from _migrations;
+\echo ''
+\echo '=== ⑪ 🔴 직원 계정 상태 (32차 착수 전) — 이름·이메일은 가려서 찍는다 ==='
+-- 🔴 **이 저장소는 public 이다.** Actions 로그는 로그인 없이 누구나 읽는다.
+--    직원 이름·이메일을 그대로 찍으면 그 순간 공개된다 — 반드시 마스킹할 것.
+--    (사람이 누구인지 아는 것은 사용자이지 이 로그가 아니다.)
+select string_agg(column_name, ', ' order by ordinal_position) as "staff_accounts 컬럼"
+  from information_schema.columns
+ where table_schema = 'public' and table_name = 'staff_accounts';
+
+\echo '--- staff_accounts RLS 정책 (🔴 anon 이 있는지가 32차 설계를 가른다) ---'
+select policyname, roles::text as 롤, cmd as 명령
+  from pg_policies where tablename = 'staff_accounts' order by policyname;
+
+\echo '--- staff_accounts 롤별 GRANT ---'
+select grantee, string_agg(distinct privilege_type, ',' order by privilege_type) as 권한
+  from information_schema.role_table_grants
+ where table_schema = 'public' and table_name = 'staff_accounts'
+   and grantee in ('anon','authenticated','service_role')
+ group by grantee order by grantee;
+
+\echo '--- 계정 목록 (마스킹) ---'
+select row_number() over (order by created_at) as 번호,
+       left(name, 1) || repeat('*', greatest(length(name) - 1, 0))          as 이름,
+       left(split_part(email, '@', 1), 2) || '***@'
+         || left(split_part(email, '@', 2), 1) || '***'                     as 이메일,
+       role, status, created_at::date as 등록일
+  from staff_accounts order by created_at;
