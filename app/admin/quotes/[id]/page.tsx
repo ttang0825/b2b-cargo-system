@@ -13,9 +13,11 @@ import { calcInclusiveAmount } from "@/lib/vat";
 import { downloadQuoteExcel } from "@/lib/quoteExcel";
 import { optimisticUpdate } from "@/lib/optimisticUpdate";
 import {
-  getLatestMixedLoadingDiscountSettings,
-  DEFAULT_MIXED_LOADING_DISCOUNT_SETTINGS,
+  getMixedLoadingDiscountTiers,
+  pickMixedDiscountTier,
+  MixedLoadingDiscountTierRow,
 } from "@/lib/mixedLoadingDiscountSettings";
+import MixedDiscountStandardHint from "@/components/MixedDiscountStandardHint";
 import AddressSearch from "@/components/AddressSearch";
 import PickupDropoffContactFields, {
   EMPTY_PICKUP_DROPOFF_CONTACT,
@@ -144,7 +146,7 @@ export default function QuoteDetailPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
-  const [standardMixedDiscountPercent, setStandardMixedDiscountPercent] = useState(0);
+  const [mixedDiscountTiers, setMixedDiscountTiers] = useState<MixedLoadingDiscountTierRow[]>([]);
   const [hasOrder, setHasOrder] = useState(false);
   const [sendingQuoteSms, setSendingQuoteSms] = useState(false);
   const [quoteSmsSent, setQuoteSmsSent] = useState(false);
@@ -191,6 +193,12 @@ export default function QuoteDetailPage() {
   // 희망 상차일시는 현재 시각 이후로만 선택 가능 (원칙 6번)
   const nowDateTime = useMemo(() => toLocalDateTimeInput(new Date().toISOString()), []);
 
+  // 입력된 거리에 해당하는 표준 혼적 할인율 구간 (없으면 null — 거리 미입력)
+  const mixedDiscountTier = useMemo(
+    () => pickMixedDiscountTier(mixedDiscountTiers, Number(editForm.distance_km) || null),
+    [mixedDiscountTiers, editForm.distance_km]
+  );
+
   // 거리 기준 최소 하차일시 (희망 상차일시가 있어야 계산됨)
   const minDropoffDateTime = useMemo(() => {
     if (!editForm.requested_pickup_at) return undefined;
@@ -206,9 +214,7 @@ export default function QuoteDetailPage() {
 
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
-    getLatestMixedLoadingDiscountSettings().then((row) => {
-      if (row) setStandardMixedDiscountPercent(row.standard_discount_percent);
-    });
+    getMixedLoadingDiscountTiers().then(({ rows }) => setMixedDiscountTiers(rows));
     supabase
       .from("rate_surcharges")
       .select("category,option_name")
@@ -1033,7 +1039,10 @@ export default function QuoteDetailPage() {
                             ...f,
                             mixed_discount_type: "percent",
                             mixed_discount_percent:
-                              f.mixed_discount_percent || String(standardMixedDiscountPercent),
+                              f.mixed_discount_percent ||
+                              (mixedDiscountTier
+                                ? String(mixedDiscountTier.standard_discount_percent)
+                                : ""),
                           }))
                         }
                       />
@@ -1054,13 +1063,17 @@ export default function QuoteDetailPage() {
                   </div>
 
                   {editForm.mixed_discount_type === "percent" && (
-                    <div className="field" style={{ maxWidth: 160, marginBottom: 10 }}>
+                    <div className="field" style={{ maxWidth: 240, marginBottom: 10 }}>
                       <label>혼적 할인율(%)</label>
                       <input
                         type="number"
                         step={0.1}
                         value={editForm.mixed_discount_percent}
                         onChange={(e) => setEditForm({ ...editForm, mixed_discount_percent: e.target.value })}
+                      />
+                      <MixedDiscountStandardHint
+                        tier={mixedDiscountTier}
+                        currentValue={editForm.mixed_discount_percent}
                       />
                     </div>
                   )}
