@@ -96,6 +96,23 @@ export async function middleware(req: NextRequest) {
     return redirectToLogin("inactive");
   }
 
+  // 임시 비밀번호를 받은 직원은 비밀번호를 바꾸기 전에는 다른 화면으로 못 간다(32차).
+  //
+  // 🔴 화주포털이 셸(CustomerPortalShell)에서 하는 일을 admin 에서는 여기가 한다 —
+  //    admin 에는 포털 셸에 해당하는 것이 이 미들웨어다.
+  // 🔴 role·status 와 같은 방식으로 user_metadata 를 본다. DB 를 매 이동마다 조회하면
+  //    페이지 전환이 그만큼 느려지는데, 이 값을 켜는 곳은 재발급 API 한 곳뿐이고
+  //    그 API 가 비밀번호를 바꾸는 **같은 호출**에서 메타데이터도 함께 켠다.
+  //    그래서 `=== true` 일 때만 막고, 값이 없으면 막지 않는 것이 맞다.
+  // 🔴 `/admin/change-password` 를 PUBLIC_PATHS 에 넣지 말 것 — 로그인이 필요한
+  //    화면이다. 여기서 예외로 빼는 것으로 충분하다.
+  if (
+    user.user_metadata?.must_change_password === true &&
+    !pathname.startsWith("/admin/change-password")
+  ) {
+    return NextResponse.redirect(new URL("/admin/change-password", req.url));
+  }
+
   // 직원 계정 관리 · 지원접속 이력 · 운영 대시보드(로드맵⑥, 담당자별 영업성과 등
   // 민감정보 포함) 화면은 관리자만 접근 가능
   if (
