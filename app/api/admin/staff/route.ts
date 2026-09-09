@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabaseServiceClient";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
 import { isValidSenderPhone } from "@/lib/smsSenderPhone";
+import { LOGIN_ID_PATTERN } from "@/lib/staffLogin";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,42 @@ function getAdminClient() {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceKey) return null;
   return createServiceClient(url, serviceKey);
+}
+
+// 로그인 아이디 검증 + 중복 확인 — 32차.
+//
+// 🔴 유니크 인덱스가 `lower(login_id)` 에 걸려 있어 DB 가 최종 방어선이지만, 그
+//    에러 메시지("duplicate key value violates unique constraint …")를 담당자가
+//    보면 무슨 말인지 알 수 없다. 그래서 저장 전에 먼저 확인해 알려준다.
+// ⚠️ 사전 조회만으로는 완전히 동시에 들어온 두 요청을 못 막는다 — 그 경우는
+//    유니크 인덱스가 막고, 아래 저장부가 그 에러를 사람 말로 바꿔 준다.
+async function validateLoginId(
+  admin: ReturnType<typeof getAdminClient>,
+  raw: unknown,
+  selfId: string | null
+): Promise<{ value: string | null } | { error: string }> {
+  const trimmed = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  // 빈 값은 허용한다 — 아직 아이디를 안 정한 계정이 있을 수 있다(전환기).
+  if (!trimmed) return { value: null };
+  if (!LOGIN_ID_PATTERN.test(trimmed)) {
+    return { error: "아이디는 영문 소문자와 숫자만, 4~20자, 첫 글자는 영문이어야 합니다." };
+  }
+  const { data: dup } = await admin!
+    .from("staff_accounts")
+    .select("id")
+    .ilike("login_id", trimmed)
+    .maybeSingle();
+  if (dup && dup.id !== selfId) {
+    return { error: `이미 사용 중인 아이디입니다 (${trimmed}).` };
+  }
+  return { value: trimmed };
+}
+
+/** 유니크 인덱스가 막았을 때 담당자가 알아볼 수 있는 말로 바꾼다. */
+function friendlyLoginIdError(message: string): string {
+  return message.includes("staff_accounts_login_id_lower_key")
+    ? "이미 사용 중인 아이디입니다."
+    : message;
 }
 
 // staff_accounts의 role/status가 바뀔 때마다 auth 쪽 user_metadata도 같이 갱신 —
@@ -84,9 +121,14 @@ export async function POST(req: Request) {
   const { action } = body;
 
   if (action === "invite") {
-    const { email, name, role, sms_sender_phone } = body;
+    const { email, name, role, sms_sender_phone, login_id } = body;
     if (!email?.trim() || !name?.trim()) {
       return NextResponse.json({ error: "이메일과 이름은 필수입니다." }, { status: 400 });
+    }
+
+    const inviteLoginId = await validateLoginId(admin, login_id, null);
+    if ("error" in inviteLoginId) {
+      return NextResponse.json({ error: inviteLoginId.error }, { status: 400 });
     }
     const finalRole = role === "admin" ? "admin" : "staff";
 
@@ -124,20 +166,32 @@ export async function POST(req: Request) {
       role: finalRole,
       status: "active",
       sms_sender_phone: inviteSenderDigits || null,
+      login_id: inviteLoginId.value,
     });
     if (insertError) {
       // 직원 계정 테이블 등록에 실패하면 방금 만든 Auth 유저도 같이 롤백 (고아 계정 방지, 원칙 19번과 동일 취지)
       await admin.auth.admin.deleteUser(userData.user.id);
-      return NextResponse.json({ error: insertError.message }, { status: 400 });
+      return NextResponse.json({ error: friendlyLoginIdError(insertError.message) }, { status: 400 });
     }
 
-    return NextResponse.json({ email: email.trim(), password: tempPassword });
+    return NextResponse.json({
+      email: email.trim(),
+      login_id: inviteLoginId.value,
+      password: tempPassword,
+    });
   }
 
   if (action === "update_profile") {
-    const { id, name, email, sms_sender_phone } = body;
+    const { id, name, email, sms_sender_phone, login_id } = body;
     if (!id || !name?.trim() || !email?.trim()) {
       return NextResponse.json({ error: "이름과 이메일을 입력해주세요." }, { status: 400 });
+    }
+
+    // 🟢 아이디는 언제든 바꿀 수 있다 — Auth 이메일과 무관한 평범한 컬럼이라
+    //    바꿔도 비밀번호는 그대로다(32차 확정).
+    const nextLoginId = await validateLoginId(admin, login_id, id);
+    if ("error" in nextLoginId) {
+      return NextResponse.json({ error: nextLoginId.error }, { status: 400 });
     }
 
     // SMS 발신번호 — 저장은 숫자만(솔라피 API가 하이픈 없는 형식을 씀).
@@ -181,9 +235,12 @@ export async function POST(req: Request) {
         name: name.trim(),
         email: email.trim(),
         sms_sender_phone: senderDigits || null,
+        login_id: nextLoginId.value,
       })
       .eq("id", id);
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    if (error) {
+      return NextResponse.json({ error: friendlyLoginIdError(error.message) }, { status: 400 });
+    }
     return NextResponse.json({ ok: true });
   }
 

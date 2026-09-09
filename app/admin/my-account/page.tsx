@@ -14,6 +14,7 @@ export default function MyAccountPage() {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<string | null>(null);
   const [senderPhone, setSenderPhone] = useState<string | null>(null);
+  const [loginId, setLoginId] = useState<string | null>(null);
   const [name, setName] = useState("");
 
   const [currentPassword, setCurrentPassword] = useState("");
@@ -43,10 +44,11 @@ export default function MyAccountPage() {
       // 불필요한 값을 같이 가져오게 된다.
       const { data: senderRow } = await supabaseAdminAuth
         .from("staff_accounts")
-        .select("sms_sender_phone")
+        .select("sms_sender_phone, login_id")
         .eq("id", user.id)
         .maybeSingle();
       setSenderPhone((senderRow as any)?.sms_sender_phone || null);
+      setLoginId((senderRow as any)?.login_id || null);
 
       setLoading(false);
     }
@@ -136,11 +138,16 @@ export default function MyAccountPage() {
               변경이 필요하면 관리자에게 문의해주세요.
             </p>
           </div>
+          {/* 🔴 32차부터 로그인 자격은 **아이디**다. 이메일은 연락처로 남는다. */}
           <div className="field" style={{ marginBottom: 12 }}>
-            <label>이메일 (로그인 아이디)</label>
+            <label>아이디 (로그인용)</label>
+            <input value={loginId || "-"} disabled />
+          </div>
+          <div className="field" style={{ marginBottom: 12 }}>
+            <label>담당자 이메일 (연락용)</label>
             <input value={email} disabled />
             <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 6 }}>
-              이메일 변경이 필요하면 관리자에게 문의해주세요.
+              아이디나 이메일 변경이 필요하면 관리자에게 문의해주세요.
             </p>
           </div>
           <div className="field" style={{ marginBottom: 12 }}>

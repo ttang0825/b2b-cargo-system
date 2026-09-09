@@ -303,3 +303,54 @@ select indexname, indexdef from pg_indexes
 \echo ''
 \echo '--- ⑩-h _migrations 행 수 (파일을 더할 때마다 늘어난다) ---'
 select count(*) as 마이그레이션_행수 from _migrations;
+\echo ''
+\echo '=== ⑪ 🔴 직원 계정 상태 (32차 착수 전) — 이름·이메일은 가려서 찍는다 ==='
+-- 🔴 **이 저장소는 public 이다.** Actions 로그는 로그인 없이 누구나 읽는다.
+--    직원 이름·이메일을 그대로 찍으면 그 순간 공개된다 — 반드시 마스킹할 것.
+--    (사람이 누구인지 아는 것은 사용자이지 이 로그가 아니다.)
+select string_agg(column_name, ', ' order by ordinal_position) as "staff_accounts 컬럼"
+  from information_schema.columns
+ where table_schema = 'public' and table_name = 'staff_accounts';
+
+\echo '--- staff_accounts RLS 정책 (🔴 anon 이 있는지가 32차 설계를 가른다) ---'
+select policyname, roles::text as 롤, cmd as 명령, qual as 조건
+  from pg_policies where tablename = 'staff_accounts' order by policyname;
+
+\echo '--- 🔴 실측: anon 이 실제로 몇 행을 읽는가 (0 이어야) ---'
+begin;
+  set local role anon;
+  select count(*) as "anon이_읽는_행수_0이어야" from staff_accounts;
+  reset role;
+commit;
+
+\echo '--- staff_accounts 롤별 GRANT ---'
+select grantee, string_agg(distinct privilege_type, ',' order by privilege_type) as 권한
+  from information_schema.role_table_grants
+ where table_schema = 'public' and table_name = 'staff_accounts'
+   and grantee in ('anon','authenticated','service_role')
+ group by grantee order by grantee;
+
+\echo '--- 🔴 32차: 아이디 없는 재직 직원 (0 이어야 merge 해도 안전) ---'
+-- 🔴 이 값이 0 이 아닌데 코드를 merge 하면 **전 직원이 못 들어온다.**
+--    아이디 값은 저장소가 public 이라 마이그레이션에 넣지 않았고,
+--    Supabase SQL Editor 에서 손으로 채운다(2026-09-09_staff_login_id.sql 머리말).
+select
+  count(*) filter (where status = 'active' and (login_id is null or btrim(login_id) = ''))
+                                                          as "아이디없는_재직자_0이어야",
+  count(*) filter (where login_id is not null)            as 아이디_보유,
+  count(*) filter (where login_id is not null
+                     and login_id !~ '^[a-z][a-z0-9]{3,19}$')
+                                                          as "규칙위반_0이어야",
+  count(distinct lower(login_id))                         as 서로다른_아이디수
+from staff_accounts;
+
+\echo '--- 계정 목록 (마스킹) ---'
+select row_number() over (order by created_at) as 번호,
+       left(name, 1) || repeat('*', greatest(length(name) - 1, 0))          as 이름,
+       left(split_part(email, '@', 1), 2) || '***@'
+         || left(split_part(email, '@', 2), 1) || '***'                     as 이메일,
+       -- 🔴 login_id 도 공개 로그에 그대로 찍지 않는다 — 자격의 절반이다.
+       case when login_id is null then '(없음)'
+            else left(login_id, 2) || repeat('*', greatest(length(login_id) - 2, 0)) end as 아이디,
+       role, status, must_change_password as 강제변경, created_at::date as 등록일
+  from staff_accounts order by created_at;
