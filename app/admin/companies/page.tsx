@@ -5,16 +5,22 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { STATUS_OPTIONS, getStatusColor } from "@/lib/statusColors";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
-import {
-  REGIONS,
-  VEHICLE_TYPES_ALL,
-  BODY_TYPES,
-  GRADE_OPTIONS,
-  formatPhoneNumber,
-} from "@/lib/constants";
-import { MANUAL_SOURCE_OPTIONS, getSourceChips } from "@/lib/sourceColors";
-import MultiSelectTags from "@/components/MultiSelectTags";
+import { getSourceChips } from "@/lib/sourceColors";
 import { getCurrentStaffId } from "@/lib/currentStaff";
+// 🔴 화주 항목 정의는 `lib/companyFields.ts` 한 곳이다 — 이 화면에 필드 배열을
+//    다시 만들지 말 것(33차 A장). 신규 등록·상세 수정·신청 승인 세 입구가 같은 정의를 읽는다.
+import {
+  COMPANY_FORM_OPEN_SECTIONS,
+  COMPANY_SECTIONS,
+  COMPANY_REQUIRED_FIELDS,
+  buildCompanyPayload,
+  companyFormFieldsOf,
+  emptyCompanyForm,
+  isRecurringContractActive,
+  type CompanySection,
+} from "@/lib/companyFields";
+import CompanyFieldInput from "@/components/CompanyFieldInput";
+import RecurringContractBadge from "@/components/RecurringContractBadge";
 
 type Company = {
   id: string;
@@ -32,6 +38,10 @@ type Company = {
   source_sheet: string | null;
   manual_source_type: string | null;
   manual_source_note: string | null;
+  // 🔴 배지 판정에 종료일이 반드시 필요하다 — `is_recurring_contract` 만 읽으면
+  //    끝난 계약의 배지가 목록에 영원히 남는다(isRecurringContractActive).
+  is_recurring_contract: boolean | null;
+  recurring_contract_ended_on: string | null;
 };
 
 const SOURCE_TABS = [
@@ -60,34 +70,8 @@ const SORT_OPTIONS = [
   { key: "status", label: "영업상태" },
 ];
 
-const EMPTY_FORM = {
-  name: "",
-  industry: "",
-  sub_industry: "",
-  metro_region: "",
-  district: "",
-  address: "",
-  phone: "",
-  website: "",
-  main_items: "",
-  biz_reg_no: "",
-  contact_name: "",
-  contact_position: "",
-  contact_mobile: "",
-  contact_email: "",
-  payment_terms: "",
-  main_pickup_region: "",
-  main_dropoff_region: "",
-  assigned_staff: "",
-  recommended_vehicle_tonnage: VEHICLE_TYPES_ALL[0],
-  recommended_vehicle_bodytype: BODY_TYPES[0],
-  status: "미접촉",
-  grade: "",
-  next_followup_date: "",
-  notes: "",
-  source_type: "",
-  source_note: "",
-};
+// 🔴 폼의 빈 값은 `emptyCompanyForm()` 이 만든다 — 여기에 EMPTY_FORM 을 다시
+//    적으면 lib/companyFields.ts 와 갈린다(33차 A장에 그래서 지운 자리다).
 
 function formatIndustry(c: Company) {
   if (c.industry && c.sub_industry) return `${c.industry} / ${c.sub_industry}`;
@@ -111,10 +95,34 @@ export default function CompaniesPage() {
   const [sortKey, setSortKey] = useState("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [form, setForm] = useState<Record<string, any>>(emptyCompanyForm);
+  // 접이식 구획 — 🔴 접혀 있어도 폼에서 빠지지 않는다(입력한 값은 그대로 저장된다).
+  const [openSections, setOpenSections] = useState<CompanySection[]>([
+    ...COMPANY_FORM_OPEN_SECTIONS,
+  ]);
+  // 「정기계약만 보기」
+  const [recurringOnly, setRecurringOnly] = useState(false);
 
-  function setField(key: keyof typeof EMPTY_FORM, value: string) {
+  function setField(key: string, value: any) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  // 주소검색이 돌려주는 sido/sigungu 를 대응 컬럼에 같이 담는다(원칙 37번).
+  function setAddressField(key: string, addr: string, sido: string, sigungu: string) {
+    const prefix = key.replace(/_address$/, "");
+    setForm((prev) => ({
+      ...prev,
+      [key]: addr,
+      [`${key}Detail`]: "",
+      [`${prefix}_sido`]: sido,
+      [`${prefix}_sigungu`]: sigungu,
+    }));
+  }
+
+  function toggleSection(section: CompanySection) {
+    setOpenSections((prev) =>
+      prev.includes(section) ? prev.filter((s) => s !== section) : [...prev, section]
+    );
   }
 
   async function loadCompanies() {
@@ -123,7 +131,9 @@ export default function CompaniesPage() {
     const { data, error } = await supabase
       .from("companies")
       .select(
-        "id,name,industry,sub_industry,metro_region,district,region,phone,status,grade,next_followup_date,created_at,source_sheet,manual_source_type,manual_source_note"
+        // 🔴 정기계약 배지는 `is_recurring_contract` 와 **종료일 둘 다** 필요하다
+        //    (종료일이 지난 계약에는 배지를 붙이지 않는다).
+        "id,name,industry,sub_industry,metro_region,district,region,phone,status,grade,next_followup_date,created_at,source_sheet,manual_source_type,manual_source_note,is_recurring_contract,recurring_contract_ended_on"
       )
       .order("created_at", { ascending: false });
 
@@ -141,47 +151,27 @@ export default function CompaniesPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.name.trim()) {
-      setError("회사명은 필수입니다.");
+    // 🔴 필수 항목도 정의 파일이 정한다 — 여기에 목록을 다시 적지 말 것.
+    const missing = COMPANY_REQUIRED_FIELDS.filter(
+      (f) => !String(form[f.key] ?? "").trim()
+    );
+    if (missing.length > 0) {
+      setError(`${missing.map((f) => f.label).join(", ")}은(는) 필수입니다.`);
+      // 필수 항목이 접힌 구획에 있으면 펼쳐서 어디를 채워야 하는지 보여준다.
+      setOpenSections((prev) =>
+        Array.from(new Set([...prev, ...missing.map((f) => f.section)]))
+      );
       return;
     }
     setSaving(true);
     setError(null);
 
-    const recommendedVehicle =
-      form.recommended_vehicle_tonnage && form.recommended_vehicle_bodytype
-        ? `${form.recommended_vehicle_tonnage} ${form.recommended_vehicle_bodytype}`
-        : null;
-
     const staffId = await getCurrentStaffId();
+    // 🔴 payload 조립도 `buildCompanyPayload()` 한 함수만 쓴다(세 입구 공통).
+    //    실적값(`includePerformance`)은 신규 등록에 넣지 않는다 — 정산이 갱신한다.
     const { error } = await supabase.from("companies").insert({
-      name: form.name,
+      ...buildCompanyPayload(form),
       created_by: staffId,
-      industry: form.industry || null,
-      sub_industry: form.sub_industry || null,
-      metro_region: form.metro_region || null,
-      district: form.district || null,
-      address: form.address || null,
-      phone: form.phone || null,
-      website: form.website || null,
-      main_items: form.main_items || null,
-      biz_reg_no: form.biz_reg_no || null,
-      contact_name: form.contact_name || null,
-      contact_position: form.contact_position || null,
-      contact_mobile: form.contact_mobile || null,
-      contact_email: form.contact_email || null,
-      payment_terms: form.payment_terms || null,
-      main_pickup_region: form.main_pickup_region || null,
-      main_dropoff_region: form.main_dropoff_region || null,
-      assigned_staff: form.assigned_staff || null,
-      recommended_vehicle: recommendedVehicle,
-      status: form.status,
-      grade: form.grade || null,
-      next_followup_date: form.next_followup_date || null,
-      notes: form.notes || null,
-      manual_source_type: form.source_type || null,
-      manual_source_note:
-        form.source_type === "기타" ? form.source_note || null : null,
     });
 
     setSaving(false);
@@ -191,7 +181,7 @@ export default function CompaniesPage() {
       return;
     }
 
-    setForm(EMPTY_FORM);
+    setForm(emptyCompanyForm());
     setShowForm(false);
     loadCompanies();
   }
@@ -219,6 +209,8 @@ export default function CompaniesPage() {
   }
 
   const filteredCompanies = companies
+    // 🔴 종료일이 지난 계약은 걸러진다 — 배지와 같은 판정을 쓴다(정의처 한 곳).
+    .filter((c) => (recurringOnly ? isRecurringContractActive(c) : true))
     .filter((c) => {
       if (activeTab === "전체") return true;
       if (activeTab === "직접등록") return !c.source_sheet;
@@ -318,6 +310,34 @@ export default function CompaniesPage() {
           alignItems: "center",
         }}
       >
+        {/*
+          「정기계약만 보기」 — 🔴 배지와 **같은 판정**을 쓴다(isRecurringContractActive).
+             종료일이 지난 계약은 여기서도 걸러진다.
+        */}
+        <label
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            fontSize: 12.5,
+            cursor: "pointer",
+            padding: "8px 10px",
+            border: `1px solid ${recurringOnly ? "#4338CA" : "var(--border)"}`,
+            borderRadius: "var(--radius)",
+            background: recurringOnly ? "#E0E7FF" : "transparent",
+            color: recurringOnly ? "#4338CA" : "var(--text)",
+            fontWeight: recurringOnly ? 700 : 400,
+            whiteSpace: "nowrap",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={recurringOnly}
+            onChange={(e) => setRecurringOnly(e.target.checked)}
+            style={{ width: 15, height: 15, margin: 0 }}
+          />
+          정기계약만 보기
+        </label>
         <div style={{ position: "relative", flex: 1, minWidth: 220, maxWidth: 360 }}>
           <input
             value={search}
@@ -381,311 +401,77 @@ export default function CompaniesPage() {
       {showForm && (
         <div className="card" style={{ marginBottom: 24 }}>
           <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown}>
-            <div className="form-grid">
-              <div className="field">
-                <label>회사명 *</label>
-                <input
-                  value={form.name}
-                  onChange={(e) => setField("name", e.target.value)}
-                  placeholder="예: ○○정밀"
-                />
-              </div>
-              <div className="field">
-                <label>업종</label>
-                <input
-                  value={form.industry}
-                  onChange={(e) => setField("industry", e.target.value)}
-                  placeholder="예: 제조 / 금속가공"
-                />
-              </div>
-              <div className="field">
-                <label>세부업종</label>
-                <input
-                  value={form.sub_industry}
-                  onChange={(e) => setField("sub_industry", e.target.value)}
-                />
-              </div>
-              <div className="field">
-                <label>광역권</label>
-                <select
-                  value={form.metro_region}
-                  onChange={(e) => setField("metro_region", e.target.value)}
-                >
-                  <option value="">선택</option>
-                  {REGIONS.map((r) => (
-                    <option key={r} value={r}>
-                      {r}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="field">
-                <label>시군구</label>
-                <input
-                  value={form.district}
-                  onChange={(e) => setField("district", e.target.value)}
-                  placeholder="예: 시흥시"
-                />
-              </div>
-              <div className="field" style={{ gridColumn: "1 / -1" }}>
-                <label>주소</label>
-                <input
-                  value={form.address}
-                  onChange={(e) => setField("address", e.target.value)}
-                />
-              </div>
-              <div className="field">
-                <label>대표번호</label>
-                <input
-                  value={form.phone}
-                  onChange={(e) =>
-                    setField("phone", formatPhoneNumber(e.target.value))
-                  }
-                  placeholder="숫자만 입력하면 자동으로 - 표시"
-                />
-              </div>
-              <div className="field">
-                <label>웹사이트</label>
-                <input
-                  value={form.website}
-                  onChange={(e) => setField("website", e.target.value)}
-                  placeholder="https://"
-                />
-              </div>
-              <div className="field">
-                <label>취급 품목</label>
-                <input
-                  value={form.main_items}
-                  onChange={(e) => setField("main_items", e.target.value)}
-                />
-              </div>
-              <div className="field">
-                <label>사업자등록번호</label>
-                <input
-                  value={form.biz_reg_no}
-                  onChange={(e) => setField("biz_reg_no", e.target.value)}
-                  placeholder="000-00-00000"
-                />
-              </div>
-
-              <div
-                style={{
-                  gridColumn: "1 / -1",
-                  fontSize: 12.5,
-                  fontWeight: 700,
-                  color: "var(--text-muted)",
-                  marginTop: 8,
-                }}
-              >
-                담당자 정보
-              </div>
-              <div className="field">
-                <label>담당자명</label>
-                <input
-                  value={form.contact_name}
-                  onChange={(e) => setField("contact_name", e.target.value)}
-                />
-              </div>
-              <div className="field">
-                <label>직책</label>
-                <input
-                  value={form.contact_position}
-                  onChange={(e) => setField("contact_position", e.target.value)}
-                />
-              </div>
-              <div className="field">
-                <label>휴대폰</label>
-                <input
-                  value={form.contact_mobile}
-                  onChange={(e) =>
-                    setField("contact_mobile", formatPhoneNumber(e.target.value))
-                  }
-                  placeholder="숫자만 입력하면 자동으로 - 표시"
-                />
-              </div>
-              <div className="field">
-                <label>이메일</label>
-                <input
-                  value={form.contact_email}
-                  onChange={(e) => setField("contact_email", e.target.value)}
-                />
-              </div>
-
-              <div
-                style={{
-                  gridColumn: "1 / -1",
-                  fontSize: 12.5,
-                  fontWeight: 700,
-                  color: "var(--text-muted)",
-                  marginTop: 8,
-                }}
-              >
-                거래 정보
-              </div>
-              <div className="field">
-                <label>추천 차량</label>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <select
-                    value={form.recommended_vehicle_tonnage}
-                    onChange={(e) =>
-                      setField("recommended_vehicle_tonnage", e.target.value)
-                    }
-                    style={{ flex: 1 }}
+            {/*
+              🔴 항목을 여기에 손으로 적지 말 것 — `lib/companyFields.ts` 를 돌린다.
+                 등록 폼과 상세 수정 폼이 **같은 정의**를 읽어야 다시 갈리지 않는다.
+              🔴 접힌 구획의 값도 그대로 저장된다 — 접기는 표시일 뿐이고 state 는 하나다.
+            */}
+            {COMPANY_SECTIONS.map((section) => {
+              const fields = companyFormFieldsOf(section);
+              if (fields.length === 0) return null; // 「실적」은 등록 폼에 없다
+              const open = openSections.includes(section);
+              return (
+                <div key={section} style={{ marginBottom: 18 }}>
+                  <button
+                    type="button"
+                    onClick={() => toggleSection(section)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      width: "100%",
+                      padding: "8px 0",
+                      background: "none",
+                      border: "none",
+                      borderBottom: "1px solid var(--border)",
+                      cursor: "pointer",
+                      font: "inherit",
+                      fontWeight: 700,
+                      fontSize: 13,
+                      color: "var(--text)",
+                      textAlign: "left",
+                      marginBottom: open ? 12 : 0,
+                    }}
+                    aria-expanded={open}
                   >
-                    {VEHICLE_TYPES_ALL.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={form.recommended_vehicle_bodytype}
-                    onChange={(e) =>
-                      setField("recommended_vehicle_bodytype", e.target.value)
-                    }
-                    style={{ flex: 1 }}
-                  >
-                    {BODY_TYPES.map((b) => (
-                      <option key={b} value={b}>
-                        {b}
-                      </option>
-                    ))}
-                  </select>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                      {open ? "▾" : "▸"}
+                    </span>
+                    {section}
+                    {!open && (
+                      <span
+                        style={{ fontSize: 11, fontWeight: 400, color: "var(--text-muted)" }}
+                      >
+                        상세 정보 더보기 ({fields.length}항목)
+                      </span>
+                    )}
+                  </button>
+                  {open && (
+                    <div className="form-grid">
+                      {fields.map((f) => (
+                        <CompanyFieldInput
+                          key={f.key}
+                          field={f}
+                          form={form}
+                          onChange={setField}
+                          onAddressChange={setAddressField}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-              <div className="field">
-                <label>결제조건</label>
-                <input
-                  value={form.payment_terms}
-                  onChange={(e) => setField("payment_terms", e.target.value)}
-                  placeholder="예: 월말 정산"
-                />
-              </div>
-              <div className="field">
-                <label>담당직원</label>
-                <input
-                  value={form.assigned_staff}
-                  onChange={(e) => setField("assigned_staff", e.target.value)}
-                />
-              </div>
-              <div className="field" style={{ gridColumn: "1 / -1" }}>
-                <label>주요 상차지역 (중복 선택 가능)</label>
-                <MultiSelectTags
-                  options={REGIONS}
-                  value={form.main_pickup_region}
-                  onChange={(v) => setField("main_pickup_region", v)}
-                />
-              </div>
-              <div className="field" style={{ gridColumn: "1 / -1" }}>
-                <label>주요 하차지역 (중복 선택 가능)</label>
-                <MultiSelectTags
-                  options={REGIONS}
-                  value={form.main_dropoff_region}
-                  onChange={(v) => setField("main_dropoff_region", v)}
-                />
-              </div>
+              );
+            })}
 
-              <div
-                style={{
-                  gridColumn: "1 / -1",
-                  fontSize: 12.5,
-                  fontWeight: 700,
-                  color: "var(--text-muted)",
-                  marginTop: 8,
-                }}
-              >
-                출처
-              </div>
-              <div className="field">
-                <label>출처 분류</label>
-                <select
-                  value={form.source_type}
-                  onChange={(e) => setField("source_type", e.target.value)}
-                >
-                  <option value="">미지정</option>
-                  {MANUAL_SOURCE_OPTIONS.map((o) => (
-                    <option key={o} value={o}>
-                      {o === "기타" ? "기타 (수기작성)" : o}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {form.source_type === "기타" && (
-                <div className="field">
-                  <label>출처 설명</label>
-                  <input
-                    value={form.source_note}
-                    onChange={(e) => setField("source_note", e.target.value)}
-                    placeholder="예: 지인 소개, 홈페이지 문의 등"
-                  />
-                </div>
-              )}
-
-              <div
-                style={{
-                  gridColumn: "1 / -1",
-                  fontSize: 12.5,
-                  fontWeight: 700,
-                  color: "var(--text-muted)",
-                  marginTop: 8,
-                }}
-              >
-                영업 정보
-              </div>
-              <div className="field">
-                <label>영업상태</label>
-                <select
-                  value={form.status}
-                  onChange={(e) => setField("status", e.target.value)}
-                >
-                  {STATUS_OPTIONS.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="field">
-                <label>화주등급</label>
-                <select
-                  value={form.grade}
-                  onChange={(e) => setField("grade", e.target.value)}
-                >
-                  <option value="">미지정</option>
-                  {GRADE_OPTIONS.map((g) => (
-                    <option key={g} value={g}>
-                      {g}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="field">
-                <label>다음 연락 예정일</label>
-                <input
-                  type="date"
-                  value={form.next_followup_date}
-                  onChange={(e) => setField("next_followup_date", e.target.value)}
-                />
-              </div>
-              <div className="field" style={{ gridColumn: "1 / -1" }}>
-                <label>메모</label>
-                <textarea
-                  rows={2}
-                  value={form.notes}
-                  onChange={(e) => setField("notes", e.target.value)}
-                  placeholder="통화내용, 특이사항"
-                />
-              </div>
-            </div>
-            <div className="form-actions">
+            <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
               <button className="btn" type="submit" disabled={saving}>
-                {saving ? "저장 중..." : "저장"}
+                {saving ? "저장 중..." : "등록"}
               </button>
               <button
                 type="button"
                 className="btn btn-ghost"
                 onClick={() => {
-                  setForm(EMPTY_FORM);
+                  setForm(emptyCompanyForm());
                   setShowForm(false);
                 }}
               >
@@ -737,7 +523,15 @@ export default function CompaniesPage() {
                       ))}
                     </div>
                   </td>
-                  <td>{c.name}</td>
+                  <td>
+                    <span
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+                    >
+                      {c.name}
+                      {/* 🔴 종료일이 지난 계약에는 안 붙는다(컴포넌트가 판정한다) */}
+                      <RecurringContractBadge company={c} small />
+                    </span>
+                  </td>
                   <td>{formatIndustry(c)}</td>
                   <td>{formatRegion(c)}</td>
                   <td>{c.phone || "-"}</td>

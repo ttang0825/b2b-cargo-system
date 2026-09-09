@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
+// 🔴 화주 항목 정의·payload 조립은 이 파일 하나다(33차 A장) — 여기서 컬럼을
+//    직접 조립하면 온라인 신청으로 만든 화주만 빈칸으로 남는다.
+import { buildCompanyPayload, emptyCompanyForm } from "@/lib/companyFields";
 import { issuePortalAccount } from "@/lib/portalAccountCredentials";
 import { applicationApprovedWithAccountMessage } from "@/lib/sms/templates";
 import { getPortalLoginUrl } from "@/lib/siteUrl";
@@ -44,38 +47,65 @@ export async function POST(req: Request) {
   }
 
   // 2. 화주 회사 신규 등록
-  // "월 예상 운송건수"/"신청 메모"는 일반 메모(notes)로 남김 — manual_source_note는
-  // 출처분류가 "기타"일 때만 쓰는 "기타 출처 설명" 전용 칸이라 여기 넣으면 안 됨
-  // (넣으면 나중에 담당자가 출처분류를 "기타"로 바꿀 때 엉뚱한 텍스트가 자동으로 보임)
+  //
+  // 🔴 세 번째 입구다 — 신규 등록 폼·상세 수정 폼과 **같은 정의·같은 payload 함수**를
+  //    쓴다(33차 A장). 여기서 직접 컬럼을 조립하면 온라인으로 들어온 화주만 계속
+  //    빈칸으로 남는다(그게 이 차수 전의 상태였다).
+  //
+  // 🔴 「월 예상 운송건수」는 대응 컬럼(`monthly_expected_orders`, integer)에 넣는다 —
+  //    전에는 `notes` 문자열에 뭉쳐 넣어서 **검색·필터가 안 됐다.**
+  //    ⚠️ 신청서 쪽은 자유 텍스트(`text`)라 「30건 정도」처럼 숫자로 못 읽는 값이 온다.
+  //       그때는 컬럼을 비우고 원문을 `notes` 에 남긴다 — 값을 잃지 않는 쪽을 고른다.
+  const rawVolume = (application.monthly_volume_estimate || "").trim();
+  const volumeDigits = rawVolume.replace(/[^0-9]/g, "");
+  const parsedVolume =
+    volumeDigits && Number(volumeDigits) > 0 && Number(volumeDigits) < 100000
+      ? Number(volumeDigits)
+      : null;
+
+  // 🔴 `manual_source_note` 에 넣지 말 것 — 출처분류가 「기타」일 때만 쓰는 전용 칸이라,
+  //    나중에 담당자가 분류를 「기타」로 바꾸면 엉뚱한 글이 화면에 나타난다(CLAUDE.md §7).
   const noteParts = [
-    application.monthly_volume_estimate ? `월 예상 운송건수: ${application.monthly_volume_estimate}` : null,
+    // 숫자로 읽힌 값은 컬럼에 들어갔으므로 메모에 다시 적지 않는다(중복 표시 방지).
+    parsedVolume === null && rawVolume ? `월 예상 운송건수: ${rawVolume}` : null,
     application.notes ? `신청 메모: ${application.notes}` : null,
   ].filter(Boolean);
 
+  // 신청서 값을 폼과 같은 모양으로 만든 뒤 공통 함수에 넘긴다.
+  // ⚠️ 신청서에 대응 항목이 없는 컬럼은 빈 값으로 남고, 담당자가 승인 직후
+  //    화주 상세 화면에서 채운다(승인 화면에서 바로 채우게 하지는 않는다).
+  const approvedForm: Record<string, any> = {
+    ...emptyCompanyForm(),
+    name: application.company_name,
+    biz_reg_no: application.business_reg_no || "",
+    contact_name: application.contact_name || "",
+    contact_mobile: application.contact_phone || "",
+    contact_email: application.contact_email || "",
+    address: application.main_origin || "",
+    status: "견적요청",
+    industry: application.industry || "",
+    monthly_expected_orders: parsedVolume === null ? "" : parsedVolume,
+    main_pickup_region: application.preferred_regions || "",
+    main_dropoff_region: application.preferred_regions || "",
+    main_pickup_address: application.main_origin || "",
+    main_pickup_sido: application.main_origin_sido || "",
+    main_pickup_sigungu: application.main_origin_sigungu || "",
+    main_dropoff_address: application.main_destination || "",
+    main_dropoff_sido: application.main_destination_sido || "",
+    main_dropoff_sigungu: application.main_destination_sigungu || "",
+    manual_source_type: "온라인 등록신청",
+    notes: noteParts.length > 0 ? noteParts.join(" / ") : "",
+  };
+
+  // 🔴 신청서에는 톤수+형태가 아니라 단일 값(`preferred_vehicle`)이 온다 —
+  //    `buildCompanyPayload` 가 두 칸을 합치는 것을 덮어써서 원문을 그대로 넣는다.
+  const payload = buildCompanyPayload(approvedForm);
+  payload.recommended_vehicle = application.preferred_vehicle || null;
+  payload.created_by = staff?.id || null;
+
   const { data: company, error: companyError } = await admin
     .from("companies")
-    .insert({
-      name: application.company_name,
-      biz_reg_no: application.business_reg_no || null,
-      contact_name: application.contact_name,
-      contact_mobile: application.contact_phone,
-      contact_email: application.contact_email || null,
-      address: application.main_origin || null,
-      status: "견적요청",
-      industry: application.industry || null,
-      main_pickup_region: application.preferred_regions || null,
-      main_dropoff_region: application.preferred_regions || null,
-      main_pickup_address: application.main_origin || null,
-      main_pickup_sido: application.main_origin_sido || null,
-      main_pickup_sigungu: application.main_origin_sigungu || null,
-      main_dropoff_address: application.main_destination || null,
-      main_dropoff_sido: application.main_destination_sido || null,
-      main_dropoff_sigungu: application.main_destination_sigungu || null,
-      recommended_vehicle: application.preferred_vehicle || null,
-      manual_source_type: "온라인 등록신청",
-      notes: noteParts.length > 0 ? noteParts.join(" / ") : null,
-      created_by: staff?.id || null,
-    })
+    .insert(payload)
     .select("id")
     .single();
 
