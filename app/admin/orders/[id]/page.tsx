@@ -20,7 +20,6 @@ import { optimisticUpdate } from "@/lib/optimisticUpdate";
 import { logSettlementFieldChange } from "@/lib/settlementFieldChangeLog";
 import { getSettlementDisplayLabel, getPaymentConditionLabel, mapToLegacySettlementType } from "@/lib/settlementLabels";
 import MoneyInput from "@/components/MoneyInput";
-import { getLatestMixedLoadingDiscountSettings } from "@/lib/mixedLoadingDiscountSettings";
 import { localInputToISOString, toLocalDateTimeInput } from "@/lib/localDateTime";
 import MixableBadge from "@/components/MixableBadge";
 
@@ -109,13 +108,9 @@ export default function OrderDetailPage() {
   const [linkedDispatchId, setLinkedDispatchId] = useState<string | null>(null);
   const [settlementModalOpen, setSettlementModalOpen] = useState(false);
   const [settlementSaving, setSettlementSaving] = useState(false);
-  const [standardMixedDiscountPercent, setStandardMixedDiscountPercent] = useState(0);
 
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
-    getLatestMixedLoadingDiscountSettings().then((row) => {
-      if (row) setStandardMixedDiscountPercent(row.standard_discount_percent);
-    });
   }, []);
 
   const [editForm, setEditForm] = useState({
@@ -770,13 +765,12 @@ export default function OrderDetailPage() {
                         name="order_mixed_discount_type"
                         style={CHECKBOX_STYLE}
                         checked={editForm.mixed_discount_type === "percent"}
+                        // 🔴 표준 할인율은 거리 구간별 값인데 orders 에는 distance_km
+                        //    컬럼이 없어 어느 구간인지 고를 수 없다. 임의의 구간 값을
+                        //    채우면 담당자가 그것을 표준으로 믿게 되므로, 견적에서
+                        //    승계된 값만 그대로 두고 비어 있으면 비운 채로 둔다.
                         onChange={() =>
-                          setEditForm((f) => ({
-                            ...f,
-                            mixed_discount_type: "percent",
-                            mixed_discount_percent:
-                              f.mixed_discount_percent || String(standardMixedDiscountPercent),
-                          }))
+                          setEditForm((f) => ({ ...f, mixed_discount_type: "percent" }))
                         }
                       />
                       할인율(%)

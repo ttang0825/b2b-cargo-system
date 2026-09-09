@@ -19,7 +19,12 @@ import CollectionMethodInput, { CollectionMethodValue } from "@/components/Colle
 import PickupDropoffContactFields, {
   EMPTY_PICKUP_DROPOFF_CONTACT,
 } from "@/components/PickupDropoffContactFields";
-import { getLatestMixedLoadingDiscountSettings } from "@/lib/mixedLoadingDiscountSettings";
+import {
+  getMixedLoadingDiscountTiers,
+  pickMixedDiscountTier,
+  MixedLoadingDiscountTierRow,
+} from "@/lib/mixedLoadingDiscountSettings";
+import MixedDiscountStandardHint from "@/components/MixedDiscountStandardHint";
 import { localInputToISOString, toLocalDateTimeInput } from "@/lib/localDateTime";
 import { applyMixedDiscount } from "@/lib/settlementCalc";
 // 🔴 차량형태 선택지는 DB(`rate_surcharges`)가 정본이고 **표시 순서만** 코드가 정한다.
@@ -142,13 +147,11 @@ function QuotesPageInner() {
   const [finalAmountOverride, setFinalAmountOverride] = useState("");
   const [ratesLoading, setRatesLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [standardMixedDiscountPercent, setStandardMixedDiscountPercent] = useState(0);
+  const [mixedDiscountTiers, setMixedDiscountTiers] = useState<MixedLoadingDiscountTierRow[]>([]);
 
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
-    getLatestMixedLoadingDiscountSettings().then((row) => {
-      if (row) setStandardMixedDiscountPercent(row.standard_discount_percent);
-    });
+    getMixedLoadingDiscountTiers().then(({ rows }) => setMixedDiscountTiers(rows));
   }, []);
 
   const [savedLocations, setSavedLocations] = useState<
@@ -585,7 +588,6 @@ function QuotesPageInner() {
       const discounted = applyMixedDiscount(
         rawFinal,
         form.loading_type,
-        true,
         form.mixed_discount_type,
         Number(form.mixed_discount_amount) || 0,
         Number(form.mixed_discount_percent) || 0
@@ -605,6 +607,12 @@ function QuotesPageInner() {
 
     return { base, surchargeTotal, final, breakdown, tierMatch };
   }, [tiers, surcharges, extraFees, form]);
+
+  // 입력된 거리에 해당하는 표준 혼적 할인율 구간 (없으면 null — 거리를 아직 안 넣은 상태)
+  const mixedDiscountTier = useMemo(
+    () => pickMixedDiscountTier(mixedDiscountTiers, Number(form.distance_km) || null),
+    [mixedDiscountTiers, form.distance_km]
+  );
 
   // 희망 상차일시는 현재 시각 이후로만 선택 가능
   const nowDateTime = (() => {
@@ -1526,7 +1534,10 @@ function QuotesPageInner() {
                               ...f,
                               mixed_discount_type: "percent",
                               mixed_discount_percent:
-                                f.mixed_discount_percent || String(standardMixedDiscountPercent),
+                                f.mixed_discount_percent ||
+                                (mixedDiscountTier
+                                  ? String(mixedDiscountTier.standard_discount_percent)
+                                  : ""),
                             }))
                           }
                         />
@@ -1553,7 +1564,7 @@ function QuotesPageInner() {
                     </div>
 
                     {form.mixed_discount_type === "percent" && (
-                      <div className="field" style={{ maxWidth: 160, marginBottom: 10 }}>
+                      <div className="field" style={{ maxWidth: 240, marginBottom: 10 }}>
                         <label>혼적 할인율(%)</label>
                         <input
                           type="number"
@@ -1562,6 +1573,10 @@ function QuotesPageInner() {
                           onChange={(e) =>
                             setForm({ ...form, mixed_discount_percent: e.target.value })
                           }
+                        />
+                        <MixedDiscountStandardHint
+                          tier={mixedDiscountTier}
+                          currentValue={form.mixed_discount_percent}
                         />
                       </div>
                     )}

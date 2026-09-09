@@ -11,9 +11,8 @@ import {
   type InsuranceRateSettingsRow,
 } from "@/lib/insuranceRateSettings";
 import {
-  getLatestMixedLoadingDiscountSettings,
-  DEFAULT_MIXED_LOADING_DISCOUNT_SETTINGS,
-  type MixedLoadingDiscountSettingsRow,
+  getMixedLoadingDiscountTiers,
+  type MixedLoadingDiscountTierRow,
 } from "@/lib/mixedLoadingDiscountSettings";
 import { VEHICLE_TYPES_ALL } from "@/lib/constants";
 import {
@@ -259,30 +258,39 @@ function InsuranceRateTab({ isAdmin }: { isAdmin: boolean }) {
 
 // 표준 혼적 할인율(%) — 가산기준 탭 안의 소섹션. 혼적 할인 중 율(%) 방식에만
 // 쓰는 회사 자체 기본값으로, 견적에서 "혼적가능"+"할인유형: 율"을 선택하면
-// 이 값이 입력창 기본값으로 채워짐(담당자가 건별 수정 가능). 금액(정액)
-// 방식은 표준값 없이 계속 수동 입력만 지원(4차 세션 결정사항).
+// 그 견적의 거리에 해당하는 구간 값이 입력창 기본값으로 채워짐(담당자가 건별
+// 수정 가능). 금액(정액) 방식은 표준값 없이 계속 수동 입력만 지원(4차 세션 결정사항).
+//
+// 🔴 단일 값이 아니라 거리 3구간이다(2026-09-09). 구간 매칭은 운임과 같은
+//    "상한 이하 첫 구간"이라 하한을 따로 두지 않는다 — 자세한 사유는
+//    lib/mixedLoadingDiscountSettings.ts 주석 참고.
 function MixedLoadingDiscountCard({ isAdmin }: { isAdmin: boolean }) {
-  const [row, setRow] = useState<MixedLoadingDiscountSettingsRow | null>(null);
+  const [rows, setRows] = useState<MixedLoadingDiscountTierRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [discountPercent, setDiscountPercent] = useState(
-    String(DEFAULT_MIXED_LOADING_DISCOUNT_SETTINGS.standard_discount_percent)
-  );
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   async function load() {
     setLoading(true);
     setError(null);
-    const data = await getLatestMixedLoadingDiscountSettings();
-    if (!data) {
+    const { rows: data, error: loadError } = await getMixedLoadingDiscountTiers();
+    if (loadError) {
+      setError(loadError);
+      setLoading(false);
+      return;
+    }
+    if (data.length === 0) {
       setError("설정값을 불러오지 못했습니다.");
       setLoading(false);
       return;
     }
-    setRow(data);
-    setDiscountPercent(String(data.standard_discount_percent));
+    setRows(data);
+    setDrafts(
+      Object.fromEntries(data.map((r) => [r.id, String(r.standard_discount_percent)]))
+    );
     setLoading(false);
   }
 
@@ -292,7 +300,7 @@ function MixedLoadingDiscountCard({ isAdmin }: { isAdmin: boolean }) {
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    if (!row) return;
+    if (rows.length === 0) return;
     setSaving(true);
     setActionError(null);
     setSaved(false);
@@ -300,7 +308,12 @@ function MixedLoadingDiscountCard({ isAdmin }: { isAdmin: boolean }) {
       const res = await fetch("/api/admin/mixed-loading-discount-settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: row.id, standard_discount_percent: Number(discountPercent) }),
+        body: JSON.stringify({
+          tiers: rows.map((r) => ({
+            id: r.id,
+            standard_discount_percent: Number(drafts[r.id]),
+          })),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -318,28 +331,58 @@ function MixedLoadingDiscountCard({ isAdmin }: { isAdmin: boolean }) {
 
   if (loading) return <div className="empty-state">불러오는 중...</div>;
 
+  // "등록/최종수정" 표시는 가장 최근에 손댄 구간을 기준으로 한다
+  const latest = rows.reduce<MixedLoadingDiscountTierRow | null>(
+    (acc, r) => (!acc || r.updated_at > acc.updated_at ? r : acc),
+    null
+  );
+
   return (
-    <div className="card" style={{ padding: 16, marginBottom: 24, maxWidth: 380 }}>
+    <div className="card" style={{ padding: 16, marginBottom: 24, maxWidth: 420 }}>
       <h3 style={{ fontSize: 13.5, marginTop: 0, marginBottom: 10 }}>표준 혼적 할인율</h3>
       <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 0, marginBottom: 12 }}>
-        견적에서 "혼적가능" + 할인유형을 "율(%)"로 선택하면 이 값이 기본값으로 채워집니다
-        (건별로 수정 가능). 금액(정액) 할인은 표준값 없이 항상 직접 입력합니다.
+        견적에서 "혼적가능" + 할인유형을 "율(%)"로 선택하면, 그 견적의 거리에 해당하는
+        구간 값이 기본값으로 채워집니다(건별로 수정 가능). 금액(정액) 할인은 표준값 없이
+        항상 직접 입력합니다.
+      </p>
+      <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 0, marginBottom: 12 }}>
+        혼적은 "반값"이 아니라 <strong>부분 적재라 그만큼만 받는다</strong>는 뜻입니다.
       </p>
       {error && <div className="error-box">오류: {error}</div>}
       {actionError && <div className="error-box">{actionError}</div>}
-      {row && (
+      {rows.length > 0 && (
         <>
-          <form onSubmit={handleSave} onKeyDown={handleFormKeyDown} style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-            <div className="field" style={{ marginBottom: 0, maxWidth: 140 }}>
-              <label>표준 할인율(%)</label>
-              <input
-                type="number"
-                step={0.1}
-                value={discountPercent}
-                onChange={(e) => setDiscountPercent(e.target.value)}
-                disabled={!isAdmin}
-              />
-            </div>
+          <form onSubmit={handleSave} onKeyDown={handleFormKeyDown}>
+            <table style={{ width: "100%", fontSize: 13, marginBottom: 12 }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: "left", fontWeight: 600, paddingBottom: 6 }}>운송거리</th>
+                  <th style={{ textAlign: "left", fontWeight: 600, paddingBottom: 6 }}>
+                    표준 할인율(%)
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.id}>
+                    <td style={{ paddingBottom: 8, whiteSpace: "nowrap" }}>{r.distance_label}</td>
+                    <td style={{ paddingBottom: 8 }}>
+                      <div className="field" style={{ marginBottom: 0, maxWidth: 120 }}>
+                        <input
+                          type="number"
+                          step={0.1}
+                          value={drafts[r.id] ?? ""}
+                          onChange={(e) =>
+                            setDrafts((d) => ({ ...d, [r.id]: e.target.value }))
+                          }
+                          disabled={!isAdmin}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
             {isAdmin && (
               <button className="btn" type="submit" disabled={saving}>
                 {saving ? "저장 중..." : "저장"}
@@ -356,7 +399,9 @@ function MixedLoadingDiscountCard({ isAdmin }: { isAdmin: boolean }) {
               조회만 가능합니다. 수정은 관리자만 할 수 있습니다.
             </p>
           )}
-          <ProcessedByFooter updatedBy={row.updated_by} updatedAt={row.updated_at} />
+          {latest && (
+            <ProcessedByFooter updatedBy={latest.updated_by} updatedAt={latest.updated_at} />
+          )}
         </>
       )}
     </div>

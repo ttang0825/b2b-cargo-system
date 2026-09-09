@@ -89,20 +89,26 @@ export function calcSettlement(input: SettlementCalcInput): SettlementCalcResult
   };
 }
 
-// 혼적 할인 (4차 세션). 견적 단계에서 동의·할인조건을 1회만 수집하고,
-// 배차 단계는 "실제 혼적됐는지" 실행여부 플래그(mixedExecuted) 1개로
-// 판단한다 — 독차로 실제 운행되면(mixedExecuted=false) 할인 미적용,
-// 혼적으로 실제 운행되면 견적에서 설정한 할인을 그대로 반영한다.
+// 혼적 할인 (4차 세션). 견적 단계에서 동의·할인조건을 1회만 수집하고, 그 조건을
+// 최종 견적금액에 바로 반영한다.
+//
+// ⚠️ 7차 세션에 배차의 "혼적 실행" 체크박스(dispatches.mixed_executed)가 없어지면서
+//    이 함수의 mixedExecuted 인자는 호출부가 늘 true 를 넘기는 죽은 값이 됐고,
+//    2026-09-09 에 제거했다. 되살리지 말 것 — 되살리려면 그 컬럼부터 다시 만들어야 한다.
+//
+// 🔴 이 함수는 거리를 보지 않는다. 표준 혼적 할인율은 거리 3구간이지만 그것은
+//    입력창 기본값이고(lib/mixedLoadingDiscountSettings.ts), 실제 할인율은 담당자가
+//    건별로 확정해 저장한 값이다. 거리로 계수를 강제하는 설계는 ① 그 건별 조정값을
+//    덮어쓰고 ② orders 에 distance_km 이 없어 오더 상세에서 같은 금액을 재현할 수
+//    없으며 ③ 요율표를 고치는 순간 과거 견적의 재계산 금액이 달라져서 채택하지 않았다.
 export function applyMixedDiscount(
   baseCharge: number,
   loadingType: "exclusive" | "mixable",
-  mixedExecuted: boolean,
   discountType: "amount" | "percent" | null,
   discountAmount: number,
   discountPercent: number
 ): number {
-  const applies = loadingType === "mixable" && mixedExecuted;
-  if (!applies) return baseCharge;
+  if (loadingType !== "mixable") return baseCharge;
   if (discountType === "percent") {
     return Math.round(baseCharge * (1 - discountPercent / 100));
   }
@@ -113,7 +119,11 @@ export function applyMixedDiscount(
 }
 
 // applyMixedDiscount()의 역연산 — "혼적 실행" 체크를 해제할 때 이미 할인이
-// 반영되어 저장된 청구운임에서 할인 전 금액으로 되돌리는 데 사용
+// 반영되어 저장된 청구운임에서 할인 전 금액으로 되돌리는 데 사용했다.
+// ⚠️ 그 체크박스가 7차 세션에 없어지면서 **호출부가 0곳**이 됐다(2026-09-09 실측).
+//    고장난 게 아니라 쓸 자리가 없어진 것이라 지우지 않고 얼려둔다 — 지우면 다음에
+//    "왜 역연산이 없지" 하고 다시 만들게 된다. applyMixedDiscount() 와 인자·규칙이
+//    짝을 이루므로, 한쪽을 고치면 다른 쪽도 같이 고칠 것.
 export function reverseMixedDiscount(
   discountedCharge: number,
   loadingType: "exclusive" | "mixable",
