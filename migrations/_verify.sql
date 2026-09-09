@@ -330,10 +330,27 @@ select grantee, string_agg(distinct privilege_type, ',' order by privilege_type)
    and grantee in ('anon','authenticated','service_role')
  group by grantee order by grantee;
 
+\echo '--- 🔴 32차: 아이디 없는 재직 직원 (0 이어야 merge 해도 안전) ---'
+-- 🔴 이 값이 0 이 아닌데 코드를 merge 하면 **전 직원이 못 들어온다.**
+--    아이디 값은 저장소가 public 이라 마이그레이션에 넣지 않았고,
+--    Supabase SQL Editor 에서 손으로 채운다(2026-09-09_staff_login_id.sql 머리말).
+select
+  count(*) filter (where status = 'active' and (login_id is null or btrim(login_id) = ''))
+                                                          as "아이디없는_재직자_0이어야",
+  count(*) filter (where login_id is not null)            as 아이디_보유,
+  count(*) filter (where login_id is not null
+                     and login_id !~ '^[a-z][a-z0-9]{3,19}$')
+                                                          as "규칙위반_0이어야",
+  count(distinct lower(login_id))                         as 서로다른_아이디수
+from staff_accounts;
+
 \echo '--- 계정 목록 (마스킹) ---'
 select row_number() over (order by created_at) as 번호,
        left(name, 1) || repeat('*', greatest(length(name) - 1, 0))          as 이름,
        left(split_part(email, '@', 1), 2) || '***@'
          || left(split_part(email, '@', 2), 1) || '***'                     as 이메일,
-       role, status, created_at::date as 등록일
+       -- 🔴 login_id 도 공개 로그에 그대로 찍지 않는다 — 자격의 절반이다.
+       case when login_id is null then '(없음)'
+            else left(login_id, 2) || repeat('*', greatest(length(login_id) - 2, 0)) end as 아이디,
+       role, status, must_change_password as 강제변경, created_at::date as 등록일
   from staff_accounts order by created_at;
