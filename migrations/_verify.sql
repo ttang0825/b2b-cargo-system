@@ -232,3 +232,74 @@ where c.relname='customer_billing_batch_candidates';
 \echo ''
 \echo '=== ⑨ 마이그레이션 이력 ================================='
 select filename, applied_at, applied_by from _migrations order by filename;
+
+\echo ''
+\echo '=== ⑩ 🔴 운임 v11 착수 전 실측 (차수 없음: 운임기준표 v11) ======'
+-- 🔴 왜 전수 덤프인가. 레포에 운임 시드 파일이 없어서 "현행 값"을 아는 길이
+--    이 조회뿐이다. v11 지시서의 「현행 → v11」 165칸 대조표가 여기서 나온다.
+--    ⚠️ 위 ⑥ 의 주석 값(1톤 10km 48,000 등)은 16·17·22차 기준이라 **낡았다** —
+--    주석이 아니라 이 덤프가 정본이다.
+--    🔴 2026-09-09 v11 적용 후 기준: 165칸 전부 천원 단위 · 게시 6칸은
+--       40,000 / 52,000 / 87,000 / 100,000 / 115,000 / 150,000 이다.
+
+\echo ''
+\echo '--- ⑩-a 차급명 전수 (🔴 견적 매칭이 문자열 완전일치다) ---'
+select vehicle_type as 차급명, length(vehicle_type) as 글자수, count(*) as 구간수
+  from rate_distance_tiers group by vehicle_type order by min(base_fare);
+
+\echo ''
+\echo '--- ⑩-b 거리 구간 표기 전수 + 상하한 ---'
+select distance_label as 구간명, min(distance_from_km) as from_km,
+       max(distance_to_km) as to_km, count(*) as 차급수
+  from rate_distance_tiers group by distance_label
+ order by coalesce(max(distance_to_km), 999999);
+
+\echo ''
+\echo '--- ⑩-c 🔴 165칸 전수 (행=구간 · 열=차급) ---'
+select distance_label as 구간,
+  max(base_fare) filter (where vehicle_type = '1톤')          as "1톤",
+  max(base_fare) filter (where vehicle_type = '1.4톤')        as "1.4톤",
+  max(base_fare) filter (where vehicle_type = '2.5톤')        as "2.5톤",
+  max(base_fare) filter (where vehicle_type = '3.5톤')        as "3.5톤",
+  max(base_fare) filter (where vehicle_type = '5톤')          as "5톤",
+  max(base_fare) filter (where vehicle_type = '5톤 플러스/축') as "5톤+/축",
+  max(base_fare) filter (where vehicle_type = '8톤')          as "8톤",
+  max(base_fare) filter (where vehicle_type = '11톤')         as "11톤",
+  max(base_fare) filter (where vehicle_type = '15톤')         as "15톤",
+  max(base_fare) filter (where vehicle_type = '18톤')         as "18톤",
+  max(base_fare) filter (where vehicle_type = '25톤')         as "25톤"
+from rate_distance_tiers group by distance_label
+order by min(coalesce(distance_to_km, 999999));
+
+\echo ''
+\echo '--- ⑩-d 🔴 위 표에서 못 잡힌 칸 (0이어야 — 차급명이 다르다는 뜻) ---'
+select count(*) as 미매칭_칸수 from rate_distance_tiers
+ where vehicle_type not in ('1톤','1.4톤','2.5톤','3.5톤','5톤','5톤 플러스/축',
+                            '8톤','11톤','15톤','18톤','25톤');
+
+\echo ''
+\echo '--- ⑩-e 혼적 할인 설정 (B장 전제) ---'
+select string_agg(column_name || ' ' || data_type, ', ' order by ordinal_position) as 컬럼
+  from information_schema.columns
+ where table_schema='public' and table_name='mixed_loading_discount_settings';
+select * from mixed_loading_discount_settings;
+
+\echo ''
+\echo '--- ⑩-f rate_surcharges 전체 (🔴 상하차 8종 병합 후 이름·금액) ---'
+select category, option_name, rate_pct, flat_amount
+  from rate_surcharges order by category, option_name;
+
+\echo ''
+\echo '--- ⑩-g 제약조건 (🔴 유니크가 없으면 재실행 시 중복 INSERT) ---'
+select conname, pg_get_constraintdef(oid) as 정의
+  from pg_constraint
+ where conrelid in ('rate_distance_tiers'::regclass,
+                    'mixed_loading_discount_settings'::regclass)
+ order by conrelid::regclass::text, conname;
+select indexname, indexdef from pg_indexes
+ where tablename in ('rate_distance_tiers','mixed_loading_discount_settings')
+ order by tablename, indexname;
+
+\echo ''
+\echo '--- ⑩-h _migrations 행 수 (파일을 더할 때마다 늘어난다) ---'
+select count(*) as 마이그레이션_행수 from _migrations;
