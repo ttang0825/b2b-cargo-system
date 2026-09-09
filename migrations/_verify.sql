@@ -354,3 +354,30 @@ select row_number() over (order by created_at) as 번호,
             else left(login_id, 2) || repeat('*', greatest(length(login_id) - 2, 0)) end as 아이디,
        role, status, must_change_password as 강제변경, created_at::date as 등록일
   from staff_accounts order by created_at;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- ⑫ 화주 항목 정합 (33차) — companies · customer_applications 컬럼 목록
+--
+--    🔴 컬럼 "이름"만 찍는다. 이 저장소는 public 이고 Actions 로그도 공개라
+--       실제 화주명·사업자등록번호·담당자 연락처는 한 글자도 나가면 안 된다(32차 규칙).
+--    🟢 33차가 「어느 신청서 항목이 companies 로 안 넘어가는가」를 판단하는 근거다.
+-- ─────────────────────────────────────────────────────────────────────────────
+\echo '--- ⑫-a companies 컬럼 ---'
+select ordinal_position as 순번, column_name as 컬럼, data_type as 형,
+       is_nullable as null허용, column_default as 기본값
+  from information_schema.columns
+ where table_schema = 'public' and table_name = 'companies'
+ order by ordinal_position;
+
+\echo '--- ⑫-b customer_applications 컬럼 ---'
+select ordinal_position as 순번, column_name as 컬럼, data_type as 형
+  from information_schema.columns
+ where table_schema = 'public' and table_name = 'customer_applications'
+ order by ordinal_position;
+
+\echo '--- ⑫-c 정기계약 컬럼 (33차 마이그레이션 뒤에 5개가 되어야 한다) ---'
+select count(*) as 정기계약_컬럼수
+  from information_schema.columns
+ where table_schema = 'public' and table_name = 'companies'
+   and column_name like 'recurring_contract%' or (table_name = 'companies'
+   and table_schema = 'public' and column_name = 'is_recurring_contract');
