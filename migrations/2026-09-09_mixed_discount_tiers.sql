@@ -69,6 +69,15 @@ with upd as (
 )
 select count(*) as "반영된 구간 수(3이어야 함)" from upd;
 
+-- ── ⑤-2 배포 전까지의 과도기 대비 ────────────────────────────
+-- 이 마이그레이션이 반영된 시점부터 코드가 배포되기 전까지, 아직 옛 구조를 쓰는
+-- 화면은 "가장 최근에 수정된 1행"만 읽는다. now() 는 트랜잭션 시각이라 세 행이
+-- 모두 같은 값이 되어 어느 행이 걸릴지 알 수 없으므로, 중간 구간을 명시적으로
+-- 가장 최근으로 만들어 그 사이에 55%(최장거리)가 기본값으로 뜨는 일을 막는다.
+update public.mixed_loading_discount_settings
+   set updated_at = clock_timestamp()
+ where distance_label = '250km 이내';
+
 -- ── ⑥ 구간 이름은 이제 필수 ──────────────────────────────────
 alter table public.mixed_loading_discount_settings
   alter column distance_label set not null;
