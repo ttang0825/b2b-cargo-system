@@ -313,8 +313,15 @@ select string_agg(column_name, ', ' order by ordinal_position) as "staff_account
  where table_schema = 'public' and table_name = 'staff_accounts';
 
 \echo '--- staff_accounts RLS 정책 (🔴 anon 이 있는지가 32차 설계를 가른다) ---'
-select policyname, roles::text as 롤, cmd as 명령
+select policyname, roles::text as 롤, cmd as 명령, qual as 조건
   from pg_policies where tablename = 'staff_accounts' order by policyname;
+
+\echo '--- 🔴 실측: anon 이 실제로 몇 행을 읽는가 (0 이어야) ---'
+begin;
+  set local role anon;
+  select count(*) as "anon이_읽는_행수_0이어야" from staff_accounts;
+  reset role;
+commit;
 
 \echo '--- staff_accounts 롤별 GRANT ---'
 select grantee, string_agg(distinct privilege_type, ',' order by privilege_type) as 권한
