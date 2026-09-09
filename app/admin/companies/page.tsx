@@ -407,7 +407,8 @@ export default function CompaniesPage() {
               🔴 접힌 구획의 값도 그대로 저장된다 — 접기는 표시일 뿐이고 state 는 하나다.
             */}
             {COMPANY_SECTIONS.map((section) => {
-              const fields = companyFormFieldsOf(section);
+              // 🔴 `form` 을 넘겨 조건부 항목(출처 설명)을 정의가 걸러 준다.
+              const fields = companyFormFieldsOf(section, form);
               if (fields.length === 0) return null; // 「실적」은 등록 폼에 없다
               const open = openSections.includes(section);
               return (

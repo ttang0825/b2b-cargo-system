@@ -81,6 +81,13 @@ export type CompanyField = {
   emptyLabel?: string;
   /** 표시 모드에서 값 뒤에 붙일 단위(예: `일`) */
   displaySuffix?: string;
+  /**
+   * 이 조건이 참일 때만 입력칸을 그린다.
+   * 🔴 조건을 화면에 적지 말 것 — 등록 폼과 수정 폼이 서로 다르게 판단하게 된다
+   *    (실제로 「출처 설명」이 등록 폼에서는 항상 보이고 수정 폼에서는 「기타」일
+   *    때만 보이는 상태였다).
+   */
+  showWhen?: (form: Record<string, any>) => boolean;
 };
 
 /**
@@ -130,7 +137,15 @@ export const COMPANY_FIELDS: CompanyField[] = [
   // 🔴 출처분류가 「기타」일 때만 쓰는 전용 칸이다(CLAUDE.md §7). 다른 흐름에서 임의
   //    텍스트를 저장할 목적으로 재사용하지 말 것 — 분류를 「기타」로 바꾸는 순간
   //    엉뚱한 글이 화면에 나타난다. 자유 메모는 `notes` 에 넣는다.
-  { key: "manual_source_note", label: "출처 설명", type: "text", section: "기본 정보" },
+  {
+    key: "manual_source_note",
+    label: "출처 설명",
+    type: "text",
+    section: "기본 정보",
+    // 🔴 분류가 「기타」일 때만 그린다 — 다른 분류에서 채워도 저장 때 비워지므로
+    //    (buildCompanyPayload) 입력칸 자체를 안 보여주는 것이 맞다.
+    showWhen: (form) => form.manual_source_type === "기타",
+  },
   { key: "notes", label: "메모", type: "textarea", section: "기본 정보" },
 
   // ── 담당자 ────────────────────────────────────────────────────────────────
@@ -217,9 +232,17 @@ export const COMPANY_REQUIRED_FIELDS = COMPANY_FIELDS.filter((f) => f.required);
  */
 export const COMPANY_FORM_OPEN_SECTIONS: readonly CompanySection[] = ["기본 정보", "담당자"];
 
-/** 그 구획에 속한, 등록 폼에 노출하는 항목들. */
-export function companyFormFieldsOf(section: CompanySection): CompanyField[] {
-  return COMPANY_FORM_FIELDS.filter((f) => f.section === section);
+/**
+ * 그 구획에 속한, 등록 폼에 노출하는 항목들.
+ * `form` 을 주면 `showWhen` 조건까지 걸러 준다 — 🔴 조건을 화면에 적지 말 것.
+ */
+export function companyFormFieldsOf(
+  section: CompanySection,
+  form?: Record<string, any>
+): CompanyField[] {
+  return COMPANY_FORM_FIELDS.filter(
+    (f) => f.section === section && (!form || !f.showWhen || f.showWhen(form))
+  );
 }
 
 /** 그 구획에 속한 모든 항목(상세 화면은 실적까지 다 보여준다). */

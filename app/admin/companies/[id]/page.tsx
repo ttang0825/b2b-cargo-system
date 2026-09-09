@@ -750,11 +750,9 @@ export default function CompanyDetailPage() {
             >
               {fields.map((f) => {
                 if (editing) {
-                  // 🔴 출처 설명은 분류가 「기타」일 때만 그린다 — 다른 분류에서 채우면
-                  //    저장 때 비워지므로(buildCompanyPayload) 입력칸을 아예 안 보여준다.
-                  if (f.key === "manual_source_note" && editForm.manual_source_type !== "기타") {
-                    return null;
-                  }
+                  // 🔴 조건부 노출은 정의 파일의 `showWhen` 이 정한다 — 여기에 조건을
+                  //    적으면 등록 폼과 다르게 판단하게 된다(그래서 갈렸던 자리다).
+                  if (f.showWhen && !f.showWhen(editForm)) return null;
                   return (
                     <CompanyFieldInput
                       key={f.key}
