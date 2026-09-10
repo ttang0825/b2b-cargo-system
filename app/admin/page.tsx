@@ -1,6 +1,12 @@
 import Link from "next/link";
 import InstallAppButton from "@/components/InstallAppButton";
 
+// 🔴 **배열 순서가 곧 화면 순서다**(리뷰 2라운드에 사용자가 직접 지정).
+//    1행: 화주 관리 · 활성 화주 · 차주 관리 · 운임기준표
+//    2행: 견적 관리 · 운송오더 · 배차 관리 · 정산 관리
+//    앞 줄은 **누구와 무엇으로 일하는가**(대상·기준), 뒷 줄은 **한 건이 흘러가는 차례**
+//    (견적 → 오더 → 배차 → 정산)다. 항목을 더하면 4의 배수를 지켜야 4칸 2줄이 유지된다.
+//    🔴 「가나다」나 「원래 순서」로 되돌리지 말 것.
 const MENU = [
   {
     href: "/admin/companies",
@@ -13,6 +19,12 @@ const MENU = [
     tag: "CRM",
     title: "활성 화주 (CRM)",
     desc: "견적 요청 이상 진행된 화주만 모아 거래 현황을 확인합니다.",
+  },
+  {
+    href: "/admin/drivers",
+    tag: "차주",
+    title: "차주 관리",
+    desc: "차주와 차량 정보, 운행 가능 지역, 누적 운송건수를 관리합니다.",
   },
   {
     href: "/admin/rates",
@@ -31,12 +43,6 @@ const MENU = [
     tag: "오더",
     title: "운송오더",
     desc: "수주된 견적과 직접 접수 건을 운송오더로 등록·관리합니다.",
-  },
-  {
-    href: "/admin/drivers",
-    tag: "차주",
-    title: "차주 관리",
-    desc: "차주와 차량 정보, 운행 가능 지역, 누적 운송건수를 관리합니다.",
   },
   {
     href: "/admin/dispatches",

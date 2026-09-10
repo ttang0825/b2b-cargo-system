@@ -1040,7 +1040,12 @@ function QuotesPageInner() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1.2fr 0.8fr",
+          /* 🔴 계산 패널을 **고정 폭**으로 뺐다(리뷰 2라운드 — *"자동계산결과창은 폭이
+             좀더 좁아도 된다"*). `0.8fr` 로 두면 화면이 넓어질수록 패널만 커지고 정작
+             입력칸이 안 넓어진다 — 남는 폭이 전부 입력 쪽으로 가게 한다.
+             🔴 `minmax(0, 1fr)` 의 `0` 을 빼지 말 것 — 그리드 칸의 기본 최소폭이
+                `auto` 라 안쪽 긴 주소 문자열이 칸을 밀어 패널이 찌그러진다. */
+          gridTemplateColumns: "minmax(0, 1fr) 340px",
           gap: 20,
           alignItems: "start",
           marginBottom: 24,
@@ -1176,6 +1181,35 @@ function QuotesPageInner() {
                 <strong style={{ fontSize: 13.5 }}>운송 구간 · 현장 정보</strong>
                 <span style={{ fontSize: 11.5, color: "var(--text-muted)" }}>화주포털 발주요청과 같은 순서입니다</span>
               </div>
+              {/* ── 출발지 열 / 도착지 열 (34차 리뷰 2라운드) ──────────────────────
+                  사용자 지시: *"견적관리에서 정보창 레이아웃을 화주포탈 발주요청과 거의
+                  유사하게 구성해줘."* 화주포털 발주요청이 **좌우 두 열**이고, 한 열에
+                  「주소 → 현장 상호·담당자명 → 담당자 연락처 → 주소록 저장」이 세로로
+                  들어간다. 그 배치를 관리자 쪽 부품으로 그대로 옮긴 것이다.
+                  🔴 **포털 부품(`Pv2AddressField`·`Pv2Select`·`.pv2-*`)은 하나도 안 가져왔다** —
+                     `.portal-v2` 스코프 전용이라 관리자 31화면이 그 CSS 를 끌어온다.
+                     34차 본작업의 「맞춘 것은 배치이지 부품이 아니다」가 그대로 유효하다.
+                  🔴 **저장된 주소는 포털처럼 드롭다운이 아니라 칩(badge)이다** — 관리자
+                     쪽 기존 방식이고, 드롭다운으로 바꾸면 포털 부품을 끌어와야 한다.
+                  ⚠️ 34차 본작업이 *"완전히 갈리지는 않는다 — 범위 밖"* 으로 남겨둔 항목이
+                     이번 지시로 범위 안에 들어온 것이다. */}
+              {/* 출발지 열 — 🔴 **주소와 그 현장 담당자가 같은 열에 있어야 한다.**
+                  전에는 주소 둘이 위에 나란히, 담당자 여섯 칸이 아래에 따로 있어서
+                  「이 담당자가 상차인가 하차인가」를 라벨로만 알 수 있었다. */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                  <span
+                    style={{
+                      width: 9,
+                      height: 9,
+                      borderRadius: "50%",
+                      background: "#2563EB",
+                      flexShrink: 0,
+                    }}
+                  />
+                  <strong style={{ fontSize: 13 }}>출발지</strong>
+                  <span style={{ fontSize: 11.5, color: "var(--text-muted)" }}>상차지 정보</span>
+                </div>
               <AddressSearch
                 label="출발지"
                 required
@@ -1221,8 +1255,53 @@ function QuotesPageInner() {
                   </div>
                 )}
               </AddressSearch>
+                <PickupDropoffContactFields
+                  value={form}
+                  onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
+                  only="pickup"
+                />
+              {customerMode === "company" && selectedCompany && (
+                <label
+                  htmlFor="saveOrigin"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontSize: 12,
+                    color: "var(--text-muted)",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    id="saveOrigin"
+                    type="checkbox"
+                    checked={saveOrigin}
+                    onChange={(e) => setSaveOrigin(e.target.checked)}
+                    style={{ margin: 0, flexShrink: 0 }}
+                  />
+                  이 출발지를 화주 주소록에 저장
+                </label>
+              )}
+              </div>
 
-              <AddressSearch
+              {/* 도착지 열 — 🔴 **주소와 그 현장 담당자가 같은 열에 있어야 한다.**
+                  전에는 주소 둘이 위에 나란히, 담당자 여섯 칸이 아래에 따로 있어서
+                  「이 담당자가 상차인가 하차인가」를 라벨로만 알 수 있었다. */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                  <span
+                    style={{
+                      width: 9,
+                      height: 9,
+                      borderRadius: "50%",
+                      background: "#DC2626",
+                      flexShrink: 0,
+                    }}
+                  />
+                  <strong style={{ fontSize: 13 }}>도착지</strong>
+                  <span style={{ fontSize: 11.5, color: "var(--text-muted)" }}>하차지 정보</span>
+                </div>
+<AddressSearch
                 label="도착지"
                 required
                 value={form.destination}
@@ -1272,82 +1351,34 @@ function QuotesPageInner() {
                   </div>
                 )}
               </AddressSearch>
-
-              {/* 🔴 **열 방향으로 흐르게 감싼다** — 공용 부품이 상차 3칸·하차 3칸을 차례로
-                  내놓는데, 부모 `.form-grid` 가 행 방향 2열이라 그냥 두면
-                  「상차 상호 / 상차 담당자명 / 상차 연락처 / 하차 상호 …」로 **지그재그**가 되어
-                  어느 쪽 담당자인지 눈으로 못 따라간다(포털은 좌우로 갈라 놓는다).
-                  🔴 **공용 부품 자체를 고치지 말 것** — 오더·배차 네 화면이 같이 쓴다.
-                  감싸개만 바꾸면 그쪽은 그대로다. */}
-              <div
-                style={{
-                  gridColumn: "1 / -1",
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gridTemplateRows: "repeat(3, auto)",
-                  gridAutoFlow: "column",
-                  gap: 14,
-                }}
-              >
                 <PickupDropoffContactFields
                   value={form}
                   onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
+                  only="dropoff"
                 />
-              </div>
-
               {customerMode === "company" && selectedCompany && (
-                <div
+                <label
+                  htmlFor="saveDestination"
                   style={{
-                    gridColumn: "1 / -1",
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: 14,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontSize: 12,
+                    color: "var(--text-muted)",
+                    cursor: "pointer",
                   }}
                 >
-                  <label
-                    htmlFor="saveOrigin"
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      fontSize: 12,
-                      color: "var(--text-muted)",
-                      cursor: "pointer",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    <input
-                      id="saveOrigin"
-                      type="checkbox"
-                      checked={saveOrigin}
-                      onChange={(e) => setSaveOrigin(e.target.checked)}
-                      style={{ margin: 0, flexShrink: 0 }}
-                    />
-                    이 출발지를 화주 주소록에 저장
-                  </label>
-                  <label
-                    htmlFor="saveDestination"
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      fontSize: 12,
-                      color: "var(--text-muted)",
-                      cursor: "pointer",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    <input
-                      id="saveDestination"
-                      type="checkbox"
-                      checked={saveDestination}
-                      onChange={(e) => setSaveDestination(e.target.checked)}
-                      style={{ margin: 0, flexShrink: 0 }}
-                    />
-                    이 도착지를 화주 주소록에 저장
-                  </label>
-                </div>
+                  <input
+                    id="saveDestination"
+                    type="checkbox"
+                    checked={saveDestination}
+                    onChange={(e) => setSaveDestination(e.target.checked)}
+                    style={{ margin: 0, flexShrink: 0 }}
+                  />
+                  이 도착지를 화주 주소록에 저장
+                </label>
               )}
+              </div>
 
               <div className="field field-required" style={{ gridColumn: "1 / -1" }}>
                 <label>거리(km) <RequiredMark /></label>
@@ -1408,7 +1439,11 @@ function QuotesPageInner() {
                 <strong style={{ fontSize: 13.5 }}>일정</strong>
                 <span style={{ fontSize: 11.5, color: "var(--text-muted)" }}></span>
               </div>
-              <div style={{ gridColumn: "1 / -1" }}>
+              {/* 🔴 **상차·하차를 좌우로 놓는다**(리뷰 2라운드 — 포털 발주요청과 같은 배치).
+                  전에는 둘 다 `gridColumn: "1 / -1"` 이라 위아래로 길게 늘어져서,
+                  「상차 다음이 하차」라는 짝이 한눈에 안 보이고 폼만 세로로 길어졌다.
+                  🔴 `gridColumn` 을 다시 붙이지 말 것. */}
+              <div>
                 <DateTimePicker
                   defaultTimeMode="now"
                   label="희망 상차 일시"
@@ -1417,7 +1452,7 @@ function QuotesPageInner() {
                   minDateTimeLabel="현재 시각 이후로만 선택 가능합니다"
                 />
               </div>
-              <div style={{ gridColumn: "1 / -1" }}>
+              <div>
                 <DateTimePicker
                   defaultTimeMode="now"
                   label="희망 하차 일시"

@@ -72,6 +72,13 @@ body {
 a {
   color: inherit;
 }
+/* 내부관리 화면 폭 — 🔴 **한 곳에서만 바꾼다**(상단바와 본문이 어긋나면 안 된다).
+   ⚠️ 1560px 로 넓혔다가 실사용 리뷰 2라운드에 *"화면폭이 너무 넓어 졌다.
+      좀 줄일 필요가 있다.(1300~1400사이)"* 로 **1360px** 이 됐다. 그 범위 밖으로
+      되돌리지 말 것 — 1100(원래)도 1560(1라운드)도 사용자가 물린 값이다. */
+:root {
+  --admin-max: 1360px;
+}
 .container {
   max-width: 1100px;
   margin: 0 auto;
@@ -7014,10 +7021,10 @@ tbody tr:hover {
       `max-width: 100%` 로 다시 덮인다.
    ───────────────────────────────────────────────────────────────────────────── */
 .admin-wide .container {
-  max-width: 1560px;
+  max-width: var(--admin-max);
 }
 .top-nav .top-nav-inner {
-  max-width: 1560px;
+  max-width: var(--admin-max);
 }
 
 /* 넓어진 폭이 **열 수**가 아니라 **칸 폭**으로 가게 한다.
@@ -7039,5 +7046,49 @@ tbody tr:hover {
   }
   .admin-wide .form-grid.quote-form-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   내부관리 홈 메뉴 카드 (34차 실사용 리뷰 2라운드)
+
+   사용자 지시: *"홈에서 메인메뉴 카드들이 전처럼 4칸 2줄로 들어오게 하자. 대신 카드의
+   폭을 넓혀서 맞추자. … 모바일에서는 홈화면 메뉴카드는 2열씩 배치하고 설명글은 2줄 구성"*
+
+   🔴 **폭을 넓혔더니 4칸 2줄이 깨진 것이 원인이다.** `.home-grid` 가
+      `auto-fill minmax(230px, 1fr)` 이라 칸 수가 폭을 따라가서, 1100 에서 4열이던 것이
+      넓히자 6열이 됐다. **칸 수를 8개 항목에 맞춰 못박고 폭이 남으면 카드가 넓어지게**
+      바꾼다 — 그것이 「카드의 폭을 넓혀서 맞추자」다.
+   🔴 **`.home-grid` 규칙 자체를 고치지 않는다**(globals.css 순수 추가 원칙).
+      `.admin-wide .home-grid`(0,0,2,0)로 특성도를 올린다 — 순서로 맞추지 말 것(원칙 58번).
+   🔴 **데스크탑 규칙은 `@media (min-width: 701px)` 안에 둔다** — 밖에 두면 특성도가 높아
+      모바일 2열 규칙을 덮어써 휴대폰에서도 4열이 된다.
+   🟢 모바일 2열은 `≤700px` 에 이미 있었지만 **`≤460px` 에서 1열로 떨어지고 있었다** —
+      사용자 지시가 「2열」이라 그 폭에서도 2열을 유지하도록 눌러 둔다.
+   ⚠️ `.home-grid`·`.home-card` 를 쓰는 화면은 **`app/admin/page.tsx` 하나뿐이다**(실측).
+      `.portal-theme .home-card-*` 규칙은 화주포털이 pv2 로 넘어간 뒤 남은 죽은 규칙이라
+      이 변경이 포털에 닿지 않는다.
+   ───────────────────────────────────────────────────────────────────────────── */
+@media (min-width: 701px) {
+  .admin-wide .home-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@media (max-width: 700px) {
+  /* 🔴 두 클래스 규칙이라야 `≤460px` 의 1열 규칙(0,0,1,0)을 이긴다(원칙 58번) */
+  .admin-wide .home-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  /* 설명글 2줄 고정 — 카드마다 글 길이가 달라 높이가 들쭉날쭉하던 것을 맞춘다.
+     🔴 `-webkit-line-clamp` 는 `display: -webkit-box` 와 **한 벌**이다(한쪽만 두면 안 걸린다). */
+  .admin-wide .home-card-desc {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .admin-wide .home-card {
+    padding: 18px;
+    gap: 8px;
   }
 }
