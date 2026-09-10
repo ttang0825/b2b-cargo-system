@@ -21,14 +21,25 @@ type Props = {
   } | null;
   /** 목록 표처럼 좁은 칸에서 쓰는 작은 크기 */
   small?: boolean;
+  /**
+   * 회사명 **위 줄**에 얹는다(목록 표 기본).
+   * 🔴 호출부에서 `<div>` 로 감싸 올리지 말 것 — 배지가 안 붙는 화주는 이 컴포넌트가
+   *    `null` 을 돌려주는데, 바깥 `<div>` 는 그대로 남아 **빈 줄로 칸이 벌어진다.**
+   *    그래서 감싸는 일까지 이 컴포넌트가 한다.
+   */
+  block?: boolean;
 };
 
-export default function RecurringContractBadge({ company, small }: Props) {
+export default function RecurringContractBadge({ company, small, block }: Props) {
   if (!company || !isRecurringContractActive(company)) return null;
   return (
     <span
       style={{
-        display: "inline-block",
+        // 🔴 `block` 이면 회사명 위 줄에 얹는다 — 이름 옆에 붙이면 이름 칸이 그만큼
+        //    넓어져 목록의 다른 칸을 민다(`cell-nowrap` 칸이라 줄바꿈도 안 된다).
+        display: block ? "block" : "inline-block",
+        width: block ? "fit-content" : undefined,
+        marginBottom: block ? 2 : undefined,
         padding: small ? "1px 5px" : "2px 7px",
         borderRadius: 4,
         fontSize: small ? 10 : 11,
@@ -37,7 +48,7 @@ export default function RecurringContractBadge({ company, small }: Props) {
         whiteSpace: "nowrap",
         background: "#E0E7FF",
         color: "#4338CA",
-        verticalAlign: "middle",
+        verticalAlign: block ? undefined : "middle",
       }}
       title="정기 운송 계약이 있는 화주입니다"
     >

@@ -589,13 +589,10 @@ export default function CompaniesPage() {
                     </div>
                   </td>
                   <td>
-                    <span
-                      style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-                    >
-                      {c.name}
-                      {/* 🔴 종료일이 지난 계약에는 안 붙는다(컴포넌트가 판정한다) */}
-                      <RecurringContractBadge company={c} small />
-                    </span>
+                    {/* 🔴 배지는 회사명 **위 줄**이다 — 이름 옆에 붙이면 이름 칸이 넓어져
+                        다른 칸을 민다. 종료일이 지난 계약에는 안 붙는다(컴포넌트가 판정한다) */}
+                    <RecurringContractBadge company={c} small block />
+                    {c.name}
                   </td>
                   <td>{formatIndustry(c)}</td>
                   <td>{formatRegion(c)}</td>

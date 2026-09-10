@@ -829,8 +829,8 @@ function DispatchesPageInner() {
                     )}
                   </td>
                   <td style={{ whiteSpace: "nowrap" }}>
+                    <RecurringContractBadge company={d.orders?.companies} small block />
                     {d.orders?.companies?.name || d.orders?.guest_name || "-"}
-                    <RecurringContractBadge company={d.orders?.companies} small />
                   </td>
                   <td style={{ width: 170, fontSize: 12.5 }}>
                     <div>{shortAddress(d.orders?.origin)}</div>
