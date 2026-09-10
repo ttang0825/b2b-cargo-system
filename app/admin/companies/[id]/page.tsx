@@ -1,21 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { STATUS_OPTIONS, getStatusColor } from "@/lib/statusColors";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
-import {
-  REGIONS,
-  VEHICLE_TYPES_ALL,
-  BODY_TYPES,
-  GRADE_OPTIONS,
-  formatPhoneNumber,
-} from "@/lib/constants";
-import { MANUAL_SOURCE_OPTIONS, getSourceChips } from "@/lib/sourceColors";
-import MultiSelectTags from "@/components/MultiSelectTags";
+import { getSourceChips } from "@/lib/sourceColors";
+// ⚠️ 아래 셋은 **화주 항목 폼이 아닌 다른 기능**이 쓴다 — 지우지 말 것:
+//    AddressSearch → 「저장된 주소」 섹션(customer_locations 추가)
+//    formatPhoneNumber → 화주포털 계정 발급 폼의 담당자 전화번호
 import AddressSearch from "@/components/AddressSearch";
+import { formatPhoneNumber } from "@/lib/constants";
+// 🔴 화주 항목 정의는 `lib/companyFields.ts` 한 곳이다(33차 A장) — 여기에 있던
+//    BASIC_FIELDS · SALES_REF_FIELDS · CRM_CONTACT_FIELDS · CRM_BIZ_FIELDS ·
+//    CRM_PERFORMANCE_FIELDS 다섯 배열을 그 파일로 옮겼다. 다시 만들지 말 것.
+import {
+  COMPANY_FIELDS,
+  COMPANY_SECTIONS,
+  buildCompanyPayload,
+  companyFieldsOf,
+  emptyCompanyForm,
+  isRecurringContractActive,
+  parseRecommendedVehicle,
+} from "@/lib/companyFields";
+import CompanyFieldInput from "@/components/CompanyFieldInput";
+import RecurringContractBadge from "@/components/RecurringContractBadge";
 import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
 import ConflictWarning from "@/components/ConflictWarning";
@@ -73,80 +83,15 @@ function EditableField({
 }
 
 // "1톤 카고" 형태의 저장 문자열을 톤수/차량형태 선택값으로 분리
-function parseRecommendedVehicle(v: string | null | undefined) {
-  if (!v) return { tonnage: VEHICLE_TYPES_ALL[0], bodytype: BODY_TYPES[0] };
-  const trimmed = v.trim();
-  for (const t of VEHICLE_TYPES_ALL) {
-    if (trimmed.startsWith(t)) {
-      const rest = trimmed.slice(t.length).trim();
-      const matchedBody = BODY_TYPES.find((b) => b === rest);
-      return { tonnage: t, bodytype: matchedBody || BODY_TYPES[0] };
-    }
-  }
-  return { tonnage: VEHICLE_TYPES_ALL[0], bodytype: BODY_TYPES[0] };
-}
 
-const BASIC_FIELDS = [
-  ["industry", "업종"],
-  ["sub_industry", "세부업종"],
-  ["main_items", "취급 품목"],
-  ["metro_region", "광역권"],
-  ["district", "시군구"],
-  ["sub_district", "세부권역"],
-  ["industrial_complex", "산업단지"],
-  ["website", "웹사이트"],
-  ["recommended_vehicle", "추천 차량"],
-  ["expected_volume", "예상 운송수요"],
-  ["biz_reg_no", "사업자등록번호"],
-  ["franchise_operator", "프랜차이즈 본부"],
-  ["company_scale", "규모구간"],
-];
 
-const SALES_REF_FIELDS = [
-  ["priority", "우선순위"],
-  ["lead_type", "화주유형"],
-  ["sales_message", "영업 메시지 포인트"],
-  ["sales_potential", "영업가능성"],
-  ["sales_difficulty", "영업난이도"],
-  ["cold_chain_risk", "냉장/냉동 리스크"],
-  ["volume_potential", "운송수요 가능성"],
-  ["total_score", "종합점수"],
-  ["next_action", "다음액션"],
-  ["data_source", "데이터출처"],
-  ["verification_notes", "검증메모"],
-];
 
-const CRM_CONTACT_FIELDS = [
-  ["contact_name", "담당자명"],
-  ["contact_position", "직책"],
-  ["contact_mobile", "휴대폰"],
-  ["contact_email", "이메일"],
-];
 
-const CRM_BIZ_FIELDS = [
-  ["payment_terms", "결제조건"],
-  ["billing_cutoff_day", "정산 마감일"],
-  ["main_pickup_region", "주요 상차지역"],
-  ["main_dropoff_region", "주요 하차지역"],
-  ["main_pickup_address", "주요 상차지 정확주소"],
-  ["main_dropoff_address", "주요 하차지 정확주소"],
-  ["assigned_staff", "담당직원"],
-];
 
-// 로드맵 ②-B: 월정산 묶음 후보 기간 계산에 쓰는 화주별 정산 마감일.
-// null(값 없음)이면 기존처럼 달력월(1일~말일) 기준으로 묶는다.
-function billingCutoffDayLabel(v: string | number | null | undefined) {
-  if (v === null || v === undefined || v === "") return "말일(달력월 기준)";
-  return `${v}일`;
-}
 
-const CRM_PERFORMANCE_FIELDS: [string, string, string?][] = [
-  ["total_orders_count", "누적 오더수", "number"],
-  ["total_revenue", "누적 매출(원)", "number"],
-  ["total_margin", "누적 마진(원)", "number"],
-  ["outstanding_amount", "미수금(원)", "number"],
-  ["last_order_date", "최근 오더일", "date"],
-];
+
+// 🔴 필드 배열 다섯 개와 parseRecommendedVehicle 은 `lib/companyFields.ts` 로 옮겼다
+//    (33차 A장). 여기에 다시 만들면 등록 폼과 갈린다.
 
 export default function CompanyDetailPage() {
   const params = useParams();
@@ -191,20 +136,8 @@ export default function CompanyDetailPage() {
   const [editingLocId, setEditingLocId] = useState<string | null>(null);
   const [editingLocValue, setEditingLocValue] = useState("");
 
-  const [editForm, setEditForm] = useState<Record<string, any>>({
-    status: "",
-    grade: "",
-    phone: "",
-    address: "",
-    contact_department: "",
-    next_followup_date: "",
-    notes: "",
-    repeat_customer: false,
-    manual_source_type: "",
-    manual_source_note: "",
-    recommended_vehicle_tonnage: VEHICLE_TYPES_ALL[0],
-    recommended_vehicle_bodytype: BODY_TYPES[0],
-  });
+  // 🔴 빈 값 묶음도 정의 파일이 만든다 — 여기에 키 목록을 다시 적으면 갈린다.
+  const [editForm, setEditForm] = useState<Record<string, any>>(emptyCompanyForm);
 
   const [portalAccounts, setPortalAccounts] = useState<any[]>([]);
   const [newAccountPhone, setNewAccountPhone] = useState("");
@@ -226,9 +159,26 @@ export default function CompanyDetailPage() {
     setTimeout(() => setCopiedLabel(null), 1500);
   }
 
-  function set(key: string, value: any) {
+  // 주소검색이 함께 준 sido/sigungu 를 대응 컬럼에 같이 담는다(원칙 37번).
+  // 🔴 이걸 빼면 광역권·시군구 자동기입이 조용히 비어 배차 판단에 못 쓴다.
+  const setAddress = useCallback(
+    (key: string, addr: string, sido: string, sigungu: string) => {
+      const prefix = key.replace(/_address$/, "");
+      setEditForm((prev) => ({
+        ...prev,
+        [key]: addr,
+        [`${key}Detail`]: "",
+        [`${prefix}_sido`]: sido,
+        [`${prefix}_sigungu`]: sigungu,
+      }));
+    },
+    []
+  );
+
+  // 🔴 `useCallback` 을 벗기지 말 것(등록 폼과 같은 이유 — memo 가 무력해진다).
+  const set = useCallback((key: string, value: any) => {
     setEditForm((prev) => ({ ...prev, [key]: value }));
-  }
+  }, []);
 
   async function loadCompany() {
     setLoading(true);
@@ -243,31 +193,24 @@ export default function CompanyDetailPage() {
       setError(error.message);
     } else {
       setCompany(data);
-      const allKeys = [
-        "status",
-        "grade",
-        "phone",
-        "address",
-        "contact_department",
-        "next_followup_date",
-        "notes",
-        "repeat_customer",
-        "manual_source_type",
-        "manual_source_note",
-        ...BASIC_FIELDS.map((f) => f[0]),
-        ...SALES_REF_FIELDS.map((f) => f[0]),
-        ...CRM_CONTACT_FIELDS.map((f) => f[0]),
-        ...CRM_BIZ_FIELDS.map((f) => f[0]),
-        ...CRM_PERFORMANCE_FIELDS.map((f) => f[0]),
+      // 🔴 DB 값 → 폼 state. 키 목록을 여기 적지 말고 정의 파일을 돌린다.
+      //    ⚠️ 주소는 저장할 때 「도로명 + 상세」를 한 문자열로 합쳤으므로 되돌릴 수
+      //       없다 — 전체를 도로명 칸에 넣고 상세 칸을 비우는 것이 기존 동작이다.
+      const initial: Record<string, any> = {};
+      for (const f of COMPANY_FIELDS) {
+        initial[f.key] = data[f.key] ?? (f.type === "checkbox" ? false : "");
+      }
+      // 주소검색이 채우는 파생 컬럼 — 정의에는 없지만 저장할 때 같이 쓴다.
+      for (const k of [
         "main_pickup_sido",
         "main_pickup_sigungu",
         "main_dropoff_sido",
         "main_dropoff_sigungu",
-      ];
-      const initial: Record<string, any> = {};
-      for (const k of allKeys) {
-        initial[k] = data[k] ?? (k === "repeat_customer" ? false : "");
+      ]) {
+        initial[k] = data[k] ?? "";
       }
+      initial.main_pickup_addressDetail = "";
+      initial.main_dropoff_addressDetail = "";
       const parsedVehicle = parseRecommendedVehicle(data.recommended_vehicle);
       initial.recommended_vehicle_tonnage = parsedVehicle.tonnage;
       initial.recommended_vehicle_bodytype = parsedVehicle.bodytype;
@@ -469,49 +412,12 @@ export default function CompanyDetailPage() {
     setError(null);
     setConflict(false);
 
-    const uiOnlyKeys = [
-      "recommended_vehicle_tonnage",
-      "recommended_vehicle_bodytype",
-      "main_pickup_addressDetail",
-      "main_dropoff_addressDetail",
-    ];
-    // 정확주소 입력의 도로명주소 + 상세주소를 저장 전에 하나의 문자열로 합침
-    // (다른 화면들의 fullOrigin/fullDestination 조합 방식과 동일한 패턴)
-    const fullMainPickupAddress = [editForm.main_pickup_address, editForm.main_pickup_addressDetail]
-      .filter((v) => v?.trim())
-      .join(" ");
-    const fullMainDropoffAddress = [editForm.main_dropoff_address, editForm.main_dropoff_addressDetail]
-      .filter((v) => v?.trim())
-      .join(" ");
-
-    const payload: Record<string, any> = {};
-    for (const key of Object.keys(editForm)) {
-      if (uiOnlyKeys.includes(key)) continue;
-      let v = editForm[key];
-      if (key === "main_pickup_address") v = fullMainPickupAddress;
-      if (key === "main_dropoff_address") v = fullMainDropoffAddress;
-      if (key === "billing_cutoff_day") v = v ? Number(v) : null;
-      if (v === "") v = null;
-      if (
-        CRM_PERFORMANCE_FIELDS.some(
-          (f) => f[0] === key && f[2] === "number"
-        )
-      ) {
-        v = v === null ? null : Number(v);
-      }
-      payload[key] = v;
-    }
-
-    // 톤수 + 차량형태 선택값을 기존 컬럼 하나로 합쳐서 저장
-    const tonnage = editForm.recommended_vehicle_tonnage;
-    const bodytype = editForm.recommended_vehicle_bodytype;
-    payload.recommended_vehicle = tonnage && bodytype ? `${tonnage} ${bodytype}` : null;
-
-    // "기타"가 아니면 출처 설명은 비워서 저장 (다른 분류로 바꿨는데 이전 수기설명이 남지 않도록)
-    if (payload.manual_source_type !== "기타") {
-      payload.manual_source_note = null;
-    }
-
+    // 🔴 payload 조립은 `buildCompanyPayload()` 한 함수만 쓴다 — 신규 등록·상세 수정·
+    //    신청 승인 세 입구가 공통이다. 각자 조립하면 조용히 갈린다(그게 이 차수의 원인).
+    //    ⚠️ 여기는 `includePerformance: true` 다 — 상세 화면은 실적값도 보여주므로
+    //       state 에 들어 있고, 빼면 저장할 때 그 컬럼이 payload 에서 사라진다.
+    //       (정산이 갱신하는 값이라 입력칸 자체는 잠겨 있다)
+    const payload = buildCompanyPayload(editForm, { includePerformance: true });
     payload.updated_by = await getCurrentStaffId();
 
     if (force) {
@@ -646,7 +552,14 @@ export default function CompanyDetailPage() {
 
       <div className="page-header">
         <div>
-          <h1 className="page-title">{company.name}</h1>
+          <h1
+            className="page-title"
+            style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+          >
+            {company.name}
+            {/* 🔴 종료일이 지난 계약에는 안 붙는다(목록과 같은 판정) */}
+            <RecurringContractBadge company={company} />
+          </h1>
           <p
             className="page-desc"
             style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}
@@ -721,111 +634,19 @@ export default function CompanyDetailPage() {
 
       {/* 영업 상태 */}
       <div className="card" style={{ padding: 20, marginBottom: 20 }}>
-        {editing ? (
-          <div className="form-grid" style={{ padding: 0 }}>
-            <div className="field">
-              <label>영업상태</label>
-              <select
-                value={editForm.status}
-                onChange={(e) => set("status", e.target.value)}
-                style={{
-                  fontWeight: 600,
-                  background: getStatusColor(editForm.status).bg,
-                  color: getStatusColor(editForm.status).text,
-                }}
-              >
-                {STATUS_OPTIONS.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
-              <label>화주등급</label>
-              <select
-                value={editForm.grade}
-                onChange={(e) => set("grade", e.target.value)}
-              >
-                <option value="">미지정</option>
-                {GRADE_OPTIONS.map((g) => (
-                  <option key={g} value={g}>
-                    {g}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
-              <label>대표번호</label>
-              <input
-                value={editForm.phone}
-                onChange={(e) => set("phone", formatPhoneNumber(e.target.value))}
-                placeholder="숫자만 입력하면 자동으로 - 표시"
-              />
-            </div>
-            <div className="field">
-              <label>담당부서</label>
-              <input
-                value={editForm.contact_department}
-                onChange={(e) => set("contact_department", e.target.value)}
-              />
-            </div>
-            <div className="field">
-              <label>다음 연락 예정일</label>
-              <input
-                type="date"
-                value={editForm.next_followup_date || ""}
-                onChange={(e) => set("next_followup_date", e.target.value)}
-              />
-            </div>
-
-            {/* 임포트된 DB 업체는 출처가 고정이라 이 항목을 숨기고, 직접등록 업체만 분류를 고를 수 있음 */}
-            {!company.source_sheet && (
-              <>
-                <div className="field">
-                  <label>출처 분류</label>
-                  <select
-                    value={editForm.manual_source_type}
-                    onChange={(e) => set("manual_source_type", e.target.value)}
-                  >
-                    <option value="">미지정</option>
-                    {MANUAL_SOURCE_OPTIONS.map((o) => (
-                      <option key={o} value={o}>
-                        {o === "기타" ? "기타 (수기작성)" : o}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {editForm.manual_source_type === "기타" && (
-                  <div className="field">
-                    <label>출처 설명</label>
-                    <input
-                      value={editForm.manual_source_note}
-                      onChange={(e) => set("manual_source_note", e.target.value)}
-                      placeholder="예: 지인 소개, 홈페이지 문의 등"
-                    />
-                  </div>
-                )}
-              </>
-            )}
-
-            <div className="field" style={{ gridColumn: "1 / -1" }}>
-              <label>주소</label>
-              <input
-                value={editForm.address}
-                onChange={(e) => set("address", e.target.value)}
-              />
-            </div>
-            <div className="field" style={{ gridColumn: "1 / -1" }}>
-              <label>메모</label>
-              <textarea
-                rows={3}
-                value={editForm.notes}
-                onChange={(e) => set("notes", e.target.value)}
-              />
-            </div>
+        {/*
+          🔴 이 카드는 **표시 전용**이다(33차 A장). 전에는 여기서도 영업상태·화주등급·
+             대표번호·담당부서·다음 연락일·출처·주소·메모 **9개를 편집**할 수 있었고,
+             아래 「기본 정보」 구획에서도 같은 항목을 편집할 수 있었다 — 같은 값을
+             두 자리에서 고치게 되어 담당자가 어느 쪽이 맞는지 헷갈린다.
+          🔴 편집 입구는 아래 구획 하나다 — 여기에 입력칸을 다시 만들지 말 것.
+          ⚠️ 수정 중에는 이 카드가 **저장 전 원래 값**을 보여준다(company 기준).
+        */}
+        {editing && (
+          <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 10 }}>
+            아래 구획에서 수정하고 있습니다 — 이 요약은 저장 전 값입니다.
           </div>
-        ) : (
+        )}
           <div
             style={{
               display: "grid",
@@ -861,299 +682,116 @@ export default function CompanyDetailPage() {
             />
             <Field label="주소" value={company.address} />
           </div>
-        )}
       </div>
 
-      {/* 기본 정보 (수정 가능) */}
-      <div className="card" style={{ padding: 20, marginBottom: 20 }}>
-        <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
-          기본 정보
-        </h3>
-        <div
-          className={editing ? "form-grid" : undefined}
-          style={
-            editing
-              ? { padding: 0 }
-              : {
-                  display: "grid",
-                  gridTemplateColumns:
-                    "repeat(auto-fill, minmax(180px, 1fr))",
-                  gap: 4,
-                }
-          }
-        >
-          {BASIC_FIELDS.map(([key, label]) => {
-            if (key === "recommended_vehicle" && editing) {
-              return (
-                <div className="field" key={key} style={{ minWidth: 0 }}>
-                  <label>{label}</label>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <select
-                      value={editForm.recommended_vehicle_tonnage}
-                      onChange={(e) =>
-                        set("recommended_vehicle_tonnage", e.target.value)
-                      }
-                      style={{ flex: 1 }}
+{/*
+        항목 구획 — 🔴 `lib/companyFields.ts` 를 돌린다. 이 화면에 필드 배열을
+        다시 만들지 말 것(33차 A장에 다섯 배열을 그 파일로 옮겼다).
+        🔴 등록 폼과 **같은 정의·같은 입력 컴포넌트**를 쓴다 — 그래서 다시 갈릴 수 없다.
+        ⚠️ 「실적」 구획은 정산이 자동 갱신하는 값이라 등록 폼에는 없고 여기만 나온다
+           (`inForm: false`). 그래서 등록 폼은 `companyFormFieldsOf`, 여기는
+           `companyFieldsOf` 를 쓴다.
+      */}
+      {COMPANY_SECTIONS.map((section) => {
+        const fields = companyFieldsOf(section);
+        if (fields.length === 0) return null;
+        // 표시 모드에서 값이 하나도 없는 구획은 그리지 않는다(빈 카드가 남지 않도록).
+        const hasAnyValue = fields.some((f) => {
+          const v = company[f.key];
+          return f.type === "checkbox" ? v === true : v !== null && v !== undefined && v !== "";
+        });
+        if (!editing && !hasAnyValue) return null;
+        return (
+          <div key={section} className="card" style={{ padding: 20, marginBottom: 20 }}>
+            <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
+              {section}
+              {section === "정기계약" && !editing && company.is_recurring_contract && (
+                <span style={{ marginLeft: 8, verticalAlign: "middle" }}>
+                  {isRecurringContractActive(company) ? (
+                    <RecurringContractBadge company={company} />
+                  ) : (
+                    /* 🔴 종료일이 지난 계약은 배지 대신 「종료됨」이다 — 체크는 기록으로
+                       남기되 목록에 배지를 영원히 남기지 않는다는 결정의 짝이다. */
+                    <span
+                      style={{
+                        padding: "2px 7px",
+                        borderRadius: 4,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        background: "#F3F4F6",
+                        color: "#6B7280",
+                      }}
                     >
-                      {VEHICLE_TYPES_ALL.map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      value={editForm.recommended_vehicle_bodytype}
-                      onChange={(e) =>
-                        set("recommended_vehicle_bodytype", e.target.value)
-                      }
-                      style={{ flex: 1 }}
-                    >
-                      {BODY_TYPES.map((b) => (
-                        <option key={b} value={b}>
-                          {b}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              );
-            }
-            return (
-              <EditableField
-                key={key}
-                label={label}
-                value={editing ? editForm[key] : company[key]}
-                editing={editing}
-                onChange={(v) => set(key, v)}
-              />
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 영업 참고 정보 (수정 가능) */}
-      <div className="card" style={{ padding: 20, marginBottom: 20 }}>
-        <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
-          영업 참고 정보
-        </h3>
-        <div
-          className={editing ? "form-grid" : undefined}
-          style={
-            editing
-              ? { padding: 0 }
-              : {
-                  display: "grid",
-                  gridTemplateColumns:
-                    "repeat(auto-fill, minmax(180px, 1fr))",
-                  gap: 4,
-                }
-          }
-        >
-          {SALES_REF_FIELDS.map(([key, label]) => (
-            <EditableField
-              key={key}
-              label={label}
-              value={editing ? editForm[key] : company[key]}
-              editing={editing}
-              onChange={(v) => set(key, v)}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* CRM 상세정보: 담당자 */}
-      <div className="card" style={{ padding: 20, marginBottom: 20 }}>
-        <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
-          담당자 정보
-        </h3>
-        <div
-          className={editing ? "form-grid" : undefined}
-          style={
-            editing
-              ? { padding: 0 }
-              : {
-                  display: "grid",
-                  gridTemplateColumns:
-                    "repeat(auto-fill, minmax(180px, 1fr))",
-                  gap: 4,
-                }
-          }
-        >
-          {CRM_CONTACT_FIELDS.map(([key, label]) => {
-            if (key === "contact_mobile" && editing) {
-              return (
-                <div className="field" key={key} style={{ minWidth: 0 }}>
-                  <label>{label}</label>
-                  <input
-                    value={editForm.contact_mobile}
-                    onChange={(e) =>
-                      set("contact_mobile", formatPhoneNumber(e.target.value))
-                    }
-                    placeholder="숫자만 입력하면 자동으로 - 표시"
-                  />
-                </div>
-              );
-            }
-            return (
-              <EditableField
-                key={key}
-                label={label}
-                value={editing ? editForm[key] : company[key]}
-                editing={editing}
-                onChange={(v) => set(key, v)}
-              />
-            );
-          })}
-        </div>
-      </div>
-
-      {/* CRM 상세정보: 거래조건 + 실적 */}
-      <div className="card" style={{ padding: 20, marginBottom: 20 }}>
-        <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
-          거래조건 · 실적
-        </h3>
-        <div
-          className={editing ? "form-grid" : undefined}
-          style={
-            editing
-              ? { padding: 0, marginBottom: 14 }
-              : {
-                  display: "grid",
-                  gridTemplateColumns:
-                    "repeat(auto-fill, minmax(180px, 1fr))",
-                  gap: 4,
-                  marginBottom: 14,
-                }
-          }
-        >
-          {CRM_BIZ_FIELDS.map(([key, label]) => {
-            if (key === "billing_cutoff_day") {
-              if (!editing) {
-                return (
-                  <div className="field" key={key} style={{ minWidth: 0 }}>
-                    <label>{label}</label>
-                    <div>{billingCutoffDayLabel(company[key])}</div>
-                  </div>
-                );
-              }
-              return (
-                <div className="field" key={key} style={{ minWidth: 0 }}>
-                  <label>{label}</label>
-                  <select value={editForm[key] || ""} onChange={(e) => set(key, e.target.value)}>
-                    <option value="">말일(달력월 기준)</option>
-                    {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
-                      <option key={d} value={d}>
-                        {d}일
-                      </option>
-                    ))}
-                  </select>
-                  <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, marginBottom: 0 }}>
-                    월정산 묶음의 정산 기간을 이 날짜 기준으로 계산합니다(예: 15일 선택 시 전월
-                    16일~이번달 15일). 지정하지 않으면 달력월(1일~말일) 기준입니다.
-                  </p>
-                </div>
-              );
-            }
-            if (
-              (key === "main_pickup_region" || key === "main_dropoff_region") &&
-              editing
-            ) {
-              return (
-                <div
-                  className="field"
-                  key={key}
-                  style={{ gridColumn: "1 / -1", minWidth: 0 }}
-                >
-                  <label>{label} (중복 선택 가능)</label>
-                  <MultiSelectTags
-                    options={REGIONS}
-                    value={editForm[key] || ""}
-                    onChange={(v) => set(key, v)}
-                  />
-                </div>
-              );
-            }
-            if (
-              (key === "main_pickup_address" || key === "main_dropoff_address") &&
-              editing
-            ) {
-              const sidoKey = key === "main_pickup_address" ? "main_pickup_sido" : "main_dropoff_sido";
-              const sigunguKey =
-                key === "main_pickup_address" ? "main_pickup_sigungu" : "main_dropoff_sigungu";
-              const detailKey = `${key}Detail`;
-              return (
-                <AddressSearch
-                  key={key}
-                  label={label}
-                  className="field"
-                  style={{ gridColumn: "1 / -1", minWidth: 0 }}
-                  value={editForm[key] || ""}
-                  detailValue={editForm[detailKey] || ""}
-                  detailPlaceholder="상세주소 (선택)"
-                  onChange={(addr, sido, sigungu) => {
-                    set(key, addr);
-                    set(sidoKey, sido);
-                    set(sigunguKey, sigungu);
-                    set(detailKey, "");
+                      종료됨
+                    </span>
+                  )}
+                </span>
+              )}
+              {section === "실적" && (
+                <span
+                  style={{
+                    marginLeft: 8,
+                    fontSize: 11,
+                    fontWeight: 400,
+                    color: "var(--text-muted)",
                   }}
-                  onDetailChange={(v) => set(detailKey, v)}
-                />
-              );
-            }
-            return (
-              <EditableField
-                key={key}
-                label={label}
-                value={editing ? editForm[key] : company[key]}
-                editing={editing}
-                onChange={(v) => set(key, v)}
-              />
-            );
-          })}
-        </div>
-        <div
-          className={editing ? "form-grid" : undefined}
-          style={
-            editing
-              ? { padding: 0 }
-              : {
-                  display: "grid",
-                  gridTemplateColumns:
-                    "repeat(auto-fill, minmax(180px, 1fr))",
-                  gap: 4,
+                >
+                  정산에서 자동 갱신됩니다
+                </span>
+              )}
+            </h3>
+            <div
+              className={editing ? "form-grid" : undefined}
+              style={
+                editing
+                  ? { padding: 0 }
+                  : {
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+                      gap: 4,
+                    }
+              }
+            >
+              {fields.map((f) => {
+                if (editing) {
+                  // 🔴 조건부 노출은 정의 파일의 `showWhen` 이 정한다 — 여기에 조건을
+                  //    적으면 등록 폼과 다르게 판단하게 된다(그래서 갈렸던 자리다).
+                  if (f.showWhen && !f.showWhen(editForm)) return null;
+                  return (
+                    <CompanyFieldInput
+                      key={f.key}
+                      field={f}
+                      value={editForm[f.key]}
+                      detailValue={editForm[`${f.key}Detail`]}
+                      tonnage={editForm.recommended_vehicle_tonnage}
+                      bodytype={editForm.recommended_vehicle_bodytype}
+                      onChange={set}
+                      onAddressChange={setAddress}
+                      /* 실적값은 정산이 갱신하므로 손으로 못 바꾸게 한다. */
+                      disabled={f.inForm === false}
+                    />
+                  );
                 }
-          }
-        >
-          {CRM_PERFORMANCE_FIELDS.map(([key, label, type]) => (
-            <EditableField
-              key={key}
-              label={label}
-              value={editing ? editForm[key] : company[key]}
-              editing={editing}
-              onChange={(v) => set(key, v)}
-              type={type || "text"}
-            />
-          ))}
-          {editing ? (
-            <div className="field">
-              <label>재거래 여부</label>
-              <select
-                value={editForm.repeat_customer ? "true" : "false"}
-                onChange={(e) => set("repeat_customer", e.target.value === "true")}
-              >
-                <option value="false">아니오</option>
-                <option value="true">예</option>
-              </select>
+                const raw = company[f.key];
+                let shown: any =
+                  f.type === "checkbox" ? (raw === true ? "예" : null) : raw;
+                if (
+                  (shown === null || shown === undefined || shown === "") &&
+                  f.emptyLabel
+                ) {
+                  // 🔴 「비어 있음」이 곧 규칙인 항목(정산 마감일)은 그 뜻을 그린다.
+                  shown = f.emptyLabel;
+                } else if (shown !== null && shown !== undefined && shown !== "" && f.displaySuffix) {
+                  shown = `${shown}${f.displaySuffix}`;
+                }
+                return <Field key={f.key} label={f.label} value={shown} />;
+              })}
             </div>
-          ) : (
-            <Field
-              label="재거래 여부"
-              value={company.repeat_customer ? "예" : null}
-            />
-          )}
-        </div>
-      </div>
+          </div>
+        );
+      })}
 
+      
       {/* 저장된 주소 (상차지/하차지) */}
       <div className="card" style={{ padding: 20, marginBottom: 20 }}>
         <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>

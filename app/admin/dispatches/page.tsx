@@ -18,6 +18,7 @@ import { shortAddress } from "@/lib/shortAddress";
 import { calcInclusiveAmount } from "@/lib/vat";
 import { fetchDispatchSmsPreview } from "@/lib/notifyDispatchSms";
 import SmsConfirmModal, { SmsPreview } from "@/components/SmsConfirmModal";
+import RecurringContractBadge from "@/components/RecurringContractBadge";
 import PickupDropoffContactFields, {
   EMPTY_PICKUP_DROPOFF_CONTACT,
 } from "@/components/PickupDropoffContactFields";
@@ -80,7 +81,12 @@ type DispatchRow = {
     origin: string | null;
     destination: string | null;
     loading_type: string | null;
-    companies: { name: string } | null;
+    // 🔴 정기계약 두 컬럼 — 33차 B장. 빼면 배지가 조용히 사라진다.
+    companies: {
+      name: string;
+      is_recurring_contract?: boolean | null;
+      recurring_contract_ended_on?: string | null;
+    } | null;
     guest_name: string | null;
   } | null;
   drivers: { name: string; phone: string | null } | null;
@@ -142,7 +148,7 @@ function DispatchesPageInner() {
     let query = supabase
       .from("dispatches")
       .select(
-        "id,dispatch_status,customer_charge,driver_payout,margin,created_at,order_id,driver_id,assignment_type,requested_network_ids,confirmed_network_id,external_driver_name,settlement_type,collection_method,billing_cycle,direct_collection_point,network_settlement_type,total_freight_amount,driver_direct_collection_amount,brokerage_fee,brokerage_fee_payer,orders(order_no,origin,destination,loading_type,companies(name),guest_name),drivers(name,phone)"
+        "id,dispatch_status,customer_charge,driver_payout,margin,created_at,order_id,driver_id,assignment_type,requested_network_ids,confirmed_network_id,external_driver_name,settlement_type,collection_method,billing_cycle,direct_collection_point,network_settlement_type,total_freight_amount,driver_direct_collection_amount,brokerage_fee,brokerage_fee_payer,orders(order_no,origin,destination,loading_type,companies(name,is_recurring_contract,recurring_contract_ended_on),guest_name),drivers(name,phone)"
       )
       .order("created_at", { ascending: false })
       .limit(preset === "all" ? ALL_PERIOD_LIMIT : FILTERED_PERIOD_LIMIT);
@@ -822,7 +828,10 @@ function DispatchesPageInner() {
                       </div>
                     )}
                   </td>
-                  <td style={{ whiteSpace: "nowrap" }}>{d.orders?.companies?.name || d.orders?.guest_name || "-"}</td>
+                  <td style={{ whiteSpace: "nowrap" }}>
+                    {d.orders?.companies?.name || d.orders?.guest_name || "-"}
+                    <RecurringContractBadge company={d.orders?.companies} small />
+                  </td>
                   <td style={{ width: 170, fontSize: 12.5 }}>
                     <div>{shortAddress(d.orders?.origin)}</div>
                     <div style={{ color: "var(--text-muted)" }}>→ {shortAddress(d.orders?.destination)}</div>

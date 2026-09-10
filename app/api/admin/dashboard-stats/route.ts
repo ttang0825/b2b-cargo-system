@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabaseServiceClient";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
 import { attributeActiveExtraCharges } from "@/lib/dashboardExtraChargeAgg";
+import { isRecurringContractActive } from "@/lib/companyFields";
 
 // 로드맵⑥ 운영 대시보드 — 담당자별 영업 성과 같은 민감정보를 포함하므로 관리자만
 // 조회 가능(원칙25와 동일한 이중체크: 화면단은 TopNav 메뉴 숨김+middleware.ts 라우트
@@ -88,14 +89,43 @@ export async function GET() {
     )
   );
 
-  const [{ data: companies }, { data: individualCustomers }] = await Promise.all([
+  const [{ data: companies }, { data: individualCustomers }, recurringResult] = await Promise.all([
     companyIds.length > 0
       ? admin.from("companies").select("id,name").in("id", companyIds)
       : Promise.resolve({ data: [] as { id: string; name: string }[] }),
     individualIds.length > 0
       ? admin.from("individual_customers").select("id,name").in("id", individualIds)
       : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    // 정기계약 화주 수(33차 B장).
+    // 🔴 **바로 위 `companies` 조회를 재사용하지 말 것** — 그쪽은 `.in("id", companyIds)` 라
+    //    **최근 12개월에 거래가 있는 화주만** 담는다. 정기계약을 맺어두고 아직 첫 운송이
+    //    없는 화주가 빠져 실제보다 적게 세어진다.
+    // 🔴 **"활성" 판정을 SQL 로 다시 쓰지 말 것** — 종료일 당일 포함 규칙이 두 벌이 되어
+    //    조용히 갈린다. `is_recurring_contract` 로만 좁혀(부분 인덱스가 그 조건이다)
+    //    `isRecurringContractActive()` 한 함수로 센다. 대상이 소수라 값이 싸다.
+    admin
+      .from("companies")
+      .select("id,name,is_recurring_contract,recurring_contract_ended_on")
+      .eq("is_recurring_contract", true),
   ]);
+
+  // 🔴 실패를 빈 명단으로 내려보내지 말 것 — 화면이 「정기계약이 하나도 없다」로 읽는다.
+  //    ⚠️ 위 6개 조회처럼 400으로 끊지 않는 것은 의도다. 부차 지표 하나 때문에 대시보드
+  //    전체가 안 뜨면 손해가 더 크다. 대신 null 로 내려보내고 화면이 「조회 실패」를 쓴다.
+  // 🔴 **개수를 따로 내려보내지 말 것** — 명단 길이가 곧 개수다. 두 값을 나눠 보내면
+  //    「3개인데 명단은 2줄」처럼 조용히 어긋난다(실사용 리뷰에서 명단 요청이 들어와
+  //    개수만 있던 구조를 명단으로 바꾼 것이다).
+  const recurringContractCompanies = recurringResult.error
+    ? null
+    : (recurringResult.data || [])
+        .filter((c: any) => isRecurringContractActive(c))
+        .map((c: any) => ({
+          id: c.id as string,
+          name: (c.name || "(이름 없음)") as string,
+          endedOn: (c.recurring_contract_ended_on || null) as string | null,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name, "ko-KR"));
+  const recurringContractError = recurringResult.error ? recurringResult.error.message : null;
 
   // 현장 추가비를 오더의 "가장 최근 invoice"에 귀속(로드맵③ 3규칙, lib/dashboardExtraChargeAgg.ts)
   const extraChargeAttributionByInvoiceId = attributeActiveExtraCharges(
@@ -126,6 +156,8 @@ export async function GET() {
     staffAccounts: staffAccounts || [],
     extraChargeAttributionByInvoiceId,
     extraChargeByCategory,
+    recurringContractCompanies,
+    recurringContractError,
   });
 }
 

@@ -31,6 +31,7 @@ import { applyMixedDiscount } from "@/lib/settlementCalc";
 //    모르는 옵션은 버리지 않고 맨 뒤에 붙인다(`lib/vehicleBodyTypes.ts` 참고).
 import { orderBodyTypes } from "@/lib/vehicleBodyTypes";
 import { CUSTOMER_APPROVED_LABEL, formatCustomerApprovedAt } from "@/lib/quoteApproval";
+import RecurringContractBadge from "@/components/RecurringContractBadge";
 import {
   arrivalTypeLabel,
   arrivalTypeHint,
@@ -82,7 +83,13 @@ type QuoteRow = {
   created_at: string;
   guest_name: string | null;
   approved_by_customer_at: string | null;
-  companies: { name: string } | null;
+  // 🔴 정기계약 두 컬럼은 「배지를 그릴 수 있는가」의 유일한 근거다(33차 B장).
+  //    빼면 배지가 조용히 사라진다 — `RecurringContractBadge` 는 값이 없으면 아무것도 안 그린다.
+  companies: {
+    name: string;
+    is_recurring_contract?: boolean | null;
+    recurring_contract_ended_on?: string | null;
+  } | null;
 };
 
 const SINGLE_SELECT_CATEGORIES = [
@@ -233,7 +240,7 @@ function QuotesPageInner() {
     let query = supabase
       .from("quotes")
       .select(
-        "id,quote_no,origin,destination,vehicle_type,final_amount,status,created_at,guest_name,approved_by_customer_at,companies(name)"
+        "id,quote_no,origin,destination,vehicle_type,final_amount,status,created_at,guest_name,approved_by_customer_at,companies(name,is_recurring_contract,recurring_contract_ended_on)"
       )
       .order("created_at", { ascending: false })
       .limit(preset === "all" ? 50 : 200);
@@ -1799,6 +1806,7 @@ function QuotesPageInner() {
                   </td>
                   <td className="cell-nowrap" style={{ minWidth: 110 }}>
                     {q.companies?.name || q.guest_name || "-"}
+                    <RecurringContractBadge company={q.companies} small />
                     {!q.companies?.name && q.guest_name && (
                       <span className="badge" style={{ marginLeft: 6 }}>
                         개인

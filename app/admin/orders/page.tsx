@@ -18,6 +18,7 @@ import PickupDropoffContactFields, {
 } from "@/components/PickupDropoffContactFields";
 import { localInputToISOString, toLocalDateTimeInput } from "@/lib/localDateTime";
 import MixableBadge from "@/components/MixableBadge";
+import RecurringContractBadge from "@/components/RecurringContractBadge";
 import { shortAddress } from "@/lib/shortAddress";
 import CollectionMethodInput, { CollectionMethodValue } from "@/components/CollectionMethodInput";
 import { getSettlementDisplayLabel, mapToLegacySettlementType } from "@/lib/settlementLabels";
@@ -36,7 +37,12 @@ type OrderRow = {
   created_at: string;
   guest_name: string | null;
   loading_type: string | null;
-  companies: { name: string } | null;
+  // 🔴 정기계약 두 컬럼 — 33차 B장. 빼면 배지가 조용히 사라진다.
+  companies: {
+    name: string;
+    is_recurring_contract?: boolean | null;
+    recurring_contract_ended_on?: string | null;
+  } | null;
 };
 
 const SORT_OPTIONS = [
@@ -126,7 +132,7 @@ function OrdersPageInner() {
     let query = supabase
       .from("orders")
       .select(
-        "id,order_no,origin,destination,vehicle_type,item,status,requested_pickup_at,created_at,guest_name,loading_type,companies(name)"
+        "id,order_no,origin,destination,vehicle_type,item,status,requested_pickup_at,created_at,guest_name,loading_type,companies(name,is_recurring_contract,recurring_contract_ended_on)"
       )
       .order("created_at", { ascending: false })
       .limit(preset === "all" ? ALL_PERIOD_LIMIT : FILTERED_PERIOD_LIMIT);
@@ -829,6 +835,7 @@ function OrdersPageInner() {
                   </td>
                   <td style={{ whiteSpace: "nowrap" }}>
                     {o.companies?.name || o.guest_name || "-"}
+                    <RecurringContractBadge company={o.companies} small />
                     {!o.companies?.name && o.guest_name && (
                       <span className="badge" style={{ marginLeft: 6 }}>
                         개인
