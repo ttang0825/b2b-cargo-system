@@ -13,16 +13,18 @@ import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 //    **따라다니기가 조용히 멈춘다.**
 // 🔴 **`touch-action: none` 을 손잡이에서 빼지 말 것** — 없으면 손가락으로 끄는 동안
 //    브라우저가 페이지 스크롤로 가로채서 패널이 안 따라온다.
-// 🔴 **화면 밖으로 완전히 나가지 않게 clamp 한다** — 한 번 나가면 되돌릴 방법이 없다.
-//    손잡이가 항상 화면 안에 남도록 아래·오른쪽을 여유 있게 잡는다.
+// 🔴 **위아래로만 움직인다**(리뷰 4라운드 — *"계산창을 좌우로는 안움직였으면 좋겠다"*).
+//    좌우를 막아 두면 손가락이 비스듬히 미끄러져도 창이 옆으로 새지 않고, 화면 양쪽
+//    가장자리로 반쯤 빠져나가 다시 잡기 어려워지는 일도 아예 없어진다.
+//    🔴 `left` 는 처음 잡은 값에서 **바뀌지 않는다** — 드래그가 `top` 만 갱신한다.
 // ⚠️ 위치는 **기억하지 않는다**(state 뿐). 저장하려면 어디에 저장할지부터 정해야 하고,
 //    화면 크기가 달라지면 그 좌표가 화면 밖일 수 있다 — 이번 범위 밖으로 뒀다.
 
 const MOBILE_QUERY = "(max-width: 700px)";
 /**
- * 화면 가장자리에서 이만큼(px)은 항상 보이게 남긴다.
- * 🔴 **손잡이를 다시 잡을 수 있을 만큼**이어야 한다 — 40px 로 뒀더니 옆으로 끌었을 때
- *    모서리 한 조각만 남아 다시 끌어오기가 어려웠다(실측). 값을 더 줄이지 말 것.
+ * 화면 **아래** 가장자리에서 이만큼(px)은 항상 보이게 남긴다.
+ * 🔴 손잡이를 다시 잡을 수 있을 만큼이어야 한다. 값을 더 줄이지 말 것.
+ * ⚠️ 좌우는 리뷰 4라운드에 아예 막았으므로 가로 clamp 는 필요 없어졌다.
  */
 const EDGE_KEEP = 72;
 
@@ -36,7 +38,7 @@ export default function DraggablePanel({
   const [isMobile, setIsMobile] = useState(false);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   const boxRef = useRef<HTMLDivElement | null>(null);
-  const dragRef = useRef<{ dx: number; dy: number } | null>(null);
+  const dragRef = useRef<{ dy: number } | null>(null);
 
   // 🔴 서버 렌더에서는 `window` 가 없으므로 항상 데스크탑으로 시작한다 —
   //    그래야 첫 페인트가 깜빡이지 않는다.
@@ -59,26 +61,24 @@ export default function DraggablePanel({
     });
   }, [isMobile, pos]);
 
-  const clamp = useCallback((left: number, top: number) => {
-    const w = boxRef.current?.offsetWidth || 300;
-    const h = boxRef.current?.offsetHeight || 180;
-    return {
-      left: Math.min(Math.max(left, EDGE_KEEP - w), window.innerWidth - EDGE_KEEP),
-      top: Math.min(Math.max(top, 0), window.innerHeight - EDGE_KEEP),
-    };
-  }, []);
+  /** 🔴 세로만 잡는다 — 가로는 아예 계산하지 않는다(리뷰 4라운드). */
+  const clampTop = useCallback(
+    (top: number) => Math.min(Math.max(top, 0), window.innerHeight - EDGE_KEEP),
+    []
+  );
 
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (!isMobile || !pos) return;
     // 🔴 포인터를 손잡이에 묶어 둔다 — 안 하면 손가락이 손잡이를 벗어나는 순간
     //    move 이벤트가 끊겨 패널이 그 자리에 멈춘다.
     e.currentTarget.setPointerCapture(e.pointerId);
-    dragRef.current = { dx: e.clientX - pos.left, dy: e.clientY - pos.top };
+    dragRef.current = { dy: e.clientY - pos.top };
   }
   function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
     const d = dragRef.current;
     if (!d) return;
-    setPos(clamp(e.clientX - d.dx, e.clientY - d.dy));
+    // 🔴 `left` 를 그대로 넘긴다 — 좌우로 움직이지 않는 것이 사용자 확정 동작이다.
+    setPos((prev) => (prev ? { left: prev.left, top: clampTop(e.clientY - d.dy) } : prev));
   }
   function onPointerUp(e: React.PointerEvent<HTMLDivElement>) {
     dragRef.current = null;
@@ -102,11 +102,11 @@ export default function DraggablePanel({
         onPointerCancel={onPointerUp}
         role="button"
         tabIndex={0}
-        aria-label={`${title} 창 위치 옮기기`}
+        aria-label={`${title} 창을 위아래로 옮기기`}
       >
         <span className="drag-panel-grip" aria-hidden="true" />
         <span className="drag-panel-title">{title}</span>
-        <span className="drag-panel-hint">끌어서 이동</span>
+        <span className="drag-panel-hint">위아래로 이동</span>
       </div>
       <div className="drag-panel-body">{children}</div>
     </div>
