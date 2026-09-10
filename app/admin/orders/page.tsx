@@ -3,6 +3,12 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { notifyBadgeRefresh } from "@/lib/notifyBadgeRefresh";
+import AdminMobileList from "@/components/AdminMobileList";
+import {
+  fetchUnlinkedWonQuotes,
+  type UnlinkedWonQuote,
+} from "@/lib/unlinkedWonQuotes";
 import { ORDER_STATUS_OPTIONS, getOrderStatusColor } from "@/lib/orderStatusColors";
 import { formatPhoneNumber } from "@/lib/constants";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
@@ -71,6 +77,14 @@ function OrdersPageInner() {
   const [sortKey, setSortKey] = useState("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [period, setPeriod] = useState<DatePreset>("all");
+  /**
+   * 「수주인데 운송오더가 없는 견적」 — `TopNav` 「견적 관리」 배지와 **같은 규칙**이다
+   * (`lib/unlinkedWonQuotes.ts`). 34차 리뷰 1라운드에 신고된
+   * *"견적관리 부분에 계속해서 알림 표시 4건이 남아 있다"* 를 이 화면에서도 바로
+   * 처리할 수 있게 띄운다 — 담당자가 오더를 만드는 자리가 여기이기 때문이다.
+   */
+  const [needOrderQuotes, setNeedOrderQuotes] = useState<UnlinkedWonQuote[]>([]);
+  const [needOrderError, setNeedOrderError] = useState<string | null>(null);
 
   const [customerMode, setCustomerMode] = useState<"company" | "guest">(
     "company"
@@ -144,8 +158,15 @@ function OrdersPageInner() {
     setLoading(false);
   }
 
+  async function loadNeedOrder() {
+    const { quotes, error } = await fetchUnlinkedWonQuotes();
+    setNeedOrderQuotes(quotes);
+    setNeedOrderError(error);
+  }
+
   useEffect(() => {
     loadOrders("all");
+    loadNeedOrder();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -277,14 +298,6 @@ function OrdersPageInner() {
       setError("출발지와 도착지를 입력해주세요.");
       return;
     }
-    if (!form.origin_contact_phone.trim()) {
-      setError("상차지 담당자 연락처를 입력해주세요.");
-      return;
-    }
-    if (!form.destination_contact_phone.trim()) {
-      setError("하차지 담당자 연락처를 입력해주세요.");
-      return;
-    }
     if (form.requested_pickup_at && form.requested_delivery_at) {
       const diffMs =
         new Date(form.requested_delivery_at).getTime() - new Date(form.requested_pickup_at).getTime();
@@ -407,6 +420,11 @@ function OrdersPageInner() {
     });
     router.replace("/admin/orders");
     loadOrders(period);
+    // 🔴 방금 만든 오더가 견적을 물고 있으면 그 건이 목록에서 빠져야 한다 —
+    //    안 부르면 「만들었는데 안내가 그대로」로 보인다.
+    loadNeedOrder();
+    // 🔴 상단 메뉴 배지도 폴링(15초)을 기다리지 않고 바로 다시 세게 한다(원칙 23번).
+    notifyBadgeRefresh();
   }
 
   async function handleStatusChange(id: string, status: string) {
@@ -480,6 +498,63 @@ function OrdersPageInner() {
       </div>
 
       {error && <div className="error-box">오류: {error}</div>}
+
+      {/* 🔴 **「알림 4건이 안 없어진다」의 처리 자리다**(34차 리뷰 1라운드).
+          누르면 기존 프리필 경로(`?from_quote=`)를 그대로 타고, 그 경로가 저장 시
+          `quote_id` 를 채우므로 오더를 만들면 배지가 저절로 사라진다.
+          🔴 **이미 그 건의 오더를 만들었다면 여기서 또 만들지 말 것** — 그 오더의
+             `quote_id` 가 비어 있는 것이므로 **오더 상세의 「견적 연결」**로 잇는다
+             (실측 2026-09-10: 오더 6건 중 3건이 `quote_id` 없음). 그래서 안내 문구에
+             그 길을 같이 적어 둔다. */}
+      {needOrderError && (
+        <div className="error-box">
+          「운송오더가 없는 수주 견적」을 불러오지 못했습니다: {needOrderError}
+        </div>
+      )}
+      {needOrderQuotes.length > 0 && (
+        <div
+          className="card"
+          style={{ marginBottom: 20, padding: 16, background: "#FFFBEB" }}
+        >
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+            운송오더가 없는 수주 견적 {needOrderQuotes.length}건
+          </div>
+          <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 10 }}>
+            상단 메뉴 「견적 관리」의 알림 숫자가 이 건들입니다. 오더를 만들면 숫자가
+            줄어듭니다. 이미 오더를 만든 건이라면 새로 만들지 말고, 그 오더 상세의
+            「견적 연결」에서 이어 주세요.
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {needOrderQuotes.map((q) => (
+              <div
+                key={q.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  flexWrap: "wrap",
+                  fontSize: 12.5,
+                }}
+              >
+                <span className="num" style={{ fontWeight: 700 }}>
+                  {q.quote_no}
+                </span>
+                <span>{q.companies?.name || q.guest_name || "-"}</span>
+                <span style={{ color: "var(--text-muted)" }}>
+                  {q.origin || "-"} → {q.destination || "-"}
+                </span>
+                <button
+                  className="btn"
+                  style={{ padding: "4px 10px", borderRadius: 6, fontSize: 12 }}
+                  onClick={() => router.push(`/admin/orders?from_quote=${q.id}`)}
+                >
+                  + 이 견적으로 오더 만들기
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {period === "all" && orders.length >= ALL_PERIOD_LIMIT && (
         <div className="error-box">
@@ -806,6 +881,11 @@ function OrdersPageInner() {
               : "선택한 기간에 등록된 운송오더가 없습니다."}
           </div>
         ) : (
+          <>
+          {/* 🔴 **데스크탑 표는 `desktop-only`, 모바일은 카드**(원칙 13번 · 리뷰 3라운드).
+              `overflowX: auto` 는 태블릿 폭(761~1000)에서 표가 **페이지를 통째로** 옆으로
+              미는 것을 막는다 — 실측에서 390px 페이지 scrollWidth 가 627 이었다. */}
+          <div className="desktop-only" style={{ overflowX: "auto" }}>
           <table>
             <thead>
               <tr>
@@ -897,6 +977,68 @@ function OrdersPageInner() {
               ))}
             </tbody>
           </table>
+          </div>
+
+          {/* 모바일 카드 — 🔴 **뺀 것은 「등록일」 하나다.** 상차일이 담당자가 실제로
+              보는 날짜이고, 등록일은 상세에서 확인한다. 배차상태 드롭다운은 목록에서
+              바로 바꾸는 일이 잦아 **오른쪽 위에 그대로 뒀다.** */}
+          <div className="mobile-only">
+            <AdminMobileList
+              rows={filtered.map((o) => ({
+                key: o.id,
+                onClick: () => router.push(`/admin/orders/${o.id}`),
+                title: o.order_no,
+                tags: (
+                  <>
+                    <RecurringContractBadge company={o.companies} small />
+                    {o.loading_type === "mixable" && <MixableBadge />}
+                    {!o.companies?.name && o.guest_name && <span className="badge">개인</span>}
+                  </>
+                ),
+                action: (
+                  <select
+                    value={o.status}
+                    onChange={(e) => handleStatusChange(o.id, e.target.value)}
+                    style={{
+                      fontSize: "12px",
+                      padding: "4px 8px",
+                      borderRadius: 999,
+                      border: "none",
+                      fontWeight: 600,
+                      background: getOrderStatusColor(o.status).bg,
+                      color: getOrderStatusColor(o.status).text,
+                    }}
+                  >
+                    {ORDER_STATUS_OPTIONS.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                ),
+                lines: [
+                  { label: "고객", value: o.companies?.name || o.guest_name || "-" },
+                  {
+                    label: "구간",
+                    value: `${shortAddress(o.origin)} → ${shortAddress(o.destination)}`,
+                  },
+                  { label: "차량", value: o.vehicle_type || "-" },
+                  {
+                    label: "상차일",
+                    value: o.requested_pickup_at
+                      ? new Date(o.requested_pickup_at).toLocaleString("ko-KR", {
+                          month: "2-digit",
+                          day: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "-",
+                  },
+                ],
+              }))}
+            />
+          </div>
+          </>
         )}
       </div>
     </main>

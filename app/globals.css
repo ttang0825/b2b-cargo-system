@@ -72,6 +72,13 @@ body {
 a {
   color: inherit;
 }
+/* 내부관리 화면 폭 — 🔴 **한 곳에서만 바꾼다**(상단바와 본문이 어긋나면 안 된다).
+   ⚠️ 1560px 로 넓혔다가 실사용 리뷰 2라운드에 *"화면폭이 너무 넓어 졌다.
+      좀 줄일 필요가 있다.(1300~1400사이)"* 로 **1360px** 이 됐다. 그 범위 밖으로
+      되돌리지 말 것 — 1100(원래)도 1560(1라운드)도 사용자가 물린 값이다. */
+:root {
+  --admin-max: 1360px;
+}
 .container {
   max-width: 1100px;
   margin: 0 auto;
@@ -6852,4 +6859,368 @@ tbody tr:hover {
 .install-app-btn:hover {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   필수 항목 표시 (34차)
+
+   🔴 **색만으로 구분하지 않는다** — 별표(기호)와 색을 **둘 다** 쓴다. 색각 이상자에게는
+      빨강·검정 차이가 안 보이므로, 색을 빼도 별표만으로 필수임을 알 수 있어야 한다.
+   🔴 **적용 범위는 견적관리 화면뿐이다**(34차 사용자 확정) — 스코프 클래스
+      `.req-marks` 를 그 화면 최상위에 붙여서 켠다. 다른 화면에 칠하지 말 것.
+   🔴 **`globals.css` 는 순수 추가만** — 삭제된 줄 0이 관리자 무회귀의 근거다.
+   ⚠️ 이 저장소는 인라인 `style` 을 많이 쓴다. 클래스가 인라인을 못 이기는 자리에서는
+      `!important` 가 우회가 아니라 유일한 방법이다(원칙 58번과 같은 결).
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* 라벨의 별표 — `<RequiredMark />` 가 그린다.
+   🔴 **색은 `.req-marks` 안에서만 붙는다.** 밖에서는 지금까지와 똑같은 평범한 별표로
+      보인다 — 공용 부품(`AddressSearch` 등)이 이 컴포넌트를 쓰기 때문에, 색을 전역으로
+      주면 이번 범위 밖 화면까지 빨개진다. */
+.req-star {
+  margin-left: 2px;
+}
+.req-marks .req-star {
+  color: #d92d20;
+  font-weight: 700;
+}
+
+/* 필수 입력칸 — 아주 옅은 바탕만.
+   🔴 테두리 전체를 빨갛게 칠하지 않는다: 아직 안 채운 칸이 「오류」로 보인다.
+   🔴 **왼쪽의 빨간 선(`border-left: 3px solid #f0a4a0`)은 실사용 리뷰 1라운드에
+      사용자 지시로 뺐다**(*"필수 항목칸의 빨간색 진한 라인은 없어도 된다"*).
+      되살리지 말 것 — 별표(기호)와 옅은 바탕(색) 두 겹이 남아 있어 색각 이상자
+      대응은 그대로 성립한다. 선은 세 번째 겹이라 없어도 정보가 줄지 않는다.
+   🔴 그래서 `:focus` 규칙도 바탕만 되돌린다 — 선이 없으니 되돌릴 선색이 없다. */
+.req-marks .field-required input,
+.req-marks .field-required select,
+.req-marks .field-required textarea {
+  background: #fffbfa;
+}
+.req-marks .field-required input:focus,
+.req-marks .field-required select:focus,
+.req-marks .field-required textarea:focus {
+  background: var(--surface);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   인쇄물 모달 (34차) — 관리자 화면 안에서 견적서를 띄우고 그대로 인쇄한다.
+
+   🔴 **화주포털의 `.pv2-printmodal` 과 쌍둥이다 — 합치지 말 것.** 그쪽 CSS 는
+      `.portal-v2` 스코프 안에 있고, 합치면 관리자 31화면이 그 스코프를 끌고 온다.
+   🔴 **인쇄할 때 모달 밖을 통째로 숨긴다** — 안 숨기면 관리자 화면(상단메뉴·목록)이
+      견적서 앞뒤에 같이 찍힌다. 🔴 **`body > *` 를 숨기고 모달만 되살리는 순서를
+      바꾸지 말 것.**
+   ⚠️ 이 저장소는 인라인 `style` 을 많이 쓴다. 인쇄 규칙이 그걸 이겨야 해서
+      `!important` 가 우회가 아니라 유일한 방법이다.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.print-modal-dim {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 17, 21, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 1200;
+}
+.print-modal {
+  background: var(--surface);
+  border-radius: 14px;
+  width: min(940px, 100%);
+  height: min(90vh, 100%);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+}
+.print-modal-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.print-modal-body {
+  flex: 1;
+  min-height: 0;
+  background: #f1f2f4;
+}
+.print-modal-frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+  background: #fff;
+}
+
+@media print {
+  /* 모달이 열려 있으면 그 안만 남긴다 */
+  body:has(.print-modal-dim) > *:not(.print-modal-dim) {
+    display: none !important;
+  }
+  .print-modal-dim {
+    position: static !important;
+    inset: auto !important;
+    background: none !important;
+    padding: 0 !important;
+    display: block !important;
+  }
+  .print-modal {
+    width: 100% !important;
+    height: auto !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    display: block !important;
+  }
+  /* 🔴 도구 막대는 인쇄물에 나오면 안 된다 */
+  .print-modal-bar {
+    display: none !important;
+  }
+  .print-modal-body {
+    background: none !important;
+  }
+}
+
+@media (max-width: 700px) {
+  .print-modal-dim {
+    padding: 0;
+  }
+  .print-modal {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   내부관리 화면 폭 (34차 실사용 리뷰 1라운드)
+
+   사용자 지적: *"내부시스템 전체페이지 잡히는 면적이 좀 좁은감이 있다. 그러다보니
+   견적관리 적는칸이 가로로 좁고 세로로 긴 형태가 나온다. … 화주포털과 비교해도
+   좁은것 같다."* 실측이 그대로였다 — 관리자는 `.container` 1100px 인데 화주포털 셸은
+   `--pv2-shell-max` 1600px 이라 관리자가 500px 좁았다.
+
+   🔴 **`.container` 자체를 고치지 않는다 — 그 클래스는 관리자만의 것이 아니다.**
+      쓰는 곳이 39개 파일인데 그중 7개가 `app/customer/**`(화주포털)이고
+      `SiteFooter`·`PublicPageHeader`·`LegalDoc` 을 통해 **공개 화면 6개**도 쓴다.
+      34차 완료조건 1·2 가 화주포털·공개 화면 **diff 0줄**을 요구하므로, 폭을 넓히는
+      일도 관리자 안에서만 일어나야 한다. 그래서 `app/admin/layout.tsx` 가 자식을
+      `.admin-wide` 로 감싸고 여기서 그 안의 `.container` 만 넓힌다.
+   🔴 **상단바는 그 래퍼 밖이다**(`TopNav` 는 루트 레이아웃에 있다) — 그래서 따로
+      넓힌다. `.top-nav-inner` 는 `TopNav` 한 곳만 쓰고 그 컴포넌트는 `/customer` 와
+      공개 경로에서 `null` 을 돌려주므로(원칙 11번) **관리자 전용 클래스가 맞다.**
+   🔴 **선언 순서가 아니라 특성도로 이긴다**(원칙 58번) — `.admin-wide .container`
+      (0,0,2,0)와 `.top-nav .top-nav-inner`(0,0,2,0)가 각각 원본(0,0,1,0)보다 높다.
+      나중에 누가 이 파일을 정렬해도 조용히 되돌아가지 않는다.
+   🟢 **`globals.css` 순수 추가 원칙이 지켜진다** — 기존 두 규칙의 줄을 고치지 않았다.
+   ⚠️ **인쇄물은 영향 없다** — `.print-sheet` 가 자기 `max-width: 780px` + `margin: auto`
+      를 갖고 있어 넓어진 칸 안에서 가운데로 놓일 뿐이고, `@media print` 에서는
+      `max-width: 100%` 로 다시 덮인다.
+   ───────────────────────────────────────────────────────────────────────────── */
+.admin-wide .container {
+  max-width: var(--admin-max);
+}
+.top-nav .top-nav-inner {
+  max-width: var(--admin-max);
+}
+
+/* 넓어진 폭이 **열 수**가 아니라 **칸 폭**으로 가게 한다.
+   🔴 `.form-grid` 는 `auto-fill minmax(200px, 1fr)` 이라, 폭만 넓히면 칸이 넓어지는 게
+      아니라 **열이 늘어난다**(실측: 견적 폼이 2열 282px → 4열 203px). 그러면 사용자가
+      지적한 「가로로 좁고」가 오히려 더 나빠진다. 그래서 최소 폭을 260px 로 올려
+      열이 덜 늘고 칸이 넓어지게 한다(관리자 폼 4열 214px → 5열 279px).
+   🔴 **견적 폼만 2열로 못박는다** — 출발지·도착지가 좌우 한 쌍이어야 하고
+      상·하차 담당자 블록도 2열 기준으로 짜여 있다(34차). 3열이 되면 그 짝이 깨진다.
+      2열이라 넓어진 폭이 전부 칸 폭으로 간다(실측 282px → 420px).
+   🔴 **`.admin-wide .form-grid`(0,0,2,0)가 `.quote-form-grid`(0,0,1,0)를 이기므로**
+      견적 폼 규칙은 `.admin-wide .form-grid.quote-form-grid`(0,0,3,0)로 올려야 한다 —
+      순서로 맞추지 말 것(원칙 58번).
+   🔴 **`@media (min-width: 701px)` 안에 둔다** — 밖에 두면 특성도가 더 높아
+      모바일 1열 규칙(`.form-grid`, 0,0,1,0)을 덮어써 휴대폰에서 2열이 된다. */
+@media (min-width: 701px) {
+  .admin-wide .form-grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+  .admin-wide .form-grid.quote-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   내부관리 홈 메뉴 카드 (34차 실사용 리뷰 2라운드)
+
+   사용자 지시: *"홈에서 메인메뉴 카드들이 전처럼 4칸 2줄로 들어오게 하자. 대신 카드의
+   폭을 넓혀서 맞추자. … 모바일에서는 홈화면 메뉴카드는 2열씩 배치하고 설명글은 2줄 구성"*
+
+   🔴 **폭을 넓혔더니 4칸 2줄이 깨진 것이 원인이다.** `.home-grid` 가
+      `auto-fill minmax(230px, 1fr)` 이라 칸 수가 폭을 따라가서, 1100 에서 4열이던 것이
+      넓히자 6열이 됐다. **칸 수를 8개 항목에 맞춰 못박고 폭이 남으면 카드가 넓어지게**
+      바꾼다 — 그것이 「카드의 폭을 넓혀서 맞추자」다.
+   🔴 **`.home-grid` 규칙 자체를 고치지 않는다**(globals.css 순수 추가 원칙).
+      `.admin-wide .home-grid`(0,0,2,0)로 특성도를 올린다 — 순서로 맞추지 말 것(원칙 58번).
+   🔴 **데스크탑 규칙은 `@media (min-width: 701px)` 안에 둔다** — 밖에 두면 특성도가 높아
+      모바일 2열 규칙을 덮어써 휴대폰에서도 4열이 된다.
+   🟢 모바일 2열은 `≤700px` 에 이미 있었지만 **`≤460px` 에서 1열로 떨어지고 있었다** —
+      사용자 지시가 「2열」이라 그 폭에서도 2열을 유지하도록 눌러 둔다.
+   ⚠️ `.home-grid`·`.home-card` 를 쓰는 화면은 **`app/admin/page.tsx` 하나뿐이다**(실측).
+      `.portal-theme .home-card-*` 규칙은 화주포털이 pv2 로 넘어간 뒤 남은 죽은 규칙이라
+      이 변경이 포털에 닿지 않는다.
+   ───────────────────────────────────────────────────────────────────────────── */
+@media (min-width: 701px) {
+  .admin-wide .home-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@media (max-width: 700px) {
+  /* 🔴 두 클래스 규칙이라야 `≤460px` 의 1열 규칙(0,0,1,0)을 이긴다(원칙 58번) */
+  .admin-wide .home-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  /* 설명글 2줄 고정 — 카드마다 글 길이가 달라 높이가 들쭉날쭉하던 것을 맞춘다.
+     🔴 `-webkit-line-clamp` 는 `display: -webkit-box` 와 **한 벌**이다(한쪽만 두면 안 걸린다). */
+  .admin-wide .home-card-desc {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .admin-wide .home-card {
+    padding: 18px;
+    gap: 8px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   내부관리 목록 화면 머리줄 — 모바일 (34차 실사용 리뷰 3라운드)
+
+   실측(390px): 기간 필터 칩이 「오 / 늘」·「이번 / 주」처럼 두 줄로 접히고
+   「+ 신규 정산 등록」도 두 줄이 됐다. `.page-header` 가 `justify-content: space-between`
+   이라 제목과 오른쪽 묶음이 **한 줄에 억지로 같이 서려다** 오른쪽이 짜부라진 것이다.
+
+   🔴 **`.btn` 자체에 `white-space: nowrap` 을 주지 말 것** — 관리자·공개 화면이 전부
+      쓰는 클래스라 긴 문구 버튼이 화면을 뚫는다. 여기서는 `.admin-wide` 안의
+      머리줄 버튼에만 건다.
+   🔴 데스크탑은 한 줄도 안 바뀐다(`@media (max-width: 700px)` 안이다).
+   ───────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 700px) {
+  /* 제목과 도구 묶음을 위아래로 — 한 줄에 같이 세우지 않는다 */
+  .admin-wide .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  /* 도구 묶음(기간 필터 + 등록 버튼)은 줄바꿈해서 늘어놓는다 */
+  .admin-wide .page-header > div:last-child {
+    flex-wrap: wrap;
+  }
+  /* 🔴 칩·버튼 글자가 어절 중간에서 끊기지 않게 — 이것이 「오 / 늘」의 직접 원인이다 */
+  .admin-wide .page-header .btn,
+  .admin-wide .page-header .btn-ghost {
+    white-space: nowrap;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   끌어 옮기는 패널 — 모바일 전용 (34차 실사용 리뷰 3라운드)
+
+   사용자 지시: *"모바일에서 「자동계산결과」창은 팝업으로 기본 아래에 배치되는데
+   끌어다 자유롭게 위치조정을 할수 있게"*
+
+   🔴 **`position: fixed` 라 문서 흐름에서 빠진다** — 그래서 견적 화면의 2열 격자를
+      모바일에서 **1열로 접어야 한다**(아래 `.quote-form-layout` 규칙). 안 접으면
+      340px 짜리 빈 칸이 남아 입력칸이 반쪽이 된다(실측: 그 상태로 라벨이 세로로 쪼개졌다).
+   🔴 **높이 상한 + 안쪽 스크롤**을 둔다 — 계산 항목이 많아지면 패널이 화면을 통째로
+      덮어서 끌 손잡이까지 안 보이게 된다.
+   🔴 **손잡이의 `touch-action: none`** 을 빼지 말 것(브라우저가 스크롤로 가로챈다).
+   🔴 **좌우로는 움직이지 않는다**(리뷰 4라운드) — 가로 위치는 `left: 8px` 고정이다.
+   🔴 데스크탑에는 이 클래스가 붙지 않는다 — 컴포넌트가 `children` 을 그대로 돌려준다.
+   ───────────────────────────────────────────────────────────────────────────── */
+.drag-panel {
+  position: fixed;
+  z-index: 60;
+  /* 🔴 **가운데 정렬은 CSS 가 한다**(리뷰 5라운드 — *"약간 왼쪽으로 쏠려 있다"*).
+     `left: 8px` 로 잡고 있었는데 폭 상한(360px)이 있어서 화면이 그보다 넓으면
+     **왼쪽 8px / 오른쪽 22px** 로 어긋났다. 두 줄은 **한 벌**이다.
+     🔴 컴포넌트에서 `left` 를 인라인으로 주지 말 것 — 이 규칙을 덮어써 다시 쏠린다.
+     🔴 `transform` 을 다른 용도로 덮어쓰지 말 것(가운데 정렬이 통째로 풀린다). */
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100vw - 16px);
+  max-width: 360px;
+  max-height: 46vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+/* 🔴 **손잡이는 옐로다**(리뷰 4라운드 — *"창의 헤더 컬러(옐로우)가 달라서 구분감이
+   있으면 좋겠다"*). 관리자 화면은 파랑 계열이라 옐로 한 줄이 「이건 떠 있는 창이고
+   여기를 잡는다」를 한눈에 말해 준다.
+   🔴 `--brand-yellow` 는 `:root` 에 있어서 관리자에서도 쓸 수 있다 — 값을 여기에
+      리터럴로 다시 적지 말 것(랜딩·포털과 같은 노랑이어야 한다).
+   🔴 **글자는 어두운 색이라야 한다** — 옐로 위에 `--text-muted` 를 올리면 대비가
+      모자란다(원칙 11차 헤더 옐로 전환에서 이미 겪은 자리). 안내 글은 `#5c4a00`
+      (옐로 대비 약 6:1), 제목은 `#1a1a1a` 다. */
+.drag-panel-handle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  background: var(--brand-yellow);
+  color: #1a1a1a;
+  border-bottom: 1px solid var(--brand-yellow-border);
+  cursor: grab;
+  /* 🔴 이 줄이 없으면 손가락으로 끄는 동안 페이지가 대신 스크롤된다 */
+  touch-action: none;
+  user-select: none;
+}
+.drag-panel-handle:active {
+  cursor: grabbing;
+}
+.drag-panel-grip {
+  width: 22px;
+  height: 4px;
+  border-radius: 999px;
+  /* 🔴 옐로 위에서는 `--border`(옅은 회색)가 거의 안 보인다 */
+  background: rgba(26, 26, 26, 0.35);
+  flex-shrink: 0;
+}
+.drag-panel-title {
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.drag-panel-hint {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: #5c4a00;
+}
+.drag-panel-body {
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+/* 🔴 떠 있는 패널 안에서는 `sticky` 가 의미 없다(데스크탑 전용 동작이다) */
+.drag-panel-body > .card {
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  position: static !important;
+}
+/* 🔴 제목이 두 번 보이지 않게 — 손잡이에 이미 같은 글이 있다.
+   ⚠️ **데스크탑의 `<h3>` 는 그대로 남는다**(그쪽엔 손잡이가 없다) — 이 규칙은
+      `.drag-panel-body` 안에서만 걸린다. `<h3>` 자체를 지우지 말 것. */
+.drag-panel-body > .card > h3:first-child {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  /* 견적 등록 화면의 「폼 | 계산 패널」 2열을 1열로 — 위 설명 참고 */
+  .admin-wide .quote-form-layout {
+    grid-template-columns: 1fr !important;
+  }
 }

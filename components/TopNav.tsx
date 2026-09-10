@@ -5,6 +5,7 @@ import BrandLogo from "@/components/BrandLogo";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { fetchUnlinkedWonQuotes } from "@/lib/unlinkedWonQuotes";
 import { supabaseAdminAuth } from "@/lib/supabaseAdminAuthClient";
 import { onBadgeRefresh } from "@/lib/notifyBadgeRefresh";
 import { getCurrentStaffInfo, onCurrentStaffChange, clearCurrentStaffCache } from "@/lib/currentStaff";
@@ -190,28 +191,17 @@ function TopNavInner() {
     //       DB 에 남기지 않기 때문이고(컬럼이 필요하다 — 28차 조사 항목), 어느 쪽이든
     //       "오더를 만들어야 하는 건"이라 담당자가 할 일로는 똑같이 맞다.
     //    🔴 실패하면 0 으로 둔다 — 배지 하나 때문에 상단메뉴가 통째로 깨지면 안 된다.
+    //    🔴 **세는 규칙은 `lib/unlinkedWonQuotes.ts` 한 곳에 있다**(34차 리뷰 1라운드).
+    //       그 전에는 계산식이 이 파일 안에만 있어서 **배지는 숫자를 말하는데 그 숫자가
+    //       어느 건인지 볼 화면이 없었다** — 신고 *"계속해서 알림 표시 4건이 남아 있다"*
+    //       가 그것이다. 여기서 다시 적지 말 것(견적 목록·오더 목록·오더 상세가 같은
+    //       함수를 쓴다).
     async function loadApprovedQuotes() {
       try {
-        const { data: won } = await supabase
-          .from("quotes")
-          .select("id")
-          .eq("status", "수주")
-          .limit(300);
-        if (!won || won.length === 0) {
-          setCounts((prev) => ({ ...prev, approvedQuotes: 0 }));
-          return;
-        }
-        const { data: ordered } = await supabase
-          .from("orders")
-          .select("quote_id")
-          .in(
-            "quote_id",
-            won.map((q) => q.id)
-          );
-        const has = new Set((ordered || []).map((o: any) => o.quote_id));
+        const { quotes, error } = await fetchUnlinkedWonQuotes();
         setCounts((prev) => ({
           ...prev,
-          approvedQuotes: won.filter((q) => !has.has(q.id)).length,
+          approvedQuotes: error ? 0 : quotes.length,
         }));
       } catch {
         setCounts((prev) => ({ ...prev, approvedQuotes: 0 }));

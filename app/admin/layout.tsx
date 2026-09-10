@@ -43,7 +43,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           떴다 안 떴다 한다. */}
       <script dangerouslySetInnerHTML={{ __html: INSTALL_PROMPT_CAPTURE }} />
       <ServiceWorkerRegister scriptUrl="/admin/sw.js" scope="/admin" />
-      {children}
+      {/* 🔴 **이 래퍼는 화면 폭을 넓히는 스코프다**(34차 리뷰 1라운드) — 지우지 말 것.
+          `.container` 는 관리자 전용이 아니라 화주포털 7화면과 공개 화면 6개도 쓰기
+          때문에 그 클래스 자체를 넓힐 수 없다. 관리자 안에서만 넓히려고 여기서 감싼다.
+          자세한 사유는 `app/globals.css` 의 「내부관리 화면 폭」 주석. */}
+      <div className="admin-wide">{children}</div>
     </>
   );
 }

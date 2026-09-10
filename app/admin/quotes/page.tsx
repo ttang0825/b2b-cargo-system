@@ -32,6 +32,10 @@ import { applyMixedDiscount } from "@/lib/settlementCalc";
 import { orderBodyTypes } from "@/lib/vehicleBodyTypes";
 import { CUSTOMER_APPROVED_LABEL, formatCustomerApprovedAt } from "@/lib/quoteApproval";
 import RecurringContractBadge from "@/components/RecurringContractBadge";
+import { fetchUnlinkedWonQuoteIds } from "@/lib/unlinkedWonQuotes";
+import AdminMobileList from "@/components/AdminMobileList";
+import DraggablePanel from "@/components/DraggablePanel";
+import RequiredMark from "@/components/RequiredMark";
 import {
   arrivalTypeLabel,
   arrivalTypeHint,
@@ -70,6 +74,17 @@ type CompanyLite = {
   phone: string | null;
   address: string | null;
   status: string;
+};
+
+/** 견적목록 맨 위에 얹는 대기 중 발주요청 한 줄 */
+type PendingRequestRow = {
+  id: string;
+  origin: string | null;
+  destination: string | null;
+  vehicle_type: string | null;
+  item: string | null;
+  created_at: string;
+  companies: { name: string; is_recurring_contract?: boolean | null; recurring_contract_ended_on?: string | null } | null;
 };
 
 type QuoteRow = {
@@ -139,6 +154,28 @@ function QuotesPageInner() {
   const [quotes, setQuotes] = useState<QuoteRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  /**
+   * 대기 중인 화주 발주요청 — 견적목록 **맨 위에 고정**해서 보여준다(34차 지적 2번,
+   * 사용자 확정). 날짜순으로 섞지 않는 이유: 처리해야 할 일이라 오래된 건이 아래로
+   * 묻히면 안 되고, 기간 필터·정렬이 **견적 행에만** 걸려 기존 동작이 안 바뀐다.
+   * 🔴 **`error` 를 버리고 빈 배열로 두지 말 것** — 조회가 실패하면 화면이
+   *    「새 요청이 없다」로 보인다. 이 차수에서 가장 위험한 실패 모드다.
+   * 🔴 **기존 「화주요청」 메뉴는 그대로 둔다**(사용자 확정) — 같은 것이 두 곳에
+   *    보이는 것이 의도다. 이번 차수의 변경 범위를 좁히기 위한 것이니 지우지 말 것.
+   */
+  const [pendingRequests, setPendingRequests] = useState<PendingRequestRow[]>([]);
+  const [requestsError, setRequestsError] = useState<string | null>(null);
+  /**
+   * 「수주인데 운송오더가 없는 견적」의 id — `TopNav` 「견적 관리」 배지가 세는 것과
+   * **같은 규칙**이다(`lib/unlinkedWonQuotes.ts`).
+   * 🔴 신고 *"견적관리 부분에 계속해서 알림 표시 4건이 남아 있다"* 의 해소가 이것이다 —
+   *    배지가 숫자만 말하고 **어느 건인지 볼 화면이 없어서** 지울 수가 없었다.
+   * 🔴 조회 실패는 빈 집합으로 두되(표시가 없어질 뿐 목록은 멀쩡하다) `needOrderError`
+   *    로 화면에 남긴다 — 조용히 삼키지 않는다(원칙 55번).
+   */
+  const [needOrderIds, setNeedOrderIds] = useState<Set<string>>(new Set());
+  const [needOrderError, setNeedOrderError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [period, setPeriod] = useState<DatePreset>("all");
   const [calculatingDistance, setCalculatingDistance] = useState(false);
@@ -252,10 +289,41 @@ function QuotesPageInner() {
     setLoading(false);
   }
 
+  // 🔴 대기 중 발주요청만 가져온다(`status='대기중'`). 승인되면 견적이 되므로 사라진다.
+  //    정렬은 **불러온 뒤 코드에서** 한다 — `.order()` 를 없는 컬럼에 걸면 조용히 400 이다.
+  async function loadPendingRequests() {
+    const { data, error } = await supabase
+      .from("portal_order_requests")
+      .select(
+        "id,origin,destination,vehicle_type,item,created_at,companies(name,is_recurring_contract,recurring_contract_ended_on)"
+      )
+      .eq("status", "대기중");
+    if (error) {
+      // 🔴 삼키지 말 것 — 빈 목록은 「새 요청이 없다」와 구분이 안 된다.
+      setRequestsError(error.message);
+      setPendingRequests([]);
+      return;
+    }
+    setRequestsError(null);
+    setPendingRequests(
+      ((data as any as PendingRequestRow[]) || []).sort((a, b) =>
+        (b.created_at || "").localeCompare(a.created_at || "")
+      )
+    );
+  }
+
+  async function loadNeedOrder() {
+    const { ids, error } = await fetchUnlinkedWonQuoteIds();
+    setNeedOrderIds(ids);
+    setNeedOrderError(error);
+  }
+
   // 최초 진입 시 운임기준 데이터 + 견적 목록 로드
   useEffect(() => {
     loadRateData();
     loadQuotes("all");
+    loadPendingRequests();
+    loadNeedOrder();
   }, []);
 
   // 기간 필터 변경 시 목록만 다시 로드
@@ -621,15 +689,6 @@ function QuotesPageInner() {
     [mixedDiscountTiers, form.distance_km]
   );
 
-  // 희망 상차일시는 현재 시각 이후로만 선택 가능
-  const nowDateTime = (() => {
-    const d = new Date();
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
-      d.getMinutes()
-    )}`;
-  })();
-
   // 거리 기준 최소 하차일시 (희망 상차일시가 있어야 계산됨)
   const minDropoffDateTime = useMemo(() => {
     if (!form.requested_pickup_at) return undefined;
@@ -673,6 +732,33 @@ function QuotesPageInner() {
     e.preventDefault();
     setError(null);
 
+    // 🔴 **같은 발주요청으로 견적이 두 번 만들어지면 안 된다**(34차).
+    //    화주신청 승인 API 와 같은 패턴이다 — 화면 state 를 믿지 말고 **저장 직전에
+    //    그 행을 다시 읽어** 이미 처리됐으면 거절한다(원칙 44번과 같은 결).
+    //    목록은 `status='대기중'` 만 보여주지만, 탭을 열어둔 채 다른 사람이 먼저
+    //    처리했으면 그 탭의 화면은 낡은 상태다.
+    if (fromRequestId) {
+      const { data: reqNow, error: reqErr } = await supabase
+        .from("portal_order_requests")
+        .select("id,status,quote_id")
+        .eq("id", fromRequestId)
+        .maybeSingle();
+      if (reqErr) {
+        setError(`발주요청 상태를 확인하지 못했습니다: ${reqErr.message}`);
+        return;
+      }
+      if (!reqNow) {
+        setError("발주요청을 찾을 수 없습니다. 목록을 새로고침해주세요.");
+        return;
+      }
+      if (reqNow.quote_id || reqNow.status !== "대기중") {
+        setError(
+          "이 발주요청은 이미 견적으로 전환되었습니다. 목록을 새로고침해주세요."
+        );
+        return;
+      }
+    }
+
     if (customerMode === "company" && !selectedCompany) {
       setError("화주 업체를 검색해서 선택해주세요.");
       return;
@@ -689,14 +775,6 @@ function QuotesPageInner() {
       setError("도착지를 입력해주세요.");
       return;
     }
-    if (!form.origin_contact_phone.trim()) {
-      setError("상차지 담당자 연락처를 입력해주세요.");
-      return;
-    }
-    if (!form.destination_contact_phone.trim()) {
-      setError("하차지 담당자 연락처를 입력해주세요.");
-      return;
-    }
     if (!form.distance_km || Number(form.distance_km) <= 0) {
       setError("거리(km)를 입력해주세요.");
       return;
@@ -705,10 +783,6 @@ function QuotesPageInner() {
       setError(
         "거리 자동계산을 먼저 실행해주세요. 직접 입력한 값을 쓰시려면 거리 입력창 아래 체크박스를 선택해주세요."
       );
-      return;
-    }
-    if (form.requested_pickup_at && new Date(form.requested_pickup_at).getTime() < Date.now() - 60000) {
-      setError("희망 상차일시는 현재 시각 이후로 설정해주세요.");
       return;
     }
     if (form.requested_pickup_at && form.requested_dropoff_at) {
@@ -864,6 +938,8 @@ function QuotesPageInner() {
         .from("portal_order_requests")
         .update({ status: "승인됨", quote_id: newQuote.id })
         .eq("id", fromRequestId);
+      // 목록 맨 위의 「발주요청」 행이 바로 사라지도록 다시 조회한다
+      loadPendingRequests();
     }
 
     // 공개 견적문의에서 전환해 넘어온 경우, 문의 상태를 연락완료로 갱신하고 이 견적과 연결
@@ -964,16 +1040,26 @@ function QuotesPageInner() {
       )}
 
       <div
+        className="quote-form-layout"
         style={{
           display: "grid",
-          gridTemplateColumns: "1.2fr 0.8fr",
+          /* 🔴 계산 패널을 **고정 폭**으로 뺐다(리뷰 2라운드 — *"자동계산결과창은 폭이
+             좀더 좁아도 된다"*). `0.8fr` 로 두면 화면이 넓어질수록 패널만 커지고 정작
+             입력칸이 안 넓어진다 — 남는 폭이 전부 입력 쪽으로 가게 한다.
+             🔴 `minmax(0, 1fr)` 의 `0` 을 빼지 말 것 — 그리드 칸의 기본 최소폭이
+                `auto` 라 안쪽 긴 주소 문자열이 칸을 밀어 패널이 찌그러진다. */
+          gridTemplateColumns: "minmax(0, 1fr) 340px",
           gap: 20,
           alignItems: "start",
           marginBottom: 24,
         }}
       >
         <div className="card" style={{ padding: 20 }}>
-          <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown}>
+          {/* 🔴 `req-marks` 가 필수 표시의 스코프다(34차) — 이 클래스가 붙은 안에서만
+              별표가 빨개지고 입력칸에 왼쪽 선이 붙는다. **다른 화면에 칠하지 말 것**
+              (사용자 확정: 이번 범위는 견적관리 화면뿐). 공용 부품 `AddressSearch` 도
+              같은 별표 부품을 쓰지만, 색은 이 스코프 밖에서 안 붙는다. */}
+          <form className="req-marks" onSubmit={handleSubmit} onKeyDown={handleFormKeyDown}>
             <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
               <button
                 type="button"
@@ -1067,9 +1153,9 @@ function QuotesPageInner() {
                 )}
               </div>
             ) : (
-              <div className="form-grid" style={{ padding: 0, marginBottom: 14 }}>
-                <div className="field">
-                  <label>고객명 *</label>
+              <div className="form-grid quote-form-grid" style={{ padding: 0, marginBottom: 14 }}>
+                <div className="field field-required">
+                  <label>고객명 <RequiredMark /></label>
                   <input
                     value={form.guest_name}
                     onChange={(e) =>
@@ -1089,46 +1175,44 @@ function QuotesPageInner() {
               </div>
             )}
 
-            <div className="form-grid" style={{ padding: 0 }}>
-              <div className="field" style={{ gridColumn: "1 / -1" }}>
-                <label>품목</label>
-                <input
-                  value={form.item}
-                  onChange={(e) => setForm({ ...form, item: e.target.value })}
-                  placeholder="운송할 물품을 입력하세요"
-                />
+            <div className="form-grid quote-form-grid" style={{ padding: 0 }}>
+              {/* ── 1. 운송 구간 · 현장 정보 ──────────────────────────────────────────── */}
+              <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "baseline", gap: 8, margin: "6px 0 -4px" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, borderRadius: "50%", background: "var(--accent)", color: "#1a1a1a", fontSize: 11.5, fontWeight: 700, flexShrink: 0 }}>
+                  1
+                </span>
+                <strong style={{ fontSize: 13.5 }}>운송 구간 · 현장 정보</strong>
+                <span style={{ fontSize: 11.5, color: "var(--text-muted)" }}>화주포털 발주요청과 같은 순서입니다</span>
               </div>
-              <div className="field">
-                <label>물품특성</label>
-                <select
-                  value={form.물품특성}
-                  onChange={(e) => setForm({ ...form, 물품특성: e.target.value })}
-                >
-                  {surcharges
-                    .filter((s) => s.category === "물품특성")
-                    .map((o) => (
-                      <option key={o.option_name} value={o.option_name}>
-                        {o.option_name}
-                      </option>
-                    ))}
-                </select>
-              </div>
-              <div className="field">
-                <label>톤수 *</label>
-                <select
-                  value={form.vehicle_type}
-                  onChange={(e) =>
-                    setForm({ ...form, vehicle_type: e.target.value })
-                  }
-                >
-                  {VEHICLE_TYPES_ALL.map((v) => (
-                    <option key={v} value={v}>
-                      {v}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
+              {/* ── 출발지 열 / 도착지 열 (34차 리뷰 2라운드) ──────────────────────
+                  사용자 지시: *"견적관리에서 정보창 레이아웃을 화주포탈 발주요청과 거의
+                  유사하게 구성해줘."* 화주포털 발주요청이 **좌우 두 열**이고, 한 열에
+                  「주소 → 현장 상호·담당자명 → 담당자 연락처 → 주소록 저장」이 세로로
+                  들어간다. 그 배치를 관리자 쪽 부품으로 그대로 옮긴 것이다.
+                  🔴 **포털 부품(`Pv2AddressField`·`Pv2Select`·`.pv2-*`)은 하나도 안 가져왔다** —
+                     `.portal-v2` 스코프 전용이라 관리자 31화면이 그 CSS 를 끌어온다.
+                     34차 본작업의 「맞춘 것은 배치이지 부품이 아니다」가 그대로 유효하다.
+                  🔴 **저장된 주소는 포털처럼 드롭다운이 아니라 칩(badge)이다** — 관리자
+                     쪽 기존 방식이고, 드롭다운으로 바꾸면 포털 부품을 끌어와야 한다.
+                  ⚠️ 34차 본작업이 *"완전히 갈리지는 않는다 — 범위 밖"* 으로 남겨둔 항목이
+                     이번 지시로 범위 안에 들어온 것이다. */}
+              {/* 출발지 열 — 🔴 **주소와 그 현장 담당자가 같은 열에 있어야 한다.**
+                  전에는 주소 둘이 위에 나란히, 담당자 여섯 칸이 아래에 따로 있어서
+                  「이 담당자가 상차인가 하차인가」를 라벨로만 알 수 있었다. */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                  <span
+                    style={{
+                      width: 9,
+                      height: 9,
+                      borderRadius: "50%",
+                      background: "#2563EB",
+                      flexShrink: 0,
+                    }}
+                  />
+                  <strong style={{ fontSize: 13 }}>출발지</strong>
+                  <span style={{ fontSize: 11.5, color: "var(--text-muted)" }}>상차지 정보</span>
+                </div>
               <AddressSearch
                 label="출발지"
                 required
@@ -1174,8 +1258,53 @@ function QuotesPageInner() {
                   </div>
                 )}
               </AddressSearch>
+                <PickupDropoffContactFields
+                  value={form}
+                  onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
+                  only="pickup"
+                />
+              {customerMode === "company" && selectedCompany && (
+                <label
+                  htmlFor="saveOrigin"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontSize: 12,
+                    color: "var(--text-muted)",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    id="saveOrigin"
+                    type="checkbox"
+                    checked={saveOrigin}
+                    onChange={(e) => setSaveOrigin(e.target.checked)}
+                    style={{ margin: 0, flexShrink: 0 }}
+                  />
+                  이 출발지를 화주 주소록에 저장
+                </label>
+              )}
+              </div>
 
-              <AddressSearch
+              {/* 도착지 열 — 🔴 **주소와 그 현장 담당자가 같은 열에 있어야 한다.**
+                  전에는 주소 둘이 위에 나란히, 담당자 여섯 칸이 아래에 따로 있어서
+                  「이 담당자가 상차인가 하차인가」를 라벨로만 알 수 있었다. */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                  <span
+                    style={{
+                      width: 9,
+                      height: 9,
+                      borderRadius: "50%",
+                      background: "#DC2626",
+                      flexShrink: 0,
+                    }}
+                  />
+                  <strong style={{ fontSize: 13 }}>도착지</strong>
+                  <span style={{ fontSize: 11.5, color: "var(--text-muted)" }}>하차지 정보</span>
+                </div>
+<AddressSearch
                 label="도착지"
                 required
                 value={form.destination}
@@ -1225,68 +1354,37 @@ function QuotesPageInner() {
                   </div>
                 )}
               </AddressSearch>
-
-              <PickupDropoffContactFields
-                value={form}
-                onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
-              />
-
+                <PickupDropoffContactFields
+                  value={form}
+                  onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
+                  only="dropoff"
+                />
               {customerMode === "company" && selectedCompany && (
-                <div
+                <label
+                  htmlFor="saveDestination"
                   style={{
-                    gridColumn: "1 / -1",
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: 14,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontSize: 12,
+                    color: "var(--text-muted)",
+                    cursor: "pointer",
                   }}
                 >
-                  <label
-                    htmlFor="saveOrigin"
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      fontSize: 12,
-                      color: "var(--text-muted)",
-                      cursor: "pointer",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    <input
-                      id="saveOrigin"
-                      type="checkbox"
-                      checked={saveOrigin}
-                      onChange={(e) => setSaveOrigin(e.target.checked)}
-                      style={{ margin: 0, flexShrink: 0 }}
-                    />
-                    이 출발지를 화주 주소록에 저장
-                  </label>
-                  <label
-                    htmlFor="saveDestination"
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      fontSize: 12,
-                      color: "var(--text-muted)",
-                      cursor: "pointer",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    <input
-                      id="saveDestination"
-                      type="checkbox"
-                      checked={saveDestination}
-                      onChange={(e) => setSaveDestination(e.target.checked)}
-                      style={{ margin: 0, flexShrink: 0 }}
-                    />
-                    이 도착지를 화주 주소록에 저장
-                  </label>
-                </div>
+                  <input
+                    id="saveDestination"
+                    type="checkbox"
+                    checked={saveDestination}
+                    onChange={(e) => setSaveDestination(e.target.checked)}
+                    style={{ margin: 0, flexShrink: 0 }}
+                  />
+                  이 도착지를 화주 주소록에 저장
+                </label>
               )}
+              </div>
 
-              <div className="field" style={{ gridColumn: "1 / -1" }}>
-                <label>거리(km) *</label>
+              <div className="field field-required" style={{ gridColumn: "1 / -1" }}>
+                <label>거리(km) <RequiredMark /></label>
                 <div style={{ display: "flex", gap: 6 }}>
                   <input
                     type="number"
@@ -1336,17 +1434,30 @@ function QuotesPageInner() {
                 )}
               </div>
 
-              <div style={{ gridColumn: "1 / -1" }}>
+              {/* ── 2. 일정 ──────────────────────────────────────────── */}
+              <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "baseline", gap: 8, margin: "6px 0 -4px" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, borderRadius: "50%", background: "var(--accent)", color: "#1a1a1a", fontSize: 11.5, fontWeight: 700, flexShrink: 0 }}>
+                  2
+                </span>
+                <strong style={{ fontSize: 13.5 }}>일정</strong>
+                <span style={{ fontSize: 11.5, color: "var(--text-muted)" }}></span>
+              </div>
+              {/* 🔴 **상차·하차를 좌우로 놓는다**(리뷰 2라운드 — 포털 발주요청과 같은 배치).
+                  전에는 둘 다 `gridColumn: "1 / -1"` 이라 위아래로 길게 늘어져서,
+                  「상차 다음이 하차」라는 짝이 한눈에 안 보이고 폼만 세로로 길어졌다.
+                  🔴 `gridColumn` 을 다시 붙이지 말 것. */}
+              <div>
                 <DateTimePicker
+                  defaultTimeMode="now"
                   label="희망 상차 일시"
                   value={form.requested_pickup_at}
                   onChange={(v) => setForm({ ...form, requested_pickup_at: v })}
-                  minDateTime={nowDateTime}
                   minDateTimeLabel="현재 시각 이후로만 선택 가능합니다"
                 />
               </div>
-              <div style={{ gridColumn: "1 / -1" }}>
+              <div>
                 <DateTimePicker
+                  defaultTimeMode="now"
                   label="희망 하차 일시"
                   value={form.requested_dropoff_at}
                   onChange={(v) => setForm({ ...form, requested_dropoff_at: v })}
@@ -1370,7 +1481,6 @@ function QuotesPageInner() {
                   </div>
                 )}
               </div>
-
               <div className="field">
                 <label>운송시간</label>
                 <select
@@ -1391,6 +1501,60 @@ function QuotesPageInner() {
                   </p>
                 )}
               </div>
+
+              {/* ── 3. 화물 · 차량 ──────────────────────────────────────────── */}
+              <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "baseline", gap: 8, margin: "6px 0 -4px" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, borderRadius: "50%", background: "var(--accent)", color: "#1a1a1a", fontSize: 11.5, fontWeight: 700, flexShrink: 0 }}>
+                  3
+                </span>
+                <strong style={{ fontSize: 13.5 }}>화물 · 차량</strong>
+                <span style={{ fontSize: 11.5, color: "var(--text-muted)" }}></span>
+              </div>
+              <div className="field field-required">
+                <label>톤수 <RequiredMark /></label>
+                <select
+                  value={form.vehicle_type}
+                  onChange={(e) =>
+                    setForm({ ...form, vehicle_type: e.target.value })
+                  }
+                >
+                  {VEHICLE_TYPES_ALL.map((v) => (
+                    <option key={v} value={v}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>차량형태</label>
+                <select
+                  value={form.차량형태}
+                  onChange={(e) => setForm({ ...form, 차량형태: e.target.value })}
+                >
+                  {orderBodyTypes(
+                    surcharges.filter((s) => s.category === "차량형태").map((s) => s.option_name)
+                  ).map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>물품특성</label>
+                <select
+                  value={form.물품특성}
+                  onChange={(e) => setForm({ ...form, 물품특성: e.target.value })}
+                >
+                  {surcharges
+                    .filter((s) => s.category === "물품특성")
+                    .map((o) => (
+                      <option key={o.option_name} value={o.option_name}>
+                        {o.option_name}
+                      </option>
+                    ))}
+                </select>
+              </div>
               <div className="field">
                 <label>왕복/편도</label>
                 <select
@@ -1406,7 +1570,6 @@ function QuotesPageInner() {
                     ))}
                 </select>
               </div>
-
               <div className="field">
                 <label>상차조건</label>
                 <select
@@ -1434,19 +1597,25 @@ function QuotesPageInner() {
                 </select>
               </div>
               <div className="field">
-                <label>차량형태</label>
-                <select
-                  value={form.차량형태}
-                  onChange={(e) => setForm({ ...form, 차량형태: e.target.value })}
-                >
-                  {orderBodyTypes(
-                    surcharges.filter((s) => s.category === "차량형태").map((s) => s.option_name)
-                  ).map((name) => (
-                    <option key={name} value={name}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
+                <label>대기시간(분)</label>
+                <input
+                  type="number"
+                  value={form.waitingMinutes}
+                  onChange={(e) =>
+                    setForm({ ...form, waitingMinutes: e.target.value })
+                  }
+                  placeholder="무료 20분 초과분만 가산"
+                />
+              </div>
+              <div className="field">
+                <label>경유지 수</label>
+                <input
+                  type="number"
+                  value={form.waypointCount}
+                  onChange={(e) =>
+                    setForm({ ...form, waypointCount: e.target.value })
+                  }
+                />
               </div>
 
               <div className="field" style={{ gridColumn: "1 / -1" }}>
@@ -1610,28 +1779,23 @@ function QuotesPageInner() {
                 )}
               </div>
 
-              <div className="field">
-                <label>대기시간(분)</label>
+              <div className="field" style={{ gridColumn: "1 / -1" }}>
+                <label>품목</label>
                 <input
-                  type="number"
-                  value={form.waitingMinutes}
-                  onChange={(e) =>
-                    setForm({ ...form, waitingMinutes: e.target.value })
-                  }
-                  placeholder="무료 20분 초과분만 가산"
-                />
-              </div>
-              <div className="field">
-                <label>경유지 수</label>
-                <input
-                  type="number"
-                  value={form.waypointCount}
-                  onChange={(e) =>
-                    setForm({ ...form, waypointCount: e.target.value })
-                  }
+                  value={form.item}
+                  onChange={(e) => setForm({ ...form, item: e.target.value })}
+                  placeholder="운송할 물품을 입력하세요"
                 />
               </div>
 
+              {/* ── 4. 요청사항 ──────────────────────────────────────────── */}
+              <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "baseline", gap: 8, margin: "6px 0 -4px" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, borderRadius: "50%", background: "var(--accent)", color: "#1a1a1a", fontSize: 11.5, fontWeight: 700, flexShrink: 0 }}>
+                  4
+                </span>
+                <strong style={{ fontSize: 13.5 }}>요청사항</strong>
+                <span style={{ fontSize: 11.5, color: "var(--text-muted)" }}></span>
+              </div>
               <div className="field" style={{ gridColumn: "1 / -1" }}>
                 <label>특이사항</label>
                 <textarea
@@ -1651,6 +1815,13 @@ function QuotesPageInner() {
         </div>
 
         {/* 실시간 계산 결과 */}
+        {/* 🔴 **모바일에서는 끌어 옮길 수 있는 떠 있는 창**이 된다(리뷰 3라운드 —
+            *"모바일에서 「자동계산결과」창은 팝업으로 기본 아래에 배치되는데 끌어다
+            자유롭게 위치조정을 할수 있게"*).
+            🔴 **데스크탑은 한 겹도 안 씌운다** — `DraggablePanel` 이 모바일이 아니면
+               children 을 그대로 돌려준다. 감싸개를 끼우면 아래 `position: sticky` 의
+               기준이 바뀌어 **따라다니기가 조용히 멈춘다.** */}
+        <DraggablePanel title="자동 계산 결과">
         <div className="card" style={{ padding: 20, position: "sticky", top: 20, alignSelf: "start" }}>
           <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
             자동 계산 결과
@@ -1755,6 +1926,7 @@ function QuotesPageInner() {
             </div>
           )}
         </div>
+        </DraggablePanel>
       </div>
 
       <div
@@ -1772,15 +1944,30 @@ function QuotesPageInner() {
       </div>
 
       <div className="card" style={{ overflowX: "auto" }}>
+        {/* 🔴 조회 실패를 빈 목록으로 두지 않는다 — 「새 요청이 없다」로 읽힌다 */}
+        {requestsError && (
+          <div className="error-box" style={{ margin: "0 0 12px" }}>
+            발주요청을 불러오지 못했습니다: {requestsError}
+          </div>
+        )}
+        {needOrderError && (
+          <div className="error-box" style={{ margin: "0 0 12px" }}>
+            「운송오더 생성 필요」 표시를 불러오지 못했습니다: {needOrderError}
+          </div>
+        )}
         {loading ? (
           <div className="empty-state">불러오는 중...</div>
-        ) : quotes.length === 0 ? (
+        ) : quotes.length === 0 && pendingRequests.length === 0 ? (
           <div className="empty-state">
             {period === "all"
               ? "아직 생성된 견적이 없습니다."
               : "선택한 기간에 생성된 견적이 없습니다."}
           </div>
         ) : (
+          <>
+          {/* 🔴 데스크탑 표는 `desktop-only`, 모바일은 카드(원칙 13번 · 리뷰 3라운드).
+              실측 390px 에서 이 표가 **880px** 이라 358px 칸 안에서 옆으로 굴러다녔다. */}
+          <div className="desktop-only">
           <table style={{ minWidth: 880 }}>
             <thead>
               <tr>
@@ -1795,6 +1982,57 @@ function QuotesPageInner() {
               </tr>
             </thead>
             <tbody>
+              {/* 🔴 **맨 위 고정**(사용자 확정) — 날짜순으로 섞지 않는다. 처리해야 할
+                  일이라 오래된 건이 아래로 묻히면 안 되고, 기간 필터·정렬이 견적
+                  행에만 걸려 기존 동작이 그대로 남는다.
+                  🔴 **누르면 기존 프리필 경로를 그대로 탄다**(`?from_request=`) — 그
+                  경로가 저장 시 `status:"승인됨" + quote_id` 를 쓰므로 **같은 요청으로
+                  견적이 두 번 만들어지지 않는다.** 새 경로를 만들지 말 것. */}
+              {pendingRequests.map((r) => (
+                <tr
+                  key={`req-${r.id}`}
+                  onClick={() => router.push(`/admin/quotes?from_request=${r.id}`)}
+                  style={{ cursor: "pointer", background: "#FFFBEB" }}
+                >
+                  <td className="cell-nowrap">
+                    <span
+                      style={{
+                        display: "inline-block",
+                        padding: "2px 7px",
+                        borderRadius: 4,
+                        fontSize: 10.5,
+                        fontWeight: 700,
+                        background: "#FDE68A",
+                        color: "#92400E",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      발주요청
+                    </span>
+                  </td>
+                  <td className="cell-nowrap" style={{ minWidth: 110 }}>
+                    <RecurringContractBadge company={r.companies} small block />
+                    {r.companies?.name || "-"}
+                  </td>
+                  <td>
+                    <div>{r.origin || "-"} →</div>
+                    <div>{r.destination || "-"}</div>
+                  </td>
+                  <td className="cell-nowrap">{r.vehicle_type || "-"}</td>
+                  <td className="cell-nowrap" style={{ color: "var(--text-muted)", fontSize: 12.5 }}>
+                    견적 전
+                  </td>
+                  <td className="cell-nowrap" style={{ color: "var(--text-muted)", fontSize: 12.5 }}>
+                    대기중
+                  </td>
+                  <td className="cell-nowrap" style={{ fontSize: 12.5 }}>
+                    {r.created_at ? new Date(r.created_at).toLocaleDateString("ko-KR") : "-"}
+                  </td>
+                  <td className="cell-nowrap">
+                    <span style={{ fontSize: 12, color: "var(--accent-strong, var(--text))" }}>견적 작성 →</span>
+                  </td>
+                </tr>
+              ))}
               {quotes.map((q) => (
                 <tr
                   key={q.id}
@@ -1830,6 +2068,26 @@ function QuotesPageInner() {
                   </td>
                   <td className="cell-nowrap">
                     <div>{q.status}</div>
+                    {/* 🔴 **`TopNav` 「견적 관리」 배지가 세는 바로 그 건이다**(34차 리뷰
+                        1라운드). 배지는 숫자만 말하고 어느 건인지 볼 화면이 없어서
+                        「알림이 계속 남아 있다」가 됐다 — 규칙은
+                        `lib/unlinkedWonQuotes.ts` 한 곳이고 여기서 다시 적지 말 것. */}
+                    {needOrderIds.has(q.id) && (
+                      <div
+                        style={{
+                          display: "inline-block",
+                          marginTop: 3,
+                          padding: "2px 7px",
+                          borderRadius: 4,
+                          fontSize: 10.5,
+                          fontWeight: 700,
+                          background: "#FDE68A",
+                          color: "#92400E",
+                        }}
+                      >
+                        운송오더 생성 필요
+                      </div>
+                    )}
                     {/* 🔴 화주가 포털에서 직접 승인한 건임을 표시한다. 없으면 담당자가
                         손으로 바꾼 것이다 — 27차까지는 둘이 구분되지 않았다(28차 §5-1). */}
                     {formatCustomerApprovedAt(q.approved_by_customer_at) && (
@@ -1847,6 +2105,27 @@ function QuotesPageInner() {
                     </span>
                   </td>
                   <td className="cell-nowrap" onClick={(e) => e.stopPropagation()}>
+                    {/* 🔴 **기존 프리필 경로(`?from_quote=`)를 그대로 탄다** — 그 경로가
+                        저장 시 `quote_id` 를 채우므로 오더를 만들면 배지가 저절로
+                        사라진다. 새 경로를 만들지 말 것(34차 ⑥ 과 같은 이유).
+                        ⚠️ 이미 오더를 만들었는데 배지가 남아 있다면 그 오더의
+                        `quote_id` 가 빈 것이다 — 그때는 여기서 또 만들지 말고
+                        **오더 상세의 「견적 연결」**로 이을 것. */}
+                    {needOrderIds.has(q.id) && (
+                      <button
+                        className="btn"
+                        style={{
+                          padding: "4px 10px",
+                          borderRadius: 6,
+                          fontSize: 12,
+                          cursor: "pointer",
+                          marginRight: isAdmin ? 6 : 0,
+                        }}
+                        onClick={() => router.push(`/admin/orders?from_quote=${q.id}`)}
+                      >
+                        + 운송오더
+                      </button>
+                    )}
                     {isAdmin && (
                       <button
                         className="btn-danger"
@@ -1866,6 +2145,115 @@ function QuotesPageInner() {
               ))}
             </tbody>
           </table>
+          </div>
+
+          {/* 모바일 카드 — 🔴 **뺀 것은 「삭제」 버튼 하나다.** 목록에서 손가락으로 지우는
+              것은 오조작이 잦아 상세에서만 지운다(관리자 권한 체크는 그대로다).
+              🔴 **대기 중 발주요청은 여기서도 맨 위 고정이다** — 데스크탑과 순서가 달라지면
+              「모바일에서는 안 보인다」가 된다. */}
+          <div className="mobile-only">
+            <AdminMobileList
+              rows={[
+                ...pendingRequests.map((r) => ({
+                  key: `req-${r.id}`,
+                  onClick: () => router.push(`/admin/quotes?from_request=${r.id}`),
+                  title: "발주요청",
+                  tags: (
+                    <>
+                      <RecurringContractBadge company={r.companies} small />
+                      <span
+                        style={{
+                          display: "inline-block",
+                          padding: "2px 7px",
+                          borderRadius: 4,
+                          fontSize: 10.5,
+                          fontWeight: 700,
+                          background: "#FDE68A",
+                          color: "#92400E",
+                        }}
+                      >
+                        견적 작성 필요
+                      </span>
+                    </>
+                  ),
+                  lines: [
+                    { label: "고객", value: r.companies?.name || "-" },
+                    { label: "구간", value: `${r.origin || "-"} → ${r.destination || "-"}` },
+                    { label: "차량", value: r.vehicle_type || "-" },
+                    {
+                      label: "접수일",
+                      value: r.created_at
+                        ? new Date(r.created_at).toLocaleDateString("ko-KR")
+                        : "-",
+                    },
+                  ],
+                })),
+                ...quotes.map((q) => ({
+                  key: q.id,
+                  onClick: () => router.push(`/admin/quotes/${q.id}`),
+                  title: q.quote_no,
+                  tags: (
+                    <>
+                      <RecurringContractBadge company={q.companies} small />
+                      {!q.companies?.name && q.guest_name && (
+                        <span className="badge">개인</span>
+                      )}
+                      {needOrderIds.has(q.id) && (
+                        <span
+                          style={{
+                            display: "inline-block",
+                            padding: "2px 7px",
+                            borderRadius: 4,
+                            fontSize: 10.5,
+                            fontWeight: 700,
+                            background: "#FDE68A",
+                            color: "#92400E",
+                          }}
+                        >
+                          운송오더 생성 필요
+                        </span>
+                      )}
+                    </>
+                  ),
+                  action: needOrderIds.has(q.id) ? (
+                    <button
+                      className="btn"
+                      style={{ padding: "4px 10px", borderRadius: 6, fontSize: 12 }}
+                      onClick={() => router.push(`/admin/orders?from_quote=${q.id}`)}
+                    >
+                      + 운송오더
+                    </button>
+                  ) : undefined,
+                  lines: [
+                    { label: "고객", value: q.companies?.name || q.guest_name || "-" },
+                    { label: "구간", value: `${q.origin || "-"} → ${q.destination || "-"}` },
+                    { label: "톤수", value: q.vehicle_type || "-" },
+                    {
+                      label: "금액",
+                      value: q.final_amount ? (
+                        <>
+                          <span className="num">{won(q.final_amount)}</span>
+                          {wonVatIncluded(q.final_amount) && (
+                            <div style={{ fontSize: 10.5, color: "var(--text-muted)" }}>
+                              (부가세 포함 {wonVatIncluded(q.final_amount)})
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        "-"
+                      ),
+                    },
+                    { label: "상태", value: q.status },
+                    {
+                      label: "일시",
+                      value: new Date(q.created_at).toLocaleDateString("ko-KR"),
+                    },
+                  ],
+                })),
+              ]}
+            />
+          </div>
+          </>
         )}
       </div>
     </main>
