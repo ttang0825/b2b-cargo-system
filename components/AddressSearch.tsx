@@ -2,6 +2,7 @@
 
 import { ReactNode } from "react";
 import { useDaumPostcode } from "@/lib/useDaumPostcode";
+import RequiredMark from "@/components/RequiredMark";
 
 type AddressSearchProps = {
   label: string;
@@ -48,7 +49,10 @@ export default function AddressSearch({
     <div className={className} style={style}>
       <label>
         {label}
-        {required ? " *" : ""}
+        {/* 🔴 별표를 문자로 적지 말 것 — `RequiredMark` 가 유일한 표시처다(34차).
+            색은 `.req-marks` 스코프 안에서만 붙으므로 이 부품을 쓰는 다른 화면의
+            보이는 모습은 그대로다. */}
+        {required ? <RequiredMark /> : null}
       </label>
       <div style={{ display: "flex", gap: 6 }}>
         <input

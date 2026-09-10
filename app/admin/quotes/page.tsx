@@ -32,6 +32,7 @@ import { applyMixedDiscount } from "@/lib/settlementCalc";
 import { orderBodyTypes } from "@/lib/vehicleBodyTypes";
 import { CUSTOMER_APPROVED_LABEL, formatCustomerApprovedAt } from "@/lib/quoteApproval";
 import RecurringContractBadge from "@/components/RecurringContractBadge";
+import RequiredMark from "@/components/RequiredMark";
 import {
   arrivalTypeLabel,
   arrivalTypeHint,
@@ -973,7 +974,11 @@ function QuotesPageInner() {
         }}
       >
         <div className="card" style={{ padding: 20 }}>
-          <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown}>
+          {/* 🔴 `req-marks` 가 필수 표시의 스코프다(34차) — 이 클래스가 붙은 안에서만
+              별표가 빨개지고 입력칸에 왼쪽 선이 붙는다. **다른 화면에 칠하지 말 것**
+              (사용자 확정: 이번 범위는 견적관리 화면뿐). 공용 부품 `AddressSearch` 도
+              같은 별표 부품을 쓰지만, 색은 이 스코프 밖에서 안 붙는다. */}
+          <form className="req-marks" onSubmit={handleSubmit} onKeyDown={handleFormKeyDown}>
             <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
               <button
                 type="button"
@@ -1068,8 +1073,8 @@ function QuotesPageInner() {
               </div>
             ) : (
               <div className="form-grid" style={{ padding: 0, marginBottom: 14 }}>
-                <div className="field">
-                  <label>고객명 *</label>
+                <div className="field field-required">
+                  <label>고객명 <RequiredMark /></label>
                   <input
                     value={form.guest_name}
                     onChange={(e) =>
@@ -1113,8 +1118,8 @@ function QuotesPageInner() {
                     ))}
                 </select>
               </div>
-              <div className="field">
-                <label>톤수 *</label>
+              <div className="field field-required">
+                <label>톤수 <RequiredMark /></label>
                 <select
                   value={form.vehicle_type}
                   onChange={(e) =>
@@ -1285,8 +1290,8 @@ function QuotesPageInner() {
                 </div>
               )}
 
-              <div className="field" style={{ gridColumn: "1 / -1" }}>
-                <label>거리(km) *</label>
+              <div className="field field-required" style={{ gridColumn: "1 / -1" }}>
+                <label>거리(km) <RequiredMark /></label>
                 <div style={{ display: "flex", gap: 6 }}>
                   <input
                     type="number"
