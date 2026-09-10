@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { STATUS_OPTIONS, getStatusColor } from "@/lib/statusColors";
 import { getDispatchStatusColor } from "@/lib/dispatchStatusColors";
+import RecurringContractBadge from "@/components/RecurringContractBadge";
 
 type Customer = {
   id: string;
@@ -23,6 +24,10 @@ type Customer = {
   payment_terms: string | null;
   total_orders_count: number | null;
   outstanding_amount: number | null;
+  // 🔴 정기계약 두 컬럼 — 33차 B장과 같은 근거다. 빼면 배지가 조용히 사라진다
+  //    (`RecurringContractBadge` 는 값이 없으면 아무것도 안 그린다).
+  is_recurring_contract: boolean | null;
+  recurring_contract_ended_on: string | null;
   latestDispatchStatus?: string | null;
 };
 
@@ -76,7 +81,7 @@ export default function CustomersPage() {
     const { data, error } = await supabase
       .from("companies")
       .select(
-        "id,name,industry,sub_industry,metro_region,district,phone,status,grade,next_followup_date,contact_name,contact_mobile,payment_terms,total_orders_count,outstanding_amount"
+        "id,name,industry,sub_industry,metro_region,district,phone,status,grade,next_followup_date,contact_name,contact_mobile,payment_terms,total_orders_count,outstanding_amount,is_recurring_contract,recurring_contract_ended_on"
       )
       .in("status", ACTIVE_CUSTOMER_STATUSES)
       .order("grade", { ascending: true });
@@ -310,6 +315,7 @@ export default function CustomersPage() {
                 >
                   <td className="cell-nowrap" style={{ minWidth: 110 }}>
                     {c.name}
+                    <RecurringContractBadge company={c} small />
                     {portalCompanyIds.has(c.id) && (
                       <span title="화주포털 계정 발급됨" style={{ marginLeft: 5, fontSize: 11 }}>
                         🔑
