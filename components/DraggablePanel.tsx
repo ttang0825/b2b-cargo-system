@@ -16,7 +16,7 @@ import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 // 🔴 **위아래로만 움직인다**(리뷰 4라운드 — *"계산창을 좌우로는 안움직였으면 좋겠다"*).
 //    좌우를 막아 두면 손가락이 비스듬히 미끄러져도 창이 옆으로 새지 않고, 화면 양쪽
 //    가장자리로 반쯤 빠져나가 다시 잡기 어려워지는 일도 아예 없어진다.
-//    🔴 `left` 는 처음 잡은 값에서 **바뀌지 않는다** — 드래그가 `top` 만 갱신한다.
+//    🔴 가로는 **CSS 가 가운데로 잡는다**(리뷰 5라운드) — 드래그도 JS 도 안 건드린다.
 // ⚠️ 위치는 **기억하지 않는다**(state 뿐). 저장하려면 어디에 저장할지부터 정해야 하고,
 //    화면 크기가 달라지면 그 좌표가 화면 밖일 수 있다 — 이번 범위 밖으로 뒀다.
 
@@ -36,7 +36,16 @@ export default function DraggablePanel({
   children: ReactNode;
 }) {
   const [isMobile, setIsMobile] = useState(false);
-  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  /**
+   * 세로 위치만 들고 있는다.
+   * 🔴 **가로는 JS 가 정하지 않는다**(리뷰 5라운드 — *"약간 왼쪽으로 쏠려 있다.
+   *    가운데 정렬이 되어야 한다"*). `left: 8px` 로 잡고 있었는데 패널 폭에 상한
+   *    (360px)이 있어서 화면이 그보다 넓으면 **왼쪽 8px / 오른쪽 22px** 로 어긋났다.
+   *    이제 CSS 가 `left: 50%` + `translateX(-50%)` 로 가운데를 잡는다 — 화면을 돌리거나
+   *    크기가 바뀌어도 **저절로 다시 가운데**가 된다(JS 로 계산하면 그때 다시 어긋난다).
+   * 🔴 그래서 여기에 `left` 를 되살리지 말 것.
+   */
+  const [top, setTop] = useState<number | null>(null);
   const boxRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ dy: number } | null>(null);
 
@@ -53,13 +62,10 @@ export default function DraggablePanel({
   // 모바일로 들어온 첫 순간에만 기본 자리(화면 아래)를 잡는다.
   // 🔴 사용자가 한 번 옮긴 뒤에는 다시 잡지 않는다(`pos` 가 있으면 건너뛴다).
   useEffect(() => {
-    if (!isMobile || pos) return;
+    if (!isMobile || top !== null) return;
     const h = boxRef.current?.offsetHeight || 180;
-    setPos({
-      left: 8,
-      top: Math.max(8, window.innerHeight - h - 16),
-    });
-  }, [isMobile, pos]);
+    setTop(Math.max(8, window.innerHeight - h - 16));
+  }, [isMobile, top]);
 
   /** 🔴 세로만 잡는다 — 가로는 아예 계산하지 않는다(리뷰 4라운드). */
   const clampTop = useCallback(
@@ -68,17 +74,17 @@ export default function DraggablePanel({
   );
 
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    if (!isMobile || !pos) return;
+    if (!isMobile || top === null) return;
     // 🔴 포인터를 손잡이에 묶어 둔다 — 안 하면 손가락이 손잡이를 벗어나는 순간
     //    move 이벤트가 끊겨 패널이 그 자리에 멈춘다.
     e.currentTarget.setPointerCapture(e.pointerId);
-    dragRef.current = { dy: e.clientY - pos.top };
+    dragRef.current = { dy: e.clientY - top };
   }
   function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
     const d = dragRef.current;
     if (!d) return;
-    // 🔴 `left` 를 그대로 넘긴다 — 좌우로 움직이지 않는 것이 사용자 확정 동작이다.
-    setPos((prev) => (prev ? { left: prev.left, top: clampTop(e.clientY - d.dy) } : prev));
+    // 🔴 세로만 갱신한다 — 가로는 CSS 가 가운데로 잡고 있고 드래그가 건드리지 않는다.
+    setTop(clampTop(e.clientY - d.dy));
   }
   function onPointerUp(e: React.PointerEvent<HTMLDivElement>) {
     dragRef.current = null;
@@ -92,7 +98,8 @@ export default function DraggablePanel({
     <div
       ref={boxRef}
       className="drag-panel"
-      style={pos ? { left: pos.left, top: pos.top } : { left: 8, bottom: 16 }}
+      // 🔴 `left` 를 여기서 주지 말 것 — CSS 의 가운데 정렬을 덮어써 다시 쏠린다.
+      style={top !== null ? { top } : { bottom: 16 }}
     >
       <div
         className="drag-panel-handle"
