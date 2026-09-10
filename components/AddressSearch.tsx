@@ -46,7 +46,9 @@ export default function AddressSearch({
   }
 
   return (
-    <div className={className} style={style}>
+    // 🔴 `field-required` 는 필수 칸 표시용이다(34차) — 스타일은 `.req-marks` 스코프
+    //    안에서만 붙으므로 이 부품을 쓰는 다른 화면의 보이는 모습은 그대로다.
+    <div className={[className, required ? "field-required" : ""].filter(Boolean).join(" ")} style={style}>
       <label>
         {label}
         {/* 🔴 별표를 문자로 적지 말 것 — `RequiredMark` 가 유일한 표시처다(34차).
