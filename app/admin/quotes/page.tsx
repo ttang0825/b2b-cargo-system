@@ -73,6 +73,17 @@ type CompanyLite = {
   status: string;
 };
 
+/** 견적목록 맨 위에 얹는 대기 중 발주요청 한 줄 */
+type PendingRequestRow = {
+  id: string;
+  origin: string | null;
+  destination: string | null;
+  vehicle_type: string | null;
+  item: string | null;
+  created_at: string;
+  companies: { name: string; is_recurring_contract?: boolean | null; recurring_contract_ended_on?: string | null } | null;
+};
+
 type QuoteRow = {
   id: string;
   quote_no: string | null;
@@ -140,6 +151,18 @@ function QuotesPageInner() {
   const [quotes, setQuotes] = useState<QuoteRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  /**
+   * 대기 중인 화주 발주요청 — 견적목록 **맨 위에 고정**해서 보여준다(34차 지적 2번,
+   * 사용자 확정). 날짜순으로 섞지 않는 이유: 처리해야 할 일이라 오래된 건이 아래로
+   * 묻히면 안 되고, 기간 필터·정렬이 **견적 행에만** 걸려 기존 동작이 안 바뀐다.
+   * 🔴 **`error` 를 버리고 빈 배열로 두지 말 것** — 조회가 실패하면 화면이
+   *    「새 요청이 없다」로 보인다. 이 차수에서 가장 위험한 실패 모드다.
+   * 🔴 **기존 「화주요청」 메뉴는 그대로 둔다**(사용자 확정) — 같은 것이 두 곳에
+   *    보이는 것이 의도다. 이번 차수의 변경 범위를 좁히기 위한 것이니 지우지 말 것.
+   */
+  const [pendingRequests, setPendingRequests] = useState<PendingRequestRow[]>([]);
+  const [requestsError, setRequestsError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [period, setPeriod] = useState<DatePreset>("all");
   const [calculatingDistance, setCalculatingDistance] = useState(false);
@@ -253,10 +276,34 @@ function QuotesPageInner() {
     setLoading(false);
   }
 
+  // 🔴 대기 중 발주요청만 가져온다(`status='대기중'`). 승인되면 견적이 되므로 사라진다.
+  //    정렬은 **불러온 뒤 코드에서** 한다 — `.order()` 를 없는 컬럼에 걸면 조용히 400 이다.
+  async function loadPendingRequests() {
+    const { data, error } = await supabase
+      .from("portal_order_requests")
+      .select(
+        "id,origin,destination,vehicle_type,item,created_at,companies(name,is_recurring_contract,recurring_contract_ended_on)"
+      )
+      .eq("status", "대기중");
+    if (error) {
+      // 🔴 삼키지 말 것 — 빈 목록은 「새 요청이 없다」와 구분이 안 된다.
+      setRequestsError(error.message);
+      setPendingRequests([]);
+      return;
+    }
+    setRequestsError(null);
+    setPendingRequests(
+      ((data as any as PendingRequestRow[]) || []).sort((a, b) =>
+        (b.created_at || "").localeCompare(a.created_at || "")
+      )
+    );
+  }
+
   // 최초 진입 시 운임기준 데이터 + 견적 목록 로드
   useEffect(() => {
     loadRateData();
     loadQuotes("all");
+    loadPendingRequests();
   }, []);
 
   // 기간 필터 변경 시 목록만 다시 로드
@@ -665,6 +712,33 @@ function QuotesPageInner() {
     e.preventDefault();
     setError(null);
 
+    // 🔴 **같은 발주요청으로 견적이 두 번 만들어지면 안 된다**(34차).
+    //    화주신청 승인 API 와 같은 패턴이다 — 화면 state 를 믿지 말고 **저장 직전에
+    //    그 행을 다시 읽어** 이미 처리됐으면 거절한다(원칙 44번과 같은 결).
+    //    목록은 `status='대기중'` 만 보여주지만, 탭을 열어둔 채 다른 사람이 먼저
+    //    처리했으면 그 탭의 화면은 낡은 상태다.
+    if (fromRequestId) {
+      const { data: reqNow, error: reqErr } = await supabase
+        .from("portal_order_requests")
+        .select("id,status,quote_id")
+        .eq("id", fromRequestId)
+        .maybeSingle();
+      if (reqErr) {
+        setError(`발주요청 상태를 확인하지 못했습니다: ${reqErr.message}`);
+        return;
+      }
+      if (!reqNow) {
+        setError("발주요청을 찾을 수 없습니다. 목록을 새로고침해주세요.");
+        return;
+      }
+      if (reqNow.quote_id || reqNow.status !== "대기중") {
+        setError(
+          "이 발주요청은 이미 견적으로 전환되었습니다. 목록을 새로고침해주세요."
+        );
+        return;
+      }
+    }
+
     if (customerMode === "company" && !selectedCompany) {
       setError("화주 업체를 검색해서 선택해주세요.");
       return;
@@ -844,6 +918,8 @@ function QuotesPageInner() {
         .from("portal_order_requests")
         .update({ status: "승인됨", quote_id: newQuote.id })
         .eq("id", fromRequestId);
+      // 목록 맨 위의 「발주요청」 행이 바로 사라지도록 다시 조회한다
+      loadPendingRequests();
     }
 
     // 공개 견적문의에서 전환해 넘어온 경우, 문의 상태를 연락완료로 갱신하고 이 견적과 연결
@@ -1804,9 +1880,15 @@ function QuotesPageInner() {
       </div>
 
       <div className="card" style={{ overflowX: "auto" }}>
+        {/* 🔴 조회 실패를 빈 목록으로 두지 않는다 — 「새 요청이 없다」로 읽힌다 */}
+        {requestsError && (
+          <div className="error-box" style={{ margin: "0 0 12px" }}>
+            발주요청을 불러오지 못했습니다: {requestsError}
+          </div>
+        )}
         {loading ? (
           <div className="empty-state">불러오는 중...</div>
-        ) : quotes.length === 0 ? (
+        ) : quotes.length === 0 && pendingRequests.length === 0 ? (
           <div className="empty-state">
             {period === "all"
               ? "아직 생성된 견적이 없습니다."
@@ -1827,6 +1909,57 @@ function QuotesPageInner() {
               </tr>
             </thead>
             <tbody>
+              {/* 🔴 **맨 위 고정**(사용자 확정) — 날짜순으로 섞지 않는다. 처리해야 할
+                  일이라 오래된 건이 아래로 묻히면 안 되고, 기간 필터·정렬이 견적
+                  행에만 걸려 기존 동작이 그대로 남는다.
+                  🔴 **누르면 기존 프리필 경로를 그대로 탄다**(`?from_request=`) — 그
+                  경로가 저장 시 `status:"승인됨" + quote_id` 를 쓰므로 **같은 요청으로
+                  견적이 두 번 만들어지지 않는다.** 새 경로를 만들지 말 것. */}
+              {pendingRequests.map((r) => (
+                <tr
+                  key={`req-${r.id}`}
+                  onClick={() => router.push(`/admin/quotes?from_request=${r.id}`)}
+                  style={{ cursor: "pointer", background: "#FFFBEB" }}
+                >
+                  <td className="cell-nowrap">
+                    <span
+                      style={{
+                        display: "inline-block",
+                        padding: "2px 7px",
+                        borderRadius: 4,
+                        fontSize: 10.5,
+                        fontWeight: 700,
+                        background: "#FDE68A",
+                        color: "#92400E",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      발주요청
+                    </span>
+                  </td>
+                  <td className="cell-nowrap" style={{ minWidth: 110 }}>
+                    <RecurringContractBadge company={r.companies} small block />
+                    {r.companies?.name || "-"}
+                  </td>
+                  <td>
+                    <div>{r.origin || "-"} →</div>
+                    <div>{r.destination || "-"}</div>
+                  </td>
+                  <td className="cell-nowrap">{r.vehicle_type || "-"}</td>
+                  <td className="cell-nowrap" style={{ color: "var(--text-muted)", fontSize: 12.5 }}>
+                    견적 전
+                  </td>
+                  <td className="cell-nowrap" style={{ color: "var(--text-muted)", fontSize: 12.5 }}>
+                    대기중
+                  </td>
+                  <td className="cell-nowrap" style={{ fontSize: 12.5 }}>
+                    {r.created_at ? new Date(r.created_at).toLocaleDateString("ko-KR") : "-"}
+                  </td>
+                  <td className="cell-nowrap">
+                    <span style={{ fontSize: 12, color: "var(--accent-strong, var(--text))" }}>견적 작성 →</span>
+                  </td>
+                </tr>
+              ))}
               {quotes.map((q) => (
                 <tr
                   key={q.id}
