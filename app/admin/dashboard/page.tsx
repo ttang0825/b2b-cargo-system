@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+// 🔴 원칙 31번 — 앱 내부 경로는 반드시 next/link. <a href> 로 바꾸면 하드 리로드가 된다.
+import Link from "next/link";
 import { calcInclusiveAmount } from "@/lib/vat";
 import { CLAIM_TYPES, getClaimTypeLabel } from "@/lib/claims";
 import { DISPATCH_EXTRA_CHARGE_CATEGORIES, getDispatchExtraChargeCategoryLabel } from "@/lib/dispatchExtraCharges";
@@ -46,8 +48,11 @@ type DashboardApiResponse = {
   staffAccounts: { id: string; name: string }[];
   extraChargeAttributionByInvoiceId: Record<string, ExtraChargeStat>;
   extraChargeByCategory: Record<string, ExtraChargeStat>;
-  // 🔴 `null` 은 「0개」가 아니라 「조회 실패」다 — 숫자로 갈음하지 말 것(33차 B장).
-  recurringContractCount: number | null;
+  // 🔴 `null` 은 「0개」가 아니라 「조회 실패」다 — 빈 배열로 갈음하지 말 것(33차 B장).
+  // 🔴 개수는 이 배열의 길이다 — 개수를 따로 받지 말 것(두 값이 조용히 어긋난다).
+  recurringContractCompanies:
+    | { id: string; name: string; endedOn: string | null }[]
+    | null;
   recurringContractError: string | null;
 };
 
@@ -59,6 +64,9 @@ export default function AdminDashboardPage() {
   const [data, setData] = useState<DashboardApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // 정기계약 명단 펼침(33차 B장 리뷰) — 기본은 접힘. 개수만 보고 지나가는 것이
+  // 이 카드의 원래 쓰임이고, 명단은 "누구인지" 궁금할 때만 편다.
+  const [recurringOpen, setRecurringOpen] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -209,6 +217,9 @@ export default function AdminDashboardPage() {
     }));
   }, [data]);
 
+  // 🔴 `null`(조회 실패)과 `[]`(0개)를 구분해서 넘긴다 — 합치면 실패가 0개로 읽힌다.
+  const recurringList = data?.recurringContractCompanies ?? null;
+
   const maxMonthlyRevenue = Math.max(1, ...monthlyRows.map((r) => r.revenue));
   const maxStaffRevenue = Math.max(1, ...staffRows.map((r) => r.revenue));
   const maxCustomerRevenue = Math.max(1, ...customerRows.map((r) => r.revenue));
@@ -247,12 +258,38 @@ export default function AdminDashboardPage() {
               </p>
             </div>
             <div style={{ marginLeft: "auto", textAlign: "right" }}>
-              {data?.recurringContractCount === null || data?.recurringContractCount === undefined ? (
+              {!recurringList ? (
                 <div style={{ fontSize: 13, color: "#e5484d", fontWeight: 700 }}>조회 실패</div>
-              ) : (
+              ) : recurringList.length === 0 ? (
+                // 🔴 0개는 펼칠 것이 없으므로 버튼으로 만들지 않는다(눌러도 아무 일이 없으면
+                //    고장으로 읽힌다).
                 <div className="num" style={{ fontSize: 22, fontWeight: 700 }}>
-                  {data.recurringContractCount}개
+                  0개
                 </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setRecurringOpen((v) => !v)}
+                  aria-expanded={recurringOpen}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    cursor: "pointer",
+                    font: "inherit",
+                    color: "inherit",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  <span className="num" style={{ fontSize: 22, fontWeight: 700 }}>
+                    {recurringList.length}개
+                  </span>
+                  <span style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
+                    {recurringOpen ? "닫기 ▲" : "명단 보기 ▼"}
+                  </span>
+                </button>
               )}
               {data?.recurringContractError && (
                 <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
@@ -261,6 +298,41 @@ export default function AdminDashboardPage() {
               )}
             </div>
           </section>
+
+          {/* 정기계약 화주 명단 (실사용 리뷰 — "클릭시 명단이 나오면 좋겠다")
+              🔴 이름은 `<Link>` 로 화주 상세에 잇는다(원칙 31번) — 명단만 보고 끝나는 게
+                 아니라 거기서 바로 계약 내용을 고칠 수 있어야 쓸모가 있다. */}
+          {recurringOpen && recurringList && recurringList.length > 0 && (
+            <section className="card" style={{ padding: 20, marginBottom: 20 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 10 }}>
+                정기계약 화주 명단 ({recurringList.length}개)
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {recurringList.map((c) => (
+                  <Link
+                    key={c.id}
+                    href={`/admin/companies/${c.id}`}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "baseline",
+                      gap: 6,
+                      padding: "6px 10px",
+                      border: "1px solid var(--border)",
+                      borderRadius: 6,
+                      fontSize: 12.5,
+                      textDecoration: "none",
+                      color: "inherit",
+                    }}
+                  >
+                    <span style={{ fontWeight: 700 }}>{c.name}</span>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                      {c.endedOn ? `~${c.endedOn}` : "기한 없음"}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* A. 전사 월별 매출·마진 추이 */}
           <section className="card" style={{ padding: 24, marginBottom: 20 }}>

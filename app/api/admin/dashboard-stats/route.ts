@@ -105,16 +105,26 @@ export async function GET() {
     //    `isRecurringContractActive()` 한 함수로 센다. 대상이 소수라 값이 싸다.
     admin
       .from("companies")
-      .select("id,is_recurring_contract,recurring_contract_ended_on")
+      .select("id,name,is_recurring_contract,recurring_contract_ended_on")
       .eq("is_recurring_contract", true),
   ]);
 
-  // 🔴 실패를 0으로 내려보내지 말 것 — 화면이 「정기계약이 하나도 없다」로 읽는다.
+  // 🔴 실패를 빈 명단으로 내려보내지 말 것 — 화면이 「정기계약이 하나도 없다」로 읽는다.
   //    ⚠️ 위 6개 조회처럼 400으로 끊지 않는 것은 의도다. 부차 지표 하나 때문에 대시보드
   //    전체가 안 뜨면 손해가 더 크다. 대신 null 로 내려보내고 화면이 「조회 실패」를 쓴다.
-  const recurringContractCount = recurringResult.error
+  // 🔴 **개수를 따로 내려보내지 말 것** — 명단 길이가 곧 개수다. 두 값을 나눠 보내면
+  //    「3개인데 명단은 2줄」처럼 조용히 어긋난다(실사용 리뷰에서 명단 요청이 들어와
+  //    개수만 있던 구조를 명단으로 바꾼 것이다).
+  const recurringContractCompanies = recurringResult.error
     ? null
-    : (recurringResult.data || []).filter((c: any) => isRecurringContractActive(c)).length;
+    : (recurringResult.data || [])
+        .filter((c: any) => isRecurringContractActive(c))
+        .map((c: any) => ({
+          id: c.id as string,
+          name: (c.name || "(이름 없음)") as string,
+          endedOn: (c.recurring_contract_ended_on || null) as string | null,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name, "ko-KR"));
   const recurringContractError = recurringResult.error ? recurringResult.error.message : null;
 
   // 현장 추가비를 오더의 "가장 최근 invoice"에 귀속(로드맵③ 3규칙, lib/dashboardExtraChargeAgg.ts)
@@ -146,7 +156,7 @@ export async function GET() {
     staffAccounts: staffAccounts || [],
     extraChargeAttributionByInvoiceId,
     extraChargeByCategory,
-    recurringContractCount,
+    recurringContractCompanies,
     recurringContractError,
   });
 }
