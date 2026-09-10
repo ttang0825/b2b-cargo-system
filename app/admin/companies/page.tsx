@@ -286,9 +286,128 @@ export default function CompaniesPage() {
         </button>
       </div>
 
+      {/* 🔴 조회 실패 배너는 어느 조건에도 넣지 말 것 — 아래 두 블록 바깥에 있어야
+          폼이 열려 있든 닫혀 있든 오류가 보인다. */}
+      {error && <div className="error-box">오류: {error}</div>}
+
+      {/* 🔴 카드에 padding 을 준다 — 다른 등록 폼(오더·차주)과 같은 어휘다.
+          안 주면 구획 제목이 카드 가장자리에 붙어 입력칸과 좌우 기준선이 어긋난다
+          (`.form-grid` 는 자체 padding 22px 을 갖는데 제목 버튼은 0이라 그랬다).
+          그래서 아래에서 `.form-grid` 의 padding 을 눌러 이중 여백을 없앤다. */}
+      {showForm && (
+        <div className="card" style={{ marginBottom: 24, padding: 20 }}>
+          <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown}>
+            {/*
+              🔴 항목을 여기에 손으로 적지 말 것 — `lib/companyFields.ts` 를 돌린다.
+                 등록 폼과 상세 수정 폼이 **같은 정의**를 읽어야 다시 갈리지 않는다.
+              🔴 접힌 구획도 **마운트를 유지하고 CSS 로만 감춘다**(`display: none`).
+                 조건부 렌더링(`open && <div/>`)으로 되돌리지 말 것 — 펼칠 때마다
+                 AddressSearch·MultiSelectTags 가 다시 마운트되어 **CPU 6배 스로틀에서
+                 「거래 조건」 펼침이 238ms** 였다(실사용 리뷰 1라운드 「버벅거림」의 원인).
+                 `display: none` 은 탭 순서에서도 빠지므로 접근성은 그대로다.
+              🔴 접힌 구획의 값도 그대로 저장된다 — state 는 처음부터 하나다.
+            */}
+            {COMPANY_SECTIONS.map((section) => {
+              // 🔴 `form` 을 넘겨 조건부 항목(출처 설명)을 정의가 걸러 준다.
+              const fields = companyFormFieldsOf(section, form);
+              if (fields.length === 0) return null; // 「실적」은 등록 폼에 없다
+              const open = openSections.includes(section);
+              return (
+                <div key={section} style={{ marginBottom: 14 }}>
+                  <button
+                    type="button"
+                    onClick={() => toggleSection(section)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      width: "100%",
+                      padding: "11px 14px",
+                      background: open ? "transparent" : "var(--bg)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 8,
+                      cursor: "pointer",
+                      font: "inherit",
+                      fontWeight: 700,
+                      fontSize: 13,
+                      color: "var(--text)",
+                      textAlign: "left",
+                    }}
+                    aria-expanded={open}
+                  >
+                    <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                      {open ? "\u25BC" : "\u25B6"}
+                    </span>
+                    {section}
+                    <span
+                      style={{
+                        marginLeft: "auto",
+                        fontSize: 11,
+                        fontWeight: 400,
+                        color: "var(--text-muted)",
+                      }}
+                    >
+                      {open ? `${fields.length}항목` : `상세 정보 더보기 (${fields.length}항목)`}
+                    </span>
+                  </button>
+                  <div
+                    className="form-grid"
+                    style={{
+                      display: open ? "grid" : "none",
+                      padding: "14px 2px 4px",
+                    }}
+                  >
+                    {fields.map((f) => (
+                      <CompanyFieldInput
+                        key={f.key}
+                        field={f}
+                        value={form[f.key]}
+                        detailValue={form[`${f.key}Detail`]}
+                        tonnage={form.recommended_vehicle_tonnage}
+                        bodytype={form.recommended_vehicle_bodytype}
+                        onChange={setField}
+                        onAddressChange={setAddressField}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                marginTop: 20,
+                paddingTop: 16,
+                borderTop: "1px solid var(--border)",
+              }}
+            >
+              <button className="btn" type="submit" disabled={saving}>
+                {saving ? "저장 중..." : "등록"}
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => {
+                  setForm(emptyCompanyForm());
+                  setShowForm(false);
+                }}
+              >
+                취소
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {/* 🔴 등록 폼이 열려 있으면 목록·검색·탭을 통째로 그리지 않는다(아래 목록 주석 참고).
           화주 540건을 페이지네이션 없이 그리는 동안 폼 구획을 토글하면 그 전체가
-          다시 배치되어 화면이 멈춘 것처럼 느껴졌다. */}
+          다시 배치되어 화면이 멈춘 것처럼 느껴졌다.
+          🔴 **위의 `{showForm && …}` 폼 블록을 이 괄호 안으로 옮기지 말 것** — 두 조건이
+             서로 배타적이라 폼이 **영영 렌더링되지 않는다.** 실사용 리뷰 3라운드
+             「신규업체등록을 누르면 아무것도 안뜬다」가 정확히 그 상태였다(내가 이 블록을
+             만들 때 폼까지 감싸버렸다). 순서는 **폼이 먼저, 이 블록이 나중**이다. */}
       {!showForm && (
         <>
       <div
@@ -406,118 +525,6 @@ export default function CompaniesPage() {
         </button>
       </div>
 
-      {error && <div className="error-box">오류: {error}</div>}
-
-      {/* 🔴 카드에 padding 을 준다 — 다른 등록 폼(오더·차주)과 같은 어휘다.
-          안 주면 구획 제목이 카드 가장자리에 붙어 입력칸과 좌우 기준선이 어긋난다
-          (`.form-grid` 는 자체 padding 22px 을 갖는데 제목 버튼은 0이라 그랬다).
-          그래서 아래에서 `.form-grid` 의 padding 을 눌러 이중 여백을 없앤다. */}
-      {showForm && (
-        <div className="card" style={{ marginBottom: 24, padding: 20 }}>
-          <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown}>
-            {/*
-              🔴 항목을 여기에 손으로 적지 말 것 — `lib/companyFields.ts` 를 돌린다.
-                 등록 폼과 상세 수정 폼이 **같은 정의**를 읽어야 다시 갈리지 않는다.
-              🔴 접힌 구획도 **마운트를 유지하고 CSS 로만 감춘다**(`display: none`).
-                 조건부 렌더링(`open && <div/>`)으로 되돌리지 말 것 — 펼칠 때마다
-                 AddressSearch·MultiSelectTags 가 다시 마운트되어 **CPU 6배 스로틀에서
-                 「거래 조건」 펼침이 238ms** 였다(실사용 리뷰 1라운드 「버벅거림」의 원인).
-                 `display: none` 은 탭 순서에서도 빠지므로 접근성은 그대로다.
-              🔴 접힌 구획의 값도 그대로 저장된다 — state 는 처음부터 하나다.
-            */}
-            {COMPANY_SECTIONS.map((section) => {
-              // 🔴 `form` 을 넘겨 조건부 항목(출처 설명)을 정의가 걸러 준다.
-              const fields = companyFormFieldsOf(section, form);
-              if (fields.length === 0) return null; // 「실적」은 등록 폼에 없다
-              const open = openSections.includes(section);
-              return (
-                <div key={section} style={{ marginBottom: 14 }}>
-                  <button
-                    type="button"
-                    onClick={() => toggleSection(section)}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      width: "100%",
-                      padding: "11px 14px",
-                      background: open ? "transparent" : "var(--bg)",
-                      border: "1px solid var(--border)",
-                      borderRadius: 8,
-                      cursor: "pointer",
-                      font: "inherit",
-                      fontWeight: 700,
-                      fontSize: 13,
-                      color: "var(--text)",
-                      textAlign: "left",
-                    }}
-                    aria-expanded={open}
-                  >
-                    <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
-                      {open ? "\u25BC" : "\u25B6"}
-                    </span>
-                    {section}
-                    <span
-                      style={{
-                        marginLeft: "auto",
-                        fontSize: 11,
-                        fontWeight: 400,
-                        color: "var(--text-muted)",
-                      }}
-                    >
-                      {open ? `${fields.length}항목` : `상세 정보 더보기 (${fields.length}항목)`}
-                    </span>
-                  </button>
-                  <div
-                    className="form-grid"
-                    style={{
-                      display: open ? "grid" : "none",
-                      padding: "14px 2px 4px",
-                    }}
-                  >
-                    {fields.map((f) => (
-                      <CompanyFieldInput
-                        key={f.key}
-                        field={f}
-                        value={form[f.key]}
-                        detailValue={form[`${f.key}Detail`]}
-                        tonnage={form.recommended_vehicle_tonnage}
-                        bodytype={form.recommended_vehicle_bodytype}
-                        onChange={setField}
-                        onAddressChange={setAddressField}
-                      />
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-
-            <div
-              style={{
-                display: "flex",
-                gap: 8,
-                marginTop: 20,
-                paddingTop: 16,
-                borderTop: "1px solid var(--border)",
-              }}
-            >
-              <button className="btn" type="submit" disabled={saving}>
-                {saving ? "저장 중..." : "등록"}
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => {
-                  setForm(emptyCompanyForm());
-                  setShowForm(false);
-                }}
-              >
-                취소
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
 
       {/*
         🔴 `contain: layout style` 을 빼지 말 것 — 등록 폼의 구획을 펼치고 닫을 때
