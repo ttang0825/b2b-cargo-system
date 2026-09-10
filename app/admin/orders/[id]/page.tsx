@@ -17,6 +17,11 @@ import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
 import ConflictWarning from "@/components/ConflictWarning";
 import { optimisticUpdate } from "@/lib/optimisticUpdate";
+import {
+  fetchUnlinkedWonQuotes,
+  type UnlinkedWonQuote,
+} from "@/lib/unlinkedWonQuotes";
+import { notifyBadgeRefresh } from "@/lib/notifyBadgeRefresh";
 import { logSettlementFieldChange } from "@/lib/settlementFieldChangeLog";
 import { getSettlementDisplayLabel, getPaymentConditionLabel, mapToLegacySettlementType } from "@/lib/settlementLabels";
 import MoneyInput from "@/components/MoneyInput";
@@ -108,6 +113,24 @@ export default function OrderDetailPage() {
   const [linkedDispatchId, setLinkedDispatchId] = useState<string | null>(null);
   const [settlementModalOpen, setSettlementModalOpen] = useState(false);
   const [settlementSaving, setSettlementSaving] = useState(false);
+  /**
+   * 「견적 연결」 후보 — 이 화주의 **수주인데 운송오더가 없는 견적**이다
+   * (`lib/unlinkedWonQuotes.ts`, `TopNav` 배지와 같은 규칙).
+   *
+   * 🔴 **이 자리가 필요한 이유**: 오더를 `?from_quote=` 를 거치지 않고 직접 등록하면
+   *    `orders.quote_id` 가 비고, 그러면 그 견적이 「오더가 없는 건」으로 남아
+   *    **배지가 영영 안 사라진다**(신고: *"알림 표시 4건이 계속 남아 있다"*).
+   *    실측 2026-09-10 — 오더 6건 중 **3건이 `quote_id` 없음**.
+   *    이 길이 없으면 담당자가 배지를 지우려고 **같은 건의 오더를 또 만들게 된다.**
+   * 🔴 **게스트(비회원) 오더에는 후보를 띄우지 않는다** — 회사가 없으면 어느 견적과
+   *    한 건인지 화면이 판단할 근거가 없다. 그때는 견적 쪽에서 오더를 만들면 된다.
+   */
+  const [linkCandidates, setLinkCandidates] = useState<UnlinkedWonQuote[]>([]);
+  const [linkCandidateError, setLinkCandidateError] = useState<string | null>(null);
+  const [linkingQuoteId, setLinkingQuoteId] = useState("");
+  const [linkSaving, setLinkSaving] = useState(false);
+  /** 🔴 연결 실패는 **페이지 로딩 실패용 `error` 와 분리**한다(원칙 33번). */
+  const [linkError, setLinkError] = useState<string | null>(null);
 
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
@@ -191,7 +214,48 @@ export default function OrderDetailPage() {
       .maybeSingle();
     setLinkedDispatchId(dispatchRow?.id || null);
 
+    // 🔴 **이미 이어져 있으면 후보를 부르지 않는다** — 연결된 오더에 「연결」 UI 가
+    //    남아 있으면 담당자가 다른 견적으로 갈아 끼울 수 있게 되고, 그건 이 화면이
+    //    할 일이 아니다(해제는 아래 「연결 해제」로만).
+    if (!data.quote_id && data.company_id) {
+      const { quotes, error: candErr } = await fetchUnlinkedWonQuotes(data.company_id);
+      setLinkCandidates(quotes);
+      setLinkCandidateError(candErr);
+    } else {
+      setLinkCandidates([]);
+      setLinkCandidateError(null);
+    }
+    setLinkingQuoteId("");
+
     setLoading(false);
+  }
+
+  /**
+   * 이 오더를 견적에 잇거나(quoteId) 끊는다(null).
+   *
+   * 🔴 **낙관적 잠금(`optimisticUpdate`)을 쓰지 않는다** — 여러 필드를 묶어 저장하는
+   *    「정보 수정」 폼이 아니라 한 필드짜리 즉시 저장이다(원칙 28번의 단순 액션 쪽).
+   * 🔴 **대신 끝에서 반드시 `load()` 로 전체를 다시 부른다**(원칙 36번) — `updated_at`
+   *    을 DB 트리거가 갱신하므로, 부분 병합만 하면 곧이어 누르는 「정보 수정」 저장이
+   *    「다른 직원이 방금 수정함」으로 잘못 걸린다.
+   */
+  async function handleQuoteLink(quoteId: string | null) {
+    setLinkSaving(true);
+    setLinkError(null);
+    const { error: linkErr } = await supabase
+      .from("orders")
+      .update({ quote_id: quoteId, updated_by: await getCurrentStaffId() })
+      .eq("id", id);
+    setLinkSaving(false);
+    if (linkErr) {
+      setLinkError(linkErr.message);
+      return;
+    }
+    await load();
+    // 🔴 상단 메뉴 「견적 관리」 배지가 세는 것이 바로 이 연결이다 — 폴링(15초)을
+    //    기다리지 않고 바로 다시 세게 한다(원칙 23번). 이게 없으면 담당자가 연결하고도
+    //    「알림이 그대로다」로 읽는다.
+    notifyBadgeRefresh();
   }
 
   useEffect(() => {
@@ -957,6 +1021,79 @@ export default function OrderDetailPage() {
             </Link>
           )}
         </div>
+
+        {/* ── 견적 연결 (34차 리뷰 1라운드) ───────────────────────────────────
+            🔴 **이 오더를 뒤늦게 견적에 잇는 자리다.** 오더를 견적 상세의
+               「+ 운송오더 생성」을 거치지 않고 직접 등록하면 `quote_id` 가 비고,
+               그러면 그 견적이 상단 메뉴 「견적 관리」 배지에 **영영 남는다**
+               (신고: *"알림 표시 4건이 계속 남아 있다"*).
+            🔴 **이 길이 없으면 담당자가 배지를 지우려고 같은 건의 오더를 또 만든다** —
+               그래서 「또 만들기」가 아니라 「잇기」를 준 것이다. 지우지 말 것.
+            🔴 후보는 **이 화주의 「수주인데 오더 없는 견적」**뿐이다. 규칙은
+               `lib/unlinkedWonQuotes.ts` 한 곳이고 여기서 다시 적지 말 것. */}
+        {linkError && (
+          <div className="error-box" style={{ marginTop: 12 }}>
+            견적 연결에 실패했습니다: {linkError}
+          </div>
+        )}
+        {linkCandidateError && (
+          <div className="error-box" style={{ marginTop: 12 }}>
+            연결할 견적을 불러오지 못했습니다: {linkCandidateError}
+          </div>
+        )}
+        {order.quote_id ? (
+          <div style={{ marginTop: 12 }}>
+            <button
+              className="btn btn-ghost"
+              style={{ fontSize: 12, padding: "5px 10px" }}
+              disabled={linkSaving}
+              onClick={() => {
+                if (
+                  confirm(
+                    "이 오더와 견적의 연결을 끊습니다.\n\n끊으면 그 견적이 상단 메뉴 「견적 관리」 알림에 다시 나타납니다. 계속할까요?"
+                  )
+                )
+                  handleQuoteLink(null);
+              }}
+            >
+              {linkSaving ? "처리 중..." : "견적 연결 해제"}
+            </button>
+          </div>
+        ) : linkCandidates.length > 0 ? (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>
+              견적 연결
+            </div>
+            <div
+              style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 8 }}
+            >
+              이 오더가 아래 견적으로 들어온 건이라면 이어 주세요. 이으면 상단 메뉴
+              「견적 관리」의 알림 숫자가 줄어듭니다.
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <select
+                value={linkingQuoteId}
+                onChange={(e) => setLinkingQuoteId(e.target.value)}
+                style={{ fontSize: 12.5, padding: "6px 10px", minWidth: 260 }}
+              >
+                <option value="">선택하세요</option>
+                {linkCandidates.map((q) => (
+                  <option key={q.id} value={q.id}>
+                    {q.quote_no} · {q.origin || "-"} → {q.destination || "-"}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="btn"
+                style={{ fontSize: 12, padding: "6px 12px" }}
+                disabled={!linkingQuoteId || linkSaving}
+                onClick={() => handleQuoteLink(linkingQuoteId)}
+              >
+                {linkSaving ? "연결 중..." : "연결"}
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div

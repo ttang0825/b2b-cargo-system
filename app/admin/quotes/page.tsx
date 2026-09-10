@@ -32,6 +32,7 @@ import { applyMixedDiscount } from "@/lib/settlementCalc";
 import { orderBodyTypes } from "@/lib/vehicleBodyTypes";
 import { CUSTOMER_APPROVED_LABEL, formatCustomerApprovedAt } from "@/lib/quoteApproval";
 import RecurringContractBadge from "@/components/RecurringContractBadge";
+import { fetchUnlinkedWonQuoteIds } from "@/lib/unlinkedWonQuotes";
 import RequiredMark from "@/components/RequiredMark";
 import {
   arrivalTypeLabel,
@@ -163,6 +164,16 @@ function QuotesPageInner() {
    */
   const [pendingRequests, setPendingRequests] = useState<PendingRequestRow[]>([]);
   const [requestsError, setRequestsError] = useState<string | null>(null);
+  /**
+   * 「수주인데 운송오더가 없는 견적」의 id — `TopNav` 「견적 관리」 배지가 세는 것과
+   * **같은 규칙**이다(`lib/unlinkedWonQuotes.ts`).
+   * 🔴 신고 *"견적관리 부분에 계속해서 알림 표시 4건이 남아 있다"* 의 해소가 이것이다 —
+   *    배지가 숫자만 말하고 **어느 건인지 볼 화면이 없어서** 지울 수가 없었다.
+   * 🔴 조회 실패는 빈 집합으로 두되(표시가 없어질 뿐 목록은 멀쩡하다) `needOrderError`
+   *    로 화면에 남긴다 — 조용히 삼키지 않는다(원칙 55번).
+   */
+  const [needOrderIds, setNeedOrderIds] = useState<Set<string>>(new Set());
+  const [needOrderError, setNeedOrderError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [period, setPeriod] = useState<DatePreset>("all");
   const [calculatingDistance, setCalculatingDistance] = useState(false);
@@ -299,11 +310,18 @@ function QuotesPageInner() {
     );
   }
 
+  async function loadNeedOrder() {
+    const { ids, error } = await fetchUnlinkedWonQuoteIds();
+    setNeedOrderIds(ids);
+    setNeedOrderError(error);
+  }
+
   // 최초 진입 시 운임기준 데이터 + 견적 목록 로드
   useEffect(() => {
     loadRateData();
     loadQuotes("all");
     loadPendingRequests();
+    loadNeedOrder();
   }, []);
 
   // 기간 필터 변경 시 목록만 다시 로드
@@ -1886,6 +1904,11 @@ function QuotesPageInner() {
             발주요청을 불러오지 못했습니다: {requestsError}
           </div>
         )}
+        {needOrderError && (
+          <div className="error-box" style={{ margin: "0 0 12px" }}>
+            「운송오더 생성 필요」 표시를 불러오지 못했습니다: {needOrderError}
+          </div>
+        )}
         {loading ? (
           <div className="empty-state">불러오는 중...</div>
         ) : quotes.length === 0 && pendingRequests.length === 0 ? (
@@ -1995,6 +2018,26 @@ function QuotesPageInner() {
                   </td>
                   <td className="cell-nowrap">
                     <div>{q.status}</div>
+                    {/* 🔴 **`TopNav` 「견적 관리」 배지가 세는 바로 그 건이다**(34차 리뷰
+                        1라운드). 배지는 숫자만 말하고 어느 건인지 볼 화면이 없어서
+                        「알림이 계속 남아 있다」가 됐다 — 규칙은
+                        `lib/unlinkedWonQuotes.ts` 한 곳이고 여기서 다시 적지 말 것. */}
+                    {needOrderIds.has(q.id) && (
+                      <div
+                        style={{
+                          display: "inline-block",
+                          marginTop: 3,
+                          padding: "2px 7px",
+                          borderRadius: 4,
+                          fontSize: 10.5,
+                          fontWeight: 700,
+                          background: "#FDE68A",
+                          color: "#92400E",
+                        }}
+                      >
+                        운송오더 생성 필요
+                      </div>
+                    )}
                     {/* 🔴 화주가 포털에서 직접 승인한 건임을 표시한다. 없으면 담당자가
                         손으로 바꾼 것이다 — 27차까지는 둘이 구분되지 않았다(28차 §5-1). */}
                     {formatCustomerApprovedAt(q.approved_by_customer_at) && (
@@ -2012,6 +2055,27 @@ function QuotesPageInner() {
                     </span>
                   </td>
                   <td className="cell-nowrap" onClick={(e) => e.stopPropagation()}>
+                    {/* 🔴 **기존 프리필 경로(`?from_quote=`)를 그대로 탄다** — 그 경로가
+                        저장 시 `quote_id` 를 채우므로 오더를 만들면 배지가 저절로
+                        사라진다. 새 경로를 만들지 말 것(34차 ⑥ 과 같은 이유).
+                        ⚠️ 이미 오더를 만들었는데 배지가 남아 있다면 그 오더의
+                        `quote_id` 가 빈 것이다 — 그때는 여기서 또 만들지 말고
+                        **오더 상세의 「견적 연결」**로 이을 것. */}
+                    {needOrderIds.has(q.id) && (
+                      <button
+                        className="btn"
+                        style={{
+                          padding: "4px 10px",
+                          borderRadius: 6,
+                          fontSize: 12,
+                          cursor: "pointer",
+                          marginRight: isAdmin ? 6 : 0,
+                        }}
+                        onClick={() => router.push(`/admin/orders?from_quote=${q.id}`)}
+                      >
+                        + 운송오더
+                      </button>
+                    )}
                     {isAdmin && (
                       <button
                         className="btn-danger"
