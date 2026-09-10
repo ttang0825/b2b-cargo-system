@@ -14,6 +14,7 @@ import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRang
 import { getCurrentStaffId } from "@/lib/currentStaff";
 import MoneyInput from "@/components/MoneyInput";
 import MixableBadge from "@/components/MixableBadge";
+import AdminMobileList from "@/components/AdminMobileList";
 import LockedBadge from "@/components/LockedBadge";
 import { getSettlementDisplayLabel, mapToLegacySettlementType } from "@/lib/settlementLabels";
 import { calcInclusiveAmount } from "@/lib/vat";
@@ -706,6 +707,10 @@ function InvoicesPageInner() {
               : "선택한 기간에 등록된 정산 건이 없습니다."}
           </div>
         ) : (
+          <>
+          {/* 🔴 데스크탑 표는 `desktop-only`, 모바일은 카드(원칙 13번 · 리뷰 3라운드).
+              실측 390px 에서 이 표가 **1056px** — 네 화면 중 가장 심했다. */}
+          <div className="desktop-only" style={{ overflowX: "auto" }}>
           <table>
             <thead>
               <tr>
@@ -853,6 +858,91 @@ function InvoicesPageInner() {
               ))}
             </tbody>
           </table>
+          </div>
+
+          {/* 모바일 카드 — 🔴 **뺀 것은 청구·지급 금액 밑에 붙던 잔주석들이다**
+              (「부가세 별도」·「산재보험료 차감」·현장 추가비 건수). 금액 자체는 다 있고
+              그 설명은 상세에 있다. 🔴 **세금계산서·입금·지급 세 상태는 한 줄로 합쳤다** —
+              세 칸이 각각 「발행」/「대기」 한 글자씩이라 표에서만 의미가 있던 배치다.
+              🔴 **선착불 건은 청구·지급 대신 「선착불(차주 직접수금)」과 주선수수료를 보여준다** —
+              데스크탑 표가 `colSpan` 으로 하던 것과 같은 판단이다(수금 주체가 다르다). */}
+          <div className="mobile-only">
+            <AdminMobileList
+              rows={filtered.map((i) => {
+                const isBroker = (i.collection_method || "broker") === "broker";
+                return {
+                  key: i.id,
+                  onClick: () => router.push(`/admin/invoices/${i.id}`),
+                  title: i.orders?.order_no || "-",
+                  tags: (
+                    <>
+                      {i.orders?.loading_type === "mixable" && <MixableBadge />}
+                      {i.locked && <LockedBadge />}
+                      {correctionInvoiceIds.has(i.id) && (
+                        <span className="badge" style={{ fontSize: 11 }}>
+                          현장추가비 정정청구
+                        </span>
+                      )}
+                    </>
+                  ),
+                  action: (
+                    <span
+                      style={{
+                        display: "inline-block",
+                        padding: "3px 10px",
+                        borderRadius: 999,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        background: getInvoiceStatusColor(i.status).bg,
+                        color: getInvoiceStatusColor(i.status).text,
+                      }}
+                    >
+                      {i.status}
+                    </span>
+                  ),
+                  lines: [
+                    { label: "화주", value: i.companies?.name || i.orders?.guest_name || "-" },
+                    { label: "정산월", value: <span className="num">{i.billing_period || "-"}</span> },
+                    isBroker
+                      ? { label: "청구금액", value: <span className="num">{won(i.customer_charge_total)}</span> }
+                      : { label: "수금", value: "선착불 (차주 직접수금)" },
+                    isBroker
+                      ? { label: "지급금액", value: <span className="num">{won(i.driver_payout_total)}</span> }
+                      : { label: "전체 운송료", value: <span className="num">{won(i.total_freight_amount)}</span> },
+                    isBroker
+                      ? { label: "수수료", value: <span className="num">{won(i.commission_total)}</span> }
+                      : {
+                          label: "주선수수료",
+                          value: (
+                            <>
+                              <span className="num">{won(i.brokerage_fee)}</span>
+                              <div style={{ fontSize: 10.5, color: "var(--text-muted)" }}>
+                                {i.brokerage_fee_paid ? "입금완료" : "입금대기"}
+                              </div>
+                            </>
+                          ),
+                        },
+                    {
+                      label: "계산서 · 입금 · 지급",
+                      value: `${i.tax_invoice_issued ? "발행" : "미발행"} · ${
+                        i.payment_received ? "완료" : "대기"
+                      } · ${i.driver_paid ? "완료" : "대기"}`,
+                    },
+                    {
+                      label: "정산방식",
+                      value: (
+                        <SettlementBadgeLabel
+                          collectionMethod={i.collection_method}
+                          billingCycle={i.billing_cycle}
+                        />
+                      ),
+                    },
+                  ],
+                };
+              })}
+            />
+          </div>
+          </>
         )}
       </div>
         </>

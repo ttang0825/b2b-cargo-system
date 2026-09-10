@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { notifyBadgeRefresh } from "@/lib/notifyBadgeRefresh";
+import AdminMobileList from "@/components/AdminMobileList";
 import {
   fetchUnlinkedWonQuotes,
   type UnlinkedWonQuote,
@@ -880,6 +881,11 @@ function OrdersPageInner() {
               : "선택한 기간에 등록된 운송오더가 없습니다."}
           </div>
         ) : (
+          <>
+          {/* 🔴 **데스크탑 표는 `desktop-only`, 모바일은 카드**(원칙 13번 · 리뷰 3라운드).
+              `overflowX: auto` 는 태블릿 폭(761~1000)에서 표가 **페이지를 통째로** 옆으로
+              미는 것을 막는다 — 실측에서 390px 페이지 scrollWidth 가 627 이었다. */}
+          <div className="desktop-only" style={{ overflowX: "auto" }}>
           <table>
             <thead>
               <tr>
@@ -971,6 +977,68 @@ function OrdersPageInner() {
               ))}
             </tbody>
           </table>
+          </div>
+
+          {/* 모바일 카드 — 🔴 **뺀 것은 「등록일」 하나다.** 상차일이 담당자가 실제로
+              보는 날짜이고, 등록일은 상세에서 확인한다. 배차상태 드롭다운은 목록에서
+              바로 바꾸는 일이 잦아 **오른쪽 위에 그대로 뒀다.** */}
+          <div className="mobile-only">
+            <AdminMobileList
+              rows={filtered.map((o) => ({
+                key: o.id,
+                onClick: () => router.push(`/admin/orders/${o.id}`),
+                title: o.order_no,
+                tags: (
+                  <>
+                    <RecurringContractBadge company={o.companies} small />
+                    {o.loading_type === "mixable" && <MixableBadge />}
+                    {!o.companies?.name && o.guest_name && <span className="badge">개인</span>}
+                  </>
+                ),
+                action: (
+                  <select
+                    value={o.status}
+                    onChange={(e) => handleStatusChange(o.id, e.target.value)}
+                    style={{
+                      fontSize: "12px",
+                      padding: "4px 8px",
+                      borderRadius: 999,
+                      border: "none",
+                      fontWeight: 600,
+                      background: getOrderStatusColor(o.status).bg,
+                      color: getOrderStatusColor(o.status).text,
+                    }}
+                  >
+                    {ORDER_STATUS_OPTIONS.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                ),
+                lines: [
+                  { label: "고객", value: o.companies?.name || o.guest_name || "-" },
+                  {
+                    label: "구간",
+                    value: `${shortAddress(o.origin)} → ${shortAddress(o.destination)}`,
+                  },
+                  { label: "차량", value: o.vehicle_type || "-" },
+                  {
+                    label: "상차일",
+                    value: o.requested_pickup_at
+                      ? new Date(o.requested_pickup_at).toLocaleString("ko-KR", {
+                          month: "2-digit",
+                          day: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "-",
+                  },
+                ],
+              }))}
+            />
+          </div>
+          </>
         )}
       </div>
     </main>

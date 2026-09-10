@@ -33,6 +33,8 @@ import { orderBodyTypes } from "@/lib/vehicleBodyTypes";
 import { CUSTOMER_APPROVED_LABEL, formatCustomerApprovedAt } from "@/lib/quoteApproval";
 import RecurringContractBadge from "@/components/RecurringContractBadge";
 import { fetchUnlinkedWonQuoteIds } from "@/lib/unlinkedWonQuotes";
+import AdminMobileList from "@/components/AdminMobileList";
+import DraggablePanel from "@/components/DraggablePanel";
 import RequiredMark from "@/components/RequiredMark";
 import {
   arrivalTypeLabel,
@@ -1038,6 +1040,7 @@ function QuotesPageInner() {
       )}
 
       <div
+        className="quote-form-layout"
         style={{
           display: "grid",
           /* 🔴 계산 패널을 **고정 폭**으로 뺐다(리뷰 2라운드 — *"자동계산결과창은 폭이
@@ -1812,6 +1815,13 @@ function QuotesPageInner() {
         </div>
 
         {/* 실시간 계산 결과 */}
+        {/* 🔴 **모바일에서는 끌어 옮길 수 있는 떠 있는 창**이 된다(리뷰 3라운드 —
+            *"모바일에서 「자동계산결과」창은 팝업으로 기본 아래에 배치되는데 끌어다
+            자유롭게 위치조정을 할수 있게"*).
+            🔴 **데스크탑은 한 겹도 안 씌운다** — `DraggablePanel` 이 모바일이 아니면
+               children 을 그대로 돌려준다. 감싸개를 끼우면 아래 `position: sticky` 의
+               기준이 바뀌어 **따라다니기가 조용히 멈춘다.** */}
+        <DraggablePanel title="자동 계산 결과">
         <div className="card" style={{ padding: 20, position: "sticky", top: 20, alignSelf: "start" }}>
           <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
             자동 계산 결과
@@ -1916,6 +1926,7 @@ function QuotesPageInner() {
             </div>
           )}
         </div>
+        </DraggablePanel>
       </div>
 
       <div
@@ -1953,6 +1964,10 @@ function QuotesPageInner() {
               : "선택한 기간에 생성된 견적이 없습니다."}
           </div>
         ) : (
+          <>
+          {/* 🔴 데스크탑 표는 `desktop-only`, 모바일은 카드(원칙 13번 · 리뷰 3라운드).
+              실측 390px 에서 이 표가 **880px** 이라 358px 칸 안에서 옆으로 굴러다녔다. */}
+          <div className="desktop-only">
           <table style={{ minWidth: 880 }}>
             <thead>
               <tr>
@@ -2130,6 +2145,115 @@ function QuotesPageInner() {
               ))}
             </tbody>
           </table>
+          </div>
+
+          {/* 모바일 카드 — 🔴 **뺀 것은 「삭제」 버튼 하나다.** 목록에서 손가락으로 지우는
+              것은 오조작이 잦아 상세에서만 지운다(관리자 권한 체크는 그대로다).
+              🔴 **대기 중 발주요청은 여기서도 맨 위 고정이다** — 데스크탑과 순서가 달라지면
+              「모바일에서는 안 보인다」가 된다. */}
+          <div className="mobile-only">
+            <AdminMobileList
+              rows={[
+                ...pendingRequests.map((r) => ({
+                  key: `req-${r.id}`,
+                  onClick: () => router.push(`/admin/quotes?from_request=${r.id}`),
+                  title: "발주요청",
+                  tags: (
+                    <>
+                      <RecurringContractBadge company={r.companies} small />
+                      <span
+                        style={{
+                          display: "inline-block",
+                          padding: "2px 7px",
+                          borderRadius: 4,
+                          fontSize: 10.5,
+                          fontWeight: 700,
+                          background: "#FDE68A",
+                          color: "#92400E",
+                        }}
+                      >
+                        견적 작성 필요
+                      </span>
+                    </>
+                  ),
+                  lines: [
+                    { label: "고객", value: r.companies?.name || "-" },
+                    { label: "구간", value: `${r.origin || "-"} → ${r.destination || "-"}` },
+                    { label: "차량", value: r.vehicle_type || "-" },
+                    {
+                      label: "접수일",
+                      value: r.created_at
+                        ? new Date(r.created_at).toLocaleDateString("ko-KR")
+                        : "-",
+                    },
+                  ],
+                })),
+                ...quotes.map((q) => ({
+                  key: q.id,
+                  onClick: () => router.push(`/admin/quotes/${q.id}`),
+                  title: q.quote_no,
+                  tags: (
+                    <>
+                      <RecurringContractBadge company={q.companies} small />
+                      {!q.companies?.name && q.guest_name && (
+                        <span className="badge">개인</span>
+                      )}
+                      {needOrderIds.has(q.id) && (
+                        <span
+                          style={{
+                            display: "inline-block",
+                            padding: "2px 7px",
+                            borderRadius: 4,
+                            fontSize: 10.5,
+                            fontWeight: 700,
+                            background: "#FDE68A",
+                            color: "#92400E",
+                          }}
+                        >
+                          운송오더 생성 필요
+                        </span>
+                      )}
+                    </>
+                  ),
+                  action: needOrderIds.has(q.id) ? (
+                    <button
+                      className="btn"
+                      style={{ padding: "4px 10px", borderRadius: 6, fontSize: 12 }}
+                      onClick={() => router.push(`/admin/orders?from_quote=${q.id}`)}
+                    >
+                      + 운송오더
+                    </button>
+                  ) : undefined,
+                  lines: [
+                    { label: "고객", value: q.companies?.name || q.guest_name || "-" },
+                    { label: "구간", value: `${q.origin || "-"} → ${q.destination || "-"}` },
+                    { label: "톤수", value: q.vehicle_type || "-" },
+                    {
+                      label: "금액",
+                      value: q.final_amount ? (
+                        <>
+                          <span className="num">{won(q.final_amount)}</span>
+                          {wonVatIncluded(q.final_amount) && (
+                            <div style={{ fontSize: 10.5, color: "var(--text-muted)" }}>
+                              (부가세 포함 {wonVatIncluded(q.final_amount)})
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        "-"
+                      ),
+                    },
+                    { label: "상태", value: q.status },
+                    {
+                      label: "일시",
+                      value: new Date(q.created_at).toLocaleDateString("ko-KR"),
+                    },
+                  ],
+                })),
+              ]}
+            />
+          </div>
+          </>
         )}
       </div>
     </main>

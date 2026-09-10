@@ -7092,3 +7092,117 @@ tbody tr:hover {
     gap: 8px;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   내부관리 목록 화면 머리줄 — 모바일 (34차 실사용 리뷰 3라운드)
+
+   실측(390px): 기간 필터 칩이 「오 / 늘」·「이번 / 주」처럼 두 줄로 접히고
+   「+ 신규 정산 등록」도 두 줄이 됐다. `.page-header` 가 `justify-content: space-between`
+   이라 제목과 오른쪽 묶음이 **한 줄에 억지로 같이 서려다** 오른쪽이 짜부라진 것이다.
+
+   🔴 **`.btn` 자체에 `white-space: nowrap` 을 주지 말 것** — 관리자·공개 화면이 전부
+      쓰는 클래스라 긴 문구 버튼이 화면을 뚫는다. 여기서는 `.admin-wide` 안의
+      머리줄 버튼에만 건다.
+   🔴 데스크탑은 한 줄도 안 바뀐다(`@media (max-width: 700px)` 안이다).
+   ───────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 700px) {
+  /* 제목과 도구 묶음을 위아래로 — 한 줄에 같이 세우지 않는다 */
+  .admin-wide .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  /* 도구 묶음(기간 필터 + 등록 버튼)은 줄바꿈해서 늘어놓는다 */
+  .admin-wide .page-header > div:last-child {
+    flex-wrap: wrap;
+  }
+  /* 🔴 칩·버튼 글자가 어절 중간에서 끊기지 않게 — 이것이 「오 / 늘」의 직접 원인이다 */
+  .admin-wide .page-header .btn,
+  .admin-wide .page-header .btn-ghost {
+    white-space: nowrap;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   끌어 옮기는 패널 — 모바일 전용 (34차 실사용 리뷰 3라운드)
+
+   사용자 지시: *"모바일에서 「자동계산결과」창은 팝업으로 기본 아래에 배치되는데
+   끌어다 자유롭게 위치조정을 할수 있게"*
+
+   🔴 **`position: fixed` 라 문서 흐름에서 빠진다** — 그래서 견적 화면의 2열 격자를
+      모바일에서 **1열로 접어야 한다**(아래 `.quote-form-layout` 규칙). 안 접으면
+      340px 짜리 빈 칸이 남아 입력칸이 반쪽이 된다(실측: 그 상태로 라벨이 세로로 쪼개졌다).
+   🔴 **높이 상한 + 안쪽 스크롤**을 둔다 — 계산 항목이 많아지면 패널이 화면을 통째로
+      덮어서 끌 손잡이까지 안 보이게 된다.
+   🔴 **손잡이의 `touch-action: none`** 을 빼지 말 것(브라우저가 스크롤로 가로챈다).
+   🔴 데스크탑에는 이 클래스가 붙지 않는다 — 컴포넌트가 `children` 을 그대로 돌려준다.
+   ───────────────────────────────────────────────────────────────────────────── */
+.drag-panel {
+  position: fixed;
+  z-index: 60;
+  width: calc(100vw - 16px);
+  max-width: 360px;
+  max-height: 46vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+.drag-panel-handle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  cursor: grab;
+  /* 🔴 이 줄이 없으면 손가락으로 끄는 동안 페이지가 대신 스크롤된다 */
+  touch-action: none;
+  user-select: none;
+}
+.drag-panel-handle:active {
+  cursor: grabbing;
+}
+.drag-panel-grip {
+  width: 22px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+.drag-panel-title {
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.drag-panel-hint {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+.drag-panel-body {
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+/* 🔴 떠 있는 패널 안에서는 `sticky` 가 의미 없다(데스크탑 전용 동작이다) */
+.drag-panel-body > .card {
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  position: static !important;
+}
+/* 🔴 제목이 두 번 보이지 않게 — 손잡이에 이미 같은 글이 있다.
+   ⚠️ **데스크탑의 `<h3>` 는 그대로 남는다**(그쪽엔 손잡이가 없다) — 이 규칙은
+      `.drag-panel-body` 안에서만 걸린다. `<h3>` 자체를 지우지 말 것. */
+.drag-panel-body > .card > h3:first-child {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  /* 견적 등록 화면의 「폼 | 계산 패널」 2열을 1열로 — 위 설명 참고 */
+  .admin-wide .quote-form-layout {
+    grid-template-columns: 1fr !important;
+  }
+}

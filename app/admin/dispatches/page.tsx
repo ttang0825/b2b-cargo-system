@@ -19,6 +19,7 @@ import { calcInclusiveAmount } from "@/lib/vat";
 import { fetchDispatchSmsPreview } from "@/lib/notifyDispatchSms";
 import SmsConfirmModal, { SmsPreview } from "@/components/SmsConfirmModal";
 import RecurringContractBadge from "@/components/RecurringContractBadge";
+import AdminMobileList from "@/components/AdminMobileList";
 import PickupDropoffContactFields, {
   EMPTY_PICKUP_DROPOFF_CONTACT,
 } from "@/components/PickupDropoffContactFields";
@@ -780,6 +781,10 @@ function DispatchesPageInner() {
               : "선택한 기간에 등록된 배차가 없습니다."}
           </div>
         ) : (
+          <>
+          {/* 🔴 데스크탑 표는 `desktop-only`, 모바일은 카드(원칙 13번 · 리뷰 3라운드).
+              실측 390px 에서 이 표가 **914px** 이라 페이지가 통째로 옆으로 밀렸다. */}
+          <div className="desktop-only" style={{ overflowX: "auto" }}>
           <table>
             <thead>
               <tr>
@@ -894,6 +899,97 @@ function DispatchesPageInner() {
               })}
             </tbody>
           </table>
+          </div>
+
+          {/* 모바일 카드 — 🔴 **뺀 것은 「마진율」 하나다**(청구·지급·마진이 있으면 눈으로
+              가늠되고, 정확한 값은 상세에 있다). 🔴 **청구·지급·마진은 안 뺐다** —
+              배차 목록에서 담당자가 가장 먼저 보는 숫자다.
+              🟢 이 화면은 관리자 전용이라 차주 지급액이 나가도 된다(화주포털이 아니다). */}
+          <div className="mobile-only">
+            <AdminMobileList
+              rows={filtered.map((d) => {
+                const assignmentText =
+                  d.assignment_type === "external"
+                    ? d.confirmed_network_id
+                      ? `${networkNameById[d.confirmed_network_id] || "외부정보망"} 배차`
+                      : (d.requested_network_ids || []).length > 0
+                      ? `후보: ${(d.requested_network_ids || [])
+                          .map((id) => networkNameById[id] || "?")
+                          .join(", ")}`
+                      : "외부정보망 (미정)"
+                    : d.drivers?.name || "내부차주 (미정)";
+                return {
+                  key: d.id,
+                  onClick: () => router.push(`/admin/dispatches/${d.id}`),
+                  title: d.orders?.order_no || "-",
+                  tags: (
+                    <>
+                      <RecurringContractBadge company={d.orders?.companies} small />
+                      {d.orders?.loading_type === "mixable" && <MixableBadge />}
+                    </>
+                  ),
+                  action:
+                    d.dispatch_status === "접수중" ? (
+                      <button
+                        type="button"
+                        className="badge"
+                        onClick={() => router.push(`/admin/dispatches/${d.id}`)}
+                        style={{
+                          cursor: "pointer",
+                          border: "none",
+                          fontWeight: 600,
+                          background: getDispatchStatusColor("접수중").bg,
+                          color: getDispatchStatusColor("접수중").text,
+                        }}
+                      >
+                        접수중
+                      </button>
+                    ) : (
+                      <select
+                        value={d.dispatch_status}
+                        onChange={(e) =>
+                          handleStatusChange(d.id, d.orders?.order_no || null, e.target.value)
+                        }
+                        style={{
+                          fontSize: "12px",
+                          padding: "4px 8px",
+                          borderRadius: 999,
+                          border: "none",
+                          fontWeight: 600,
+                          background: getDispatchStatusColor(d.dispatch_status).bg,
+                          color: getDispatchStatusColor(d.dispatch_status).text,
+                        }}
+                      >
+                        {/* 🔴 데스크탑 표와 **같은 목록**이어야 한다 — 「접수중」은
+                            상세에서만 확정하므로 여기서 고를 수 없다. */}
+                        {DISPATCH_STATUS_OPTIONS.filter((s) => s !== "접수중").map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                    ),
+                  lines: [
+                    {
+                      label: "고객",
+                      value: d.orders?.companies?.name || d.orders?.guest_name || "-",
+                    },
+                    {
+                      label: "구간",
+                      value: `${shortAddress(d.orders?.origin)} → ${shortAddress(
+                        d.orders?.destination
+                      )}`,
+                    },
+                    { label: "배정", value: assignmentText },
+                    { label: "청구운임", value: <span className="num">{won(d.customer_charge)}</span> },
+                    { label: "지급운임", value: <span className="num">{won(d.driver_payout)}</span> },
+                    { label: "마진", value: <span className="num">{won(d.margin)}</span> },
+                  ],
+                };
+              })}
+            />
+          </div>
+          </>
         )}
       </div>
 
