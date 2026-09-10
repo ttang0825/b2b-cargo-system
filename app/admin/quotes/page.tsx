@@ -1074,45 +1074,14 @@ function QuotesPageInner() {
             )}
 
             <div className="form-grid" style={{ padding: 0 }}>
-              <div className="field" style={{ gridColumn: "1 / -1" }}>
-                <label>품목</label>
-                <input
-                  value={form.item}
-                  onChange={(e) => setForm({ ...form, item: e.target.value })}
-                  placeholder="운송할 물품을 입력하세요"
-                />
+              {/* ── 1. 운송 구간 · 현장 정보 ──────────────────────────────────────────── */}
+              <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "baseline", gap: 8, margin: "6px 0 -4px" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, borderRadius: "50%", background: "var(--accent)", color: "#1a1a1a", fontSize: 11.5, fontWeight: 700, flexShrink: 0 }}>
+                  1
+                </span>
+                <strong style={{ fontSize: 13.5 }}>운송 구간 · 현장 정보</strong>
+                <span style={{ fontSize: 11.5, color: "var(--text-muted)" }}>화주포털 발주요청과 같은 순서입니다</span>
               </div>
-              <div className="field">
-                <label>물품특성</label>
-                <select
-                  value={form.물품특성}
-                  onChange={(e) => setForm({ ...form, 물품특성: e.target.value })}
-                >
-                  {surcharges
-                    .filter((s) => s.category === "물품특성")
-                    .map((o) => (
-                      <option key={o.option_name} value={o.option_name}>
-                        {o.option_name}
-                      </option>
-                    ))}
-                </select>
-              </div>
-              <div className="field field-required">
-                <label>톤수 <RequiredMark /></label>
-                <select
-                  value={form.vehicle_type}
-                  onChange={(e) =>
-                    setForm({ ...form, vehicle_type: e.target.value })
-                  }
-                >
-                  {VEHICLE_TYPES_ALL.map((v) => (
-                    <option key={v} value={v}>
-                      {v}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
               <AddressSearch
                 label="출발지"
                 required
@@ -1210,10 +1179,27 @@ function QuotesPageInner() {
                 )}
               </AddressSearch>
 
-              <PickupDropoffContactFields
-                value={form}
-                onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
-              />
+              {/* 🔴 **열 방향으로 흐르게 감싼다** — 공용 부품이 상차 3칸·하차 3칸을 차례로
+                  내놓는데, 부모 `.form-grid` 가 행 방향 2열이라 그냥 두면
+                  「상차 상호 / 상차 담당자명 / 상차 연락처 / 하차 상호 …」로 **지그재그**가 되어
+                  어느 쪽 담당자인지 눈으로 못 따라간다(포털은 좌우로 갈라 놓는다).
+                  🔴 **공용 부품 자체를 고치지 말 것** — 오더·배차 네 화면이 같이 쓴다.
+                  감싸개만 바꾸면 그쪽은 그대로다. */}
+              <div
+                style={{
+                  gridColumn: "1 / -1",
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gridTemplateRows: "repeat(3, auto)",
+                  gridAutoFlow: "column",
+                  gap: 14,
+                }}
+              >
+                <PickupDropoffContactFields
+                  value={form}
+                  onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
+                />
+              </div>
 
               {customerMode === "company" && selectedCompany && (
                 <div
@@ -1320,6 +1306,14 @@ function QuotesPageInner() {
                 )}
               </div>
 
+              {/* ── 2. 일정 ──────────────────────────────────────────── */}
+              <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "baseline", gap: 8, margin: "6px 0 -4px" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, borderRadius: "50%", background: "var(--accent)", color: "#1a1a1a", fontSize: 11.5, fontWeight: 700, flexShrink: 0 }}>
+                  2
+                </span>
+                <strong style={{ fontSize: 13.5 }}>일정</strong>
+                <span style={{ fontSize: 11.5, color: "var(--text-muted)" }}></span>
+              </div>
               <div style={{ gridColumn: "1 / -1" }}>
                 <DateTimePicker
                   defaultTimeMode="now"
@@ -1355,7 +1349,6 @@ function QuotesPageInner() {
                   </div>
                 )}
               </div>
-
               <div className="field">
                 <label>운송시간</label>
                 <select
@@ -1376,6 +1369,60 @@ function QuotesPageInner() {
                   </p>
                 )}
               </div>
+
+              {/* ── 3. 화물 · 차량 ──────────────────────────────────────────── */}
+              <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "baseline", gap: 8, margin: "6px 0 -4px" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, borderRadius: "50%", background: "var(--accent)", color: "#1a1a1a", fontSize: 11.5, fontWeight: 700, flexShrink: 0 }}>
+                  3
+                </span>
+                <strong style={{ fontSize: 13.5 }}>화물 · 차량</strong>
+                <span style={{ fontSize: 11.5, color: "var(--text-muted)" }}></span>
+              </div>
+              <div className="field field-required">
+                <label>톤수 <RequiredMark /></label>
+                <select
+                  value={form.vehicle_type}
+                  onChange={(e) =>
+                    setForm({ ...form, vehicle_type: e.target.value })
+                  }
+                >
+                  {VEHICLE_TYPES_ALL.map((v) => (
+                    <option key={v} value={v}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>차량형태</label>
+                <select
+                  value={form.차량형태}
+                  onChange={(e) => setForm({ ...form, 차량형태: e.target.value })}
+                >
+                  {orderBodyTypes(
+                    surcharges.filter((s) => s.category === "차량형태").map((s) => s.option_name)
+                  ).map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>물품특성</label>
+                <select
+                  value={form.물품특성}
+                  onChange={(e) => setForm({ ...form, 물품특성: e.target.value })}
+                >
+                  {surcharges
+                    .filter((s) => s.category === "물품특성")
+                    .map((o) => (
+                      <option key={o.option_name} value={o.option_name}>
+                        {o.option_name}
+                      </option>
+                    ))}
+                </select>
+              </div>
               <div className="field">
                 <label>왕복/편도</label>
                 <select
@@ -1391,7 +1438,6 @@ function QuotesPageInner() {
                     ))}
                 </select>
               </div>
-
               <div className="field">
                 <label>상차조건</label>
                 <select
@@ -1419,19 +1465,25 @@ function QuotesPageInner() {
                 </select>
               </div>
               <div className="field">
-                <label>차량형태</label>
-                <select
-                  value={form.차량형태}
-                  onChange={(e) => setForm({ ...form, 차량형태: e.target.value })}
-                >
-                  {orderBodyTypes(
-                    surcharges.filter((s) => s.category === "차량형태").map((s) => s.option_name)
-                  ).map((name) => (
-                    <option key={name} value={name}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
+                <label>대기시간(분)</label>
+                <input
+                  type="number"
+                  value={form.waitingMinutes}
+                  onChange={(e) =>
+                    setForm({ ...form, waitingMinutes: e.target.value })
+                  }
+                  placeholder="무료 20분 초과분만 가산"
+                />
+              </div>
+              <div className="field">
+                <label>경유지 수</label>
+                <input
+                  type="number"
+                  value={form.waypointCount}
+                  onChange={(e) =>
+                    setForm({ ...form, waypointCount: e.target.value })
+                  }
+                />
               </div>
 
               <div className="field" style={{ gridColumn: "1 / -1" }}>
@@ -1595,28 +1647,23 @@ function QuotesPageInner() {
                 )}
               </div>
 
-              <div className="field">
-                <label>대기시간(분)</label>
+              <div className="field" style={{ gridColumn: "1 / -1" }}>
+                <label>품목</label>
                 <input
-                  type="number"
-                  value={form.waitingMinutes}
-                  onChange={(e) =>
-                    setForm({ ...form, waitingMinutes: e.target.value })
-                  }
-                  placeholder="무료 20분 초과분만 가산"
-                />
-              </div>
-              <div className="field">
-                <label>경유지 수</label>
-                <input
-                  type="number"
-                  value={form.waypointCount}
-                  onChange={(e) =>
-                    setForm({ ...form, waypointCount: e.target.value })
-                  }
+                  value={form.item}
+                  onChange={(e) => setForm({ ...form, item: e.target.value })}
+                  placeholder="운송할 물품을 입력하세요"
                 />
               </div>
 
+              {/* ── 4. 요청사항 ──────────────────────────────────────────── */}
+              <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "baseline", gap: 8, margin: "6px 0 -4px" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, borderRadius: "50%", background: "var(--accent)", color: "#1a1a1a", fontSize: 11.5, fontWeight: 700, flexShrink: 0 }}>
+                  4
+                </span>
+                <strong style={{ fontSize: 13.5 }}>요청사항</strong>
+                <span style={{ fontSize: 11.5, color: "var(--text-muted)" }}></span>
+              </div>
               <div className="field" style={{ gridColumn: "1 / -1" }}>
                 <label>특이사항</label>
                 <textarea
