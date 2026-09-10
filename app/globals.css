@@ -6892,3 +6892,95 @@ tbody tr:hover {
   border-left-color: var(--accent);
   background: var(--surface);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   인쇄물 모달 (34차) — 관리자 화면 안에서 견적서를 띄우고 그대로 인쇄한다.
+
+   🔴 **화주포털의 `.pv2-printmodal` 과 쌍둥이다 — 합치지 말 것.** 그쪽 CSS 는
+      `.portal-v2` 스코프 안에 있고, 합치면 관리자 31화면이 그 스코프를 끌고 온다.
+   🔴 **인쇄할 때 모달 밖을 통째로 숨긴다** — 안 숨기면 관리자 화면(상단메뉴·목록)이
+      견적서 앞뒤에 같이 찍힌다. 🔴 **`body > *` 를 숨기고 모달만 되살리는 순서를
+      바꾸지 말 것.**
+   ⚠️ 이 저장소는 인라인 `style` 을 많이 쓴다. 인쇄 규칙이 그걸 이겨야 해서
+      `!important` 가 우회가 아니라 유일한 방법이다.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.print-modal-dim {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 17, 21, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 1200;
+}
+.print-modal {
+  background: var(--surface);
+  border-radius: 14px;
+  width: min(940px, 100%);
+  height: min(90vh, 100%);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+}
+.print-modal-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.print-modal-body {
+  flex: 1;
+  min-height: 0;
+  background: #f1f2f4;
+}
+.print-modal-frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+  background: #fff;
+}
+
+@media print {
+  /* 모달이 열려 있으면 그 안만 남긴다 */
+  body:has(.print-modal-dim) > *:not(.print-modal-dim) {
+    display: none !important;
+  }
+  .print-modal-dim {
+    position: static !important;
+    inset: auto !important;
+    background: none !important;
+    padding: 0 !important;
+    display: block !important;
+  }
+  .print-modal {
+    width: 100% !important;
+    height: auto !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    display: block !important;
+  }
+  /* 🔴 도구 막대는 인쇄물에 나오면 안 된다 */
+  .print-modal-bar {
+    display: none !important;
+  }
+  .print-modal-body {
+    background: none !important;
+  }
+}
+
+@media (max-width: 700px) {
+  .print-modal-dim {
+    padding: 0;
+  }
+  .print-modal {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+  }
+}

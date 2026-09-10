@@ -29,6 +29,7 @@ import ProcessedByFooter from "@/components/ProcessedByFooter";
 import SmsLogPanel from "@/components/SmsLogPanel";
 import SmsConfirmModal, { SmsPreview } from "@/components/SmsConfirmModal";
 import ConflictWarning from "@/components/ConflictWarning";
+import PrintModal from "@/components/PrintModal";
 import CollectionMethodInput, { CollectionMethodValue } from "@/components/CollectionMethodInput";
 import { getSettlementDisplayLabel, getPaymentConditionLabel, mapToLegacySettlementType } from "@/lib/settlementLabels";
 // 🔴 차량형태 선택지는 DB(`rate_surcharges`)가 정본이고 **표시 순서만** 코드가 정한다.
@@ -151,6 +152,7 @@ export default function QuoteDetailPage() {
   const [sendingQuoteSms, setSendingQuoteSms] = useState(false);
   const [quoteSmsSent, setQuoteSmsSent] = useState(false);
   const [excelBusy, setExcelBusy] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
   const [quoteSmsError, setQuoteSmsError] = useState<string | null>(null);
   const [smsPreview, setSmsPreview] = useState<SmsPreview | null>(null);
 
@@ -1261,14 +1263,15 @@ export default function QuoteDetailPage() {
           견적서 출력
         </h3>
         <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginBottom: 14 }}>
-          화주에게 전달할 정식 견적서를 새 탭에서 열어 인쇄하거나 PDF로 저장할 수
-          있습니다. (화주포털을 통한 공유 기능은 추후 추가될 예정입니다.)
+          화주에게 전달할 정식 견적서를 <strong>이 화면 위에 띄워</strong> 인쇄하거나
+          PDF로 저장할 수 있습니다. (화주포털을 통한 공유 기능은 추후 추가될 예정입니다.)
         </p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <button
-            className="btn"
-            onClick={() => window.open(`/admin/quotes/${quote.id}/print`, "_blank")}
-          >
+          {/* 🔴 **새 탭으로 열지 않는다**(34차 지적 3번) — 화면을 떠났다가 탭을 닫고
+              돌아오면 하던 일이 끊긴다. 모달 안 `iframe` 이 **같은 print 라우트**를
+              띄우므로 견적서 내용은 여전히 한 곳에만 있다.
+              🟢 프레임 인쇄가 막히는 브라우저를 위한 「새 탭으로 열기」는 모달 안에 있다. */}
+          <button className="btn" onClick={() => setPrintOpen(true)}>
             견적서 출력 (PDF)
           </button>
           {/* 화주가 "엑셀로 보내달라"고 요청하는 경우가 있어 관리자 쪽에도 같이 둠.
@@ -1305,6 +1308,14 @@ export default function QuoteDetailPage() {
         updatedBy={quote.updated_by}
         updatedAt={quote.updated_at}
       />
+
+      {printOpen && (
+        <PrintModal
+          src={`/admin/quotes/${quote.id}/print`}
+          title={`견적서 ${quote.quote_no || ""}`.trim()}
+          onClose={() => setPrintOpen(false)}
+        />
+      )}
     </main>
   );
 }
