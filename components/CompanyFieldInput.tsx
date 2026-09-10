@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import AddressSearch from "@/components/AddressSearch";
 import MultiSelectTags from "@/components/MultiSelectTags";
 import { formatPhoneNumber, VEHICLE_TYPES_ALL, BODY_TYPES, REGIONS } from "@/lib/constants";
@@ -16,8 +17,18 @@ import type { CompanyField } from "@/lib/companyFields";
 
 type Props = {
   field: CompanyField;
-  /** 화면의 폼 state 전체(보조 키 — 상세주소·톤수·형태 — 를 같이 읽어야 한다) */
-  form: Record<string, any>;
+  /**
+   * 🔴 **폼 state 전체를 넘기지 말 것.** 그 필드가 실제로 쓰는 값만 받는다 —
+   *    `form` 객체를 통째로 넘기면 한 칸만 고쳐도 참조가 바뀌어 `React.memo` 가
+   *    무력해지고 **입력칸 51개가 전부 다시 그려진다.** 실사용 리뷰 1라운드의
+   *    「펼치고 닫을 때 버벅거림」이 그것이었다(CPU 6배에서 218~238ms).
+   */
+  value: any;
+  /** `address` 전용 — 상세주소 칸 */
+  detailValue?: string;
+  /** `vehicle` 전용 — 톤수·형태 두 칸 */
+  tonnage?: string;
+  bodytype?: string;
   onChange: (key: string, value: any) => void;
   /** 주소 검색이 sido/sigungu 를 함께 돌려줄 때 저장할 컬럼 접두어 */
   onAddressChange?: (key: string, addr: string, sido: string, sigungu: string) => void;
@@ -32,15 +43,17 @@ function formatBizRegNo(v: string) {
   return `${d.slice(0, 3)}-${d.slice(3, 5)}-${d.slice(5)}`;
 }
 
-export default function CompanyFieldInput({
+function CompanyFieldInput({
   field,
-  form,
+  value,
+  detailValue,
+  tonnage,
+  bodytype,
   onChange,
   onAddressChange,
   disabled,
 }: Props) {
   const f = field;
-  const value = form[f.key];
 
   // ── 주소 ─────────────────────────────────────────────────────────────────
   // 🔴 원칙 37번 — 주소는 예외 없이 AddressSearch 를 재사용한다. 상세주소는 별도
@@ -50,7 +63,7 @@ export default function CompanyFieldInput({
       <AddressSearch
         label={f.label}
         value={value || ""}
-        detailValue={form[`${f.key}Detail`] || ""}
+        detailValue={detailValue || ""}
         onChange={(addr, sido, sigungu) =>
           onAddressChange
             ? onAddressChange(f.key, addr, sido, sigungu)
@@ -84,7 +97,7 @@ export default function CompanyFieldInput({
         <label>{f.label}</label>
         <div style={{ display: "flex", gap: 6 }}>
           <select
-            value={form.recommended_vehicle_tonnage || VEHICLE_TYPES_ALL[0]}
+            value={tonnage || VEHICLE_TYPES_ALL[0]}
             onChange={(e) => onChange("recommended_vehicle_tonnage", e.target.value)}
             disabled={disabled}
             style={{ flex: 1, minWidth: 0 }}
@@ -96,7 +109,7 @@ export default function CompanyFieldInput({
             ))}
           </select>
           <select
-            value={form.recommended_vehicle_bodytype || BODY_TYPES[0]}
+            value={bodytype || BODY_TYPES[0]}
             onChange={(e) => onChange("recommended_vehicle_bodytype", e.target.value)}
             disabled={disabled}
             style={{ flex: 1, minWidth: 0 }}
@@ -205,6 +218,13 @@ export default function CompanyFieldInput({
     </div>
   );
 }
+
+/**
+ * 🔴 `React.memo` 를 벗기지 말 것 — 구획을 펼치고 닫을 때 값이 안 바뀐 입력칸까지
+ *    전부 다시 그려져 버벅거린다. 이것이 먹으려면 위의 「값만 받는다」와
+ *    화면 쪽의 `useCallback` 이 **한 벌로** 지켜져야 한다(하나만 어겨도 무력해진다).
+ */
+export default memo(CompanyFieldInput);
 
 function FieldNote({ text }: { text: string }) {
   return (

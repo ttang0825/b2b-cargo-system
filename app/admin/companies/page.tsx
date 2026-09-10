@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { STATUS_OPTIONS, getStatusColor } from "@/lib/statusColors";
@@ -103,27 +103,32 @@ export default function CompaniesPage() {
   // 「정기계약만 보기」
   const [recurringOnly, setRecurringOnly] = useState(false);
 
-  function setField(key: string, value: any) {
+  // 🔴 `useCallback` 을 벗기지 말 것 — 참조가 매 렌더 바뀌면 `CompanyFieldInput` 의
+  //    `React.memo` 가 무력해져 입력칸 51개가 전부 다시 그려진다(리뷰 1라운드 「버벅거림」).
+  const setField = useCallback((key: string, value: any) => {
     setForm((prev) => ({ ...prev, [key]: value }));
-  }
+  }, []);
 
   // 주소검색이 돌려주는 sido/sigungu 를 대응 컬럼에 같이 담는다(원칙 37번).
-  function setAddressField(key: string, addr: string, sido: string, sigungu: string) {
-    const prefix = key.replace(/_address$/, "");
-    setForm((prev) => ({
-      ...prev,
-      [key]: addr,
-      [`${key}Detail`]: "",
-      [`${prefix}_sido`]: sido,
-      [`${prefix}_sigungu`]: sigungu,
-    }));
-  }
+  const setAddressField = useCallback(
+    (key: string, addr: string, sido: string, sigungu: string) => {
+      const prefix = key.replace(/_address$/, "");
+      setForm((prev) => ({
+        ...prev,
+        [key]: addr,
+        [`${key}Detail`]: "",
+        [`${prefix}_sido`]: sido,
+        [`${prefix}_sigungu`]: sigungu,
+      }));
+    },
+    []
+  );
 
-  function toggleSection(section: CompanySection) {
+  const toggleSection = useCallback((section: CompanySection) => {
     setOpenSections((prev) =>
       prev.includes(section) ? prev.filter((s) => s !== section) : [...prev, section]
     );
-  }
+  }, []);
 
   async function loadCompanies() {
     setLoading(true);
@@ -398,13 +403,22 @@ export default function CompaniesPage() {
 
       {error && <div className="error-box">오류: {error}</div>}
 
+      {/* 🔴 카드에 padding 을 준다 — 다른 등록 폼(오더·차주)과 같은 어휘다.
+          안 주면 구획 제목이 카드 가장자리에 붙어 입력칸과 좌우 기준선이 어긋난다
+          (`.form-grid` 는 자체 padding 22px 을 갖는데 제목 버튼은 0이라 그랬다).
+          그래서 아래에서 `.form-grid` 의 padding 을 눌러 이중 여백을 없앤다. */}
       {showForm && (
-        <div className="card" style={{ marginBottom: 24 }}>
+        <div className="card" style={{ marginBottom: 24, padding: 20 }}>
           <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown}>
             {/*
               🔴 항목을 여기에 손으로 적지 말 것 — `lib/companyFields.ts` 를 돌린다.
                  등록 폼과 상세 수정 폼이 **같은 정의**를 읽어야 다시 갈리지 않는다.
-              🔴 접힌 구획의 값도 그대로 저장된다 — 접기는 표시일 뿐이고 state 는 하나다.
+              🔴 접힌 구획도 **마운트를 유지하고 CSS 로만 감춘다**(`display: none`).
+                 조건부 렌더링(`open && <div/>`)으로 되돌리지 말 것 — 펼칠 때마다
+                 AddressSearch·MultiSelectTags 가 다시 마운트되어 **CPU 6배 스로틀에서
+                 「거래 조건」 펼침이 238ms** 였다(실사용 리뷰 1라운드 「버벅거림」의 원인).
+                 `display: none` 은 탭 순서에서도 빠지므로 접근성은 그대로다.
+              🔴 접힌 구획의 값도 그대로 저장된다 — state 는 처음부터 하나다.
             */}
             {COMPANY_SECTIONS.map((section) => {
               // 🔴 `form` 을 넘겨 조건부 항목(출처 설명)을 정의가 걸러 준다.
@@ -412,59 +426,76 @@ export default function CompaniesPage() {
               if (fields.length === 0) return null; // 「실적」은 등록 폼에 없다
               const open = openSections.includes(section);
               return (
-                <div key={section} style={{ marginBottom: 18 }}>
+                <div key={section} style={{ marginBottom: 14 }}>
                   <button
                     type="button"
                     onClick={() => toggleSection(section)}
                     style={{
                       display: "flex",
                       alignItems: "center",
-                      gap: 6,
+                      gap: 8,
                       width: "100%",
-                      padding: "8px 0",
-                      background: "none",
-                      border: "none",
-                      borderBottom: "1px solid var(--border)",
+                      padding: "11px 14px",
+                      background: open ? "transparent" : "var(--bg)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 8,
                       cursor: "pointer",
                       font: "inherit",
                       fontWeight: 700,
                       fontSize: 13,
                       color: "var(--text)",
                       textAlign: "left",
-                      marginBottom: open ? 12 : 0,
                     }}
                     aria-expanded={open}
                   >
-                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                      {open ? "▾" : "▸"}
+                    <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                      {open ? "\u25BC" : "\u25B6"}
                     </span>
                     {section}
-                    {!open && (
-                      <span
-                        style={{ fontSize: 11, fontWeight: 400, color: "var(--text-muted)" }}
-                      >
-                        상세 정보 더보기 ({fields.length}항목)
-                      </span>
-                    )}
+                    <span
+                      style={{
+                        marginLeft: "auto",
+                        fontSize: 11,
+                        fontWeight: 400,
+                        color: "var(--text-muted)",
+                      }}
+                    >
+                      {open ? `${fields.length}항목` : `상세 정보 더보기 (${fields.length}항목)`}
+                    </span>
                   </button>
-                  {open && (
-                    <div className="form-grid">
-                      {fields.map((f) => (
-                        <CompanyFieldInput
-                          key={f.key}
-                          field={f}
-                          form={form}
-                          onChange={setField}
-                          onAddressChange={setAddressField}
-                        />
-                      ))}
-                    </div>
-                  )}
+                  <div
+                    className="form-grid"
+                    style={{
+                      display: open ? "grid" : "none",
+                      padding: "14px 2px 4px",
+                    }}
+                  >
+                    {fields.map((f) => (
+                      <CompanyFieldInput
+                        key={f.key}
+                        field={f}
+                        value={form[f.key]}
+                        detailValue={form[`${f.key}Detail`]}
+                        tonnage={form.recommended_vehicle_tonnage}
+                        bodytype={form.recommended_vehicle_bodytype}
+                        onChange={setField}
+                        onAddressChange={setAddressField}
+                      />
+                    ))}
+                  </div>
                 </div>
               );
             })}
 
-            <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                marginTop: 20,
+                paddingTop: 16,
+                borderTop: "1px solid var(--border)",
+              }}
+            >
               <button className="btn" type="submit" disabled={saving}>
                 {saving ? "저장 중..." : "등록"}
               </button>

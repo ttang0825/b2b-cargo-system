@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
@@ -161,20 +161,24 @@ export default function CompanyDetailPage() {
 
   // 주소검색이 함께 준 sido/sigungu 를 대응 컬럼에 같이 담는다(원칙 37번).
   // 🔴 이걸 빼면 광역권·시군구 자동기입이 조용히 비어 배차 판단에 못 쓴다.
-  function setAddress(key: string, addr: string, sido: string, sigungu: string) {
-    const prefix = key.replace(/_address$/, "");
-    setEditForm((prev) => ({
-      ...prev,
-      [key]: addr,
-      [`${key}Detail`]: "",
-      [`${prefix}_sido`]: sido,
-      [`${prefix}_sigungu`]: sigungu,
-    }));
-  }
+  const setAddress = useCallback(
+    (key: string, addr: string, sido: string, sigungu: string) => {
+      const prefix = key.replace(/_address$/, "");
+      setEditForm((prev) => ({
+        ...prev,
+        [key]: addr,
+        [`${key}Detail`]: "",
+        [`${prefix}_sido`]: sido,
+        [`${prefix}_sigungu`]: sigungu,
+      }));
+    },
+    []
+  );
 
-  function set(key: string, value: any) {
+  // 🔴 `useCallback` 을 벗기지 말 것(등록 폼과 같은 이유 — memo 가 무력해진다).
+  const set = useCallback((key: string, value: any) => {
     setEditForm((prev) => ({ ...prev, [key]: value }));
-  }
+  }, []);
 
   async function loadCompany() {
     setLoading(true);
@@ -757,7 +761,10 @@ export default function CompanyDetailPage() {
                     <CompanyFieldInput
                       key={f.key}
                       field={f}
-                      form={editForm}
+                      value={editForm[f.key]}
+                      detailValue={editForm[`${f.key}Detail`]}
+                      tonnage={editForm.recommended_vehicle_tonnage}
+                      bodytype={editForm.recommended_vehicle_bodytype}
                       onChange={set}
                       onAddressChange={setAddress}
                       /* 실적값은 정산이 갱신하므로 손으로 못 바꾸게 한다. */
