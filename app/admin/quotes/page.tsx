@@ -622,15 +622,6 @@ function QuotesPageInner() {
     [mixedDiscountTiers, form.distance_km]
   );
 
-  // 희망 상차일시는 현재 시각 이후로만 선택 가능
-  const nowDateTime = (() => {
-    const d = new Date();
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
-      d.getMinutes()
-    )}`;
-  })();
-
   // 거리 기준 최소 하차일시 (희망 상차일시가 있어야 계산됨)
   const minDropoffDateTime = useMemo(() => {
     if (!form.requested_pickup_at) return undefined;
@@ -698,10 +689,6 @@ function QuotesPageInner() {
       setError(
         "거리 자동계산을 먼저 실행해주세요. 직접 입력한 값을 쓰시려면 거리 입력창 아래 체크박스를 선택해주세요."
       );
-      return;
-    }
-    if (form.requested_pickup_at && new Date(form.requested_pickup_at).getTime() < Date.now() - 60000) {
-      setError("희망 상차일시는 현재 시각 이후로 설정해주세요.");
       return;
     }
     if (form.requested_pickup_at && form.requested_dropoff_at) {
@@ -1335,15 +1322,16 @@ function QuotesPageInner() {
 
               <div style={{ gridColumn: "1 / -1" }}>
                 <DateTimePicker
+                  defaultTimeMode="now"
                   label="희망 상차 일시"
                   value={form.requested_pickup_at}
                   onChange={(v) => setForm({ ...form, requested_pickup_at: v })}
-                  minDateTime={nowDateTime}
                   minDateTimeLabel="현재 시각 이후로만 선택 가능합니다"
                 />
               </div>
               <div style={{ gridColumn: "1 / -1" }}>
                 <DateTimePicker
+                  defaultTimeMode="now"
                   label="희망 하차 일시"
                   value={form.requested_dropoff_at}
                   onChange={(v) => setForm({ ...form, requested_dropoff_at: v })}

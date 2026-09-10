@@ -191,7 +191,6 @@ export default function QuoteDetailPage() {
   });
 
   // 희망 상차일시는 현재 시각 이후로만 선택 가능 (원칙 6번)
-  const nowDateTime = useMemo(() => toLocalDateTimeInput(new Date().toISOString()), []);
 
   // 입력된 거리에 해당하는 표준 혼적 할인율 구간 (없으면 null — 거리 미입력)
   const mixedDiscountTier = useMemo(
@@ -385,13 +384,6 @@ export default function QuoteDetailPage() {
       if (!proceed) return;
     }
 
-    if (
-      editForm.requested_pickup_at &&
-      new Date(editForm.requested_pickup_at).getTime() < Date.now() - 60000
-    ) {
-      setSaveError("희망 상차일시는 현재 시각 이후로 설정해주세요.");
-      return;
-    }
     if (editForm.requested_pickup_at && editForm.requested_dropoff_at) {
       const gapHours = calcMinGapHours(Number(editForm.distance_km) || 0);
       const diffMs =
@@ -860,14 +852,15 @@ export default function QuoteDetailPage() {
             </div>
             <div style={{ gridColumn: "1 / -1" }}>
               <DateTimePicker
+                defaultTimeMode="now"
                 label="희망 상차 일시"
                 value={editForm.requested_pickup_at}
                 onChange={(v) => setEditForm({ ...editForm, requested_pickup_at: v })}
-                minDateTime={nowDateTime}
               />
             </div>
             <div style={{ gridColumn: "1 / -1" }}>
               <DateTimePicker
+                defaultTimeMode="now"
                 label="희망 하차 일시"
                 value={editForm.requested_dropoff_at}
                 onChange={(v) => setEditForm({ ...editForm, requested_dropoff_at: v })}
