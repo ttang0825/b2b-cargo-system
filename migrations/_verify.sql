@@ -425,3 +425,41 @@ select count(*) filter (where quote_id is null) as quote_id_없는_오더,
 \echo '--- ⑬-d 견적 상태 분포 (수주가 몇 건인지) ---'
 select status as 상태, count(*) as 건수
   from quotes group by status order by count(*) desc;
+
+\echo ''
+\echo '=== ⑭ 🔴 다마스·라보 착수 전 실측 (차수 없음: 차급 13종) ========'
+-- 🔴 ⑩ 이 대부분을 덮지만 두 가지가 빠져 있어 더한다.
+--    ① `rate_vehicle_extra_fees` 의 제약조건 — 이 표에도 2행을 INSERT 하는데
+--       ⑩-g 는 `rate_distance_tiers` 와 혼적 설정만 본다. 유니크가 없으면
+--       재실행 시 조용히 중복된다(⑩-g 를 더할 때 이 표를 빠뜨린 자리다).
+--    ② `insurance_rate_settings` 의 컬럼 — 산재보험료가 차급별인지 실측으로
+--       확인한다(코드상으로는 요율 두 개뿐이라 차급 무관이다).
+
+\echo ''
+\echo '--- ⑭-a rate_vehicle_extra_fees 제약조건·인덱스 (🔴 재실행 안전) ---'
+select conname, pg_get_constraintdef(oid) as 정의
+  from pg_constraint where conrelid = 'rate_vehicle_extra_fees'::regclass
+ order by conname;
+select indexname, indexdef from pg_indexes
+ where tablename = 'rate_vehicle_extra_fees' order by indexname;
+
+\echo ''
+\echo '--- ⑭-b rate_vehicle_extra_fees 컬럼 (넣을 값의 모양) ---'
+select string_agg(column_name || ' ' || data_type ||
+                  case when is_nullable='NO' then ' NOT NULL' else '' end,
+                  ', ' order by ordinal_position) as 컬럼
+  from information_schema.columns
+ where table_schema='public' and table_name='rate_vehicle_extra_fees';
+
+\echo ''
+\echo '--- ⑭-c insurance_rate_settings 컬럼 (🔴 차급별인가) ---'
+select string_agg(column_name || ' ' || data_type, ', ' order by ordinal_position) as 컬럼
+  from information_schema.columns
+ where table_schema='public' and table_name='insurance_rate_settings';
+
+\echo ''
+\echo '--- ⑭-d rate_surcharges 컬럼 (🔴 차급별인가) ---'
+select string_agg(column_name || ' ' || data_type, ', ' order by ordinal_position) as 컬럼
+  from information_schema.columns
+ where table_schema='public' and table_name='rate_surcharges';
+\echo ''
