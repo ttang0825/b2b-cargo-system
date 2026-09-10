@@ -46,6 +46,9 @@ type DashboardApiResponse = {
   staffAccounts: { id: string; name: string }[];
   extraChargeAttributionByInvoiceId: Record<string, ExtraChargeStat>;
   extraChargeByCategory: Record<string, ExtraChargeStat>;
+  // 🔴 `null` 은 「0개」가 아니라 「조회 실패」다 — 숫자로 갈음하지 말 것(33차 B장).
+  recurringContractCount: number | null;
+  recurringContractError: string | null;
 };
 
 function won(n: number) {
@@ -228,6 +231,37 @@ export default function AdminDashboardPage() {
         <div className="empty-state">{error}</div>
       ) : (
         <>
+          {/* 정기계약 화주 수 (33차 B장)
+              🔴 최근 12개월 조회기간과 무관하게 **지금 유효한 계약 전체**를 센다 —
+                 이 화면의 다른 지표(매출·마진)와 기간 기준이 다르므로 캡션으로 밝힌다.
+              🔴 종료일이 지난 계약은 빠진다(`isRecurringContractActive`) — 「체크는 켜져
+                 있는데 안 세어진다」는 의도된 동작이다. */}
+          <section
+            className="card"
+            style={{ padding: 20, marginBottom: 20, display: "flex", alignItems: "center", gap: 16 }}
+          >
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>정기계약 화주</div>
+              <p style={{ fontSize: 11.5, color: "var(--text-muted)", margin: "2px 0 0" }}>
+                현재 유효한 계약 기준(종료일이 지난 계약은 제외) · 조회기간과 무관합니다.
+              </p>
+            </div>
+            <div style={{ marginLeft: "auto", textAlign: "right" }}>
+              {data?.recurringContractCount === null || data?.recurringContractCount === undefined ? (
+                <div style={{ fontSize: 13, color: "#e5484d", fontWeight: 700 }}>조회 실패</div>
+              ) : (
+                <div className="num" style={{ fontSize: 22, fontWeight: 700 }}>
+                  {data.recurringContractCount}개
+                </div>
+              )}
+              {data?.recurringContractError && (
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+                  {data.recurringContractError}
+                </div>
+              )}
+            </div>
+          </section>
+
           {/* A. 전사 월별 매출·마진 추이 */}
           <section className="card" style={{ padding: 24, marginBottom: 20 }}>
             <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>전사 월별 매출·마진 추이</div>

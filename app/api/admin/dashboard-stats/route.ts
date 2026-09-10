@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabaseServiceClient";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
 import { attributeActiveExtraCharges } from "@/lib/dashboardExtraChargeAgg";
+import { isRecurringContractActive } from "@/lib/companyFields";
 
 // 로드맵⑥ 운영 대시보드 — 담당자별 영업 성과 같은 민감정보를 포함하므로 관리자만
 // 조회 가능(원칙25와 동일한 이중체크: 화면단은 TopNav 메뉴 숨김+middleware.ts 라우트
@@ -88,14 +89,33 @@ export async function GET() {
     )
   );
 
-  const [{ data: companies }, { data: individualCustomers }] = await Promise.all([
+  const [{ data: companies }, { data: individualCustomers }, recurringResult] = await Promise.all([
     companyIds.length > 0
       ? admin.from("companies").select("id,name").in("id", companyIds)
       : Promise.resolve({ data: [] as { id: string; name: string }[] }),
     individualIds.length > 0
       ? admin.from("individual_customers").select("id,name").in("id", individualIds)
       : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    // 정기계약 화주 수(33차 B장).
+    // 🔴 **바로 위 `companies` 조회를 재사용하지 말 것** — 그쪽은 `.in("id", companyIds)` 라
+    //    **최근 12개월에 거래가 있는 화주만** 담는다. 정기계약을 맺어두고 아직 첫 운송이
+    //    없는 화주가 빠져 실제보다 적게 세어진다.
+    // 🔴 **"활성" 판정을 SQL 로 다시 쓰지 말 것** — 종료일 당일 포함 규칙이 두 벌이 되어
+    //    조용히 갈린다. `is_recurring_contract` 로만 좁혀(부분 인덱스가 그 조건이다)
+    //    `isRecurringContractActive()` 한 함수로 센다. 대상이 소수라 값이 싸다.
+    admin
+      .from("companies")
+      .select("id,is_recurring_contract,recurring_contract_ended_on")
+      .eq("is_recurring_contract", true),
   ]);
+
+  // 🔴 실패를 0으로 내려보내지 말 것 — 화면이 「정기계약이 하나도 없다」로 읽는다.
+  //    ⚠️ 위 6개 조회처럼 400으로 끊지 않는 것은 의도다. 부차 지표 하나 때문에 대시보드
+  //    전체가 안 뜨면 손해가 더 크다. 대신 null 로 내려보내고 화면이 「조회 실패」를 쓴다.
+  const recurringContractCount = recurringResult.error
+    ? null
+    : (recurringResult.data || []).filter((c: any) => isRecurringContractActive(c)).length;
+  const recurringContractError = recurringResult.error ? recurringResult.error.message : null;
 
   // 현장 추가비를 오더의 "가장 최근 invoice"에 귀속(로드맵③ 3규칙, lib/dashboardExtraChargeAgg.ts)
   const extraChargeAttributionByInvoiceId = attributeActiveExtraCharges(
@@ -126,6 +146,8 @@ export async function GET() {
     staffAccounts: staffAccounts || [],
     extraChargeAttributionByInvoiceId,
     extraChargeByCategory,
+    recurringContractCount,
+    recurringContractError,
   });
 }
 
