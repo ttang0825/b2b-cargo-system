@@ -1805,8 +1805,8 @@ function QuotesPageInner() {
                     <span className="num">{q.quote_no}</span>
                   </td>
                   <td className="cell-nowrap" style={{ minWidth: 110 }}>
+                    <RecurringContractBadge company={q.companies} small block />
                     {q.companies?.name || q.guest_name || "-"}
-                    <RecurringContractBadge company={q.companies} small />
                     {!q.companies?.name && q.guest_name && (
                       <span className="badge" style={{ marginLeft: 6 }}>
                         개인

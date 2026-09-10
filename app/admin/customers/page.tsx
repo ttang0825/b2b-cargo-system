@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { STATUS_OPTIONS, getStatusColor } from "@/lib/statusColors";
 import { getDispatchStatusColor } from "@/lib/dispatchStatusColors";
 import RecurringContractBadge from "@/components/RecurringContractBadge";
+import { isRecurringContractActive } from "@/lib/companyFields";
 
 type Customer = {
   id: string;
@@ -72,6 +73,10 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  // 🔴 판정은 배지와 **같은 함수**(`isRecurringContractActive`)를 쓴다 —
+  //    따로 적으면 「배지는 없는데 필터에는 걸리는」 건이 생긴다.
+  //    종료일이 지난 계약은 여기서도 걸러진다.
+  const [recurringOnly, setRecurringOnly] = useState(false);
   const [sortKey, setSortKey] = useState("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
@@ -144,6 +149,7 @@ export default function CustomersPage() {
   }
 
   const filtered = customers
+    .filter((c) => (recurringOnly ? isRecurringContractActive(c) : true))
     .filter((c) => {
       if (!search.trim()) return true;
       const q = search.trim().toLowerCase();
@@ -220,6 +226,32 @@ export default function CustomersPage() {
           alignItems: "center",
         }}
       >
+        {/* 🔴 화주 관리(`/admin/companies`) 목록의 같은 칩과 **모양·자리·문구를 맞춘다** —
+            두 화면이 나란히 쓰여서 한쪽만 다르면 다른 기능으로 읽힌다. */}
+        <label
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            fontSize: 12.5,
+            cursor: "pointer",
+            padding: "8px 10px",
+            border: `1px solid ${recurringOnly ? "#4338CA" : "var(--border)"}`,
+            borderRadius: "var(--radius)",
+            background: recurringOnly ? "#E0E7FF" : "transparent",
+            color: recurringOnly ? "#4338CA" : "var(--text)",
+            fontWeight: recurringOnly ? 700 : 400,
+            whiteSpace: "nowrap",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={recurringOnly}
+            onChange={(e) => setRecurringOnly(e.target.checked)}
+            style={{ width: 15, height: 15, margin: 0 }}
+          />
+          정기계약만 보기
+        </label>
         <div style={{ position: "relative", flex: 1, minWidth: 220, maxWidth: 360 }}>
           <input
             value={search}
@@ -314,8 +346,8 @@ export default function CustomersPage() {
                   style={{ cursor: "pointer" }}
                 >
                   <td className="cell-nowrap" style={{ minWidth: 110 }}>
+                    <RecurringContractBadge company={c} small block />
                     {c.name}
-                    <RecurringContractBadge company={c} small />
                     {portalCompanyIds.has(c.id) && (
                       <span title="화주포털 계정 발급됨" style={{ marginLeft: 5, fontSize: 11 }}>
                         🔑

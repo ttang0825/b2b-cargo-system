@@ -834,8 +834,8 @@ function OrdersPageInner() {
                     )}
                   </td>
                   <td style={{ whiteSpace: "nowrap" }}>
+                    <RecurringContractBadge company={o.companies} small block />
                     {o.companies?.name || o.guest_name || "-"}
-                    <RecurringContractBadge company={o.companies} small />
                     {!o.companies?.name && o.guest_name && (
                       <span className="badge" style={{ marginLeft: 6 }}>
                         개인
