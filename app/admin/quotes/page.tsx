@@ -1127,7 +1127,7 @@ function QuotesPageInner() {
                 )}
               </div>
             ) : (
-              <div className="form-grid" style={{ padding: 0, marginBottom: 14 }}>
+              <div className="form-grid quote-form-grid" style={{ padding: 0, marginBottom: 14 }}>
                 <div className="field field-required">
                   <label>고객명 <RequiredMark /></label>
                   <input
@@ -1149,7 +1149,7 @@ function QuotesPageInner() {
               </div>
             )}
 
-            <div className="form-grid" style={{ padding: 0 }}>
+            <div className="form-grid quote-form-grid" style={{ padding: 0 }}>
               {/* ── 1. 운송 구간 · 현장 정보 ──────────────────────────────────────────── */}
               <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "baseline", gap: 8, margin: "6px 0 -4px" }}>
                 <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, borderRadius: "50%", background: "var(--accent)", color: "#1a1a1a", fontSize: 11.5, fontWeight: 700, flexShrink: 0 }}>

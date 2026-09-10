@@ -6878,18 +6878,21 @@ tbody tr:hover {
   font-weight: 700;
 }
 
-/* 필수 입력칸 — 왼쪽 선 + 아주 옅은 바탕.
-   🔴 테두리 전체를 빨갛게 칠하지 않는다: 아직 안 채운 칸이 「오류」로 보인다. */
+/* 필수 입력칸 — 아주 옅은 바탕만.
+   🔴 테두리 전체를 빨갛게 칠하지 않는다: 아직 안 채운 칸이 「오류」로 보인다.
+   🔴 **왼쪽의 빨간 선(`border-left: 3px solid #f0a4a0`)은 실사용 리뷰 1라운드에
+      사용자 지시로 뺐다**(*"필수 항목칸의 빨간색 진한 라인은 없어도 된다"*).
+      되살리지 말 것 — 별표(기호)와 옅은 바탕(색) 두 겹이 남아 있어 색각 이상자
+      대응은 그대로 성립한다. 선은 세 번째 겹이라 없어도 정보가 줄지 않는다.
+   🔴 그래서 `:focus` 규칙도 바탕만 되돌린다 — 선이 없으니 되돌릴 선색이 없다. */
 .req-marks .field-required input,
 .req-marks .field-required select,
 .req-marks .field-required textarea {
-  border-left: 3px solid #f0a4a0;
   background: #fffbfa;
 }
 .req-marks .field-required input:focus,
 .req-marks .field-required select:focus,
 .req-marks .field-required textarea:focus {
-  border-left-color: var(--accent);
   background: var(--surface);
 }
 
@@ -6982,5 +6985,59 @@ tbody tr:hover {
     width: 100%;
     height: 100%;
     border-radius: 0;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   내부관리 화면 폭 (34차 실사용 리뷰 1라운드)
+
+   사용자 지적: *"내부시스템 전체페이지 잡히는 면적이 좀 좁은감이 있다. 그러다보니
+   견적관리 적는칸이 가로로 좁고 세로로 긴 형태가 나온다. … 화주포털과 비교해도
+   좁은것 같다."* 실측이 그대로였다 — 관리자는 `.container` 1100px 인데 화주포털 셸은
+   `--pv2-shell-max` 1600px 이라 관리자가 500px 좁았다.
+
+   🔴 **`.container` 자체를 고치지 않는다 — 그 클래스는 관리자만의 것이 아니다.**
+      쓰는 곳이 39개 파일인데 그중 7개가 `app/customer/**`(화주포털)이고
+      `SiteFooter`·`PublicPageHeader`·`LegalDoc` 을 통해 **공개 화면 6개**도 쓴다.
+      34차 완료조건 1·2 가 화주포털·공개 화면 **diff 0줄**을 요구하므로, 폭을 넓히는
+      일도 관리자 안에서만 일어나야 한다. 그래서 `app/admin/layout.tsx` 가 자식을
+      `.admin-wide` 로 감싸고 여기서 그 안의 `.container` 만 넓힌다.
+   🔴 **상단바는 그 래퍼 밖이다**(`TopNav` 는 루트 레이아웃에 있다) — 그래서 따로
+      넓힌다. `.top-nav-inner` 는 `TopNav` 한 곳만 쓰고 그 컴포넌트는 `/customer` 와
+      공개 경로에서 `null` 을 돌려주므로(원칙 11번) **관리자 전용 클래스가 맞다.**
+   🔴 **선언 순서가 아니라 특성도로 이긴다**(원칙 58번) — `.admin-wide .container`
+      (0,0,2,0)와 `.top-nav .top-nav-inner`(0,0,2,0)가 각각 원본(0,0,1,0)보다 높다.
+      나중에 누가 이 파일을 정렬해도 조용히 되돌아가지 않는다.
+   🟢 **`globals.css` 순수 추가 원칙이 지켜진다** — 기존 두 규칙의 줄을 고치지 않았다.
+   ⚠️ **인쇄물은 영향 없다** — `.print-sheet` 가 자기 `max-width: 780px` + `margin: auto`
+      를 갖고 있어 넓어진 칸 안에서 가운데로 놓일 뿐이고, `@media print` 에서는
+      `max-width: 100%` 로 다시 덮인다.
+   ───────────────────────────────────────────────────────────────────────────── */
+.admin-wide .container {
+  max-width: 1560px;
+}
+.top-nav .top-nav-inner {
+  max-width: 1560px;
+}
+
+/* 넓어진 폭이 **열 수**가 아니라 **칸 폭**으로 가게 한다.
+   🔴 `.form-grid` 는 `auto-fill minmax(200px, 1fr)` 이라, 폭만 넓히면 칸이 넓어지는 게
+      아니라 **열이 늘어난다**(실측: 견적 폼이 2열 282px → 4열 203px). 그러면 사용자가
+      지적한 「가로로 좁고」가 오히려 더 나빠진다. 그래서 최소 폭을 260px 로 올려
+      열이 덜 늘고 칸이 넓어지게 한다(관리자 폼 4열 214px → 5열 279px).
+   🔴 **견적 폼만 2열로 못박는다** — 출발지·도착지가 좌우 한 쌍이어야 하고
+      상·하차 담당자 블록도 2열 기준으로 짜여 있다(34차). 3열이 되면 그 짝이 깨진다.
+      2열이라 넓어진 폭이 전부 칸 폭으로 간다(실측 282px → 420px).
+   🔴 **`.admin-wide .form-grid`(0,0,2,0)가 `.quote-form-grid`(0,0,1,0)를 이기므로**
+      견적 폼 규칙은 `.admin-wide .form-grid.quote-form-grid`(0,0,3,0)로 올려야 한다 —
+      순서로 맞추지 말 것(원칙 58번).
+   🔴 **`@media (min-width: 701px)` 안에 둔다** — 밖에 두면 특성도가 더 높아
+      모바일 1열 규칙(`.form-grid`, 0,0,1,0)을 덮어써 휴대폰에서 2열이 된다. */
+@media (min-width: 701px) {
+  .admin-wide .form-grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+  .admin-wide .form-grid.quote-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
