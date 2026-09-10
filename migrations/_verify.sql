@@ -381,3 +381,47 @@ select count(*) as 정기계약_컬럼수
  where table_schema = 'public' and table_name = 'companies'
    and column_name like 'recurring_contract%' or (table_name = 'companies'
    and table_schema = 'public' and column_name = 'is_recurring_contract');
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- ⑬ 견적 관리 배지가 안 사라진다 (34차 리뷰 1라운드)
+--
+--    신고: *"견적관리 부분에 계속해서 알림 표시 4건이 남아 있다."*
+--    그 배지는 `TopNav` 가 **「status='수주' 인데 orders.quote_id 로 이어진 오더가
+--    없는 견적」**을 센다(27차 리뷰). 그러니 남는 원인은 둘 중 하나다 —
+--      (가) 정말 오더를 안 만든 건이다      → 배지가 맞다. 할 일이 남은 것
+--      (나) 오더는 만들었는데 `quote_id` 가 비었다 → 배지가 영영 안 사라진다
+--           (오더 화면에서 `?from_quote=` 를 거치지 않고 직접 등록하면 그렇게 된다)
+--    이 항목은 그 둘을 갈라 보기 위한 **읽기 전용** 진단이다.
+--
+--    🔴 화주명·연락처는 한 글자도 찍지 않는다(32차 규칙 — 이 저장소와 Actions 로그는
+--       공개다). 견적번호·날짜·건수만 본다.
+-- ─────────────────────────────────────────────────────────────────────────────
+\echo ''
+\echo '=== ⑬ 견적 관리 배지 진단 (34차) ==========================='
+
+\echo '--- ⑬-a 배지가 세는 수 (TopNav 와 같은 식) ---'
+select count(*) as 배지_건수
+  from quotes q
+ where q.status = '수주'
+   and not exists (select 1 from orders o where o.quote_id = q.id);
+
+\echo '--- ⑬-b 그 건들 (견적번호·등록일만) ---'
+select q.quote_no as 견적번호,
+       q.created_at::date as 등록일,
+       q.updated_at::date as 최종수정일,
+       (q.approved_by_customer_at is not null) as 화주가_승인함,
+       (q.company_id is not null)           as 회원건
+  from quotes q
+ where q.status = '수주'
+   and not exists (select 1 from orders o where o.quote_id = q.id)
+ order by q.created_at;
+
+\echo '--- ⑬-c 🔴 (나) 가설 검증: quote_id 가 빈 오더가 몇 건인가 ---'
+select count(*) filter (where quote_id is null) as quote_id_없는_오더,
+       count(*) filter (where quote_id is not null) as quote_id_있는_오더,
+       count(*) as 오더_전체
+  from orders;
+
+\echo '--- ⑬-d 견적 상태 분포 (수주가 몇 건인지) ---'
+select status as 상태, count(*) as 건수
+  from quotes group by status order by count(*) desc;
