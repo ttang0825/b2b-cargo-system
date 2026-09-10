@@ -690,14 +690,6 @@ function QuotesPageInner() {
       setError("도착지를 입력해주세요.");
       return;
     }
-    if (!form.origin_contact_phone.trim()) {
-      setError("상차지 담당자 연락처를 입력해주세요.");
-      return;
-    }
-    if (!form.destination_contact_phone.trim()) {
-      setError("하차지 담당자 연락처를 입력해주세요.");
-      return;
-    }
     if (!form.distance_km || Number(form.distance_km) <= 0) {
       setError("거리(km)를 입력해주세요.");
       return;

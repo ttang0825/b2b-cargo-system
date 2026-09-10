@@ -287,14 +287,6 @@ function DispatchesPageInner() {
       setError("배차할 운송오더를 선택해주세요.");
       return;
     }
-    if (!contactFields.origin_contact_phone.trim()) {
-      setError("상차지 담당자 연락처를 입력해주세요.");
-      return;
-    }
-    if (!contactFields.destination_contact_phone.trim()) {
-      setError("하차지 담당자 연락처를 입력해주세요.");
-      return;
-    }
 
     setSaving(true);
     const vehicleId = null; // vehicles 테이블은 driver_id로 조회 가능하므로 필요 시 추후 연결

@@ -277,14 +277,6 @@ function OrdersPageInner() {
       setError("출발지와 도착지를 입력해주세요.");
       return;
     }
-    if (!form.origin_contact_phone.trim()) {
-      setError("상차지 담당자 연락처를 입력해주세요.");
-      return;
-    }
-    if (!form.destination_contact_phone.trim()) {
-      setError("하차지 담당자 연락처를 입력해주세요.");
-      return;
-    }
     if (form.requested_pickup_at && form.requested_delivery_at) {
       const diffMs =
         new Date(form.requested_delivery_at).getTime() - new Date(form.requested_pickup_at).getTime();

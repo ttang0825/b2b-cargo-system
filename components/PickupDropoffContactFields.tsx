@@ -1,5 +1,13 @@
 "use client";
 
+// 상·하차지 현장 정보 공용 입력 — 견적/오더/배차 **여섯 화면**이 같이 쓴다.
+//
+// 🔴 **담당자 연락처는 일부러 선택이다**(34차, 사용자 확정 — 여섯 화면 전부).
+//    모르는 채로 견적을 못 내는 것이 실제 업무를 막고 있었다. 「필수인데 빠졌다」로
+//    되돌리지 말 것 — 각 화면의 제출 검증에서도 같이 풀었다.
+// 🟢 이 번호는 **SMS 수신번호가 아니다**(실측 — `sendSms` 는 화주/차주 번호를 쓴다).
+//    비어도 문자 발송이 조용히 실패하지 않는다.
+
 import { formatPhoneNumber } from "@/lib/constants";
 
 export type PickupDropoffContactValue = {
@@ -49,7 +57,7 @@ export default function PickupDropoffContactFields({ value, onChange, disabled }
         />
       </div>
       <div className="field">
-        <label>상차지 담당자 연락처 *</label>
+        <label>상차지 담당자 연락처 (선택)</label>
         <input
           value={value.origin_contact_phone}
           onChange={(e) => onChange({ origin_contact_phone: formatPhoneNumber(e.target.value) })}
@@ -74,7 +82,7 @@ export default function PickupDropoffContactFields({ value, onChange, disabled }
         />
       </div>
       <div className="field">
-        <label>하차지 담당자 연락처 *</label>
+        <label>하차지 담당자 연락처 (선택)</label>
         <input
           value={value.destination_contact_phone}
           onChange={(e) => onChange({ destination_contact_phone: formatPhoneNumber(e.target.value) })}

@@ -201,14 +201,6 @@ export default function OrderDetailPage() {
 
   async function handleSave(force = false) {
     setError(null);
-    if (!editForm.origin_contact_phone.trim()) {
-      setError("상차지 담당자 연락처를 입력해주세요.");
-      return;
-    }
-    if (!editForm.destination_contact_phone.trim()) {
-      setError("하차지 담당자 연락처를 입력해주세요.");
-      return;
-    }
     setSaving(true);
     setConflict(false);
     const fullOrigin = [editForm.origin, editForm.originDetail].filter((v) => v.trim()).join(" ");

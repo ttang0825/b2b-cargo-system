@@ -403,14 +403,6 @@ export default function QuoteDetailPage() {
       }
     }
 
-    if (!editForm.origin_contact_phone.trim()) {
-      setSaveError("상차지 담당자 연락처를 입력해주세요.");
-      return;
-    }
-    if (!editForm.destination_contact_phone.trim()) {
-      setSaveError("하차지 담당자 연락처를 입력해주세요.");
-      return;
-    }
 
     setSaving(true);
 
