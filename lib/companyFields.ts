@@ -21,7 +21,13 @@
 // 화면이 다루는 것만 담는다 — 나머지(점수 6종·`external_id`·`source_url` 등)는 화면에
 // 없던 것이고 이번 차수는 **있는 항목을 맞추는 것**이라 늘리지 않았다(지시서 §5 금지 3번).
 
-import { REGIONS, VEHICLE_TYPES_ALL, BODY_TYPES, GRADE_OPTIONS } from "@/lib/constants";
+import {
+  REGIONS,
+  VEHICLE_TYPES_ALL,
+  DEFAULT_VEHICLE_TYPE,
+  BODY_TYPES,
+  GRADE_OPTIONS,
+} from "@/lib/constants";
 import { STATUS_OPTIONS } from "@/lib/statusColors";
 import { MANUAL_SOURCE_OPTIONS } from "@/lib/sourceColors";
 
@@ -260,7 +266,8 @@ export function emptyCompanyForm(): Record<string, any> {
     out[f.key] = f.type === "checkbox" ? false : "";
   }
   // 톤수·형태는 저장 직전에 `recommended_vehicle` 한 컬럼으로 합친다.
-  out.recommended_vehicle_tonnage = VEHICLE_TYPES_ALL[0];
+  // 🔴 `VEHICLE_TYPES_ALL[0]` 을 쓰지 말 것 — 2026-09-11 에 맨 앞이 「다마스」가 됐다.
+  out.recommended_vehicle_tonnage = DEFAULT_VEHICLE_TYPE;
   out.recommended_vehicle_bodytype = BODY_TYPES[0];
   // 상세주소는 별도 컬럼 없이 도로명주소와 합쳐 저장한다(원칙 37번의 fullOrigin 패턴).
   out.main_pickup_addressDetail = "";
@@ -328,8 +335,8 @@ export function buildCompanyPayload(
 
 /** `"1톤 카고"` 처럼 합쳐 저장된 값을 두 칸으로 되돌린다. */
 export function parseRecommendedVehicle(v: string | null | undefined) {
-  if (!v) return { tonnage: VEHICLE_TYPES_ALL[0], bodytype: BODY_TYPES[0] };
-  const tonnage = VEHICLE_TYPES_ALL.find((t) => v.startsWith(t)) || VEHICLE_TYPES_ALL[0];
+  if (!v) return { tonnage: DEFAULT_VEHICLE_TYPE, bodytype: BODY_TYPES[0] };
+  const tonnage = VEHICLE_TYPES_ALL.find((t) => v.startsWith(t)) || DEFAULT_VEHICLE_TYPE;
   const rest = v.slice(tonnage.length).trim();
   const bodytype = BODY_TYPES.find((b) => b === rest) || BODY_TYPES[0];
   return { tonnage, bodytype };

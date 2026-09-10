@@ -9,7 +9,8 @@
 
 \echo ''
 \echo '=== ① 운임기준표 구조 ==================================='
--- 기대: 차급 수 × 15구간. **22차 이후 11차급 = 165행**, 가산기준 11행.
+-- 기대: 차급 수 × 15구간. 🔴 **2026-09-11 다마스·라보 신설 이후 13차급 = 195행**,
+--       가산기준 13행. (22차~그 전까지는 11차급 165행이었다)
 select
   (select count(distinct vehicle_type) from rate_distance_tiers) as 차급수,
   (select count(distinct distance_label) from rate_distance_tiers) as 구간수,
@@ -64,10 +65,12 @@ order by base_fare;
 
 \echo ''
 \echo '=== ⑥-b 차급 역전 — 인접 차급끼리 값이 안 커지는 칸 (0이어야 함) =='
--- 🔴 22차에 8톤·15톤이 **중간에** 끼어들었다. 차급을 더 넣을 때마다 여기를 갱신할 것.
+-- 🔴 22차에 8톤·15톤이 **중간에**, 2026-09-11 에 다마스·라보가 **맨 앞에** 끼어들었다.
+--    차급을 더 넣을 때마다 여기를 갱신할 것 — 안 하면 새 차급이 검사에서 **조용히** 빠진다.
 with ord(vt, rk) as (values
-  ('1톤',1),('1.4톤',2),('2.5톤',3),('3.5톤',4),('5톤',5),('5톤 플러스/축',6),
-  ('8톤',7),('11톤',8),('15톤',9),('18톤',10),('25톤',11)
+  ('다마스',1),('라보',2),
+  ('1톤',3),('1.4톤',4),('2.5톤',5),('3.5톤',6),('5톤',7),('5톤 플러스/축',8),
+  ('8톤',9),('11톤',10),('15톤',11),('18톤',12),('25톤',13)
 )
 select count(*) as 차급역전_건수
   from rate_distance_tiers a join ord oa on oa.vt = a.vehicle_type
@@ -76,7 +79,7 @@ select count(*) as 차급역전_건수
  where ob.rk = oa.rk + 1 and b.base_fare <= a.base_fare;
 
 \echo ''
-\echo '=== ⑦ 가산기준 전체 (22차 이후 11행) ===================='
+\echo '=== ⑦ 가산기준 전체 (2026-09-11 이후 13행) ==============='
 -- 🔴 차급 수와 반드시 같아야 한다 — 빠진 차급은 대기료가 조용히 0원이 된다(16차).
 select vehicle_type, free_waiting_minutes, waiting_fee_per_unit, waypoint_fee
 from rate_vehicle_extra_fees order by waiting_fee_per_unit, vehicle_type;
@@ -255,8 +258,10 @@ select distance_label as 구간명, min(distance_from_km) as from_km,
  order by coalesce(max(distance_to_km), 999999);
 
 \echo ''
-\echo '--- ⑩-c 🔴 165칸 전수 (행=구간 · 열=차급) ---'
+\echo '--- ⑩-c 🔴 195칸 전수 (행=구간 · 열=차급) ---'
 select distance_label as 구간,
+  max(base_fare) filter (where vehicle_type = '다마스')        as "다마스",
+  max(base_fare) filter (where vehicle_type = '라보')          as "라보",
   max(base_fare) filter (where vehicle_type = '1톤')          as "1톤",
   max(base_fare) filter (where vehicle_type = '1.4톤')        as "1.4톤",
   max(base_fare) filter (where vehicle_type = '2.5톤')        as "2.5톤",
@@ -274,7 +279,8 @@ order by min(coalesce(distance_to_km, 999999));
 \echo ''
 \echo '--- ⑩-d 🔴 위 표에서 못 잡힌 칸 (0이어야 — 차급명이 다르다는 뜻) ---'
 select count(*) as 미매칭_칸수 from rate_distance_tiers
- where vehicle_type not in ('1톤','1.4톤','2.5톤','3.5톤','5톤','5톤 플러스/축',
+ where vehicle_type not in ('다마스','라보',
+                            '1톤','1.4톤','2.5톤','3.5톤','5톤','5톤 플러스/축',
                             '8톤','11톤','15톤','18톤','25톤');
 
 \echo ''

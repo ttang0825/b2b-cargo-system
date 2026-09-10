@@ -6,7 +6,7 @@ import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 // 🔴 희망 톤수는 배열 그대로다(22차 이후 11종). 로그인한 화주만 보는 화면이라
 //   공개 화면의 금지 표현 기준(32차·12차)이 적용되지 않는다 — 사용자 결정 2026-08-26.
 //   공개 4개 화면(`/`·`/vehicles`·`/quote`·`/apply`)은 여전히 6종이니 헷갈리지 말 것.
-import { VEHICLE_TYPES_ALL, formatPhoneNumber } from "@/lib/constants";
+import { VEHICLE_TYPES_ALL, DEFAULT_VEHICLE_TYPE, formatPhoneNumber } from "@/lib/constants";
 // 🔴 상하차조건은 **DB 8종 그대로** 노출한다. 시안은 6종으로 줄여 그렸지만 합치면 안 된다
 //   (사용자 확정 2026-08-27): `호이스트`(차량 자체 장착, 기사 단독 처리)와 `크레인`(별도
 //   장비 수배 필요)은 현장 준비가 갈리고, 라벨을 바꾸면 견적 계산이 `option_name`
@@ -152,7 +152,8 @@ export default function PortalRequestPage() {
     destinationSido: "",
     destinationSigungu: "",
     ...EMPTY_LEG_CONTACT,
-    vehicle_type: VEHICLE_TYPES_ALL[0] as string,
+    // 🔴 `VEHICLE_TYPES_ALL[0]` 을 쓰지 말 것 — 2026-09-11 에 맨 앞이 「다마스」가 됐다.
+    vehicle_type: DEFAULT_VEHICLE_TYPE as string,
     차량형태: "",
     상차조건: LOADING_METHOD_OPTIONS[0] as string,
     하차조건: LOADING_METHOD_OPTIONS[0] as string,
