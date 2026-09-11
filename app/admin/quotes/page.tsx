@@ -763,8 +763,9 @@ function QuotesPageInner() {
       setError("화주 업체를 검색해서 선택해주세요.");
       return;
     }
-    if (customerMode === "guest" && !form.guest_name.trim()) {
-      setError("개인/신규 고객명을 입력해주세요.");
+    // 🔴 개인·신규 고객의 필수는 **연락처**다(위 폼 주석 참고). 이름은 선택이다.
+    if (customerMode === "guest" && !form.guest_phone.trim()) {
+      setError("개인/신규 고객 연락처를 입력해주세요.");
       return;
     }
     if (!form.origin.trim()) {
@@ -816,7 +817,8 @@ function QuotesPageInner() {
         quote_no: quoteNo,
         created_by: staffId,
         company_id: customerMode === "company" ? selectedCompany!.id : null,
-        guest_name: customerMode === "guest" ? form.guest_name : null,
+        // 이름은 선택이라 빈 값이면 null 로 — 목록이 `guest_name ||` 로 대체 표기한다
+        guest_name: customerMode === "guest" ? form.guest_name.trim() || null : null,
         guest_phone:
           customerMode === "guest" ? form.guest_phone || null : null,
         guest_email:
@@ -1059,7 +1061,10 @@ function QuotesPageInner() {
               별표가 빨개지고 입력칸에 왼쪽 선이 붙는다. **다른 화면에 칠하지 말 것**
               (사용자 확정: 이번 범위는 견적관리 화면뿐). 공용 부품 `AddressSearch` 도
               같은 별표 부품을 쓰지만, 색은 이 스코프 밖에서 안 붙는다. */}
-          <form className="req-marks" onSubmit={handleSubmit} onKeyDown={handleFormKeyDown}>
+          {/* 🔴 `quote-form` 은 **이 폼 하나에만** 거는 스코프다 — 라벨·입력칸 모양을
+              화주포털 발주요청에 맞추는 규칙이 여기 안에서만 돌게 하려고 둔 것이다.
+              `.field` 를 전역으로 고치면 관리자 31개 화면이 같이 바뀐다. 지우지 말 것. */}
+          <form className="req-marks quote-form" onSubmit={handleSubmit} onKeyDown={handleFormKeyDown}>
             <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
               <button
                 type="button"
@@ -1100,7 +1105,10 @@ function QuotesPageInner() {
 
             {customerMode === "company" ? (
               <div style={{ marginBottom: 14 }}>
-                <div className="field">
+                {/* 🔴 `quote-form-half` — 이 칸은 `.form-grid` **밖**이라 폼 전체 폭
+                    (1600px 화면에서 910px)을 먹고 있었다. 회사명은 길어야 스무 글자라
+                    그만큼 필요 없다(실사용 지적). 2열 한 칸과 같은 폭으로 묶는다. */}
+                <div className="field quote-form-half">
                   <label>화주 업체 검색</label>
                   <input
                     value={selectedCompany ? selectedCompany.name : companySearch}
@@ -1154,8 +1162,11 @@ function QuotesPageInner() {
               </div>
             ) : (
               <div className="form-grid quote-form-grid" style={{ padding: 0, marginBottom: 14 }}>
-                <div className="field field-required">
-                  <label>고객명 <RequiredMark /></label>
+                {/* 🔴 필수는 **연락처**다(사용자 확정 2026-09-11) — 개인·신규 고객은
+                    이름을 안 밝히는 경우가 흔하고, 나중에 다시 연락할 수 있어야 하는
+                    쪽은 연락처다. 🔴 둘을 맞바꾼 것이니 되돌리지 말 것. */}
+                <div className="field">
+                  <label>고객명</label>
                   <input
                     value={form.guest_name}
                     onChange={(e) =>
@@ -1163,8 +1174,8 @@ function QuotesPageInner() {
                     }
                   />
                 </div>
-                <div className="field">
-                  <label>연락처</label>
+                <div className="field field-required">
+                  <label>연락처 <RequiredMark /></label>
                   <input
                     value={form.guest_phone}
                     onChange={(e) =>
@@ -1177,11 +1188,11 @@ function QuotesPageInner() {
 
             <div className="form-grid quote-form-grid" style={{ padding: 0 }}>
               {/* ── 1. 운송 구간 · 현장 정보 ──────────────────────────────────────────── */}
-              <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "baseline", gap: 8, margin: "6px 0 -4px" }}>
-                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, borderRadius: "50%", background: "var(--accent)", color: "#1a1a1a", fontSize: 11.5, fontWeight: 700, flexShrink: 0 }}>
+              <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 10, margin: "6px 0 4px" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", background: "var(--accent)", color: "#1a1a1a", fontSize: 13.5, fontWeight: 700, flexShrink: 0 }}>
                   1
                 </span>
-                <strong style={{ fontSize: 13.5 }}>운송 구간 · 현장 정보</strong>
+                <strong style={{ fontSize: 16.5 }}>운송 구간 · 현장 정보</strong>
                 <span style={{ fontSize: 11.5, color: "var(--text-muted)" }}>화주포털 발주요청과 같은 순서입니다</span>
               </div>
               {/* ── 출발지 열 / 도착지 열 (34차 리뷰 2라운드) ──────────────────────
@@ -1383,7 +1394,10 @@ function QuotesPageInner() {
               )}
               </div>
 
-              <div className="field field-required" style={{ gridColumn: "1 / -1" }}>
+              {/* 🔴 전체 폭(1600px 화면에서 836px)을 먹던 것을 **2열 한 칸**으로 되돌린다
+                  (실사용 지적). 숫자 한 개 + 「자동계산」 버튼뿐이라 그만큼 필요 없었다.
+                  🔴 `gridColumn: "1 / -1"` 을 되살리지 말 것. */}
+              <div className="field field-required">
                 <label>거리(km) <RequiredMark /></label>
                 <div style={{ display: "flex", gap: 6 }}>
                   <input
@@ -1435,11 +1449,11 @@ function QuotesPageInner() {
               </div>
 
               {/* ── 2. 일정 ──────────────────────────────────────────── */}
-              <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "baseline", gap: 8, margin: "6px 0 -4px" }}>
-                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, borderRadius: "50%", background: "var(--accent)", color: "#1a1a1a", fontSize: 11.5, fontWeight: 700, flexShrink: 0 }}>
+              <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 10, margin: "6px 0 4px" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", background: "var(--accent)", color: "#1a1a1a", fontSize: 13.5, fontWeight: 700, flexShrink: 0 }}>
                   2
                 </span>
-                <strong style={{ fontSize: 13.5 }}>일정</strong>
+                <strong style={{ fontSize: 16.5 }}>일정</strong>
                 <span style={{ fontSize: 11.5, color: "var(--text-muted)" }}></span>
               </div>
               {/* 🔴 **상차·하차를 좌우로 놓는다**(리뷰 2라운드 — 포털 발주요청과 같은 배치).
@@ -1503,11 +1517,11 @@ function QuotesPageInner() {
               </div>
 
               {/* ── 3. 화물 · 차량 ──────────────────────────────────────────── */}
-              <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "baseline", gap: 8, margin: "6px 0 -4px" }}>
-                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, borderRadius: "50%", background: "var(--accent)", color: "#1a1a1a", fontSize: 11.5, fontWeight: 700, flexShrink: 0 }}>
+              <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 10, margin: "6px 0 4px" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", background: "var(--accent)", color: "#1a1a1a", fontSize: 13.5, fontWeight: 700, flexShrink: 0 }}>
                   3
                 </span>
-                <strong style={{ fontSize: 13.5 }}>화물 · 차량</strong>
+                <strong style={{ fontSize: 16.5 }}>화물 · 차량</strong>
                 <span style={{ fontSize: 11.5, color: "var(--text-muted)" }}></span>
               </div>
               <div className="field field-required">
@@ -1789,11 +1803,11 @@ function QuotesPageInner() {
               </div>
 
               {/* ── 4. 요청사항 ──────────────────────────────────────────── */}
-              <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "baseline", gap: 8, margin: "6px 0 -4px" }}>
-                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, borderRadius: "50%", background: "var(--accent)", color: "#1a1a1a", fontSize: 11.5, fontWeight: 700, flexShrink: 0 }}>
+              <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 10, margin: "6px 0 4px" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", background: "var(--accent)", color: "#1a1a1a", fontSize: 13.5, fontWeight: 700, flexShrink: 0 }}>
                   4
                 </span>
-                <strong style={{ fontSize: 13.5 }}>요청사항</strong>
+                <strong style={{ fontSize: 16.5 }}>요청사항</strong>
                 <span style={{ fontSize: 11.5, color: "var(--text-muted)" }}></span>
               </div>
               <div className="field" style={{ gridColumn: "1 / -1" }}>
