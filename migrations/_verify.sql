@@ -606,3 +606,22 @@ select
             where o.id = i.order_id))             as 배차있음
 from invoices i
 order by i.created_at;
+
+\echo ''
+\echo '--- ⑯-j 배차 6건 한눈에 (🔴 정산 건이 아예 없는 배차를 찾는다) ---'
+-- invoices 5건 < dispatches 6건 이라 정산이 아예 안 만들어진 배차가 있다.
+-- 「정산관리에서 표시가 안 된다」의 또 다른 후보다(스냅샷 문제와 원인이 다르다).
+select
+  d.dispatch_status                                   as 배차상태,
+  coalesce(d.collection_method,'(빈칸)')              as 수금방식,
+  (d.customer_charge is not null)                     as 청구운임_입력,
+  (d.driver_payout is not null)                       as 지급운임_입력,
+  (d.driver_base_fare is not null)                    as 계산기_거침,
+  (o.id is not null)                                  as 오더연결,
+  (exists (select 1 from invoices i where i.order_id = d.order_id)) as 정산건_있음,
+  (d.updated_at > coalesce((select max(i.created_at) from invoices i
+                             where i.order_id = d.order_id), d.created_at))
+                                                      as 정산뒤에_배차수정됨
+from dispatches d
+left join orders o on o.id = d.order_id
+order by d.created_at;
