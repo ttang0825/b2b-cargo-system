@@ -275,7 +275,8 @@ export default function CompaniesPage() {
     tabCounts[key] = (tabCounts[key] || 0) + 1;
   }
 
-  // 🔴 **그리는 것은 이 50건뿐이다** — `filteredCompanies` 를 직접 `.map()` 하지 말 것.
+  // 🔴 **그리는 것은 이 한 페이지분뿐이다** — `filteredCompanies` 를 직접 `.map()` 하지 말 것.
+  //    건수는 `LIST_PAGE_SIZE`(15) 한 곳이 정한다.
   //    실측(2026-09-11) 화주 **539건**을 전부 그리던 것이 이 화면 느림의 원인이었다.
   // 🔴 `resetKey` 에 **필터·검색·정렬을 전부** 넣어야 한다 — 하나라도 빠지면
   //    「3페이지를 보다가 조건을 바꿨더니 결과는 2건인데 3페이지라 빈 화면」이 된다.
