@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 // 🔴 원칙 31번 — 앱 내부 경로는 반드시 next/link. <a href> 로 바꾸면 하드 리로드가 된다.
 import Link from "next/link";
-import { calcInclusiveAmount } from "@/lib/vat";
+import { calcMargin } from "@/lib/marginCalc";
 import { CLAIM_TYPES, getClaimTypeLabel } from "@/lib/claims";
 import { DISPATCH_EXTRA_CHARGE_CATEGORIES, getDispatchExtraChargeCategoryLabel } from "@/lib/dispatchExtraCharges";
 
@@ -83,17 +83,42 @@ export default function AdminDashboardPage() {
     load();
   }, []);
 
-  // 오더별 매출·원가·마진(현장 추가비 표시시점 합산 포함) — 담당자별/화주별 섹션이
-  // 공통으로 재사용하는 중간 집계
+  // 🔴 35차 C-1 — 마진 정의를 `lib/marginCalc.ts` 하나로 옮겼다(사용자 확정 2026-09-11).
+  //
+  //    「위캐리가 버는 돈, 부가세 제외」 하나이고, 수금방식이 계산식을 정한다:
+  //      주선사정산  마진 = 화주청구(공급가액) − 차주지급(공급가액)
+  //      선착불      마진 = 주선수수료 ÷ 1.1   🔴 운임은 매출에도 원가에도 안 잡는다
+  //
+  //    ⚠️ 그전에는 수금방식과 무관하게 `화주청구 × 1.1 − 차주지급` 이었다 —
+  //       선착불에서 **위캐리를 거치지도 않는 운임**을 매출로 세고 있었다.
+  //    🔴 다른 두 마진(DB 생성 컬럼 `dispatches.margin` · `settlementCalc` 의 실질마진)을
+  //       이 화면에 섞지 말 것(하지말것 5). 실질마진은 `driver_base_fare` 입력이 실측
+  //       0건이라 켜면 숫자가 틀린다.
+  const marginOf = (inv: any, extraCharge: number, extraPayout: number) =>
+    calcMargin({
+      collectionMethod: inv.collection_method,
+      customerCharge: (inv.customer_charge_total || 0) + extraCharge,
+      customerChargeVatIncluded: inv.customer_charge_vat_included,
+      driverPayout: (inv.driver_payout_total || 0) + extraPayout,
+      driverVatIncluded: inv.driver_vat_included,
+      brokerageFee: inv.brokerage_fee,
+    });
+
+  // 오더별 취급고·원가·마진(현장 추가비 표시시점 합산 포함) — 담당자별/화주별 섹션이
+  // 공통으로 재사용하는 중간 집계.
+  // 🔴 `revenue` 는 **매출이 아니라 취급고**다 — 선착불 운임이 섞이므로 화면에
+  //    「매출」이라고 적지 말 것.
   const revenueByOrderId = useMemo(() => {
     const map: Record<string, { revenue: number; cost: number; margin: number }> = {};
     if (!data) return map;
     data.invoices.forEach((inv) => {
       if (!inv.order_id) return;
       const attribution = data.extraChargeAttributionByInvoiceId[inv.id];
-      const revenue = (inv.customer_charge_total || 0) + (attribution?.customerAmount || 0);
-      const cost = (inv.driver_payout_total || 0) + (attribution?.driverAmount || 0);
-      const margin = calcInclusiveAmount(revenue) - cost;
+      const extraCharge = attribution?.customerAmount || 0;
+      const extraPayout = attribution?.driverAmount || 0;
+      const revenue = (inv.customer_charge_total || 0) + extraCharge;
+      const cost = (inv.driver_payout_total || 0) + extraPayout;
+      const margin = marginOf(inv, extraCharge, extraPayout);
       const cur = map[inv.order_id] || { revenue: 0, cost: 0, margin: 0 };
       cur.revenue += revenue;
       cur.cost += cost;
@@ -109,9 +134,10 @@ export default function AdminDashboardPage() {
     if (!data) return [];
     data.invoices.forEach((inv) => {
       const attribution = data.extraChargeAttributionByInvoiceId[inv.id];
-      const revenue = (inv.customer_charge_total || 0) + (attribution?.customerAmount || 0);
-      const cost = (inv.driver_payout_total || 0) + (attribution?.driverAmount || 0);
-      const margin = calcInclusiveAmount(revenue) - cost;
+      const extraCharge = attribution?.customerAmount || 0;
+      const extraPayout = attribution?.driverAmount || 0;
+      const revenue = (inv.customer_charge_total || 0) + extraCharge;
+      const margin = marginOf(inv, extraCharge, extraPayout);
       const key = inv.billing_period || "미지정";
       const cur = map[key] || { period: key, revenue: 0, margin: 0, count: 0 };
       cur.revenue += revenue;
@@ -143,7 +169,7 @@ export default function AdminDashboardPage() {
       }
       map[key] = cur;
     });
-    return Object.values(map).sort((a, b) => b.revenue - a.revenue);
+    return Object.values(map).sort((a, b) => b.margin - a.margin);
   }, [data, revenueByOrderId]);
 
   // C. 화주별 수익성 순위 (company/개인고객/게스트 순으로 식별, TOP 10)
@@ -184,7 +210,7 @@ export default function AdminDashboardPage() {
       map[key] = cur;
     });
     return Object.values(map)
-      .sort((a, b) => b.revenue - a.revenue)
+      .sort((a, b) => b.margin - a.margin)
       .slice(0, 10);
   }, [data, revenueByOrderId]);
 
@@ -220,9 +246,15 @@ export default function AdminDashboardPage() {
   // 🔴 `null`(조회 실패)과 `[]`(0개)를 구분해서 넘긴다 — 합치면 실패가 0개로 읽힌다.
   const recurringList = data?.recurringContractCompanies ?? null;
 
-  const maxMonthlyRevenue = Math.max(1, ...monthlyRows.map((r) => r.revenue));
-  const maxStaffRevenue = Math.max(1, ...staffRows.map((r) => r.revenue));
-  const maxCustomerRevenue = Math.max(1, ...customerRows.map((r) => r.revenue));
+  // 🔴 35차 C-2 (사용자 13번) — **마진 금액이 주인공**이다. 막대 길이의 기준도
+  //    취급고가 아니라 마진으로 바꿨다(그전에는 매출 기준이라, 마진이 작은 큰 건이
+  //    가장 길게 그려져 「어느 달이 잘 벌었나」를 읽을 수 없었다).
+  const maxMonthlyMargin = Math.max(1, ...monthlyRows.map((r) => Math.abs(r.margin)));
+  const totalMargin = monthlyRows.reduce((sum, r) => sum + r.margin, 0);
+  const totalVolume = monthlyRows.reduce((sum, r) => sum + r.revenue, 0);
+  // 🔴 35차 C-2 — 정렬·막대 기준을 취급고에서 **마진**으로 바꿨다(사용자 13번)
+  const maxStaffMargin = Math.max(1, ...staffRows.map((r) => Math.abs(r.margin)));
+  const maxCustomerMargin = Math.max(1, ...customerRows.map((r) => Math.abs(r.margin)));
 
   return (
     <main className="container">
@@ -242,6 +274,33 @@ export default function AdminDashboardPage() {
         <div className="empty-state">{error}</div>
       ) : (
         <>
+          {/* ── 마진 요약 (35차 C-2 · 사용자 13번) ──────────────────────────────────
+              🔴 **어느 마진을 쓰는지 화면에 적는다**(완료조건 20) — 이 저장소에는
+                 마진이라 불리는 값이 셋 있고, 어느 것인지 안 적으면 아무도 모른다.
+              🔴 **취급고는 매출이 아니다** — 선착불 운임은 화주가 차주에게 직접 주는
+                 돈이라 위캐리를 거치지 않는다. 그래서 작은 글씨 보조로만 둔다. */}
+          <section className="card" style={{ padding: 20, marginBottom: 20 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>마진 합계</div>
+              <div className="num" style={{ fontSize: 30, fontWeight: 700 }}>
+                {totalMargin.toLocaleString()}원
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: "auto" }}>
+                취급고(참고) {totalVolume.toLocaleString()}원
+              </div>
+            </div>
+            <p style={{ fontSize: 11.5, color: "var(--text-muted)", margin: "8px 0 0", lineHeight: 1.65 }}>
+              <strong>마진 = 위캐리가 버는 돈(부가세 제외)</strong>입니다. 수금방식에 따라 계산이
+              다릅니다 — <strong>주선사 정산</strong>은 「화주 청구금액 − 차주 지급금액」,
+              <strong>선착불</strong>은 「주선수수료」뿐입니다(운임은 화주가 차주에게 직접 주므로
+              위캐리 매출이 아닙니다).
+              <br />
+              「취급고」는 위캐리를 거쳐 간 운임의 크기이고 <strong>매출이 아닙니다</strong>.
+              <br />
+              ⚠️ 배차 목록의 「마진·마진율」과 배차 상세의 「실질마진(정산기준)」은 계산이 다른
+              별개 값입니다 — 이 화면의 숫자와 맞지 않는 것이 정상입니다.
+            </p>
+          </section>
           {/* 정기계약 화주 수 (33차 B장)
               🔴 최근 12개월 조회기간과 무관하게 **지금 유효한 계약 전체**를 센다 —
                  이 화면의 다른 지표(매출·마진)와 기간 기준이 다르므로 캡션으로 밝힌다.
@@ -336,18 +395,21 @@ export default function AdminDashboardPage() {
 
           {/* A. 전사 월별 매출·마진 추이 */}
           <section className="card" style={{ padding: 24, marginBottom: 20 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>전사 월별 매출·마진 추이</div>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>전사 월별 마진 추이</div>
             <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 0, marginBottom: 16 }}>
-              매출 = 정산 청구금액 + 그 이후 등록된 현장 추가비 · 마진은 청구금액을 부가세 포함가로 환산한 뒤
-              지급금액(+추가비)을 차감한 값입니다.
+              {/* 🔴 35차 C-2 — 막대는 **마진** 길이다(그전에는 매출이었다). 마진이 작은 큰
+                  건이 가장 길게 그려져 「어느 달이 잘 벌었나」를 읽을 수 없었다. */}
+              막대 길이는 <strong>마진</strong>입니다. 취급고는 오른쪽에 작게 병기합니다 ·
+              현장 추가비는 그 이후 등록된 것까지 표시 시점에 합산합니다.
             </p>
             {monthlyRows.length === 0 ? (
               <div className="empty-state">최근 12개월간 정산 데이터가 없습니다.</div>
             ) : (
               monthlyRows.map((r, idx) => {
                 const prev = idx > 0 ? monthlyRows[idx - 1] : null;
+                // 🔴 증감률도 마진 기준이다 — 취급고가 늘어도 마진이 줄면 나쁜 달이다
                 const changePct =
-                  prev && prev.revenue > 0 ? Math.round(((r.revenue - prev.revenue) / prev.revenue) * 100) : null;
+                  prev && prev.margin > 0 ? Math.round(((r.margin - prev.margin) / prev.margin) * 100) : null;
                 return (
                   <div key={r.period} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
                     <div className="num" style={{ width: 70, fontSize: 12.5, color: "var(--text-muted)" }}>
@@ -356,19 +418,19 @@ export default function AdminDashboardPage() {
                     <div style={{ flex: 1, background: "var(--bg)", borderRadius: 8, overflow: "hidden", height: 26 }}>
                       <div
                         style={{
-                          width: `${(r.revenue / maxMonthlyRevenue) * 100}%`,
+                          width: `${(Math.abs(r.margin) / maxMonthlyMargin) * 100}%`,
                           background: "var(--accent)",
                           height: "100%",
                           borderRadius: 8,
-                          minWidth: r.revenue > 0 ? 4 : 0,
+                          minWidth: r.margin !== 0 ? 4 : 0,
                         }}
                       />
                     </div>
-                    <div className="num" style={{ width: 120, textAlign: "right", fontSize: 13 }}>
-                      {won(r.revenue)}
+                    <div className="num" style={{ width: 120, textAlign: "right", fontSize: 14, fontWeight: 700 }}>
+                      {won(r.margin)}
                     </div>
-                    <div className="num" style={{ width: 110, textAlign: "right", fontSize: 12, color: "var(--text-muted)" }}>
-                      마진 {won(r.margin)}
+                    <div className="num" style={{ width: 110, textAlign: "right", fontSize: 11.5, color: "var(--text-muted)" }}>
+                      취급고 {won(r.revenue)}
                     </div>
                     <div style={{ width: 40, textAlign: "right", fontSize: 12, color: "var(--text-muted)" }}>
                       {r.count}건
@@ -398,19 +460,19 @@ export default function AdminDashboardPage() {
                   <div style={{ flex: 1, background: "var(--bg)", borderRadius: 8, overflow: "hidden", height: 26 }}>
                     <div
                       style={{
-                        width: `${(r.revenue / maxStaffRevenue) * 100}%`,
+                        width: `${(Math.abs(r.margin) / maxStaffMargin) * 100}%`,
                         background: "var(--accent)",
                         height: "100%",
                         borderRadius: 8,
-                        minWidth: r.revenue > 0 ? 4 : 0,
+                        minWidth: r.margin !== 0 ? 4 : 0,
                       }}
                     />
                   </div>
-                  <div className="num" style={{ width: 120, textAlign: "right", fontSize: 13 }}>
-                    {won(r.revenue)}
+                  <div className="num" style={{ width: 120, textAlign: "right", fontSize: 14, fontWeight: 700 }}>
+                    {won(r.margin)}
                   </div>
-                  <div className="num" style={{ width: 110, textAlign: "right", fontSize: 12, color: "var(--text-muted)" }}>
-                    마진 {won(r.margin)}
+                  <div className="num" style={{ width: 110, textAlign: "right", fontSize: 11.5, color: "var(--text-muted)" }}>
+                    취급고 {won(r.revenue)}
                   </div>
                   <div style={{ width: 50, textAlign: "right", fontSize: 12, color: "var(--text-muted)" }}>
                     {r.orderCount}건
@@ -437,19 +499,19 @@ export default function AdminDashboardPage() {
                   <div style={{ flex: 1, background: "var(--bg)", borderRadius: 8, overflow: "hidden", height: 26 }}>
                     <div
                       style={{
-                        width: `${(r.revenue / maxCustomerRevenue) * 100}%`,
+                        width: `${(Math.abs(r.margin) / maxCustomerMargin) * 100}%`,
                         background: "var(--accent)",
                         height: "100%",
                         borderRadius: 8,
-                        minWidth: r.revenue > 0 ? 4 : 0,
+                        minWidth: r.margin !== 0 ? 4 : 0,
                       }}
                     />
                   </div>
-                  <div className="num" style={{ width: 120, textAlign: "right", fontSize: 13 }}>
-                    {won(r.revenue)}
+                  <div className="num" style={{ width: 120, textAlign: "right", fontSize: 14, fontWeight: 700 }}>
+                    {won(r.margin)}
                   </div>
-                  <div className="num" style={{ width: 110, textAlign: "right", fontSize: 12, color: "var(--text-muted)" }}>
-                    마진 {won(r.margin)}
+                  <div className="num" style={{ width: 110, textAlign: "right", fontSize: 11.5, color: "var(--text-muted)" }}>
+                    취급고 {won(r.revenue)}
                   </div>
                   <div style={{ width: 50, textAlign: "right", fontSize: 12, color: "var(--text-muted)" }}>
                     {r.orderCount}건
