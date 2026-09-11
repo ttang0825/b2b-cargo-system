@@ -7,6 +7,9 @@ import { STATUS_OPTIONS, getStatusColor } from "@/lib/statusColors";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import { getSourceChips } from "@/lib/sourceColors";
 import { getCurrentStaffId } from "@/lib/currentStaff";
+import AdminMobileList from "@/components/AdminMobileList";
+import ListPagination from "@/components/ListPagination";
+import { useListPagination } from "@/lib/useListPagination";
 // 🔴 화주 항목 정의는 `lib/companyFields.ts` 한 곳이다 — 이 화면에 필드 배열을
 //    다시 만들지 말 것(33차 A장). 신규 등록·상세 수정·신청 승인 세 입구가 같은 정의를 읽는다.
 import {
@@ -272,6 +275,18 @@ export default function CompaniesPage() {
     tabCounts[key] = (tabCounts[key] || 0) + 1;
   }
 
+  // 🔴 **그리는 것은 이 50건뿐이다** — `filteredCompanies` 를 직접 `.map()` 하지 말 것.
+  //    실측(2026-09-11) 화주 **539건**을 전부 그리던 것이 이 화면 느림의 원인이었다.
+  // 🔴 `resetKey` 에 **필터·검색·정렬을 전부** 넣어야 한다 — 하나라도 빠지면
+  //    「3페이지를 보다가 조건을 바꿨더니 결과는 2건인데 3페이지라 빈 화면」이 된다.
+  const pagination = useListPagination(
+    filteredCompanies,
+    // 🔴 구분자를 빈 문자열로 두지 말 것 — 탭 "전체"+검색 "" 과 탭 "전"+검색 "체"
+    //    가 같은 키가 되어 조건이 바뀌었는데도 1페이지로 안 돌아간다.
+    //    검색창에 입력할 수 없는 문자를 구분자로 쓴다.
+    [activeTab, search, recurringOnly, sortKey, sortDir].join("\u0000")
+  );
+
   return (
     <main className="container">
       <div className="page-header">
@@ -401,15 +416,6 @@ export default function CompaniesPage() {
         </div>
       )}
 
-      {/* 🔴 등록 폼이 열려 있으면 목록·검색·탭을 통째로 그리지 않는다(아래 목록 주석 참고).
-          화주 540건을 페이지네이션 없이 그리는 동안 폼 구획을 토글하면 그 전체가
-          다시 배치되어 화면이 멈춘 것처럼 느껴졌다.
-          🔴 **위의 `{showForm && …}` 폼 블록을 이 괄호 안으로 옮기지 말 것** — 두 조건이
-             서로 배타적이라 폼이 **영영 렌더링되지 않는다.** 실사용 리뷰 3라운드
-             「신규업체등록을 누르면 아무것도 안뜬다」가 정확히 그 상태였다(내가 이 블록을
-             만들 때 폼까지 감싸버렸다). 순서는 **폼이 먼저, 이 블록이 나중**이다. */}
-      {!showForm && (
-        <>
       <div
         style={{
           display: "flex",
@@ -535,26 +541,26 @@ export default function CompaniesPage() {
            (React 동기 작업은 이미 10ms 였다).
         🔴 `paint` 를 더하지 말 것 — 이득이 9ms 뿐인데 이 카드가 클리핑 컨테이너가 되어
            안쪽 요소가 카드 밖으로 넘칠 수 없게 된다.
-        ⚠️ 목록이 길수록 비용이 커진다 — 근본 해결은 페이지네이션이고 별도 로드맵 항목이다.
+        🟢 목록이 길수록 비용이 커지던 것은 페이지 나누기로 해소됐다(한 번에 50행).
+           그래도 이 선언은 남긴다 — 폼 구획을 접었다 펼 때 아래 목록이 다시 배치되는
+           것을 막는 것은 행 수와 별개로 유효하다.
       */}
       {/*
-        🔴 **등록 폼이 열려 있는 동안에는 목록을 그리지 않는다.**
-           화주가 실제로 **540건**이고 이 목록은 페이지네이션 없이 전부 그리므로,
-           등록 폼에서 구획을 접었다 펼 때마다 그 수천 개 DOM 이 통째로 다시 배치됐다.
-           그것이 실사용 리뷰 2라운드 「클릭시 버벅대고 윈도우도 같이 버벅댄다」의
-           진짜 원인이다(실측: 목록 300행 기준 121ms → 감추면 79ms, 540행이면 더 크다).
-        🟢 정보 손실이 아니다 — 등록을 닫으면 목록이 그대로 돌아온다.
-        ⚠️ 근본 해결은 목록 페이지네이션이고 별도 로드맵 항목이다(§5 「유료 플랜 전환 /
-           페이지네이션」). 그때 이 분기는 없애도 된다.
+        🟢 **「등록 폼이 열려 있으면 목록을 통째로 안 그린다」 분기는 없앴다.**
+           그것은 화주 **539건**을 한 번에 그리던 시절의 증상 완화였고(실측: 300행 기준
+           121ms → 감추면 79ms), 이제 한 번에 **50행**만 그리므로 감출 이유가 없다.
+        🔴 **다시 만들지 말 것** — 그 분기는 「신규업체등록을 눌렀는데 아무것도 안 뜬다」를
+           한 번 만들었다(폼까지 같이 감싸버려서다. 34차 리뷰 3라운드).
       */}
       <div className="card" style={{ contain: "layout style" }}>
         {loading ? (
           <div className="empty-state">불러오는 중...</div>
-        ) : filteredCompanies.length === 0 ? (
+        ) : pagination.total === 0 ? (
           <div className="empty-state">
             해당 조건에 등록된 업체가 없습니다.
           </div>
         ) : (
+          <div className="desktop-only">
           <table>
             <thead>
               <tr>
@@ -569,7 +575,7 @@ export default function CompaniesPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredCompanies.map((c) => (
+              {pagination.pageItems.map((c) => (
                 <tr
                   key={c.id}
                   onClick={() => router.push(`/admin/companies/${c.id}`)}
@@ -642,10 +648,80 @@ export default function CompaniesPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
+
+        {/* 모바일 카드 — 🔴 **뺀 것은 「출처」 배지와 「등록일」이다.**
+            출처는 좁은 칸에서 배지가 두 줄로 쌓여 카드를 밀고, 등록일은 목록에서
+            고르는 기준이 아니다(둘 다 행을 눌러 상세로 들어가면 보인다).
+            🔴 **정기계약 배지와 영업상태 드롭다운, 「CRM 전환」은 남긴다** — 배지는
+            33차가 다섯 목록 전부에 붙인 것이고, 나머지 둘은 이 화면에서 바로 하는 일이다.
+            🔴 그 둘을 `action` 에 넣은 것은 `AdminMobileList` 가 거기에만
+            `stopPropagation` 을 걸기 때문이다 — `lines` 로 옮기면 누르는 순간 상세로 튄다. */}
+        <div className="mobile-only">
+          <AdminMobileList
+            empty="해당 조건에 등록된 업체가 없습니다."
+            rows={pagination.pageItems.map((c) => ({
+              key: c.id,
+              onClick: () => router.push(`/admin/companies/${c.id}`),
+              title: c.name,
+              tags: <RecurringContractBadge company={c} small />,
+              action: (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 6,
+                    alignItems: "flex-end",
+                  }}
+                >
+                  <select
+                    value={c.status}
+                    onChange={(e) => handleStatusChange(c.id, e.target.value)}
+                    style={{
+                      fontSize: "12px",
+                      padding: "4px 8px",
+                      borderRadius: 999,
+                      border: "none",
+                      fontWeight: 600,
+                      background: getStatusColor(c.status).bg,
+                      color: getStatusColor(c.status).text,
+                    }}
+                  >
+                    {STATUS_OPTIONS.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                  {!ACTIVE_STATUSES_FOR_BUTTON.includes(c.status) && (
+                    <button
+                      className="btn-ghost"
+                      style={{
+                        padding: "4px 10px",
+                        borderRadius: 6,
+                        fontSize: 11.5,
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }}
+                      onClick={() => handleSendToCRM(c.id, c.name)}
+                    >
+                      CRM 전환
+                    </button>
+                  )}
+                </div>
+              ),
+              lines: [
+                { label: "업종", value: formatIndustry(c) },
+                { label: "지역", value: formatRegion(c) },
+                { label: "대표번호", value: c.phone || "-" },
+              ],
+            }))}
+          />
+        </div>
+
+        <ListPagination pagination={pagination} />
       </div>
-        </>
-      )}
     </main>
   );
 }

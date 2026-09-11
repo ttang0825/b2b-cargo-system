@@ -8,6 +8,9 @@ import { STATUS_OPTIONS, getStatusColor } from "@/lib/statusColors";
 import { getDispatchStatusColor } from "@/lib/dispatchStatusColors";
 import RecurringContractBadge from "@/components/RecurringContractBadge";
 import { isRecurringContractActive } from "@/lib/companyFields";
+import AdminMobileList from "@/components/AdminMobileList";
+import ListPagination from "@/components/ListPagination";
+import { useListPagination } from "@/lib/useListPagination";
 
 type Customer = {
   id: string;
@@ -195,6 +198,18 @@ export default function CustomersPage() {
       return sortDir === "asc" ? cmp : -cmp;
     });
 
+  // 🔴 **지금 이 화면은 7건뿐이라 페이지가 하나다**(실측 2026-09-11 — 활성 화주 7 /
+  //    전체 화주 539). 그래도 붙여 두는 것은 활성 화주가 늘어나는 쪽이기 때문이고,
+  //    `ListPagination` 이 **한 페이지뿐이면 번호를 안 그리므로** 지금 화면에 보이는
+  //    변화는 건수 줄 하나뿐이다. 비용 없이 미리 받아 두는 것이다.
+  // 🔴 화주 관리(`/admin/companies`)와 **같은 훅·같은 건수**를 쓴다 — 한쪽만 다르게
+  //    만들면 나란히 쓰는 두 화면이 서로 다른 기능으로 읽힌다.
+  const pagination = useListPagination(
+    filtered,
+    // 구분자 설명은 `/admin/companies` 의 같은 자리 주석 참고.
+    [search, recurringOnly, sortKey, sortDir].join("\u0000")
+  );
+
   return (
     <main className="container">
       <div className="page-header">
@@ -315,12 +330,13 @@ export default function CustomersPage() {
       <div className="card" style={{ overflowX: "auto" }}>
         {loading ? (
           <div className="empty-state">불러오는 중...</div>
-        ) : filtered.length === 0 ? (
+        ) : pagination.total === 0 ? (
           <div className="empty-state">
             아직 활성 화주가 없습니다. 견적을 발송하거나, 화주 관리
             목록에서 "CRM 전환" 버튼을 눌러 등록할 수 있습니다.
           </div>
         ) : (
+          <div className="desktop-only">
           <table className="table-compact" style={{ minWidth: 880 }}>
             <thead>
               <tr>
@@ -339,7 +355,7 @@ export default function CustomersPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((c) => (
+              {pagination.pageItems.map((c) => (
                 <tr
                   key={c.id}
                   onClick={() => router.push(`/admin/companies/${c.id}?from=customers`)}
@@ -428,7 +444,83 @@ export default function CustomersPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
+
+        {/* 모바일 카드 — 🔴 **뺀 것은 결제조건·미수금·등급·배차상태 넷이다.**
+            390px 에 열 12개는 안 들어가고(표 폭이 880px 로 못박혀 있다), 이 넷은
+            「어느 화주인지 고르는」 데 쓰는 값이 아니라 고른 **뒤에 보는** 값이라
+            상세로 넘겼다. 🔴 **누적오더는 남겼다** — 활성 화주를 고르는 기준이다.
+            🔴 🔑(포털 계정)도 남긴다 — 지원접속·발주 가능 여부를 여기서 판단한다. */}
+        <div className="mobile-only">
+          <AdminMobileList
+            empty="아직 활성 화주가 없습니다."
+            rows={pagination.pageItems.map((c) => ({
+              key: c.id,
+              onClick: () => router.push(`/admin/companies/${c.id}?from=customers`),
+              title: (
+                <>
+                  {c.name}
+                  {portalCompanyIds.has(c.id) && (
+                    <span title="화주포털 계정 발급됨" style={{ marginLeft: 5, fontSize: 11 }}>
+                      🔑
+                    </span>
+                  )}
+                </>
+              ),
+              tags: <RecurringContractBadge company={c} small />,
+              // 🔴 데스크탑의 「제외」는 `<td onClick={stopPropagation}>` 안에 있었다 —
+              //    여기서도 `action` 이라야 눌렀을 때 상세로 안 튄다.
+              action: (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 6,
+                    alignItems: "flex-end",
+                  }}
+                >
+                  <span
+                    style={{
+                      display: "inline-block",
+                      padding: "3px 10px",
+                      borderRadius: 999,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      whiteSpace: "nowrap",
+                      background: getStatusColor(c.status).bg,
+                      color: getStatusColor(c.status).text,
+                    }}
+                  >
+                    {c.status}
+                  </span>
+                  <button
+                    className="btn-ghost"
+                    style={{
+                      padding: "4px 10px",
+                      borderRadius: 6,
+                      fontSize: 11.5,
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                    onClick={() => handleRemoveFromCRM(c.id, c.name)}
+                  >
+                    제외
+                  </button>
+                </div>
+              ),
+              lines: [
+                { label: "업종", value: formatIndustry(c) },
+                { label: "지역", value: formatRegion(c) },
+                { label: "담당자", value: c.contact_name || "-" },
+                { label: "연락처", value: c.contact_mobile || c.phone || "-" },
+                { label: "누적오더", value: `${c.total_orders_count || 0}건` },
+              ],
+            }))}
+          />
+        </div>
+
+        <ListPagination pagination={pagination} />
       </div>
     </main>
   );
