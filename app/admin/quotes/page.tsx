@@ -1187,9 +1187,19 @@ function QuotesPageInner() {
             )}
 
             <div className="form-grid quote-form-grid" style={{ padding: 0 }}>
+              {/* ── 블록 번호 배지 색 ────────────────────────────────────────────────
+                  🔴 **`var(--brand-yellow)`(#ffd833) 다 — 리터럴로 다시 적지 말 것**
+                  (34차 계산창 손잡이와 같은 규칙). 43차는 관리자 전체 강조색인
+                  `var(--accent)`(파랑)로 뒀는데, 사용자가 *"배지 색도 화주포털처럼
+                  옐로우로 바꿔줘"* 로 확정했다(2026-09-11). 화주포털 `.pv2-step-num`
+                  과 **같은 값**이라 두 폼이 나란히 같은 색이 된다.
+                  🔴 **`var(--pv2-yellow)` 를 쓰지 말 것** — 그 토큰은 `.portal-v2`
+                  스코프 안에만 있어서 관리자 화면에서는 **아무 색도 안 나온다.**
+                  🔴 글자색 `#1a1a1a` 는 포털 `--pv2-text` 와 같은 값이다 —
+                  옐로 위에 `--text-muted` 계열을 올리지 말 것(대비 부족). */}
               {/* ── 1. 운송 구간 · 현장 정보 ──────────────────────────────────────────── */}
               <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 10, margin: "6px 0 4px" }}>
-                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", background: "var(--accent)", color: "#1a1a1a", fontSize: 13.5, fontWeight: 700, flexShrink: 0 }}>
+                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", background: "var(--brand-yellow)", color: "#1a1a1a", fontSize: 13.5, fontWeight: 700, flexShrink: 0 }}>
                   1
                 </span>
                 <strong style={{ fontSize: 16.5 }}>운송 구간 · 현장 정보</strong>
@@ -1450,7 +1460,7 @@ function QuotesPageInner() {
 
               {/* ── 2. 일정 ──────────────────────────────────────────── */}
               <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 10, margin: "6px 0 4px" }}>
-                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", background: "var(--accent)", color: "#1a1a1a", fontSize: 13.5, fontWeight: 700, flexShrink: 0 }}>
+                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", background: "var(--brand-yellow)", color: "#1a1a1a", fontSize: 13.5, fontWeight: 700, flexShrink: 0 }}>
                   2
                 </span>
                 <strong style={{ fontSize: 16.5 }}>일정</strong>
@@ -1518,7 +1528,7 @@ function QuotesPageInner() {
 
               {/* ── 3. 화물 · 차량 ──────────────────────────────────────────── */}
               <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 10, margin: "6px 0 4px" }}>
-                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", background: "var(--accent)", color: "#1a1a1a", fontSize: 13.5, fontWeight: 700, flexShrink: 0 }}>
+                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", background: "var(--brand-yellow)", color: "#1a1a1a", fontSize: 13.5, fontWeight: 700, flexShrink: 0 }}>
                   3
                 </span>
                 <strong style={{ fontSize: 16.5 }}>화물 · 차량</strong>
@@ -1804,7 +1814,7 @@ function QuotesPageInner() {
 
               {/* ── 4. 요청사항 ──────────────────────────────────────────── */}
               <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 10, margin: "6px 0 4px" }}>
-                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", background: "var(--accent)", color: "#1a1a1a", fontSize: 13.5, fontWeight: 700, flexShrink: 0 }}>
+                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", background: "var(--brand-yellow)", color: "#1a1a1a", fontSize: 13.5, fontWeight: 700, flexShrink: 0 }}>
                   4
                 </span>
                 <strong style={{ fontSize: 16.5 }}>요청사항</strong>
