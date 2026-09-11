@@ -56,6 +56,28 @@ function won(n: number | null) {
   return n.toLocaleString("ko-KR") + "원";
 }
 
+// 숫자 + 단위를 **한 줄로** 그린다 (PR #142 실사용 리뷰).
+//
+// 🔴 **`whiteSpace: nowrap` 을 빼지 말 것** — 차급이 13종이 되면서 금액 칸이 92px 로
+//    좁아졌고, 그대로 두면 「원」만 아랫줄로 내려간다(실측 1440px 에서 **154칸**,
+//    1280px 에서 **180칸**). 사용자 지적이 정확히 이것이다.
+// 🔴 단위는 **0.85em + 흐린 색**이다 — 사용자가 *"폭이 좁으면 「원」 글씨를 더 작게
+//    가거나 아예 없어도 된다"* 고 했고, 작게 하는 것만으로 한 줄에 들어가서 **지우지
+//    않았다**(지우면 금액인지 분/퍼센트인지 구분이 사라진다 — 이 컴포넌트는 기본운임
+//    뿐 아니라 가산기준의 `분`·산재보험료의 `%` 도 그린다).
+// ⚠️ 화면에 읽히는 글자는 그대로 「34,000원」이다 — 태그만 나뉜다.
+function UnitAmount({ value, suffix }: { value: number | null; suffix: string }) {
+  if (!value) return <>-</>;
+  return (
+    <span style={{ whiteSpace: "nowrap" }}>
+      {value.toLocaleString("ko-KR")}
+      <span style={{ fontSize: "0.85em", color: "var(--text-muted)", marginLeft: 1 }}>
+        {suffix}
+      </span>
+    </span>
+  );
+}
+
 // 클릭하면 바로 그 자리에서 숫자를 고칠 수 있는 셀
 function EditableNumber({
   value,
@@ -73,7 +95,7 @@ function EditableNumber({
   const step = suffix === "원" ? 1000 : 1;
 
   if (readOnly) {
-    return <span>{value ? value.toLocaleString("ko-KR") + suffix : "-"}</span>;
+    return <UnitAmount value={value} suffix={suffix} />;
   }
 
   if (editing) {
@@ -116,7 +138,7 @@ function EditableNumber({
       style={{ cursor: "pointer" }}
       title="클릭해서 수정"
     >
-      {value ? value.toLocaleString("ko-KR") + suffix : "-"}
+      <UnitAmount value={value} suffix={suffix} />
     </span>
   );
 }
@@ -822,7 +844,9 @@ export default function RatesPage() {
               <tbody>
                 {labelOrder.map((label) => (
                   <tr key={label}>
-                    <td style={{ fontWeight: 600 }}>{label}</td>
+                    {/* 🔴 `nowrap` 을 빼지 말 것 — 13차급이 되면서 이 칸이 99px 로
+                        좁아져 **15구간 전부** 「이내」가 아랫줄로 내려갔다(실측). */}
+                    <td style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{label}</td>
                     {VEHICLE_TYPES_ALL.map((v) => {
                       const cell = matrix[label]?.[v];
                       return (
