@@ -125,8 +125,11 @@ begin
              and column_name in ('driver_tax_invoice_issued','driver_tax_invoice_date'))
          or (table_name = 'orders'
              and column_name in ('customer_charge','customer_charge_vat_included')));
-  if n <> 11 then
-    raise exception '컬럼이 11개가 아닙니다: %', n;
+  -- 🔴 10개다 — dispatches 3(부가세2+면제1) · invoices 3 · invoices 세금계산서 2 ·
+  --    orders 2. 처음에 11로 적었다가 단언에 걸려 트랜잭션이 통째로 되돌아갔다
+  --    (안전장치가 제 몫을 한 것이고, 그때 DB 에는 아무것도 반영되지 않았다).
+  if n <> 10 then
+    raise exception '컬럼이 10개가 아닙니다: %', n;
   end if;
 end $$;
 
