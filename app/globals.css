@@ -7224,3 +7224,44 @@ tbody tr:hover {
     grid-template-columns: 1fr !important;
   }
 }
+
+/* ── 견적 등록·수정 폼을 화주포털 발주요청과 같은 결로 (실사용 지적 2026-09-11) ──────
+ *
+ * 사용자 지적: *"내부시스템 견적관리 폼 구성이 아직 마음에 들지 않는다. 최대한 화주포털
+ * 발주요청 폼에 맞추자. 글씨의 가독성, 항목 레이아웃 구성 등"*
+ *
+ * 34차는 **배치만** 맞췄다(네 블록 · 출발지/도착지 열). 실측해 보니 입력칸 자체는 이미
+ * 거의 같았고(높이 38 vs 40 · 모서리 12 vs 12 · 테두리 1px · 안쪽여백 비슷) **다른 것은
+ * 라벨과 배경 두 가지뿐**이었다.
+ *
+ *              화주포털 발주요청            관리자 견적 폼(전)
+ *   라벨        14px / 400 / #888378        12.5px / 600 / #5f6b78
+ *   입력 배경    #ffffff                     #f9fafb
+ *
+ * 🔴 **`.field` 를 전역으로 고치지 말 것** — 관리자 31개 화면이 같이 바뀐다.
+ *    그래서 `.quote-form` 스코프 안에서만 덮어쓴다(폼 여는 태그에 붙어 있다).
+ * 🔴 **포털 부품(`.pv2-*`)이나 `--pv2-*` 토큰을 끌어오지 말 것** — `.portal-v2` 스코프
+ *    전용이라 끌어오면 관리자 화면 CSS 가 통째로 딸려온다(34차가 같은 이유로 안 가져왔다).
+ *    아래 색이 리터럴인 것은 그 때문이고, **포털 실측값을 그대로 옮겨 적은 것**이다.
+ * 🔴 라벨을 **더 작게·더 굵게** 되돌리지 말 것 — 굵은 12.5px 이 지적받은 그 상태다.
+ */
+.admin-wide .quote-form .field label {
+  font-size: 14px;
+  font-weight: 500;
+  /* 포털 실측 rgb(136, 131, 120) — 차가운 청회색(--text-muted)보다 글자가 눈에 덜 튄다 */
+  color: #888378;
+  margin-bottom: 6px;
+}
+.admin-wide .quote-form .field input,
+.admin-wide .quote-form .field select,
+.admin-wide .quote-form .field textarea {
+  background: var(--surface);
+  font-size: 14.5px;
+}
+
+/* 🔴 `.form-grid` **밖**에 있어 폼 전체 폭을 먹던 칸을 2열 한 칸 폭으로 묶는다.
+ *    (「화주 업체 검색」이 1600px 화면에서 910px 이었다 — 회사명은 그만큼 길지 않다)
+ *    🔴 `width` 가 아니라 `max-width` 다 — 좁은 화면에서는 그대로 줄어들어야 한다. */
+.admin-wide .quote-form .quote-form-half {
+  max-width: 448px;
+}
