@@ -7368,4 +7368,11 @@ tbody tr:hover {
   .list-pagination-nav {
     justify-content: center;
   }
+  /* 🔴 모바일에서만 버튼을 조인다 — 390px(내부 358px)에서 기본 크기면 약 366px 이라
+     **「다음」 하나만 아랫줄로 내려간다**(실측). 한 줄에 들어가게 하는 것이 목적이고,
+     더 줄이면 손가락으로 누르기 어려워진다. 🔴 데스크탑에는 적용하지 말 것. */
+  .list-pagination-btn {
+    min-width: 28px;
+    padding: 6px 6px;
+  }
 }
