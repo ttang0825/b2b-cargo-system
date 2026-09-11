@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import Pv2AddressField from "@/components/pv2/Pv2AddressField";
 import Pv2Select from "@/components/pv2/Pv2Select";
-import { VEHICLE_TYPES_ALL, formatPhoneNumber } from "@/lib/constants";
+import { VEHICLE_TYPES_ALL, DEFAULT_VEHICLE_TYPE, formatPhoneNumber } from "@/lib/constants";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import { orderBodyTypes } from "@/lib/vehicleBodyTypes";
 import {
@@ -75,7 +75,8 @@ export default function PortalLocationsPage() {
   // 새 화물 프리셋
   const [nc, setNc] = useState({
     name: "",
-    vehicle_type: VEHICLE_TYPES_ALL[0] as string,
+    // 🔴 `VEHICLE_TYPES_ALL[0]` 을 쓰지 말 것 — 2026-09-11 에 맨 앞이 「다마스」가 됐다.
+    vehicle_type: DEFAULT_VEHICLE_TYPE as string,
     body_type: "",
     item: "",
     item_condition: "",
@@ -281,7 +282,7 @@ export default function PortalLocationsPage() {
     setEditingCargoId(c.id);
     setNc({
       name: c.name,
-      vehicle_type: c.payload?.vehicle_type || (VEHICLE_TYPES_ALL[0] as string),
+      vehicle_type: c.payload?.vehicle_type || (DEFAULT_VEHICLE_TYPE as string),
       body_type: c.payload?.body_type || "",
       item: c.payload?.item || "",
       item_condition: c.payload?.item_condition || "",
@@ -296,7 +297,7 @@ export default function PortalLocationsPage() {
     setCargoFormError(null);
     setNc({
       name: "",
-      vehicle_type: VEHICLE_TYPES_ALL[0] as string,
+      vehicle_type: DEFAULT_VEHICLE_TYPE as string,
       body_type: orderBodyTypes(optionsOf("차량형태"))[0] || "",
       item: "",
       item_condition: optionsOf("물품특성")[0] || "",

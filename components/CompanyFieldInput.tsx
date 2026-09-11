@@ -3,7 +3,13 @@
 import { memo } from "react";
 import AddressSearch from "@/components/AddressSearch";
 import MultiSelectTags from "@/components/MultiSelectTags";
-import { formatPhoneNumber, VEHICLE_TYPES_ALL, BODY_TYPES, REGIONS } from "@/lib/constants";
+import {
+  formatPhoneNumber,
+  VEHICLE_TYPES_ALL,
+  DEFAULT_VEHICLE_TYPE,
+  BODY_TYPES,
+  REGIONS,
+} from "@/lib/constants";
 import type { CompanyField } from "@/lib/companyFields";
 
 // 화주 항목 하나를 그리는 공용 입력칸 — 33차 A장.
@@ -97,7 +103,7 @@ function CompanyFieldInput({
         <label>{f.label}</label>
         <div style={{ display: "flex", gap: 6 }}>
           <select
-            value={tonnage || VEHICLE_TYPES_ALL[0]}
+            value={tonnage || DEFAULT_VEHICLE_TYPE}
             onChange={(e) => onChange("recommended_vehicle_tonnage", e.target.value)}
             disabled={disabled}
             style={{ flex: 1, minWidth: 0 }}
