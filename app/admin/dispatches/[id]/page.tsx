@@ -28,7 +28,7 @@ import {
   mapToLegacySettlementType,
 } from "@/lib/settlementLabels";
 import { calcSettlement } from "@/lib/settlementCalc";
-import { calcVatAmount, calcInclusiveAmount } from "@/lib/vat";
+import { calcVatAmount, calcInclusiveAmount, toSupplyAmount } from "@/lib/vat";
 import MoneyInput from "@/components/MoneyInput";
 import MixableBadge from "@/components/MixableBadge";
 import {
@@ -47,6 +47,7 @@ import {
   isDispatchReadyForPhotoUpload,
 } from "@/lib/dispatchPhotos";
 import { uploadDispatchPhoto } from "@/lib/uploadDispatchPhoto";
+import VatBasisSelect from "@/components/VatBasisSelect";
 import { autoCreateInvoice } from "@/lib/autoCreateInvoice";
 import {
   CLAIM_TYPES,
@@ -199,7 +200,9 @@ export default function DispatchDetailPage() {
 
   const [editForm, setEditForm] = useState({
     customer_charge: "",
+    customer_charge_vat_included: false,
     driver_payout: "",
+    driver_vat_included: false,
     total_freight_amount: "",
     pickup_confirmed: false,
     delivery_confirmed: false,
@@ -212,7 +215,10 @@ export default function DispatchDetailPage() {
     network_settlement_type: "none" as string,
     driver_direct_collection_amount: "",
     brokerage_fee: "",
-    brokerage_fee_payer: "" as string,
+    // 🔴 `brokerage_fee_payer` 는 35차에 화면에서 뺐다(수수료는 무조건 차주 부담).
+    //    컬럼은 과거 기록 보존용으로 DB 에 남아 있지만 **여기서 읽지도 쓰지도 않는다**
+    //    (원칙 45번 — 구형 필드는 얼려두고 역방향 동기화를 만들지 않는다).
+    brokerage_fee_waived: false,
     ...EMPTY_PICKUP_DROPOFF_CONTACT,
   });
   const [settlementValue, setSettlementValue] = useState<CollectionMethodValue>({
@@ -238,7 +244,9 @@ export default function DispatchDetailPage() {
     setDispatch(data);
     setEditForm({
       customer_charge: data.customer_charge ?? "",
+      customer_charge_vat_included: !!data.customer_charge_vat_included,
       driver_payout: data.driver_payout ?? "",
+      driver_vat_included: !!data.driver_vat_included,
       total_freight_amount: data.total_freight_amount != null ? String(data.total_freight_amount) : "",
       pickup_confirmed: data.pickup_confirmed || false,
       delivery_confirmed: data.delivery_confirmed || false,
@@ -252,7 +260,7 @@ export default function DispatchDetailPage() {
       driver_direct_collection_amount:
         data.driver_direct_collection_amount != null ? String(data.driver_direct_collection_amount) : "",
       brokerage_fee: data.brokerage_fee != null ? String(data.brokerage_fee) : "",
-      brokerage_fee_payer: data.brokerage_fee_payer || "",
+      brokerage_fee_waived: !!data.brokerage_fee_waived,
       origin_company_name: data.origin_company_name || "",
       origin_contact_name: data.origin_contact_name || "",
       origin_contact_phone: data.origin_contact_phone || "",
@@ -573,7 +581,9 @@ export default function DispatchDetailPage() {
       external_vehicle_plate:
         editForm.assignment_type === "external" ? externalVehiclePlate.trim() || null : null,
       customer_charge: editForm.customer_charge ? Number(editForm.customer_charge) : null,
+      customer_charge_vat_included: editForm.customer_charge_vat_included,
       driver_payout: editForm.driver_payout ? Number(editForm.driver_payout) : null,
+      driver_vat_included: editForm.driver_vat_included,
       updated_by: await getCurrentStaffId(),
     };
 
@@ -845,6 +855,9 @@ export default function DispatchDetailPage() {
         ? Number(editForm.driver_direct_collection_amount)
         : null,
       brokerageFee: editForm.brokerage_fee ? Number(editForm.brokerage_fee) : null,
+      brokerageFeeWaived: editForm.brokerage_fee_waived,
+      customerChargeVatIncluded: editForm.customer_charge_vat_included,
+      driverVatIncluded: editForm.driver_vat_included,
     });
     if (result.kind === "error") {
       setError(`정산 자동등록에 실패했습니다: ${result.message}`);
@@ -928,9 +941,11 @@ export default function DispatchDetailPage() {
       customer_charge: editForm.customer_charge
         ? Number(editForm.customer_charge)
         : null,
+      customer_charge_vat_included: editForm.customer_charge_vat_included,
       driver_payout: editForm.driver_payout
         ? Number(editForm.driver_payout)
         : null,
+      driver_vat_included: editForm.driver_vat_included,
       total_freight_amount: editForm.total_freight_amount
         ? Number(editForm.total_freight_amount)
         : editForm.customer_charge
@@ -957,8 +972,8 @@ export default function DispatchDetailPage() {
               ? Number(editForm.driver_direct_collection_amount)
               : null,
             brokerage_fee:
-              editForm.brokerage_fee_payer === "waived" ? 0 : editForm.brokerage_fee ? Number(editForm.brokerage_fee) : null,
-            brokerage_fee_payer: editForm.brokerage_fee_payer || null,
+              editForm.brokerage_fee_waived ? 0 : editForm.brokerage_fee ? Number(editForm.brokerage_fee) : null,
+            brokerage_fee_waived: editForm.brokerage_fee_waived,
           }
         : {}),
       updated_by: await getCurrentStaffId(),
@@ -1476,13 +1491,27 @@ export default function DispatchDetailPage() {
           정산 정보
         </h3>
 
+        {/* ── 부가세 구분 (35차 A-3) ────────────────────────────────────────────
+            🔴 **7차 세션에 지웠던 토글을 되살린 것이다.** 그때는 입력값을 항상
+               공급가액으로 고정했는데, 선착불에서 화주가 차주에게 **부가세 포함가를
+               주는 경우가 실제로 있다**는 사용자 확정(5번)으로 다시 필요해졌다.
+            🔴 **화주쪽·차주쪽이 같은 부품(`VatBasisSelect`)을 쓴다** — 두 벌이 되면
+               갈린다(완료조건 9). 새로 만들지 말 것.
+            🔴 **기본값은 「부가세 별도」다** — true 로 두면 7차 이후 저장된 모든
+               금액의 의미가 통째로 바뀐다. */}
         <div className="form-grid" style={{ padding: 0, marginBottom: 10 }}>
           <div className="field">
-            <label>화주 청구금액(공급가액, 원)</label>
+            <label>화주 청구금액(원)</label>
             <MoneyInput
               value={String(editForm.customer_charge)}
               onChange={(v) => setEditForm({ ...editForm, customer_charge: v })}
             />
+            <div style={{ marginTop: 4 }}>
+              <VatBasisSelect
+                value={editForm.customer_charge_vat_included}
+                onChange={(v) => setEditForm({ ...editForm, customer_charge_vat_included: v })}
+              />
+            </div>
           </div>
           <div className="field">
             <label>차주 지급운임(원)</label>
@@ -1490,6 +1519,12 @@ export default function DispatchDetailPage() {
               value={String(editForm.driver_payout)}
               onChange={(v) => setEditForm({ ...editForm, driver_payout: v })}
             />
+            <div style={{ marginTop: 4 }}>
+              <VatBasisSelect
+                value={editForm.driver_vat_included}
+                onChange={(v) => setEditForm({ ...editForm, driver_vat_included: v })}
+              />
+            </div>
           </div>
         </div>
         <p style={{ fontSize: 13.5, fontWeight: 600 }}>
@@ -1532,39 +1567,44 @@ export default function DispatchDetailPage() {
                   onChange={(v) => setEditForm({ ...editForm, driver_direct_collection_amount: v })}
                 />
               </div>
+              {/* ── 주선수수료 (35차 A-3·A-4) ──────────────────────────────────
+                  🔴 **부가세 포함가로 기입한다**(사용자 6·9번 확정). 그전 라벨은
+                     「공급가액」이었고, 그래서 DB 에 5,000(포함가)과 4,545(공급가액)가
+                     **섞여 들어가 있다**(실측). 통계는 항상 ÷1.1 해서 공급가액으로 쓴다.
+                  🔴 **「수수료 지급자」를 없앴다** — 수수료는 무조건 차주가 지급한다
+                     (사용자 10번). 그 드롭다운의 `waived`(면제)만 정산확정 게이트에
+                     실제로 쓰이고 있어서 **체크 하나로 옮겨 담았다.**
+                     🔴 게이트를 없앤 것이 아니다 — 없애면 「정말 0원」과 「아직 안 적었다」를
+                        가릴 수 없어 미수금이 조용히 사라진다. */}
               <div className="field">
-                <label>주선수수료(공급가액, 원)</label>
+                <label>주선수수료(부가세 포함가, 원)</label>
                 <MoneyInput
-                  value={editForm.brokerage_fee_payer === "waived" ? "0" : editForm.brokerage_fee}
+                  value={editForm.brokerage_fee_waived ? "0" : editForm.brokerage_fee}
                   onChange={(v) => setEditForm({ ...editForm, brokerage_fee: v })}
-                  disabled={editForm.brokerage_fee_payer === "waived"}
+                  disabled={editForm.brokerage_fee_waived}
                 />
-                {editForm.brokerage_fee && Number(editForm.brokerage_fee) > 0 && editForm.brokerage_fee_payer !== "waived" && (
+                {editForm.brokerage_fee && Number(editForm.brokerage_fee) > 0 && !editForm.brokerage_fee_waived && (
                   <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, marginBottom: 0 }}>
-                    부가세 {won(calcVatAmount(Number(editForm.brokerage_fee)))} · 부가세 포함{" "}
-                    {won(calcInclusiveAmount(Number(editForm.brokerage_fee)))}
+                    공급가액 {won(toSupplyAmount(Number(editForm.brokerage_fee)))} · 부가세{" "}
+                    {won(Number(editForm.brokerage_fee) - toSupplyAmount(Number(editForm.brokerage_fee)))}
                   </p>
                 )}
-              </div>
-              <div className="field">
-                <label>수수료 지급자</label>
-                <select
-                  value={editForm.brokerage_fee_payer}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      brokerage_fee_payer: e.target.value,
-                      brokerage_fee: e.target.value === "waived" ? "0" : editForm.brokerage_fee,
-                    })
-                  }
+                <label
+                  style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, fontSize: 12.5 }}
                 >
-                  <option value="">선택</option>
-                  {Object.entries(BROKERAGE_FEE_PAYER_LABELS).map(([v, label]) => (
-                    <option key={v} value={v}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
+                  <input
+                    type="checkbox"
+                    checked={editForm.brokerage_fee_waived}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        brokerage_fee_waived: e.target.checked,
+                        brokerage_fee: e.target.checked ? "0" : editForm.brokerage_fee,
+                      })
+                    }
+                  />
+                  주선수수료 면제
+                </label>
               </div>
             </div>
           </div>

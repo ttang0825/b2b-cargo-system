@@ -150,7 +150,10 @@ function InvoicesPageInner() {
     total_freight_amount: number | null;
     driver_direct_collection_amount: number | null;
     brokerage_fee: number | null;
-    brokerage_fee_payer: string | null;
+    // 🔴 `brokerage_fee_payer` 는 35차 A-4 에 뺐다(수수료는 무조건 차주 부담).
+    brokerage_fee_waived: boolean;
+    customer_charge_vat_included: boolean;
+    driver_vat_included: boolean;
   } | null>(null);
 
   async function loadInvoices(preset: DatePreset = period) {
@@ -295,7 +298,7 @@ function InvoicesPageInner() {
     const { data: dispatch } = await supabase
       .from("dispatches")
       .select(
-        "id, customer_charge, driver_payout, collection_method, billing_cycle, direct_collection_point, network_settlement_type, total_freight_amount, driver_direct_collection_amount, brokerage_fee, brokerage_fee_payer"
+        "id, customer_charge, driver_payout, customer_charge_vat_included, driver_vat_included, collection_method, billing_cycle, direct_collection_point, network_settlement_type, total_freight_amount, driver_direct_collection_amount, brokerage_fee, brokerage_fee_waived"
       )
       .eq("order_id", orderId)
       .maybeSingle();
@@ -309,7 +312,9 @@ function InvoicesPageInner() {
         total_freight_amount: dispatch.total_freight_amount ?? null,
         driver_direct_collection_amount: dispatch.driver_direct_collection_amount ?? null,
         brokerage_fee: dispatch.brokerage_fee ?? null,
-        brokerage_fee_payer: dispatch.brokerage_fee_payer ?? null,
+        brokerage_fee_waived: !!dispatch.brokerage_fee_waived,
+        customer_charge_vat_included: !!dispatch.customer_charge_vat_included,
+        driver_vat_included: !!dispatch.driver_vat_included,
       });
     } else {
       setSettlementSnapshot({
@@ -320,7 +325,9 @@ function InvoicesPageInner() {
         total_freight_amount: null,
         driver_direct_collection_amount: null,
         brokerage_fee: null,
-        brokerage_fee_payer: null,
+        brokerage_fee_waived: false,
+        customer_charge_vat_included: false,
+        driver_vat_included: false,
       });
     }
 
@@ -376,6 +383,7 @@ function InvoicesPageInner() {
     // 지급되는 최종 금액(부가세 포함 기준)이므로, 기준을 맞추기 위해
     // 화주 청구금액도 부가세 포함가로 환산한 뒤 차감한다(PR #63 리뷰 피드백)
     const commission = calcInclusiveAmount(chargeNum) - payoutNum;
+    const isDirect = settlementSnapshot?.collection_method === "driver_direct";
 
     const { error } = await supabase.from("invoices").insert({
       order_id: selectedOrderId,
@@ -387,8 +395,11 @@ function InvoicesPageInner() {
       driver_payout_total: payoutNum || null,
       commission_total: commission || null,
       payment_due_date: paymentDueDate || null,
-      receivable_amount: chargeNum || null,
-      payable_amount: payoutNum || null,
+      // 🔴 35차 A-1 — 받을 돈·줄 돈은 수금방식이 정한다. 선착불은 운임이 위캐리를
+      //    거치지 않으므로 받을 돈이 **주선수수료**이고 줄 돈은 **0**이다.
+      //    ⚠️ `lib/autoCreateInvoice.ts` 와 **같은 규칙이다** — 한쪽만 고치지 말 것.
+      receivable_amount: isDirect ? settlementSnapshot?.brokerage_fee ?? null : chargeNum || null,
+      payable_amount: isDirect ? 0 : payoutNum || null,
       settlement_type: order?.settlement_type || "general",
       collection_method: settlementSnapshot?.collection_method || "broker",
       billing_cycle: settlementSnapshot?.billing_cycle || "per_order",
@@ -397,7 +408,15 @@ function InvoicesPageInner() {
       total_freight_amount: settlementSnapshot?.total_freight_amount ?? chargeNum ?? null,
       driver_direct_collection_amount: settlementSnapshot?.driver_direct_collection_amount ?? null,
       brokerage_fee: settlementSnapshot?.brokerage_fee ?? null,
-      brokerage_fee_payer: settlementSnapshot?.brokerage_fee_payer ?? null,
+      brokerage_fee_waived: settlementSnapshot?.brokerage_fee_waived ?? false,
+      customer_charge_vat_included: settlementSnapshot?.customer_charge_vat_included ?? false,
+      driver_vat_included: settlementSnapshot?.driver_vat_included ?? false,
+      // 선착불은 운송완료 시점에 입금·지급이 완료다(35차 A-2) — 오갈 돈이 위캐리를
+      // 안 거친다. 🔴 받을 주선수수료는 `brokerage_fee_paid` 로 따로 남는다.
+      payment_received: isDirect,
+      payment_received_date: isDirect ? settlementReferenceDate || null : null,
+      driver_paid: isDirect,
+      driver_paid_date: isDirect ? settlementReferenceDate || null : null,
       status: "정산대기",
       created_by: await getCurrentStaffId(),
     });

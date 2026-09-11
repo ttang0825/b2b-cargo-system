@@ -75,7 +75,11 @@ type DispatchRow = {
   total_freight_amount: number | null;
   driver_direct_collection_amount: number | null;
   brokerage_fee: number | null;
-  brokerage_fee_payer: string | null;
+  // 🔴 `brokerage_fee_payer` 는 35차에 화면에서 뺐다 — 조회에서도 뺀다.
+  //    컬럼은 과거 기록 보존용으로 DB 에 남아 있지만 새로 읽지 않는다(원칙 45번).
+  brokerage_fee_waived: boolean | null;
+  customer_charge_vat_included: boolean | null;
+  driver_vat_included: boolean | null;
   orders: {
     order_no: string | null;
     origin: string | null;
@@ -148,7 +152,7 @@ function DispatchesPageInner() {
     let query = supabase
       .from("dispatches")
       .select(
-        "id,dispatch_status,customer_charge,driver_payout,margin,created_at,order_id,driver_id,assignment_type,requested_network_ids,confirmed_network_id,external_driver_name,settlement_type,collection_method,billing_cycle,direct_collection_point,network_settlement_type,total_freight_amount,driver_direct_collection_amount,brokerage_fee,brokerage_fee_payer,orders(order_no,origin,destination,loading_type,companies(name,is_recurring_contract,recurring_contract_ended_on),guest_name),drivers(name,phone)"
+        "id,dispatch_status,customer_charge,driver_payout,margin,created_at,order_id,driver_id,assignment_type,requested_network_ids,confirmed_network_id,external_driver_name,settlement_type,collection_method,billing_cycle,direct_collection_point,network_settlement_type,total_freight_amount,driver_direct_collection_amount,brokerage_fee,brokerage_fee_waived,customer_charge_vat_included,driver_vat_included,orders(order_no,origin,destination,loading_type,companies(name,is_recurring_contract,recurring_contract_ended_on),guest_name),drivers(name,phone)"
       )
       .order("created_at", { ascending: false })
       .limit(preset === "all" ? ALL_PERIOD_LIMIT : FILTERED_PERIOD_LIMIT);
@@ -437,6 +441,9 @@ function DispatchesPageInner() {
       totalFreightAmount: target.total_freight_amount ?? null,
       driverDirectCollectionAmount: target.driver_direct_collection_amount ?? null,
       brokerageFee: target.brokerage_fee ?? null,
+      brokerageFeeWaived: target.brokerage_fee_waived ?? false,
+      customerChargeVatIncluded: target.customer_charge_vat_included ?? false,
+      driverVatIncluded: target.driver_vat_included ?? false,
     });
     if (result.kind === "error") {
       setError(`정산 자동등록에 실패했습니다: ${result.message}`);

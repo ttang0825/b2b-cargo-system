@@ -31,8 +31,14 @@ const ALLOWED_FIELDS = [
   "brokerage_fee_paid",
   "brokerage_fee_paid_at",
   "brokerage_fee",
-  "brokerage_fee_payer",
+  // 🔴 `brokerage_fee_payer` 는 35차 A-4 에 **화이트리스트에서 뺐다** — 화면에서
+  //    「수수료 지급자」를 없앴고(수수료는 무조건 차주 부담) 그 컬럼은 과거 기록
+  //    보존용 읽기 전용이다(원칙 45번). **다시 넣지 말 것.**
+  "brokerage_fee_waived",
   "driver_direct_collection_amount",
+  // 35차 A-5 — 선착불의 차주 수수료분 세금계산서. 화주쪽 `tax_invoice_issued` 와 다른 칸
+  "driver_tax_invoice_issued",
+  "driver_tax_invoice_date",
 ];
 
 function getAdminClient() {

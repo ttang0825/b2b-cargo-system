@@ -18,10 +18,10 @@ import { logSettlementFieldChange } from "@/lib/settlementFieldChangeLog";
 import {
   getSettlementDisplayLabel,
   getPaymentConditionLabel,
-  getBrokerageFeePayerLabel,
   mapToLegacySettlementType,
 } from "@/lib/settlementLabels";
-import { calcVatAmount, calcInclusiveAmount } from "@/lib/vat";
+import { calcVatAmount, calcInclusiveAmount, toSupplyAmount } from "@/lib/vat";
+import { vatBasisLabel } from "@/components/VatBasisSelect";
 import MixableBadge from "@/components/MixableBadge";
 import LockedBadge from "@/components/LockedBadge";
 import AmendmentReasonModal from "@/components/AmendmentReasonModal";
@@ -73,6 +73,10 @@ export default function InvoiceDetailPage() {
     driver_paid_date: "",
     brokerage_fee_paid: false,
     brokerage_fee_paid_at: "",
+    // 35차 A-4·A-5 — 「수수료 지급자」 대신 면제 체크 · 차주 수수료 세금계산서
+    brokerage_fee_waived: false,
+    driver_tax_invoice_issued: false,
+    driver_tax_invoice_date: "",
   });
   const [settlementValue, setSettlementValue] = useState<CollectionMethodValue>({
     collection_method: "broker",
@@ -143,6 +147,11 @@ export default function InvoiceDetailPage() {
       driver_paid: data.driver_paid || false,
       driver_paid_date: data.driver_paid_date || "",
       brokerage_fee_paid: data.brokerage_fee_paid || false,
+      brokerage_fee_waived: data.brokerage_fee_waived || false,
+      driver_tax_invoice_issued: data.driver_tax_invoice_issued || false,
+      driver_tax_invoice_date: data.driver_tax_invoice_date
+        ? String(data.driver_tax_invoice_date).slice(0, 10)
+        : "",
       brokerage_fee_paid_at: data.brokerage_fee_paid_at
         ? String(data.brokerage_fee_paid_at).slice(0, 10)
         : "",
@@ -206,6 +215,10 @@ export default function InvoiceDetailPage() {
         setSaveError("주선수수료 입금완료를 체크하셨습니다. 입금일을 입력해주세요.");
         return;
       }
+      if (editForm.driver_tax_invoice_issued && !editForm.driver_tax_invoice_date) {
+        setSaveError("차주 세금계산서 발행완료를 체크하셨습니다. 발행일을 입력해주세요.");
+        return;
+      }
     }
 
     // 확정(잠금)된 건이고 아직 수정 사유를 안 받았다면, 저장 대신 사유 입력
@@ -233,6 +246,9 @@ export default function InvoiceDetailPage() {
     } else {
       payload.brokerage_fee_paid = editForm.brokerage_fee_paid;
       payload.brokerage_fee_paid_at = editForm.brokerage_fee_paid_at || null;
+      payload.brokerage_fee_waived = editForm.brokerage_fee_waived;
+      payload.driver_tax_invoice_issued = editForm.driver_tax_invoice_issued;
+      payload.driver_tax_invoice_date = editForm.driver_tax_invoice_date || null;
     }
 
     // 이 저장 지점은 "잠긴 건인지"를 서버가 매번 새로 확인해야 해서 서버
@@ -265,16 +281,20 @@ export default function InvoiceDetailPage() {
     // 입금 확인 상태가 바뀌면, 연결된 화주의 미수금을 전체 재계산합니다
     // (증분 방식 대신, 그 화주의 모든 미입금 정산건을 다시 합산 - 삭제된
     // 기록이 있어도 항상 정확합니다).
+    // 🔴 집계 기준을 `customer_charge_total` 에서 `receivable_amount` 로 바꿨다(35차 A-1).
+    //    선착불 건의 「받을 돈」은 화주 청구액이 아니라 **주선수수료**다 — 청구액으로 세면
+    //    위캐리를 거치지도 않는 운임 전액이 화주 미수금으로 잡힌다.
+    //    ⚠️ `receivable_amount` 가 없는 옛 건은 종전대로 청구액으로 폴백한다.
     if (settlementValue.collection_method === "broker" && invoice.companies?.id && wasReceived !== nowReceived) {
       const { data: allInvoices } = await supabase
         .from("invoices")
-        .select("id,customer_charge_total,payment_received")
+        .select("id,customer_charge_total,receivable_amount,payment_received")
         .eq("company_id", invoice.companies.id);
       const outstanding = (allInvoices || [])
         .filter((i) => i.id !== id) // 이 건은 아래서 최신 nowReceived 기준으로 따로 반영
         .filter((i) => !i.payment_received)
-        .reduce((sum, i) => sum + (i.customer_charge_total || 0), 0);
-      const thisAmount = nowReceived ? 0 : invoice.customer_charge_total || 0;
+        .reduce((sum, i) => sum + (i.receivable_amount ?? i.customer_charge_total ?? 0), 0);
+      const thisAmount = nowReceived ? 0 : invoice.receivable_amount ?? invoice.customer_charge_total ?? 0;
       await supabase
         .from("companies")
         .update({ outstanding_amount: outstanding + thisAmount })
@@ -295,13 +315,16 @@ export default function InvoiceDetailPage() {
     if (!invoice) return;
     if (settlementValue.collection_method === "driver_direct") {
       const fee = invoice.brokerage_fee || 0;
-      const waived = invoice.brokerage_fee_payer === "waived";
+      // 🔴 판정 근거를 `brokerage_fee_payer === "waived"` 에서 전용 플래그로 옮겼다
+      //    (35차 A-4). 게이트를 **없앤 것이 아니다** — 없애면 「정말 0원」과
+      //    「아직 안 적었다」를 가릴 수 없어 미수금이 조용히 사라진다.
+      const waived = !!invoice.brokerage_fee_waived;
       if (fee > 0 && !invoice.brokerage_fee_paid) {
         setSaveError("주선수수료가 아직 입금완료 처리되지 않았습니다. 먼저 입금완료를 체크하고 저장해주세요.");
         return;
       }
       if (fee === 0 && !waived) {
-        setSaveError("주선수수료가 0원인데 지급자가 '면제'로 설정되어 있지 않습니다. 배차 상세에서 먼저 확인해주세요.");
+        setSaveError("주선수수료가 0원입니다. 정말 받지 않는 건이면 아래 '주선수수료 면제'를 체크하고 저장해주세요.");
         return;
       }
     }
@@ -617,8 +640,13 @@ export default function InvoiceDetailPage() {
                 <div style={{ fontSize: 14, fontWeight: 600 }}>
                   {won(invoice.customer_charge_total)}
                 </div>
+                {/* 🔴 「부가세 별도」를 글자로 박아두던 자리다(35차 A-3) — 이제 저장된
+                    구분값을 읽는다. 선착불에서 화주가 차주에게 **부가세 포함가를 주는
+                    경우가 실제로 있어서** 구분이 생겼다(사용자 5번). */}
                 {invoice.customer_charge_total != null && (
-                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>부가세 별도</div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                    {vatBasisLabel(invoice.customer_charge_vat_included)}
+                  </div>
                 )}
                 {trailingExtraCharges.length > 0 && (
                   <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
@@ -640,10 +668,12 @@ export default function InvoiceDetailPage() {
                 <div style={{ fontSize: 14, fontWeight: 600 }}>
                   {won(invoice.driver_payout_total)}
                 </div>
-                {invoice.driver_payout_total != null && driverCalcInfo?.throughCalc && (
+                {invoice.driver_payout_total != null && (
                   <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                    부가세 포함
-                    {driverCalcInfo.insuranceApplied && " · 산재보험료 차감됨"}
+                    {/* 계산기를 거친 금액은 계산식 구조상 항상 부가세 포함이라 고정이고,
+                        직접 입력한 금액은 저장된 구분값을 따른다(35차 A-3) */}
+                    {driverCalcInfo?.throughCalc ? "부가세 포함" : vatBasisLabel(invoice.driver_vat_included)}
+                    {driverCalcInfo?.insuranceApplied && " · 산재보험료 차감됨"}
                   </div>
                 )}
                 {trailingExtraCharges.length > 0 && (
@@ -679,19 +709,25 @@ export default function InvoiceDetailPage() {
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{won(invoice.driver_direct_collection_amount)}</div>
               </div>
               <div>
-                <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>주선수수료(실질수익)</div>
+                {/* 🔴 주선수수료는 **부가세 포함가**로 기입한다(사용자 6·9번 확정).
+                    그전 라벨이 「공급가액」이라 DB 에 두 기준이 섞여 들어가 있다(실측).
+                    🔴 **마진으로 쓸 때는 ÷1.1 한 공급가액이다** — 선착불에서 위캐리가
+                       버는 돈이 이것뿐이고, 운임은 위캐리를 거치지 않는다. */}
+                <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>주선수수료(부가세 포함가)</div>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{won(invoice.brokerage_fee)}</div>
                 {invoice.brokerage_fee != null && invoice.brokerage_fee > 0 && (
                   <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                    부가세 {won(calcVatAmount(invoice.brokerage_fee))} · 포함{" "}
-                    {won(calcInclusiveAmount(invoice.brokerage_fee))}
+                    공급가액 {won(toSupplyAmount(invoice.brokerage_fee))} · 부가세{" "}
+                    {won(invoice.brokerage_fee - toSupplyAmount(invoice.brokerage_fee))}
                   </div>
                 )}
+                {invoice.brokerage_fee_waived && (
+                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>면제</div>
+                )}
               </div>
-              <div>
-                <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>수수료 지급자</div>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>{getBrokerageFeePayerLabel(invoice.brokerage_fee_payer)}</div>
-              </div>
+              {/* 🔴 「수수료 지급자」는 35차에 없앴다 — 수수료는 무조건 차주가 지급한다
+                  (사용자 10번). 그 값의 `waived`(면제)만 정산확정 게이트에 쓰이고 있어서
+                  `brokerage_fee_waived` 체크로 옮겼다. **다시 만들지 말 것.** */}
             </>
           )}
           {invoice.orders?.id && (
@@ -780,38 +816,52 @@ export default function InvoiceDetailPage() {
             gap: 20,
           }}
         >
-          <div>
-            <label
-              style={{
-                display: "flex",
-                gap: 6,
-                alignItems: "center",
-                fontSize: 13,
-                marginBottom: 8,
-              }}
-            >
+          {/* ── 화주 세금계산서 (35차 A-5) ────────────────────────────────────────
+              🔴 **선착불에서는 그리지 않는다** — 운임이 화주에서 차주로 바로 가므로
+                 위캐리가 화주에게 발행할 것이 없다(사용자 8번 확정).
+                 대신 아래 선착불 블록에 **차주에게 발행하는 수수료분**이 있다.
+              🔴 컬럼(`tax_invoice_issued`)은 그대로다 — 과거 건과 주선사정산 건이 쓴다. */}
+          {settlementValue.collection_method === "broker" ? (
+            <div>
+              <label
+                style={{
+                  display: "flex",
+                  gap: 6,
+                  alignItems: "center",
+                  fontSize: 13,
+                  marginBottom: 8,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={editForm.tax_invoice_issued}
+                  disabled={fieldsLocked || customerSideLocked}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      tax_invoice_issued: e.target.checked,
+                    })
+                  }
+                />
+                화주 세금계산서 발행완료
+              </label>
               <input
-                type="checkbox"
-                checked={editForm.tax_invoice_issued}
-                disabled={fieldsLocked || customerSideLocked}
+                type="date"
+                value={editForm.tax_invoice_date}
                 onChange={(e) =>
-                  setEditForm({
-                    ...editForm,
-                    tax_invoice_issued: e.target.checked,
-                  })
+                  setEditForm({ ...editForm, tax_invoice_date: e.target.value })
                 }
+                disabled={fieldsLocked || customerSideLocked || !editForm.tax_invoice_issued}
               />
-              세금계산서 발행완료
-            </label>
-            <input
-              type="date"
-              value={editForm.tax_invoice_date}
-              onChange={(e) =>
-                setEditForm({ ...editForm, tax_invoice_date: e.target.value })
-              }
-              disabled={fieldsLocked || customerSideLocked || !editForm.tax_invoice_issued}
-            />
-          </div>
+            </div>
+          ) : (
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>화주 세금계산서</div>
+              <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                해당 없음 — 선착불은 화주가 차주에게 직접 지급합니다
+              </div>
+            </div>
+          )}
 
           {settlementValue.collection_method === "broker" ? (
             <>
@@ -906,9 +956,52 @@ export default function InvoiceDetailPage() {
                 onChange={(e) => setEditForm({ ...editForm, brokerage_fee_paid_at: e.target.value })}
                 disabled={fieldsLocked || !editForm.brokerage_fee_paid}
               />
-              <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6, marginBottom: 0 }}>
-                선착불(차주 직접수금) 건이라 화주 입금·차주 지급 개념이 적용되지 않습니다 —
-                차주는 화주에게 직접 운임을 수금하고, WeCarry는 주선수수료만 정산받습니다.
+              <label
+                style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13, marginTop: 10 }}
+              >
+                <input
+                  type="checkbox"
+                  checked={editForm.brokerage_fee_waived}
+                  disabled={fieldsLocked}
+                  onChange={(e) => setEditForm({ ...editForm, brokerage_fee_waived: e.target.checked })}
+                />
+                주선수수료 면제
+              </label>
+              {/* 🔴 이 체크가 **정산확정 게이트의 판정 근거**다(35차 A-4). 수수료가 0원인
+                  건을 확정하려면 이것이 켜져 있어야 한다 — 「정말 0원」과 「아직 안 적었다」를
+                  가리는 유일한 장치라서, 없애면 미수금이 조용히 사라진다.
+                  ⚠️ 그전에는 「수수료 지급자 = 면제」가 그 자리였고, 사용자 10번으로 그
+                     드롭다운을 없애면서 이 체크로 옮겼다. */}
+
+              {/* ── 차주 세금계산서 (35차 A-5 · 사용자 8번) ───────────────────────
+                  🔴 위쪽 화주 세금계산서와 **다른 칸이다**(`driver_tax_invoice_issued`).
+                     선착불에서 위캐리가 발행하는 것은 차주에게 주는 **수수료분**뿐이다. */}
+              <div style={{ marginTop: 14 }}>
+                <label
+                  style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13, marginBottom: 8 }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={editForm.driver_tax_invoice_issued}
+                    disabled={fieldsLocked}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, driver_tax_invoice_issued: e.target.checked })
+                    }
+                  />
+                  차주 세금계산서 발행완료 (주선수수료분)
+                </label>
+                <input
+                  type="date"
+                  value={editForm.driver_tax_invoice_date}
+                  onChange={(e) => setEditForm({ ...editForm, driver_tax_invoice_date: e.target.value })}
+                  disabled={fieldsLocked || !editForm.driver_tax_invoice_issued}
+                />
+              </div>
+
+              <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 10, marginBottom: 0 }}>
+                선착불(차주 직접수금) 건이라 화주 입금·차주 지급은 <strong>해당 없음</strong>입니다 —
+                운송완료 시점에 자동으로 완료 처리됩니다. 🔴 다만 <strong>차주에게 받을
+                주선수수료는 그대로 남습니다</strong>(위 「주선수수료 입금완료」).
               </p>
             </div>
           )}

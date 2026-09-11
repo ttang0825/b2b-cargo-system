@@ -48,7 +48,15 @@ export type AutoCreateInvoiceInput = {
 
   totalFreightAmount: number | null;
   driverDirectCollectionAmount: number | null;
+  /** 🔴 주선수수료는 **부가세 포함가**로 기입한다(사용자 6·9번 확정, 35차 A-3) */
   brokerageFee: number | null;
+  /** 수수료 면제 — 수수료 0원인 선착불 건을 정산확정할 수 있는 유일한 근거(35차 A-4) */
+  brokerageFeeWaived?: boolean;
+
+  /** 화주 청구금액이 부가세 포함가인가. 기본 false = 공급가액 (35차 A-3) */
+  customerChargeVatIncluded?: boolean;
+  /** 차주 지급금액이 부가세 포함가인가. 기본 false = 공급가액 */
+  driverVatIncluded?: boolean;
 
   /** 운송완료로 넘어간 시각 — 선착불의 입금·지급 완료일로 쓴다 */
   completedOn?: string;
@@ -142,6 +150,9 @@ export async function autoCreateInvoice(
     total_freight_amount: input.totalFreightAmount ?? charge ?? null,
     driver_direct_collection_amount: input.driverDirectCollectionAmount ?? null,
     brokerage_fee: fee,
+    brokerage_fee_waived: !!input.brokerageFeeWaived,
+    customer_charge_vat_included: !!input.customerChargeVatIncluded,
+    driver_vat_included: !!input.driverVatIncluded,
     payment_received: isDirect ? true : false,
     payment_received_date: directDone?.received_at ?? null,
     driver_paid: isDirect ? true : false,
