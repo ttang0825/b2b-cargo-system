@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
-import { fetchExtraChargesByDispatchIds, fetchActiveExtraCharges } from "@/lib/fetchDispatchExtraCharges";
+import { fetchExtraChargesByDispatchIds } from "@/lib/fetchDispatchExtraCharges";
 import {
   DISPATCH_STATUS_OPTIONS,
   getDispatchStatusColor,
@@ -47,6 +47,7 @@ import {
   isDispatchReadyForPhotoUpload,
 } from "@/lib/dispatchPhotos";
 import { uploadDispatchPhoto } from "@/lib/uploadDispatchPhoto";
+import { autoCreateInvoice } from "@/lib/autoCreateInvoice";
 import {
   CLAIM_TYPES,
   CLAIM_STATUSES,
@@ -821,69 +822,32 @@ export default function DispatchDetailPage() {
     }
   }
 
-  // 운송완료로 바뀐 오더에 정산이 아직 없으면 자동으로 등록
-  // (화주 실적은 DB 트리거가 알아서 재계산하므로 여기서 따로 안 건드림)
+  // 🔴 정산 자동등록의 본체는 `lib/autoCreateInvoice.ts` 하나다(35차 A-6).
+  //    그전에는 이 화면 컴포넌트 **안에** 있었고 배차 목록에도 같은 함수가 한 벌
+  //    더 있었다. 🔴 **여기에 다시 본체를 적지 말 것.**
+  //    ⚠️ 이 화면은 아직 저장 안 한 편집값(`editForm`)을 기준으로 만든다 —
+  //       담당자가 운임을 적고 바로 운송완료로 넘기는 흐름이라 그게 맞다.
   async function autoCreateInvoiceIfNeeded(orderId: string) {
-    // 로드맵③ 이후로는 한 오더에 정정청구 invoice가 추가로 있을 수 있어
-    // .maybeSingle()이 2행 이상이면 에러를 던짐 — 존재 여부만 확인
-    const { data: existing } = await supabase
-      .from("invoices")
-      .select("id")
-      .eq("order_id", orderId)
-      .limit(1);
-    if (existing && existing.length > 0) return;
-
-    const { data: order } = await supabase
-      .from("orders")
-      .select("company_id,individual_customer_id")
-      .eq("id", orderId)
-      .single();
-
-    // 로드맵③ 현장 추가비 — 정산 건이 아직 없는 상태에서 미리 등록된 활성
-    // 추가비가 있으면 최초 스냅샷에 포함해서 얼림(3-2)
-    const activeExtras = await fetchActiveExtraCharges(id);
-    const extraCharge = activeExtras.reduce((s, e) => s + (e.customer_charge_amount || 0), 0);
-    const extraPayout = activeExtras.reduce((s, e) => s + (e.driver_payout_amount || 0), 0);
-
-    // 혼적 할인은 이미 견적 단계 최종금액에 반영되어 저장되므로 별도 변환
-    // 없이 화주 청구운임을 그대로 사용
-    const charge = (Number(editForm.customer_charge) || 0) + extraCharge;
-    const payout = (Number(editForm.driver_payout) || 0) + extraPayout;
-    const now = new Date();
-    const billingPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    // 화주 청구금액은 공급가액, 차주 지급금액은 실제 지급되는 최종금액
-    // (부가세 포함 기준)이라 기준이 달랐음 — 청구금액을 부가세 포함가로
-    // 환산해서 맞춘 뒤 차감(PR #63 리뷰 피드백)
-    const commission = calcInclusiveAmount(charge) - payout;
-
-    const { error: invoiceError } = await supabase.from("invoices").insert({
-      order_id: orderId,
-      company_id: order?.company_id || null,
-      individual_customer_id: order?.individual_customer_id || null,
-      billing_period: billingPeriod,
-      settlement_reference_date: new Date().toISOString().slice(0, 10),
-      customer_charge_total: charge || null,
-      driver_payout_total: payout || null,
-      commission_total: commission || null,
-      receivable_amount: charge || null,
-      payable_amount: payout || null,
-      settlement_type: dispatch?.settlement_type || "general",
-      collection_method: dispatch?.collection_method || "broker",
-      billing_cycle: dispatch?.billing_cycle || "per_order",
-      direct_collection_point: dispatch?.direct_collection_point || null,
-      network_settlement_type: dispatch?.network_settlement_type || "none",
-      total_freight_amount:
-        (editForm.total_freight_amount ? Number(editForm.total_freight_amount) : null) ?? charge ?? null,
-      driver_direct_collection_amount: editForm.driver_direct_collection_amount
+    const result = await autoCreateInvoice({
+      dispatchId: id,
+      orderId,
+      customerCharge: Number(editForm.customer_charge) || 0,
+      driverPayout: Number(editForm.driver_payout) || 0,
+      settlementType: dispatch?.settlement_type,
+      collectionMethod: dispatch?.collection_method,
+      billingCycle: dispatch?.billing_cycle,
+      directCollectionPoint: dispatch?.direct_collection_point,
+      networkSettlementType: dispatch?.network_settlement_type,
+      totalFreightAmount: editForm.total_freight_amount
+        ? Number(editForm.total_freight_amount)
+        : null,
+      driverDirectCollectionAmount: editForm.driver_direct_collection_amount
         ? Number(editForm.driver_direct_collection_amount)
         : null,
-      brokerage_fee: editForm.brokerage_fee ? Number(editForm.brokerage_fee) : null,
-      brokerage_fee_payer: editForm.brokerage_fee_payer || null,
-      status: "정산대기",
-      created_by: await getCurrentStaffId(),
+      brokerageFee: editForm.brokerage_fee ? Number(editForm.brokerage_fee) : null,
     });
-    if (invoiceError) {
-      setError(`정산 자동등록에 실패했습니다: ${invoiceError.message}`);
+    if (result.kind === "error") {
+      setError(`정산 자동등록에 실패했습니다: ${result.message}`);
     }
   }
 
