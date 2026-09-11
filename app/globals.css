@@ -7265,3 +7265,26 @@ tbody tr:hover {
 .admin-wide .quote-form .quote-form-half {
   max-width: 448px;
 }
+
+/* 🔴 **필수항목 옅은 강조를 되살린다.**
+ *
+ * 바로 위 `.admin-wide .quote-form .field input`(0,0,3,1)이
+ * `.req-marks .field-required input`(0,0,2,1)보다 특성도가 높아서, 흰 배경으로
+ * 바꾸는 순간 **필수 칸의 옅은 분홍(`#fffbfa`)이 조용히 사라졌다.** 실사용 지적으로
+ * 드러났고 실측으로 확인했다(칸 배경이 `rgb(255,255,255)` 였다).
+ *
+ * 🔴 **규칙 순서를 바꿔 고치지 말 것**(원칙 58번) — 다음에 누가 정렬하면 조용히
+ *    되돌아간다. `.quote-form.req-marks` 두 클래스로 **특성도를 올려서** 이긴다
+ *    (0,0,4,1). 폼 태그가 `className="req-marks quote-form"` 이라 둘이 같은 요소다.
+ * 🔴 포커스하면 흰색으로 돌아가는 것은 원래 동작이다 — 그 규칙도 같이 올려야 한다.
+ */
+.admin-wide .quote-form.req-marks .field-required input,
+.admin-wide .quote-form.req-marks .field-required select,
+.admin-wide .quote-form.req-marks .field-required textarea {
+  background: #fffbfa;
+}
+.admin-wide .quote-form.req-marks .field-required input:focus,
+.admin-wide .quote-form.req-marks .field-required select:focus,
+.admin-wide .quote-form.req-marks .field-required textarea:focus {
+  background: var(--surface);
+}
