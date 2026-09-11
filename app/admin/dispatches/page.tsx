@@ -13,6 +13,7 @@ import {
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import { getCurrentStaffId } from "@/lib/currentStaff";
 import MoneyInput from "@/components/MoneyInput";
+import VatBasisSelect from "@/components/VatBasisSelect";
 import MixableBadge from "@/components/MixableBadge";
 import { shortAddress } from "@/lib/shortAddress";
 import { fetchDispatchSmsPreview } from "@/lib/notifyDispatchSms";
@@ -40,6 +41,9 @@ type OrderLite = {
   billing_cycle: string | null;
   direct_collection_point: string | null;
   quote_id: string | null;
+  // 35차 B-3 — 오더가 금액을 들고 있게 됐다. 배차 등록이 빈 칸일 때 물려받는다
+  customer_charge: number | null;
+  customer_charge_vat_included: boolean | null;
   companies: { name: string } | null;
   guest_name: string | null;
 };
@@ -129,6 +133,8 @@ function DispatchesPageInner() {
     []
   );
   const [customerCharge, setCustomerCharge] = useState("");
+  // 35차 A-3 — 배차 등록의 화주 청구금액도 부가세 기준을 같이 저장한다
+  const [customerChargeVatIncluded, setCustomerChargeVatIncluded] = useState(false);
   const [driverPayout, setDriverPayout] = useState("");
   const [memo, setMemo] = useState("");
   const [contactFields, setContactFields] = useState(EMPTY_PICKUP_DROPOFF_CONTACT);
@@ -169,7 +175,7 @@ function DispatchesPageInner() {
     const { data } = await supabase
       .from("orders")
       .select(
-        "id,order_no,origin,destination,origin_company_name,origin_contact_name,origin_contact_phone,destination_company_name,destination_contact_name,destination_contact_phone,vehicle_type,settlement_type,collection_method,billing_cycle,direct_collection_point,quote_id,companies(name),guest_name"
+        "id,order_no,origin,destination,origin_company_name,origin_contact_name,origin_contact_phone,destination_company_name,destination_contact_name,destination_contact_phone,vehicle_type,settlement_type,collection_method,billing_cycle,direct_collection_point,quote_id,customer_charge,customer_charge_vat_included,companies(name),guest_name"
       )
       .in("status", ["접수", "배차중"])
       .order("created_at", { ascending: false });
@@ -241,7 +247,14 @@ function DispatchesPageInner() {
       destination_contact_name: order?.destination_contact_name || "",
       destination_contact_phone: order?.destination_contact_phone || "",
     });
-    if (order?.quote_id) {
+    // 🔴 35차 B-3 — 오더가 금액을 들고 있으면 그것을 먼저 쓴다. 담당자가 오더 화면에서
+    //    합의 금액을 적어두면 배차에서 다시 적을 일이 없다.
+    //    ⚠️ 오더에 금액이 없을 때만 종전처럼 견적의 최종금액으로 폴백한다 — 견적 없이
+    //       바로 만든 오더도 있어서 이 경로를 지우면 안 된다.
+    if (order?.customer_charge != null) {
+      setCustomerCharge(String(Math.round(order.customer_charge)));
+      setCustomerChargeVatIncluded(!!order.customer_charge_vat_included);
+    } else if (order?.quote_id) {
       const { data: q } = await supabase
         .from("quotes")
         .select("final_amount")
@@ -312,6 +325,7 @@ function DispatchesPageInner() {
         sourceOrder?.collection_method === "driver_direct" ? sourceOrder?.direct_collection_point : null,
       total_freight_amount: customerCharge ? Number(customerCharge) : null,
       customer_charge: customerCharge ? Number(customerCharge) : null,
+      customer_charge_vat_included: customerChargeVatIncluded,
       driver_payout: driverPayout ? Number(driverPayout) : null,
       origin_company_name: contactFields.origin_company_name.trim() || null,
       origin_contact_name: contactFields.origin_contact_name.trim() || null,
@@ -341,6 +355,7 @@ function DispatchesPageInner() {
     setSelectedDriver(null);
     setDriverSearch("");
     setCustomerCharge("");
+    setCustomerChargeVatIncluded(false);
     setDriverPayout("");
     setMemo("");
     setContactFields(EMPTY_PICKUP_DROPOFF_CONTACT);
@@ -660,6 +675,13 @@ function DispatchesPageInner() {
               <div className="field">
                 <label>화주 청구운임(원)</label>
                 <MoneyInput value={customerCharge} onChange={setCustomerCharge} />
+                {/* 35차 A-3 — 배차 상세·정산과 같은 부품이다(두 벌 아님) */}
+                <div style={{ marginTop: 4 }}>
+                  <VatBasisSelect
+                    value={customerChargeVatIncluded}
+                    onChange={setCustomerChargeVatIncluded}
+                  />
+                </div>
               </div>
               <div className="field">
                 <label>차주 지급운임(원)</label>

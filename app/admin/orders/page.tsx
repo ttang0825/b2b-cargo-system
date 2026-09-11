@@ -10,13 +10,20 @@ import {
   type UnlinkedWonQuote,
 } from "@/lib/unlinkedWonQuotes";
 import { ORDER_STATUS_OPTIONS, getOrderStatusColor } from "@/lib/orderStatusColors";
-import { formatPhoneNumber } from "@/lib/constants";
+import {
+  formatPhoneNumber,
+  VEHICLE_TYPES_ALL,
+  DEFAULT_VEHICLE_TYPE,
+  BODY_TYPES,
+} from "@/lib/constants";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import { generateDailyNumber } from "@/lib/generateNumber";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import { getCurrentStaffId } from "@/lib/currentStaff";
 import { getOrCreateIndividualCustomer, findIndividualCustomerByPhone } from "@/lib/individualCustomer";
 import DateTimePicker from "@/components/DateTimePicker";
+import MoneyInput from "@/components/MoneyInput";
+import VatBasisSelect from "@/components/VatBasisSelect";
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import AddressSearch from "@/components/AddressSearch";
 import PickupDropoffContactFields, {
@@ -70,7 +77,13 @@ function OrdersPageInner() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showForm, setShowForm] = useState(false);
+  // 🔴 35차 B-2 (사용자 1번) — 운송오더 관리에 들어오면 **바로 신규 등록 폼이 열려 있다.**
+  //    🔴 **목록을 숨기지 않는다.** PR #144 가 「폼 열림 시 목록 미렌더」 분기를 없앴고
+  //       「다시 만들지 말 것」으로 못박았다 — 그 분기가 34차 리뷰에서 「눌렀는데 아무것도
+  //       안 뜬다」를 한 번 만들었다. 폼과 목록이 같이 보이는 것이 정상이다.
+  const [showForm, setShowForm] = useState(true);
+  const [lastOrderNote, setLastOrderNote] = useState<string | null>(null);
+
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("전체");
@@ -110,7 +123,10 @@ function OrdersPageInner() {
     destinationSido: "",
     destinationSigungu: "",
     ...EMPTY_PICKUP_DROPOFF_CONTACT,
-    vehicle_type: "",
+    vehicle_type: `${DEFAULT_VEHICLE_TYPE} ${BODY_TYPES[0]}`,
+    // 35차 B-3 — 오더에 금액이 없었다(사용자 2번). 부가세 구분은 배차·정산과 같은 부품
+    customer_charge: "",
+    customer_charge_vat_included: false,
     collection_method: "broker" as CollectionMethodValue["collection_method"],
     billing_cycle: "per_order" as CollectionMethodValue["billing_cycle"],
     direct_collection_point: null as CollectionMethodValue["direct_collection_point"],
@@ -175,6 +191,83 @@ function OrdersPageInner() {
     loadOrders(period);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period]);
+
+  // `orders.vehicle_type` 은 「톤수 차량형태」 한 문자열이라(35차 B-1) 드롭다운 두 개가
+  // 쓸 값을 여기서 되짚는다. `lib/companyFields.ts` 의 `recommended_vehicle` 과 같은 관례다.
+  const vehicleTonnage =
+    VEHICLE_TYPES_ALL.find((t) => (form.vehicle_type || "").startsWith(t)) || DEFAULT_VEHICLE_TYPE;
+  const vehicleBodyType =
+    (form.vehicle_type || "").slice(vehicleTonnage.length).trim() || BODY_TYPES[0];
+
+  // 🔴 35차 B-4 (사용자 4번) — 화주를 고르면 그 화주의 **가장 최근 오더**에서 반복되는
+  //    항목을 제안한다. 같은 화주가 같은 구간을 계속 보내는 경우가 많아서다.
+  //
+  //    🔴 **이미 입력한 칸은 절대 덮어쓰지 않는다** — 빈 칸만 채운다. 담당자가 적어둔
+  //       값을 화주 선택 한 번으로 날리면 그 자체가 사고다.
+  //    🔴 **금액은 채우지 않는다** — 운임은 건마다 다르고, 지난 금액이 조용히 들어가면
+  //       **잘못된 청구**가 된다(지시서 하지말것 9). 참고로 보여주지도 않는다.
+  //    🔴 **일정(상차·하차 일시)도 채우지 않는다** — 지난 날짜가 들어가면 원칙 6번의
+  //       「상차는 항상 현재시각 이후」와 정면으로 부딪힌다.
+  //    ⚠️ 견적에서 넘어온 경우(`?from_quote=`)에는 이 제안이 견적 값을 덮지 않도록
+  //       빈 칸만 채우는 규칙이 그대로 방어가 된다.
+  async function prefillFromLastOrder(companyId: string) {
+    const { data, error } = await supabase
+      .from("orders")
+      .select(
+        "origin,origin_sido,origin_sigungu,destination,destination_sido,destination_sigungu,origin_company_name,origin_contact_name,origin_contact_phone,destination_company_name,destination_contact_name,destination_contact_phone,vehicle_type,item,load_condition,unload_condition,collection_method,billing_cycle,direct_collection_point"
+      )
+      .eq("company_id", companyId)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    // 🔴 조회 실패를 조용히 빈 결과로 넘기지 않는다(원칙 55번) — 다만 이것은 **제안**이라
+    //    폼 전체를 막을 일은 아니므로 안내만 띄우고 폼은 그대로 쓴다.
+    if (error) {
+      setLastOrderNote(`직전 오더를 불러오지 못했습니다: ${error.message}`);
+      return;
+    }
+    const last = data?.[0];
+    if (!last) {
+      setLastOrderNote(null);
+      return;
+    }
+    const filled: string[] = [];
+    setForm((prev) => {
+      const next = { ...prev };
+      const put = (key: keyof typeof prev, value: any, label: string) => {
+        if (value == null || value === "") return;
+        if (next[key] !== "" && next[key] != null) return;
+        (next as any)[key] = value;
+        filled.push(label);
+      };
+      put("origin", last.origin, "출발지");
+      put("originSido", last.origin_sido, "");
+      put("originSigungu", last.origin_sigungu, "");
+      put("destination", last.destination, "도착지");
+      put("destinationSido", last.destination_sido, "");
+      put("destinationSigungu", last.destination_sigungu, "");
+      put("origin_company_name", last.origin_company_name, "상차지 담당자");
+      put("origin_contact_name", last.origin_contact_name, "");
+      put("origin_contact_phone", last.origin_contact_phone, "");
+      put("destination_company_name", last.destination_company_name, "하차지 담당자");
+      put("destination_contact_name", last.destination_contact_name, "");
+      put("destination_contact_phone", last.destination_contact_phone, "");
+      put("item", last.item, "품목");
+      put("load_condition", last.load_condition, "상차 조건");
+      put("unload_condition", last.unload_condition, "하차 조건");
+      // 차량은 기본값(1톤 카고)이 먼저 들어가 있어 `put` 의 「빈 칸만」 규칙에 걸리지
+      // 않는다 — 담당자가 아직 손대지 않은 기본값일 때만 갈아끼운다
+      if (last.vehicle_type && next.vehicle_type === `${DEFAULT_VEHICLE_TYPE} ${BODY_TYPES[0]}`) {
+        next.vehicle_type = last.vehicle_type;
+        filled.push("차량");
+      }
+      return next;
+    });
+    setLastOrderNote(
+      filled.length > 0
+        ? `직전 오더에서 ${filled.filter(Boolean).join(" · ")}을(를) 채웠습니다. 금액과 일정은 채우지 않습니다.`
+        : "직전 오더가 있지만 이미 입력하신 값이 있어 채우지 않았습니다."
+    );
+  }
 
   // 견적 상세페이지에서 "운송오더 생성" 버튼으로 넘어온 경우, 견적 내용을 미리 채워줌
   useEffect(() => {
@@ -351,6 +444,8 @@ function OrdersPageInner() {
       destination_contact_name: form.destination_contact_name.trim() || null,
       destination_contact_phone: form.destination_contact_phone.trim() || null,
       vehicle_type: form.vehicle_type || null,
+      customer_charge: form.customer_charge ? Number(form.customer_charge) : null,
+      customer_charge_vat_included: form.customer_charge_vat_included,
       collection_method: form.collection_method,
       billing_cycle: form.billing_cycle,
       direct_collection_point: form.collection_method === "driver_direct" ? form.direct_collection_point : null,
@@ -400,7 +495,9 @@ function OrdersPageInner() {
       destinationSido: "",
       destinationSigungu: "",
       ...EMPTY_PICKUP_DROPOFF_CONTACT,
-      vehicle_type: "",
+      vehicle_type: `${DEFAULT_VEHICLE_TYPE} ${BODY_TYPES[0]}`,
+      customer_charge: "",
+      customer_charge_vat_included: false,
       collection_method: "broker",
       billing_cycle: "per_order",
       direct_collection_point: null,
@@ -565,7 +662,12 @@ function OrdersPageInner() {
 
       {showForm && (
         <div className="card" style={{ marginBottom: 24, padding: 20 }}>
-          <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown}>
+          {/* 🔴 `req-marks quote-form` 은 **34차·PR #143 이 견적 폼에 만든 스코프를 그대로
+                쓰는 것**이다(35차 B-1). 이름이 「quote」인 채로 두 화면이 공유하는 이유는,
+                같은 규칙을 두 벌로 복사하면 다음에 한쪽만 고쳐져 조용히 갈리기 때문이다.
+                🔴 **이름을 바꾸려고 `globals.css` 를 건드리지 말 것** — 그 순간 견적 폼이
+                   같이 움직이고(완료조건 18), 삭제된 줄이 생긴다(완료조건 25). */}
+          <form className="req-marks quote-form" onSubmit={handleSubmit} onKeyDown={handleFormKeyDown}>
             <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
               <button
                 type="button"
@@ -597,6 +699,11 @@ function OrdersPageInner() {
                     }}
                     placeholder="회사명 입력"
                   />
+                  {lastOrderNote && (
+                    <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 4, marginBottom: 0 }}>
+                      {lastOrderNote}
+                    </p>
+                  )}
                 </div>
                 {!selectedCompany && companyResults.length > 0 && (
                   <div
@@ -609,6 +716,7 @@ function OrdersPageInner() {
                         onClick={() => {
                           setSelectedCompany(c);
                           setCompanyResults([]);
+                          prefillFromLastOrder(c.id);
                         }}
                         style={{
                           padding: "8px 12px",
@@ -652,7 +760,18 @@ function OrdersPageInner() {
               </div>
             )}
 
+            {/* ── 오더 등록 폼 블록 순서 (35차 B-1) ──────────────────────────────
+                🔴 **① 구간 ② 일정 ③ 화물·차량 ④ 요청사항** — 화주포털 「화물등록」
+                   (`/customer/request`)과 34차 견적 폼이 쓰는 순서다(사용자 3번).
+                   그전에는 주소 → 차량 → 정산방식 → 일정 → 상하차조건 → 품목 순이라
+                   **일정이 차량·정산 뒤에 있었고 묶음 표시가 없었다.**
+                🔴 **포털 부품(`Pv2Select`·`Pv2DatePicker`·`.pv2-*`)은 하나도 안 가져왔다** —
+                   `.portal-v2` 스코프 전용이라 끌어오면 관리자 31화면 CSS 가 딸려온다.
+                   맞춘 것은 **순서와 묶음**이지 부품이 아니다(34차와 같은 규칙).
+                ⚠️ **⑤ 정산·금액은 포털에 없는 블록이다** — 화주에게 안 보이는 내부
+                   정보라 포털 발주 폼에는 처음부터 없다. 관리자에만 두고 번호를 이어 붙였다. */}
             <div className="form-grid" style={{ padding: 0 }}>
+              <FormBlockHead n={1} title="운송 구간 · 현장 정보" note="화주포털 화물등록과 같은 순서입니다" />
               <AddressSearch
                 label="출발지"
                 required
@@ -682,32 +801,7 @@ function OrdersPageInner() {
                 value={form}
                 onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
               />
-              <div className="field">
-                <label>차량</label>
-                <input
-                  value={form.vehicle_type}
-                  onChange={(e) =>
-                    setForm({ ...form, vehicle_type: e.target.value })
-                  }
-                  placeholder="예: 1톤 탑차"
-                />
-              </div>
-              <CollectionMethodInput
-                namePrefix="order_new"
-                value={{
-                  collection_method: form.collection_method,
-                  billing_cycle: form.billing_cycle,
-                  direct_collection_point: form.direct_collection_point,
-                }}
-                onChange={(next) =>
-                  setForm({
-                    ...form,
-                    collection_method: next.collection_method,
-                    billing_cycle: next.billing_cycle,
-                    direct_collection_point: next.direct_collection_point,
-                  })
-                }
-              />
+              <FormBlockHead n={2} title="일정" />
               <div style={{ gridColumn: "1 / -1" }}>
                 <DateTimePicker
                   label="상차 예정일시"
@@ -727,6 +821,47 @@ function OrdersPageInner() {
                   minDateTime={minDeliveryDateTime}
                   minDateTimeLabel="상차 후 최소 2시간 이후로 선택해주세요"
                 />
+              </div>
+
+              <FormBlockHead n={3} title="화물 · 차량" />
+              {/* ── 차량 (35차 B-1) ────────────────────────────────────────────────
+                  🔴 **자유 입력칸이었다.** 포털·견적은 톤수와 차량형태를 각각 고르는데
+                     오더만 `placeholder="예: 1톤 탑차"` 텍스트라, 같은 차급이 사람마다
+                     다르게 적혀 배차에서 눈으로 맞춰야 했다.
+                  🔴 저장은 종전과 같은 **한 칸(`orders.vehicle_type`)에 「톤수 차량형태」
+                     문자열**이다 — `lib/companyFields.ts` 의 `recommended_vehicle` 과 같은
+                     관례다. **컬럼을 새로 만들지 않았다**(원칙 27번).
+                  ⚠️ `orders.tonnage` 컬럼이 따로 있지만 **관리자 어디서도 읽지 않는다**
+                     (실측). 거기에 나눠 담으면 두 곳이 갈리므로 건드리지 않았다. */}
+              <div className="field">
+                <label>톤수</label>
+                <select
+                  value={vehicleTonnage}
+                  onChange={(e) =>
+                    setForm({ ...form, vehicle_type: `${e.target.value} ${vehicleBodyType}`.trim() })
+                  }
+                >
+                  {VEHICLE_TYPES_ALL.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>차량형태</label>
+                <select
+                  value={vehicleBodyType}
+                  onChange={(e) =>
+                    setForm({ ...form, vehicle_type: `${vehicleTonnage} ${e.target.value}`.trim() })
+                  }
+                >
+                  {BODY_TYPES.map((b) => (
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="field">
                 <label>상차 조건</label>
@@ -767,6 +902,7 @@ function OrdersPageInner() {
                   onChange={(e) => setForm({ ...form, item: e.target.value })}
                 />
               </div>
+              <FormBlockHead n={4} title="요청사항" />
               <div className="field" style={{ gridColumn: "1 / -1" }}>
                 <label>특이사항</label>
                 <textarea
@@ -777,6 +913,44 @@ function OrdersPageInner() {
                   }
                 />
               </div>
+              <FormBlockHead n={5} title="정산 · 금액" note="화주포털에는 없는 관리자 전용 블록입니다" />
+              {/* ── 금액 (35차 B-3 · 사용자 2번) ───────────────────────────────────
+                  🔴 **오더에는 금액 칸이 하나도 없었다**(실측 — `orders` 에 금액 컬럼
+                     자체가 없었다). 지금까지 금액은 **배차 등록 때 처음** 들어갔고,
+                     그래서 담당자가 오더 화면에서 합의 금액을 볼 수가 없었다.
+                  🔴 부가세 구분은 배차·정산과 **같은 부품**(`VatBasisSelect`)을 쓴다 —
+                     두 벌이 되면 갈린다(A-3 · 완료조건 9).
+                  🔴 **회사명 자동 기입이 이 칸을 채우지 않는다**(B-4) — 운임은 건마다
+                     다르고, 지난 금액이 조용히 들어가면 잘못된 청구가 된다. */}
+              <div className="field">
+                <label>화주 청구금액(원)</label>
+                <MoneyInput
+                  value={form.customer_charge}
+                  onChange={(v) => setForm({ ...form, customer_charge: v })}
+                />
+                <div style={{ marginTop: 4 }}>
+                  <VatBasisSelect
+                    value={form.customer_charge_vat_included}
+                    onChange={(v) => setForm({ ...form, customer_charge_vat_included: v })}
+                  />
+                </div>
+              </div>
+              <CollectionMethodInput
+                namePrefix="order_new"
+                value={{
+                  collection_method: form.collection_method,
+                  billing_cycle: form.billing_cycle,
+                  direct_collection_point: form.direct_collection_point,
+                }}
+                onChange={(next) =>
+                  setForm({
+                    ...form,
+                    collection_method: next.collection_method,
+                    billing_cycle: next.billing_cycle,
+                    direct_collection_point: next.direct_collection_point,
+                  })
+                }
+              />
             </div>
 
             <div className="form-actions">
@@ -1042,6 +1216,40 @@ function OrdersPageInner() {
         )}
       </div>
     </main>
+  );
+}
+
+/**
+ * 폼 블록 머리 — 옐로 원 번호 + 제목. 34차·PR #143·#145 가 견적 폼에 만든 것과
+ * **같은 모양**이다(35차 B-1).
+ * 🔴 색은 `var(--brand-yellow)` 토큰이다 — `#FFD833` 리터럴로 다시 적지 말 것.
+ * 🔴 `var(--pv2-yellow)` 를 쓰지 말 것 — `.portal-v2` 스코프 안에만 있어서 관리자에서는
+ *    옐로가 안 나온다(상속값이 그대로 나온다. PR #145 에서 실측).
+ * 🔴 글자색 `#1a1a1a` 는 포털 `--pv2-text` 와 같은 값이다.
+ */
+function FormBlockHead({ n, title, note }: { n: number; title: string; note?: string }) {
+  return (
+    <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 10, margin: "6px 0 4px" }}>
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 22,
+          height: 22,
+          borderRadius: "50%",
+          background: "var(--brand-yellow)",
+          color: "#1a1a1a",
+          fontSize: 13.5,
+          fontWeight: 700,
+          flexShrink: 0,
+        }}
+      >
+        {n}
+      </span>
+      <strong style={{ fontSize: 16.5 }}>{title}</strong>
+      {note && <span style={{ fontSize: 11.5, color: "var(--text-muted)" }}>{note}</span>}
+    </div>
   );
 }
 
