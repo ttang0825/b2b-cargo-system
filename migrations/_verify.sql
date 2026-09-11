@@ -469,3 +469,26 @@ select string_agg(column_name || ' ' || data_type, ', ' order by ordinal_positio
   from information_schema.columns
  where table_schema='public' and table_name='rate_surcharges';
 \echo ''
+
+\echo ''
+\echo '=== ⑮ 목록 화면 무게 (페이지네이션 차수) ============================='
+\echo '--- ⑮-a 화주 목록이 한 번에 그리는 행수 ---'
+-- 🔴 여기가 「540건을 한 번에 그린다」의 근거다. `활성화주` 는 /admin/customers 가
+--    `.in(status, …)` 로 서버에서 이미 거르는 수이고, `전체` 는 /admin/companies 가
+--    조건 없이 받아오는 수다.
+select
+  (select count(*) from companies)                                        as 전체화주,
+  (select count(*) from companies
+    where status in ('견적요청','견적발송','첫거래완료','재거래발생','반복화주','월정산화주'))
+                                                                          as 활성화주;
+
+\echo ''
+\echo '--- ⑮-b /admin/customers 가 곁다리로 긁는 표 ---'
+-- 🔴 그 화면은 화주별 「최근 배차상태」 한 칸을 채우려고 **배차 전체**를 받아서
+--    JS 로 접는다(limit 없음). 이 수가 화주 수보다 훨씬 크면 페이지네이션으로도
+--    안 줄어드는 무게라는 뜻이다.
+select
+  (select count(*) from dispatches)                                       as 배차_전체,
+  (select count(*) from orders)                                           as 오더_전체,
+  (select count(*) from customer_accounts where is_active)                as 포털계정_활성;
+\echo ''
