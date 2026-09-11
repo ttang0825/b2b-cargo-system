@@ -46,7 +46,10 @@ export async function GET() {
     admin
       .from("invoices")
       .select(
-        "id,order_id,company_id,individual_customer_id,billing_period,customer_charge_total,driver_payout_total,status,created_at"
+        // 🔴 35차 C-1 — 마진을 수금방식별로 계산하려면 `collection_method`·`brokerage_fee`·
+        //    부가세 구분이 필요하다. 선착불은 위캐리가 운임을 받지도 주지도 않으므로
+        //    **마진이 주선수수료뿐**이고, 청구액으로 세면 취급고가 매출로 둔갑한다.
+        "id,order_id,company_id,individual_customer_id,billing_period,customer_charge_total,driver_payout_total,customer_charge_vat_included,driver_vat_included,collection_method,brokerage_fee,status,created_at"
       )
       .gte("created_at", sinceIso),
     admin

@@ -10,3 +10,13 @@ export function calcVatAmount(supplyAmount: number): number {
 export function calcInclusiveAmount(supplyAmount: number): number {
   return Math.round(supplyAmount * 1.1);
 }
+
+// 부가세 포함가 → 공급가액. 35차 A-3 에서 부가세 구분 컬럼을 되살리면서 필요해졌다.
+//
+// ⚠️ 7차 세션에 `lib/settlementCalc.ts` 의 `toSupplyAmount()` 를 지운 적이 있다 —
+//    그때는 입력값을 항상 공급가액으로 고정했기 때문에 변환할 일이 없어서였다.
+//    🔴 **이번 것은 그것과 자리가 다르다** — 계산기 안이 아니라 공용 부가세 파일이고,
+//    `calcInclusiveAmount()` 의 역연산이라 한 쌍으로 여기 있는 것이 맞다.
+export function toSupplyAmount(inclusiveAmount: number): number {
+  return Math.round(inclusiveAmount / 1.1);
+}

@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { fetchActiveExtraCharges } from "@/lib/fetchDispatchExtraCharges";
+import { autoCreateInvoice } from "@/lib/autoCreateInvoice";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import {
   DISPATCH_STATUS_OPTIONS,
@@ -13,9 +13,9 @@ import {
 import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
 import { getCurrentStaffId } from "@/lib/currentStaff";
 import MoneyInput from "@/components/MoneyInput";
+import VatBasisSelect from "@/components/VatBasisSelect";
 import MixableBadge from "@/components/MixableBadge";
 import { shortAddress } from "@/lib/shortAddress";
-import { calcInclusiveAmount } from "@/lib/vat";
 import { fetchDispatchSmsPreview } from "@/lib/notifyDispatchSms";
 import SmsConfirmModal, { SmsPreview } from "@/components/SmsConfirmModal";
 import RecurringContractBadge from "@/components/RecurringContractBadge";
@@ -41,6 +41,9 @@ type OrderLite = {
   billing_cycle: string | null;
   direct_collection_point: string | null;
   quote_id: string | null;
+  // 35차 B-3 — 오더가 금액을 들고 있게 됐다. 배차 등록이 빈 칸일 때 물려받는다
+  customer_charge: number | null;
+  customer_charge_vat_included: boolean | null;
   companies: { name: string } | null;
   guest_name: string | null;
 };
@@ -76,7 +79,11 @@ type DispatchRow = {
   total_freight_amount: number | null;
   driver_direct_collection_amount: number | null;
   brokerage_fee: number | null;
-  brokerage_fee_payer: string | null;
+  // 🔴 `brokerage_fee_payer` 는 35차에 화면에서 뺐다 — 조회에서도 뺀다.
+  //    컬럼은 과거 기록 보존용으로 DB 에 남아 있지만 새로 읽지 않는다(원칙 45번).
+  brokerage_fee_waived: boolean | null;
+  customer_charge_vat_included: boolean | null;
+  driver_vat_included: boolean | null;
   orders: {
     order_no: string | null;
     origin: string | null;
@@ -126,6 +133,8 @@ function DispatchesPageInner() {
     []
   );
   const [customerCharge, setCustomerCharge] = useState("");
+  // 35차 A-3 — 배차 등록의 화주 청구금액도 부가세 기준을 같이 저장한다
+  const [customerChargeVatIncluded, setCustomerChargeVatIncluded] = useState(false);
   const [driverPayout, setDriverPayout] = useState("");
   const [memo, setMemo] = useState("");
   const [contactFields, setContactFields] = useState(EMPTY_PICKUP_DROPOFF_CONTACT);
@@ -149,7 +158,7 @@ function DispatchesPageInner() {
     let query = supabase
       .from("dispatches")
       .select(
-        "id,dispatch_status,customer_charge,driver_payout,margin,created_at,order_id,driver_id,assignment_type,requested_network_ids,confirmed_network_id,external_driver_name,settlement_type,collection_method,billing_cycle,direct_collection_point,network_settlement_type,total_freight_amount,driver_direct_collection_amount,brokerage_fee,brokerage_fee_payer,orders(order_no,origin,destination,loading_type,companies(name,is_recurring_contract,recurring_contract_ended_on),guest_name),drivers(name,phone)"
+        "id,dispatch_status,customer_charge,driver_payout,margin,created_at,order_id,driver_id,assignment_type,requested_network_ids,confirmed_network_id,external_driver_name,settlement_type,collection_method,billing_cycle,direct_collection_point,network_settlement_type,total_freight_amount,driver_direct_collection_amount,brokerage_fee,brokerage_fee_waived,customer_charge_vat_included,driver_vat_included,orders(order_no,origin,destination,loading_type,companies(name,is_recurring_contract,recurring_contract_ended_on),guest_name),drivers(name,phone)"
       )
       .order("created_at", { ascending: false })
       .limit(preset === "all" ? ALL_PERIOD_LIMIT : FILTERED_PERIOD_LIMIT);
@@ -166,7 +175,7 @@ function DispatchesPageInner() {
     const { data } = await supabase
       .from("orders")
       .select(
-        "id,order_no,origin,destination,origin_company_name,origin_contact_name,origin_contact_phone,destination_company_name,destination_contact_name,destination_contact_phone,vehicle_type,settlement_type,collection_method,billing_cycle,direct_collection_point,quote_id,companies(name),guest_name"
+        "id,order_no,origin,destination,origin_company_name,origin_contact_name,origin_contact_phone,destination_company_name,destination_contact_name,destination_contact_phone,vehicle_type,settlement_type,collection_method,billing_cycle,direct_collection_point,quote_id,customer_charge,customer_charge_vat_included,companies(name),guest_name"
       )
       .in("status", ["접수", "배차중"])
       .order("created_at", { ascending: false });
@@ -238,7 +247,14 @@ function DispatchesPageInner() {
       destination_contact_name: order?.destination_contact_name || "",
       destination_contact_phone: order?.destination_contact_phone || "",
     });
-    if (order?.quote_id) {
+    // 🔴 35차 B-3 — 오더가 금액을 들고 있으면 그것을 먼저 쓴다. 담당자가 오더 화면에서
+    //    합의 금액을 적어두면 배차에서 다시 적을 일이 없다.
+    //    ⚠️ 오더에 금액이 없을 때만 종전처럼 견적의 최종금액으로 폴백한다 — 견적 없이
+    //       바로 만든 오더도 있어서 이 경로를 지우면 안 된다.
+    if (order?.customer_charge != null) {
+      setCustomerCharge(String(Math.round(order.customer_charge)));
+      setCustomerChargeVatIncluded(!!order.customer_charge_vat_included);
+    } else if (order?.quote_id) {
       const { data: q } = await supabase
         .from("quotes")
         .select("final_amount")
@@ -309,6 +325,7 @@ function DispatchesPageInner() {
         sourceOrder?.collection_method === "driver_direct" ? sourceOrder?.direct_collection_point : null,
       total_freight_amount: customerCharge ? Number(customerCharge) : null,
       customer_charge: customerCharge ? Number(customerCharge) : null,
+      customer_charge_vat_included: customerChargeVatIncluded,
       driver_payout: driverPayout ? Number(driverPayout) : null,
       origin_company_name: contactFields.origin_company_name.trim() || null,
       origin_contact_name: contactFields.origin_contact_name.trim() || null,
@@ -338,6 +355,7 @@ function DispatchesPageInner() {
     setSelectedDriver(null);
     setDriverSearch("");
     setCustomerCharge("");
+    setCustomerChargeVatIncluded(false);
     setDriverPayout("");
     setMemo("");
     setContactFields(EMPTY_PICKUP_DROPOFF_CONTACT);
@@ -420,70 +438,30 @@ function DispatchesPageInner() {
     }
   }
 
-  // 운송완료로 바뀐 오더에 정산이 아직 등록되어 있지 않으면 자동으로 등록
-  // (화주 실적은 DB 트리거가 알아서 재계산하므로 여기서 따로 안 건드림)
+  // 🔴 정산 자동등록의 본체는 `lib/autoCreateInvoice.ts` 하나다(35차 A-6).
+  //    그전에는 이 파일과 배차 상세 화면에 **같은 함수가 두 벌** 있었고 실제로
+  //    갈렸다(이 목록 경로에만 `settlement_type` 이 빠져 있던 시절이 있다).
+  //    🔴 **여기에 다시 본체를 적지 말 것** — 24시콜 차수도 그 공용 함수를 부른다.
   async function autoCreateInvoiceIfNeeded(target: DispatchRow) {
-    if (!target.order_id) return;
-
-    // 로드맵③ 이후로는 한 오더에 정정청구 invoice가 추가로 있을 수 있어
-    // .maybeSingle()이 2행 이상이면 에러를 던짐 — 존재 여부만 확인
-    const { data: existing } = await supabase
-      .from("invoices")
-      .select("id")
-      .eq("order_id", target.order_id)
-      .limit(1);
-    if (existing && existing.length > 0) return;
-
-    const { data: order } = await supabase
-      .from("orders")
-      .select("company_id,individual_customer_id")
-      .eq("id", target.order_id)
-      .single();
-
-    // 로드맵③ 현장 추가비 — 정산 건이 아직 없는 상태에서 미리 등록된 활성
-    // 추가비가 있으면 최초 스냅샷에 포함해서 얼림(3-2)
-    const activeExtras = await fetchActiveExtraCharges(target.id);
-    const extraCharge = activeExtras.reduce((s, e) => s + (e.customer_charge_amount || 0), 0);
-    const extraPayout = activeExtras.reduce((s, e) => s + (e.driver_payout_amount || 0), 0);
-
-    const charge = (target.customer_charge || 0) + extraCharge;
-    const payout = (target.driver_payout || 0) + extraPayout;
-    const now = new Date();
-    const billingPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    // 화주 청구금액은 공급가액, 차주 지급금액은 실제 지급되는 최종금액
-    // (부가세 포함 기준)이라 기준이 달랐음 — 청구금액을 부가세 포함가로
-    // 환산해서 맞춘 뒤 차감(PR #63 리뷰 피드백)
-    const commission = calcInclusiveAmount(charge) - payout;
-
-    // 배차 확정 시점의 정산방식·선착불 관련 값을 정산건 생성 시 그대로
-    // 스냅샷 복사(작업지시서 4-5) — 이 목록화면 경로는 예전부터
-    // settlement_type 자체가 누락돼있던 버그가 있었음(상세화면 경로에는
-    // 있었음), 이번에 신규 필드와 함께 같이 채움
-    const { error: invoiceError } = await supabase.from("invoices").insert({
-      order_id: target.order_id,
-      company_id: order?.company_id || null,
-      individual_customer_id: order?.individual_customer_id || null,
-      billing_period: billingPeriod,
-      settlement_reference_date: new Date().toISOString().slice(0, 10),
-      customer_charge_total: charge || null,
-      driver_payout_total: payout || null,
-      commission_total: commission || null,
-      receivable_amount: charge || null,
-      payable_amount: payout || null,
-      settlement_type: target.settlement_type || "general",
-      collection_method: target.collection_method || "broker",
-      billing_cycle: target.billing_cycle || "per_order",
-      direct_collection_point: target.direct_collection_point || null,
-      network_settlement_type: target.network_settlement_type || "none",
-      total_freight_amount: target.total_freight_amount ?? charge ?? null,
-      driver_direct_collection_amount: target.driver_direct_collection_amount ?? null,
-      brokerage_fee: target.brokerage_fee ?? null,
-      brokerage_fee_payer: target.brokerage_fee_payer ?? null,
-      status: "정산대기",
-      created_by: await getCurrentStaffId(),
+    const result = await autoCreateInvoice({
+      dispatchId: target.id,
+      orderId: target.order_id,
+      customerCharge: target.customer_charge,
+      driverPayout: target.driver_payout,
+      settlementType: target.settlement_type,
+      collectionMethod: target.collection_method,
+      billingCycle: target.billing_cycle,
+      directCollectionPoint: target.direct_collection_point,
+      networkSettlementType: target.network_settlement_type,
+      totalFreightAmount: target.total_freight_amount ?? null,
+      driverDirectCollectionAmount: target.driver_direct_collection_amount ?? null,
+      brokerageFee: target.brokerage_fee ?? null,
+      brokerageFeeWaived: target.brokerage_fee_waived ?? false,
+      customerChargeVatIncluded: target.customer_charge_vat_included ?? false,
+      driverVatIncluded: target.driver_vat_included ?? false,
     });
-    if (invoiceError) {
-      setError(`정산 자동등록에 실패했습니다: ${invoiceError.message}`);
+    if (result.kind === "error") {
+      setError(`정산 자동등록에 실패했습니다: ${result.message}`);
     }
   }
 
@@ -697,6 +675,13 @@ function DispatchesPageInner() {
               <div className="field">
                 <label>화주 청구운임(원)</label>
                 <MoneyInput value={customerCharge} onChange={setCustomerCharge} />
+                {/* 35차 A-3 — 배차 상세·정산과 같은 부품이다(두 벌 아님) */}
+                <div style={{ marginTop: 4 }}>
+                  <VatBasisSelect
+                    value={customerChargeVatIncluded}
+                    onChange={setCustomerChargeVatIncluded}
+                  />
+                </div>
               </div>
               <div className="field">
                 <label>차주 지급운임(원)</label>
