@@ -7303,7 +7303,28 @@ tbody tr:hover {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 10px;
-  padding: 12px 4px 2px;
+  /* 🔴 이 줄은 **카드의 푸터**다 — 목록 밑에 떠 있는 글이 아니다.
+     실측: `.card` 는 패딩이 0이고 표가 카드를 꽉 채운다(`tbody td` 가 13px 16px).
+     그래서 좌우를 **표의 칸 여백과 같은 16px** 로 맞춰 「539건 중 1–15」가 첫 칸
+     글자와 같은 세로선에서 시작하게 한다. 위아래는 행 리듬(13px)보다 조금 넉넉한
+     14/16px 이라 표와 붙어 보이지 않는다.
+     🔴 `border-top` 을 빼지 말 것 — `tbody tr:last-child td` 가 아래 테두리를
+        지우기 때문에, 이게 없으면 마지막 행과 이 줄 사이에 경계가 사라져
+        **카드 바닥에 글자가 얹힌 것처럼** 보인다(실사용 지적이 정확히 이것이었다). */
+  /* 🔴 좌우 여백은 **변수 하나**로 둔다 — 표마다 칸 여백이 달라서다
+     (`tbody td` 16px / `.table-compact td` 8px / 모바일 `.mobile-row-card` 18px).
+     아래 두 규칙이 그 값만 갈아끼운다. padding 을 통째로 다시 선언하면
+     위아래 값까지 복사되어 한쪽만 고칠 때 갈린다. */
+  --lp-pad-x: 16px;
+  padding: 14px var(--lp-pad-x) 16px;
+  border-top: 1px solid var(--border);
+}
+
+/* `.table-compact` 를 쓰는 화면(활성 화주)용 — 그 표는 칸 여백이 8px 이라
+   기본 16px 로 두면 「539건 중…」이 첫 칸 글자보다 8px 오른쪽에서 시작한다(실측).
+   🔴 이것은 기본 규칙 **바로 뒤**에 와야 하는 수정자다 — 위치를 옮기지 말 것. */
+.list-pagination-compact {
+  --lp-pad-x: 8px;
 }
 
 .list-pagination-count {
@@ -7360,6 +7381,10 @@ tbody tr:hover {
 @media (max-width: 700px) {
   .list-pagination {
     justify-content: center;
+    /* 🔴 모바일은 표가 없다 — 카드(`.mobile-row-card`, 14px 18px)와 나란히 선다.
+       `.list-pagination-compact` 도 여기서는 18px 이 된다(같은 특성도인데 이 규칙이
+       뒤에 있어서다). 모바일에는 표가 안 보이니 그게 맞다. */
+    --lp-pad-x: 18px;
   }
   .list-pagination-count {
     width: 100%;
@@ -7368,11 +7393,17 @@ tbody tr:hover {
   .list-pagination-nav {
     justify-content: center;
   }
-  /* 🔴 모바일에서만 버튼을 조인다 — 390px(내부 358px)에서 기본 크기면 약 366px 이라
-     **「다음」 하나만 아랫줄로 내려간다**(실측). 한 줄에 들어가게 하는 것이 목적이고,
-     더 줄이면 손가락으로 누르기 어려워진다. 🔴 데스크탑에는 적용하지 말 것. */
+  /* 🔴 모바일에서만 버튼을 조인다 — 이 줄이 카드 푸터가 되면서 좌우 여백이 4 → 18px 이
+     되어 쓸 폭이 28px 줄었고, 390px 에서 **정확히 6px 모자라** 「다음」 하나만 아랫줄로
+     내려갔다(실측). 아래 셋을 같이 줄여 **17px 여유**로 한 줄에 넣는다.
+     🔴 데스크탑에는 적용하지 말 것 · 🔴 더 줄이지 말 것(손가락으로 누르기 어려워진다).
+     ⚠️ 360px 은 그래도 두 줄이다 — 가로 넘침은 0이고, 한 줄로 만들려면 버튼이
+        누르기 어려운 크기가 된다. 되감기는 것이 맞다. */
   .list-pagination-btn {
-    min-width: 28px;
-    padding: 6px 6px;
+    min-width: 26px;
+    padding: 6px 5px;
+  }
+  .list-pagination-nav {
+    gap: 3px;
   }
 }

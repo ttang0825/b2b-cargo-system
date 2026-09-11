@@ -7,18 +7,25 @@ import { ListPaginationResult } from "@/lib/useListPagination";
  *
  * 🔴 **무한 스크롤로 바꾸지 말 것**(지시서 하지 말 것 3번) — 담당자가 「몇 페이지에 있던
  *    그 화주」로 되돌아가야 하는 업무라 번호가 있어야 한다.
- * 🔴 **번호 버튼은 최대 5개만 그린다** — 539건이면 11페이지지만, 화주가 더 늘면 번호가
+ * 🔴 **번호 버튼은 최대 5개만 그린다** — 화주가 늘수록 페이지가 느는데, 다 그리면 번호가
  *    줄바꿈으로 쌓여 모바일에서 화면을 먹는다. 양 끝(1·마지막)은 항상 두고 사이는 `…` 다.
+ *    ⚠️ 한 페이지 15건이라 539건이면 **36페이지**인데, 그래도 버튼은 9개 그대로다.
  * 🟢 총 건수는 **필터가 걸린 뒤의 수**다 — `/admin/customers` 제목의 `(총 N건)` 은
  *    필터 전 전체라서 서로 다른 값이고, 그게 정상이다(중복 표기가 아니다).
  */
 export default function ListPagination({
   pagination,
   unit = "건",
+  compact = false,
 }: {
   pagination: ListPaginationResult<unknown>;
   /** 세는 단위. 화주는 "건" */
   unit?: string;
+  /**
+   * 🔴 그 화면의 표가 `.table-compact`(칸 여백 8px)면 켤 것 — 안 켜면 건수 글자가
+   *    첫 칸보다 8px 오른쪽에서 시작한다. 기본 표(16px)는 끄고 쓴다.
+   */
+  compact?: boolean;
 }) {
   const { page, totalPages, total, rangeStart, rangeEnd, setPage } = pagination;
 
@@ -28,7 +35,7 @@ export default function ListPagination({
   const numbers = pageNumbers(page, totalPages);
 
   return (
-    <div className="list-pagination">
+    <div className={compact ? "list-pagination list-pagination-compact" : "list-pagination"}>
       <div className="list-pagination-count">
         {total.toLocaleString("ko-KR")}
         {unit} 중 <strong>{rangeStart.toLocaleString("ko-KR")}</strong>–

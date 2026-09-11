@@ -520,7 +520,9 @@ export default function CustomersPage() {
           />
         </div>
 
-        <ListPagination pagination={pagination} />
+        {/* 🔴 `compact` — 이 화면의 표가 `.table-compact` 라 칸 여백이 8px 이다.
+            안 켜면 건수 글자가 첫 칸보다 오른쪽에서 시작한다(실측 8px). */}
+        <ListPagination pagination={pagination} compact />
       </div>
     </main>
   );
