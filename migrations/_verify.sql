@@ -625,3 +625,11 @@ select
 from dispatches d
 left join orders o on o.id = d.order_id
 order by d.created_at;
+
+\echo ''
+\echo '--- ⑯-k 🔴 원칙 27번: 새 컬럼을 넣기 전에 이미 있는지 본다 ---'
+select table_name as 표,
+       string_agg(column_name, ', ' order by ordinal_position) as 컬럼
+from information_schema.columns
+where table_schema = 'public' and table_name in ('orders','dispatches','invoices')
+group by table_name order by table_name;
