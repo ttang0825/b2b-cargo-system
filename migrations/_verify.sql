@@ -588,3 +588,21 @@ select
   count(*) filter (where receivable_amount is not null) as 죽은컬럼_receivable,
   count(*) filter (where payable_amount is not null)    as 죽은컬럼_payable
 from invoices;
+
+\echo ''
+\echo '--- ⑯-i 정산 5건 한눈에 (🔴 이름·번호 없이 플래그만) ---'
+-- ⑯-a 의 「차주지급 빈칸 1건」과 ⑯-c 의 「게이트2 에 걸린 1건」이 같은 건인지 가른다.
+select
+  i.billing_period                                as 정산월,
+  i.status                                        as 상태,
+  i.locked                                        as 잠김,
+  coalesce(i.collection_method,'(빈칸)')          as 수금방식,
+  (i.customer_charge_total is not null)           as 화주청구_있음,
+  (i.driver_payout_total is not null)             as 차주지급_있음,
+  coalesce(i.brokerage_fee,0)                     as 수수료,
+  coalesce(i.brokerage_fee_payer,'(빈칸)')        as 지급자,
+  coalesce(i.brokerage_fee_paid,false)            as 입금완료,
+  (exists (select 1 from orders o join dispatches d on d.order_id = o.id
+            where o.id = i.order_id))             as 배차있음
+from invoices i
+order by i.created_at;
