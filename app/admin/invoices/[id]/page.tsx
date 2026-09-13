@@ -49,6 +49,12 @@ export default function InvoiceDetailPage() {
   const [settlementSaving, setSettlementSaving] = useState(false);
   const [amendmentReasonOpen, setAmendmentReasonOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  // 35차 A-7 — 배차 기준 재동기화(PR #146 리뷰 1라운드). 🔴 **액션 실패용 state 를
+  // 로딩 실패용 `error` 와 섞지 말 것**(원칙 33번) — 섞으면 이미 불러온 상세 화면이
+  // 통째로 오류 문구로 덮인다.
+  const [resyncOpen, setResyncOpen] = useState(false);
+  const [resyncing, setResyncing] = useState(false);
+  const [resyncError, setResyncError] = useState<string | null>(null);
   // 차주 지급금액이 배차 상세 계산기를 거친 값인지 — 목록과 동일한 판단 기준
   const [driverCalcInfo, setDriverCalcInfo] = useState<{ throughCalc: boolean; insuranceApplied: boolean } | null>(
     null
@@ -192,6 +198,39 @@ export default function InvoiceDetailPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editForm.payment_received, editForm.driver_paid, invoice?.locked, settlementValue.collection_method]);
+
+  // 35차 A-7 — 이 정산 건의 금액을 **배차의 현재 값으로 다시 맞춘다**.
+  //
+  // 🔴 **왜 있는가** — `invoices` 의 금액은 생성 시점 스냅샷이라(원칙 47번) 정산 건이
+  //    먼저 만들어진 뒤에 배차에서 운임을 적으면 따라오지 않는데, 그걸 고칠 경로가
+  //    **어디에도 없었다**(금액 칸은 읽기 전용이고 저장 화이트리스트에도 없다).
+  //    그래서 「예전 오더의 마진·수수료가 틀렸는데 수정할 수가 없다」가 됐다.
+  // 🔴 계산은 전부 서버(`/api/admin/invoices/resync`)가 한다 — 클라이언트가 금액을
+  //    만들어 보내면 그 값이 그대로 스냅샷이 되어 화면단 우회가 곧 금액 조작이 된다.
+  async function handleResync(reason: string) {
+    setResyncError(null);
+    setResyncing(true);
+    try {
+      const res = await fetch("/api/admin/invoices/resync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, reason }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setResyncError(json.error || "다시 맞추지 못했습니다.");
+        return;
+      }
+      setResyncOpen(false);
+      // 🔴 부분 병합으로 넘어가지 말고 전체를 다시 불러온다(원칙 36번) — `updated_at`
+      //    이 트리거로 갱신되므로, 안 맞추면 곧이어 저장할 때 낙관적 잠금이 오탐한다.
+      await load();
+    } catch (e: any) {
+      setResyncError(e?.message || "다시 맞추지 못했습니다.");
+    } finally {
+      setResyncing(false);
+    }
+  }
 
   async function handleSave(force = false, reason?: string) {
     setSaveError(null);
@@ -772,6 +811,38 @@ export default function InvoiceDetailPage() {
           )}
         </div>
 
+        {/* 35차 A-7 — 배차 기준 재동기화. 🔴 **금액 칸을 직접 편집하게 만들지 말 것** —
+            정본은 배차이고, 직접 입력을 열면 배차와 정산이 서로 다른 값을 갖게 된다.
+            🔴 오더에 연결되지 않은 건은 가져올 곳이 없어서 버튼을 아예 안 그린다. */}
+        {invoice.order_id && (!invoice.locked || isAdmin) && (
+          <div style={{ marginTop: 14, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => {
+                  setResyncError(null);
+                  setResyncOpen(true);
+                }}
+                style={{ whiteSpace: "nowrap" }}
+                disabled={resyncing}
+              >
+                {resyncing ? "맞추는 중..." : "배차 기준으로 금액 다시 맞추기"}
+              </button>
+              <span style={{ fontSize: 11.5, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                배차의 현재 청구·지급 운임, 부가세 구분, 수금방식, 주선수수료를 이 정산
+                건에 다시 옮겨 적습니다. 사유가 기록되며 입금·지급 완료 표시는 그대로
+                둡니다.
+              </span>
+            </div>
+            {resyncError && (
+              <div className="error-box" style={{ marginTop: 10 }}>
+                오류: {resyncError}
+              </div>
+            )}
+          </div>
+        )}
+
         {trailingExtraCharges.length > 0 && (
           <div style={{ marginTop: 14, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
             <h4 style={{ fontSize: 13, marginTop: 0, marginBottom: 8 }}>
@@ -1032,6 +1103,16 @@ export default function InvoiceDetailPage() {
         <button className="btn" onClick={() => handleSave()} disabled={saving}>
           {saving ? "저장 중..." : "변경사항 저장"}
         </button>
+      )}
+
+      {resyncOpen && (
+        <AmendmentReasonModal
+          title="배차 기준으로 금액 다시 맞추기"
+          description="이 정산 건의 청구·지급 금액과 부가세 구분, 수금방식, 주선수수료를 배차의 현재 값으로 다시 옮겨 적습니다. 수정 전/후 내용과 사유가 기록됩니다."
+          onCancel={() => setResyncOpen(false)}
+          onConfirm={(reason) => handleResync(reason)}
+          saving={resyncing}
+        />
       )}
 
       {amendmentReasonOpen && (
