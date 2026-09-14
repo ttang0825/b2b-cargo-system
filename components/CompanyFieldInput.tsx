@@ -164,11 +164,20 @@ function CompanyFieldInput({
           disabled={disabled}
         >
           <option value="">선택</option>
-          {(f.options || []).map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
+          {/* 🔴 `codedOptions` 는 **저장되는 값과 보이는 글이 다르다**(36차 A장) —
+              거래조건 칸들은 DB CHECK 제약이 걸린 코드값이라 한글을 그대로 넣으면
+              저장이 통째로 거부된다. `options` 와 섞어 쓰지 말 것. */}
+          {f.codedOptions
+            ? f.codedOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))
+            : (f.options || []).map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
         </select>
         {f.note && <FieldNote text={f.note} />}
       </div>

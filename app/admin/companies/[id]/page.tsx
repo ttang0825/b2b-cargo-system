@@ -19,7 +19,9 @@ import {
   COMPANY_FIELDS,
   COMPANY_SECTIONS,
   buildCompanyPayload,
+  validateCompanyForm,
   companyFieldsOf,
+  companyFieldDisplay,
   emptyCompanyForm,
   isRecurringContractActive,
   parseRecommendedVehicle,
@@ -408,6 +410,36 @@ export default function CompanyDetailPage() {
   }
 
   async function handleSave(force = false) {
+    // 🔴 범위 검사는 세 입구 공통 함수를 쓴다(36차 A장).
+    const invalid = validateCompanyForm(editForm);
+    if (invalid) {
+      setError(invalid);
+      return;
+    }
+
+    // 🔴 **원칙 46번** — 정산 마감일을 나중에 바꾸면 **이미 만들어진 월정산 묶음은
+    //    따라오지 않는다.** 그 묶음은 만들어질 때의 기간을 그대로 들고 있고, 지금
+    //    설정으로 역산해 찾으면 영영 못 찾는다(로드맵 ②-B 에서 실제로 겪은 버그 —
+    //    확정건을 눌러도 상세가 안 뜨고 세금계산서 발행 버튼까지 같이 사라져 보였다).
+    //    담당자가 그 사실을 모르고 바꾸는 것을 코드가 막을 방법이 없으므로,
+    //    **값이 실제로 바뀌는 순간 한 번 알린다.**
+    // 🔴 이 확인 창을 지우지 말 것. `force`(충돌 후 덮어쓰기)에서는 이미 물어봤다.
+    if (!force) {
+      const norm = (v: any) =>
+        v === "" || v === null || v === undefined ? null : Number(v);
+      const before = norm(company?.billing_cutoff_day);
+      const after = norm(editForm.billing_cutoff_day);
+      if (before !== after) {
+        const say = (v: number | null) => (v === null ? "말일(달력월 기준)" : `${v}일`);
+        const ok = window.confirm(
+          `정산 마감일을 ${say(before)} → ${say(after)} 로 바꿉니다.\n\n` +
+            "이미 만들어진 월정산 묶음은 바뀌지 않습니다 — 그 묶음은 만들어질 때의 기간을 그대로 씁니다.\n" +
+            "새로 만드는 묶음부터 이 마감일이 적용됩니다."
+        );
+        if (!ok) return;
+      }
+    }
+
     setSaving(true);
     setError(null);
     setConflict(false);
@@ -772,18 +804,10 @@ export default function CompanyDetailPage() {
                     />
                   );
                 }
-                const raw = company[f.key];
-                let shown: any =
-                  f.type === "checkbox" ? (raw === true ? "예" : null) : raw;
-                if (
-                  (shown === null || shown === undefined || shown === "") &&
-                  f.emptyLabel
-                ) {
-                  // 🔴 「비어 있음」이 곧 규칙인 항목(정산 마감일)은 그 뜻을 그린다.
-                  shown = f.emptyLabel;
-                } else if (shown !== null && shown !== undefined && shown !== "" && f.displaySuffix) {
-                  shown = `${shown}${f.displaySuffix}`;
-                }
+                // 🔴 표시 규칙(코드값→라벨 · 「비어 있음」의 뜻 · 단위 · 천단위)은
+                //    정의처 함수 하나가 정한다 — 여기에 다시 적으면 `codedOptions` 를
+                //    늘렸을 때 이 화면만 조용히 코드값을 그대로 보여준다.
+                const shown = companyFieldDisplay(f, company[f.key]);
                 return <Field key={f.key} label={f.label} value={shown} />;
               })}
             </div>

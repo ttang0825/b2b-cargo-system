@@ -17,6 +17,7 @@ import {
   COMPANY_SECTIONS,
   COMPANY_REQUIRED_FIELDS,
   buildCompanyPayload,
+  validateCompanyForm,
   companyFormFieldsOf,
   emptyCompanyForm,
   isRecurringContractActive,
@@ -171,6 +172,16 @@ export default function CompaniesPage() {
       );
       return;
     }
+
+    // 🔴 범위 검사는 세 입구 공통 함수를 쓴다 — 안 막으면 DB CHECK 위반 원문이
+    //    그대로 올라와 담당자는 어느 칸이 틀렸는지 알 수 없다(36차 A장).
+    const invalid = validateCompanyForm(form);
+    if (invalid) {
+      setError(invalid);
+      setOpenSections((prev) => Array.from(new Set([...prev, "거래 조건" as const])));
+      return;
+    }
+
     setSaving(true);
     setError(null);
 

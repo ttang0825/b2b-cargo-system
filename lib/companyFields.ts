@@ -67,14 +67,29 @@ export type CompanyField = {
   /** 신규 등록에서 필수인가 */
   required?: boolean;
   /**
-   * 등록 폼에 노출하는가(기본 true).
-   * 🔴 false 인 것은 **정산이 자동으로 갱신하는 실적값**이라 신규 등록에 넣으면 안 된다 —
-   *    신규 화주는 실적이 0이고, 담당자가 손으로 넣어도 다음 정산에서 덮인다.
+   * 등록 폼에 노출하는가(기본 true). 상세 수정 폼에는 **나오되 읽기 전용**이 된다.
+   *
+   * 🔴 false 인 이유가 **둘**이다 — 섞어서 읽지 말 것.
+   *    ① **정산이 자동으로 갱신하는 실적값**(「실적」 구획). 신규 화주는 0이고,
+   *       담당자가 손으로 넣어도 다음 정산에서 덮인다.
+   *    ② **새 구조로 대체돼 얼려둔 구형 칸**(`payment_terms`, 36차 A장). 원칙 45번 —
+   *       값을 지우지 않고 읽기 전용으로 남겨 기록을 보존한다. 🔴 **되살려 쓰지 말 것.**
    *    (완료조건 2의 「등록 == 수정」은 이 플래그를 제외한 집합을 뜻한다)
    */
   inForm?: boolean;
-  /** select 일 때의 값 목록 */
+  /** select 일 때의 값 목록 (값 == 라벨) */
   options?: readonly string[];
+  /**
+   * select 인데 **DB 에 코드값을 저장하는** 항목의 값 목록 (36차 A장).
+   *
+   * 🔴 `options` 와 달리 **저장되는 것은 `value`, 보이는 것은 `label`** 이다 —
+   *    거래조건 칸들은 DB CHECK 제약이 걸린 코드값(`per_order` 등)이라 한글을
+   *    그대로 넣으면 저장이 통째로 거부된다.
+   * 🔴 라벨을 `lib/settlementLabels.ts` 의 **화주 말** 함수에서 끌어오지 말 것
+   *    (`getCustomerBillingCycleLabel`) — 이 화면은 담당자 화면이고, 화주 말이
+   *    바뀔 때 관리자 화면이 조용히 따라가면 안 된다(사용자 확정 2026-09-14).
+   */
+  codedOptions?: readonly { value: string; label: string }[];
   placeholder?: string;
   /** inForm:false 인 이유 — 화면 도움말로 그대로 쓴다 */
   note?: string;
@@ -87,6 +102,8 @@ export type CompanyField = {
   emptyLabel?: string;
   /** 표시 모드에서 값 뒤에 붙일 단위(예: `일`) */
   displaySuffix?: string;
+  /** 표시 모드에서 1,000 단위 쉼표를 넣는가(금액 칸) */
+  displayThousands?: boolean;
   /**
    * 이 조건이 참일 때만 입력칸을 그린다.
    * 🔴 조건을 화면에 적지 말 것 — 등록 폼과 수정 폼이 서로 다르게 판단하게 된다
@@ -95,6 +112,48 @@ export type CompanyField = {
    */
   showWhen?: (form: Record<string, any>) => boolean;
 };
+
+/**
+ * 화주 거래조건 — 청구주기 **기본값** (36차 A장).
+ *
+ * 🔴 **기본값이지 강제가 아니다**(사용자 확정 2026-09-14 · 지시서가 정할 것 ①).
+ *    오더·발주요청을 만들 때 이 값을 **복사**해 채우고, 그 뒤로는 그 건의 값이 이긴다.
+ *    강제로 만들면 화주 설정을 바꾸는 순간 **진행 중인 건의 정산방식이 조용히 바뀐다.**
+ * 🔴 **역방향 동기화 금지**(원칙 45번) — 오더에서 고친 값을 화주로 되돌리지 말 것.
+ * 🔴 `quotes`·`orders`·`dispatches`·`invoices` 의 `billing_cycle` 과 **같은 코드값**이다
+ *    (`lib/settlementLabels.ts` 의 `BillingCycle`). 새 값을 여기서만 늘리지 말 것.
+ */
+export const BILLING_CYCLE_DEFAULT_OPTIONS = [
+  { value: "per_order", label: "건별" },
+  { value: "monthly", label: "월정산" },
+] as const;
+
+/**
+ * 화주 거래조건 — 결제일 **기준** (36차 A장).
+ *
+ * 🔴 **기준 + 값 두 칸이라야 「정산 예정일」을 계산할 수 있다.** 자유 입력 한 칸은
+ *    지금은 편하지만 미수금 알림·정산 예정일 자동계산에 **영영 못 쓴다**
+ *    (그 자리가 바로 `payment_terms` 이고, 그래서 이번에 얼렸다).
+ * 🔴 `negotiated`(협의)는 **값 칸을 안 그린다** — 자동계산에서도 제외 대상이다.
+ */
+export const PAYMENT_DUE_BASIS_OPTIONS = [
+  { value: "cutoff", label: "마감일 기준" },
+  { value: "fixed_day", label: "매월 고정일" },
+  { value: "tax_invoice", label: "세금계산서 발행일 기준" },
+  { value: "negotiated", label: "협의" },
+] as const;
+
+/**
+ * 화주 거래조건 — 세금계산서 발행 방식 (36차 A장, 사용자 확정 ⭕).
+ *
+ * ⚠️ 「발행 안 함」은 **면세·간이 등 실제로 안 내보내는 화주**를 뜻한다 —
+ *    정산 화면의 발행 여부 체크를 대신하는 값이 아니다(그건 건별 기록이다).
+ */
+export const TAX_INVOICE_METHOD_OPTIONS = [
+  { value: "standard", label: "정발행" },
+  { value: "reverse", label: "역발행" },
+  { value: "none", label: "발행 안 함" },
+] as const;
 
 /**
  * 정기계약 운송 주기.
@@ -163,15 +222,82 @@ export const COMPANY_FIELDS: CompanyField[] = [
   { key: "assigned_staff", label: "담당직원", type: "text", section: "담당자" },
 
   // ── 거래 조건 ──────────────────────────────────────────────────────────────
-  { key: "payment_terms", label: "결제조건", type: "text", section: "거래 조건", placeholder: "예: 월말 마감 익월 15일" },
+  // 🔴 **전부 내부 전용이다**(사용자 확정 2026-09-14) — 화주포털·견적서·엑셀에
+  //    한 줄도 내보내지 않는다(33차 정기계약 배지와 같은 취급).
+  //    🔴 `app/customer/**` 에서 이 값들을 읽지 말 것.
+  // 🔴 **기존 화주 539건은 전부 비어 있는 것이 맞다** — 일괄로 「건별」을 채우면
+  //    「안 정했다」와 「건별로 정했다」가 구분되지 않는다(지시서가 정할 것 ④).
+  {
+    key: "billing_cycle_default",
+    label: "청구주기 (기본값)",
+    type: "select",
+    section: "거래 조건",
+    codedOptions: BILLING_CYCLE_DEFAULT_OPTIONS,
+    note: "새 오더·발주요청에 기본으로 채워집니다. 건별로 담당자가 바꿀 수 있습니다.",
+    emptyLabel: "미정",
+  },
   {
     key: "billing_cutoff_day",
     label: "정산 마감일",
     type: "number",
     section: "거래 조건",
-    note: "비우면 달력월(1일~말일) 기준",
+    // 🔴 **신설한 칸이 아니다 — 로드맵 ②-B 부터 있던 컬럼이다**(원칙 46번이 그 이름을
+    //    그대로 적는다). 36차 지시서는 「기입이 되어야 한다」고 적었지만 실측하니
+    //    이미 있었고 화면에도 나오고 있었다. **두 벌로 만들면 월정산 묶음이 갈린다.**
+    note: "비우면 달력월(1일~말일) 기준 · 바꿔도 과거 묶음은 그대로입니다",
     emptyLabel: "말일(달력월 기준)",
     displaySuffix: "일",
+  },
+  {
+    key: "payment_due_basis",
+    label: "결제일 기준",
+    type: "select",
+    section: "거래 조건",
+    codedOptions: PAYMENT_DUE_BASIS_OPTIONS,
+    // 🔴 결제일 = **화주가 위캐리에 입금하는 날**이다(사용자 확정 2026-09-14).
+    //    차주 지급일이 아니다 — 라벨을 「지급일」로 바꾸지 말 것.
+    note: "화주가 위캐리에 입금하는 날의 기준입니다",
+    emptyLabel: "미정",
+  },
+  {
+    key: "payment_due_value",
+    label: "결제일",
+    type: "number",
+    section: "거래 조건",
+    // 🔴 기준에 따라 뜻이 다르다 — 한 칸으로 합치지 말 것(자동계산이 못 읽는다).
+    note: "마감일·세금계산서 기준이면 「N일 이내」, 매월 고정일이면 그 날짜 (0 = 말일)",
+    displaySuffix: "일",
+    // 🔴 조건을 화면에 적지 말 것 — 등록 폼과 수정 폼이 다르게 판단하게 된다.
+    showWhen: (form) => !!form.payment_due_basis && form.payment_due_basis !== "negotiated",
+  },
+  {
+    key: "credit_limit",
+    label: "여신 한도 (원)",
+    type: "number",
+    section: "거래 조건",
+    // 🔴 **값만 받는다 — 넘어도 막지 않는다**(지시서가 정할 것 ③ 권장안).
+    //    「어디서 무엇을 막을지」는 별개 설계라 이번 차수에 넣지 않았다.
+    note: "참고용입니다 — 넘어도 등록·배차를 막지 않습니다",
+    displayThousands: true,
+  },
+  {
+    key: "tax_invoice_method",
+    label: "세금계산서 발행 방식",
+    type: "select",
+    section: "거래 조건",
+    codedOptions: TAX_INVOICE_METHOD_OPTIONS,
+    emptyLabel: "미정",
+  },
+  // 🔴 **얼려둔 구형 칸이다**(원칙 45번) — 위의 「결제일 기준 + 결제일」이 대체했다.
+  //    자유 문자열이라 정산 예정일을 계산할 수 없어서 바꾼 것이고, 지우면 이미
+  //    적어 둔 조건이 사라지므로 **읽기 전용으로 남긴다.** 🔴 되살려 쓰지 말 것.
+  {
+    key: "payment_terms",
+    label: "(구) 결제조건",
+    type: "text",
+    section: "거래 조건",
+    inForm: false,
+    note: "새 건은 위의 「결제일 기준 · 결제일」에 적습니다 (읽기 전용)",
   },
   { key: "main_pickup_region", label: "주요 상차지역", type: "region-multi", section: "거래 조건" },
   { key: "main_dropoff_region", label: "주요 하차지역", type: "region-multi", section: "거래 조건" },
@@ -257,6 +383,29 @@ export function companyFieldsOf(section: CompanySection): CompanyField[] {
 }
 
 /**
+ * 표시 모드(수정이 아닐 때)에 그 칸이 보여줄 글 — 없으면 `null`.
+ *
+ * 🔴 **화면에 이 규칙을 다시 적지 말 것.** 코드값→라벨 변환이 화면에 있으면
+ *    `codedOptions` 를 늘렸을 때 그 화면만 조용히 코드값을 그대로 보여준다.
+ */
+export function companyFieldDisplay(f: CompanyField, raw: any): string | null {
+  let shown: any = f.type === "checkbox" ? (raw === true ? "예" : null) : raw;
+
+  if (shown === null || shown === undefined || shown === "") {
+    // 🔴 「비어 있음」이 곧 규칙인 항목(정산 마감일)은 그 뜻을 그린다.
+    return f.emptyLabel ?? null;
+  }
+  if (f.codedOptions) {
+    // 🔴 목록에 없는 값이면 **코드값을 그대로 보여준다** — 숨기면 잘못 들어간 값을
+    //    아무도 못 본다(조용히 사라지는 것이 가장 나쁘다).
+    shown = f.codedOptions.find((o) => o.value === shown)?.label ?? shown;
+  }
+  if (f.displayThousands) shown = Number(shown).toLocaleString();
+  if (f.displaySuffix) shown = `${shown}${f.displaySuffix}`;
+  return String(shown);
+}
+
+/**
  * 화면 state 를 담을 빈 값 묶음.
  * `vehicle`·`address` 는 화면에서 두 칸으로 나뉘므로 보조 키를 함께 만든다.
  */
@@ -330,7 +479,50 @@ export function buildCompanyPayload(
     payload.manual_source_note = null;
   }
 
+  // 🔴 결제일 기준이 없거나 「협의」면 값 칸도 비운다 — `showWhen` 과 **한 벌**이다.
+  //    안 비우면 기준을 「협의」로 바꿔도 옛 숫자가 남아, 나중에 정산 예정일을
+  //    계산하는 코드가 「협의인데 30일」이라는 있을 수 없는 조합을 읽는다.
+  if (!payload.payment_due_basis || payload.payment_due_basis === "negotiated") {
+    payload.payment_due_value = null;
+  }
+
   return payload;
+}
+
+/**
+ * 저장 전 검사 — 문제가 있으면 그 이유를, 없으면 `null` 을 돌려준다.
+ *
+ * 🔴 **DB CHECK 제약과 같은 범위를 본다**(`migrations/2026-09-14_company_trade_terms.sql`).
+ *    안 막으면 PostgREST 가 `new row violates check constraint "..."` 를 그대로
+ *    올려서 담당자는 **어느 칸이 틀렸는지 알 수 없다.**
+ * 🔴 이것은 화면 편의이고 **방어선은 DB 제약이다** — 한쪽만 고치지 말 것.
+ */
+export function validateCompanyForm(form: Record<string, any>): string | null {
+  if (!String(form.name ?? "").trim()) return "회사명을 입력해주세요.";
+
+  const cutoff = form.billing_cutoff_day;
+  if (cutoff !== "" && cutoff !== null && cutoff !== undefined) {
+    const n = Number(cutoff);
+    if (!Number.isInteger(n) || n < 1 || n > 31)
+      return "정산 마감일은 1~31 사이의 날짜입니다. 말일이면 비워 두세요.";
+  }
+
+  const due = form.payment_due_value;
+  if (due !== "" && due !== null && due !== undefined) {
+    const n = Number(due);
+    if (!Number.isInteger(n) || n < 0 || n > 180)
+      return "결제일은 0~180 사이입니다. (매월 고정일이면 0 = 말일, 1~31)";
+    if (form.payment_due_basis === "fixed_day" && n > 31)
+      return "「매월 고정일」의 결제일은 0(말일) 또는 1~31 입니다.";
+  }
+
+  const credit = form.credit_limit;
+  if (credit !== "" && credit !== null && credit !== undefined) {
+    const n = Number(credit);
+    if (!Number.isFinite(n) || n < 0) return "여신 한도는 0 이상의 금액입니다.";
+  }
+
+  return null;
 }
 
 /** `"1톤 카고"` 처럼 합쳐 저장된 값을 두 칸으로 되돌린다. */
