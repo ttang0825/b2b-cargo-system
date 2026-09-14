@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 // 🔴 원칙 31번 — 앱 내부 경로는 반드시 next/link. <a href> 로 바꾸면 하드 리로드가 된다.
 import Link from "next/link";
 import { calcMargin } from "@/lib/marginCalc";
+// 🔴 부가세 포함가 병기용 — 공용 함수만 쓴다(`× 1.1` 을 화면에 직접 적지 말 것).
+import { calcInclusiveAmount } from "@/lib/vat";
 // 🔴 원칙 8번 — 엑셀은 공용 함수만 쓴다(헤더 굵게+옐로 배경 · 1행 틀고정이 자동).
 //    `xlsx` 가 아니라 `xlsx-js-style` 을 쓰는 것도 그 파일 안에서 처리된다.
 import { exportMultiSheetExcel, buildExportFilename } from "@/lib/exportExcel";
@@ -67,6 +69,25 @@ function won(n: number) {
 function manwon(n: number) {
   if (n === 0) return "—";
   return `${Math.round(n / 10000).toLocaleString("ko-KR")}만`;
+}
+
+// ── 부가세 포함가 병기 (35차 리뷰 7라운드 · 사용자 지시) ──────────────────────
+//
+// 🔴 **부가세 포함가는 「더 버는 돈」이 아니다.** 이 화면의 마진은 공급가액이고,
+//    거기 붙는 10% 는 받아서 국가에 내는 돈이다. 세금계산서 금액·통장에 찍히는
+//    입금액과 맞춰 볼 때 쓰라고 병기하는 것이지 수익으로 읽으면 안 된다.
+//    🔴 그래서 **항상 괄호 + 흐린 보조 글씨**다 — 마진과 같은 크기·굵기로 올리면
+//       둘 중 어느 것이 실적인지 화면이 스스로 말하지 못하게 된다.
+//
+// 🔴 마진이 공급가액이라 포함가는 정확히 ×1.1 이다(주선사정산은 청구·지급 양쪽이
+//    같은 비율로 커지고, 선착불은 원래 포함가로 입력된 주선수수료로 되돌아간다).
+function wonVat(n: number) {
+  return `부가세 포함 ${won(calcInclusiveAmount(n))}`;
+}
+
+function manwonVat(n: number) {
+  if (n === 0) return "";
+  return `(${manwon(calcInclusiveAmount(n))})`;
 }
 
 function addMonths(month: string, delta: number) {
@@ -431,6 +452,9 @@ export default function AdminDashboardPage() {
                 return {
                   정산월: r.period,
                   "마진(부가세 제외)": Math.round(r.margin),
+                  // 🔴 화면과 같은 것을 낸다(리뷰 7라운드) — 파일에만 없으면
+                  //    받은 사람이 세금계산서 금액과 맞춰 볼 수가 없다.
+                  "마진(부가세 포함)": calcInclusiveAmount(Math.round(r.margin)),
                   "취급고(참고)": Math.round(r.revenue),
                   정산건수: r.count,
                   "전월 대비(%)": changePct === null ? "" : changePct,
@@ -447,6 +471,7 @@ export default function AdminDashboardPage() {
                 화주: r.name,
                 오더건수: r.orderCount,
                 "마진(부가세 제외)": Math.round(r.margin),
+                "마진(부가세 포함)": calcInclusiveAmount(Math.round(r.margin)),
                 "취급고(참고)": Math.round(r.revenue),
               }))
             : [{ 안내: "해당 기간 오더 없음" }],
@@ -459,6 +484,7 @@ export default function AdminDashboardPage() {
                 담당자: r.name,
                 오더건수: r.orderCount,
                 "마진(부가세 제외)": Math.round(r.margin),
+                "마진(부가세 포함)": calcInclusiveAmount(Math.round(r.margin)),
                 "취급고(참고)": Math.round(r.revenue),
               }))
             : [{ 안내: "해당 기간 오더 없음" }],
@@ -605,6 +631,10 @@ export default function AdminDashboardPage() {
               <div className="num" style={{ fontSize: 30, fontWeight: 700 }}>
                 {totalMargin.toLocaleString()}원
               </div>
+              {/* 🔴 흐린 보조 글씨다 — 마진과 같은 크기로 올리지 말 것(위 주석 참고) */}
+              <div className="num" style={{ fontSize: 12.5, color: "var(--text-muted)" }}>
+                ({wonVat(totalMargin)})
+              </div>
               <div style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: "auto" }}>
                 취급고(참고) {totalVolume.toLocaleString()}원
               </div>
@@ -616,6 +646,10 @@ export default function AdminDashboardPage() {
               위캐리 매출이 아닙니다).
               <br />
               「취급고」는 위캐리를 거쳐 간 운임의 크기이고 <strong>매출이 아닙니다</strong>.
+              <br />
+              괄호 안 <strong>부가세 포함</strong>은 세금계산서에 찍히는 금액입니다 —
+              <strong>더 버는 돈이 아니라</strong> 받아서 국가에 내는 10%가 얹힌 값이니,
+              실적은 앞의 공급가액으로 보십시오.
               <br />
               ⚠️ 배차 목록의 「마진·마진율」과 배차 상세의 「실질마진(정산기준)」은 계산이 다른
               별개 값입니다 — 이 화면의 숫자와 맞지 않는 것이 정상입니다.
@@ -730,13 +764,16 @@ export default function AdminDashboardPage() {
               <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{periodLabel}</div>
               <div style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: "auto" }}>
                 실적 {activeMonthCount}개월 · 정산 {totalCount}건 · 월평균 마진{" "}
-                <strong className="num">{won(avgMonthlyMargin)}</strong>
+                <strong className="num">{won(avgMonthlyMargin)}</strong>{" "}
+                <span className="num">({wonVat(avgMonthlyMargin)})</span>
               </div>
             </div>
             <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 0, marginBottom: 18 }}>
-              막대 높이는 <strong>마진(부가세 제외)</strong>입니다 · 막대에 마우스를 올리면
-              취급고·건수·증감이 보입니다 · 현장 추가비는 그 이후 등록된 것까지 표시 시점에
-              합산합니다.
+              막대 높이는 <strong>마진(부가세 제외)</strong>이고 그 아래 괄호가
+              <strong>부가세 포함가</strong>입니다 · 점선은 <strong>월평균 마진</strong>
+              {avgMonthlyMargin > 0 ? ` ${won(avgMonthlyMargin)}` : ""}입니다(실적이 있는 달로만
+              나눕니다) · 막대에 마우스를 올리면 취급고·건수·증감이 보입니다 · 현장 추가비는
+              그 이후 등록된 것까지 표시 시점에 합산합니다.
             </p>
             {activeMonthCount === 0 ? (
               <div className="empty-state">이 기간에 정산 데이터가 없습니다.</div>
@@ -768,21 +805,13 @@ export default function AdminDashboardPage() {
                         zIndex: 1,
                       }}
                     >
-                      {/* 🔴 라벨은 **왼쪽**이다 — 오른쪽에 두면 달 수가 많아 내용이 카드보다
-                          넓어졌을 때 처음 보이는 화면 밖으로 밀려 안 보인다(24개월에서 실측). */}
-                      <span
-                        style={{
-                          position: "absolute",
-                          left: 0,
-                          top: -15,
-                          fontSize: 10.5,
-                          color: "var(--text-muted)",
-                          background: "var(--surface)",
-                          padding: "0 4px",
-                        }}
-                      >
-                        평균 {manwon(avgMonthlyMargin)}
-                      </span>
+                      {/* 🔴 **선 위에 숫자를 얹지 않는다 — 다시 넣지 말 것.**
+                          리뷰 5라운드에는 왼쪽 끝에 「평균 148만」을 얹었는데(오른쪽은 24개월에서
+                          화면 밖으로 밀렸다), 그 자리가 **첫 달 막대의 라벨 자리와 같다.**
+                          7라운드에 부가세 포함가가 둘째 줄로 붙으면서 「평균 148만」 바로 아래에
+                          첫 달의 「(141만)」이 놓여, **포함가가 더 작은 것처럼** 읽혔다(실측).
+                          겹침은 첫 달 실적이 평균 근처면 언제든 나므로 자리를 옮겨도 재발한다 —
+                          그래서 값은 **위 머리줄과 아래 안내문**이 말하고 선은 선만 긋는다. */}
                     </div>
                   )}
                   <div
@@ -805,7 +834,7 @@ export default function AdminDashboardPage() {
                       return (
                         <div
                           key={r.period}
-                          title={`${r.period} · 마진 ${won(r.margin)} · 취급고 ${won(r.revenue)} · ${r.count}건${
+                          title={`${r.period} · 마진 ${won(r.margin)} (${wonVat(r.margin)}) · 취급고 ${won(r.revenue)} · ${r.count}건${
                             changePct !== null ? ` · 전월 대비 ${changePct >= 0 ? "+" : ""}${changePct}%` : ""
                           }`}
                           style={{
@@ -829,6 +858,20 @@ export default function AdminDashboardPage() {
                           >
                             {manwon(r.margin)}
                           </span>
+                          {/* 🔴 둘째 줄이다 — 같은 줄에 붙이면 24개월에서 막대끼리 겹친다.
+                              값이 0인 달은 아예 그리지 않는다(「(—)」가 되어 어수선해진다). */}
+                          {r.margin !== 0 && (
+                            <span
+                              style={{
+                                fontSize: 9.5,
+                                whiteSpace: "nowrap",
+                                color: "var(--text-muted)",
+                                marginTop: -4,
+                              }}
+                            >
+                              {manwonVat(r.margin)}
+                            </span>
+                          )}
                           <div
                             style={{
                               width: "70%",
@@ -908,8 +951,23 @@ export default function AdminDashboardPage() {
                       }}
                     />
                   </div>
-                  <div className="num" style={{ width: 120, textAlign: "right", fontSize: 14, fontWeight: 700 }}>
-                    {won(r.margin)}
+                  {/* 🔴 부가세 포함가는 **아랫줄 흐린 글씨**다(리뷰 7라운드) — 같은 줄에
+                      이어 붙이면 취급고 칸을 민다.
+                      🔴 **칸이 150px 이고 `nowrap` 이다 — 120px 으로 되돌리지 말 것.**
+                         8자리 금액에서 「원)」이 아랫줄로 떨어졌다(24개월 표본 실측).
+                         넓힌 30px 은 옆의 막대(`flex: 1`)에서 가져오므로 다른 칸은 안 밀린다. */}
+                  <div className="num" style={{ width: 150, textAlign: "right" }}>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>{won(r.margin)}</div>
+                    <div
+                      style={{
+                        fontSize: 10.5,
+                        color: "var(--text-muted)",
+                        marginTop: 1,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      ({wonVat(r.margin)})
+                    </div>
                   </div>
                   <div className="num" style={{ width: 110, textAlign: "right", fontSize: 11.5, color: "var(--text-muted)" }}>
                     취급고 {won(r.revenue)}
@@ -1011,8 +1069,23 @@ export default function AdminDashboardPage() {
                       }}
                     />
                   </div>
-                  <div className="num" style={{ width: 120, textAlign: "right", fontSize: 14, fontWeight: 700 }}>
-                    {won(r.margin)}
+                  {/* 🔴 부가세 포함가는 **아랫줄 흐린 글씨**다(리뷰 7라운드) — 같은 줄에
+                      이어 붙이면 취급고 칸을 민다.
+                      🔴 **칸이 150px 이고 `nowrap` 이다 — 120px 으로 되돌리지 말 것.**
+                         8자리 금액에서 「원)」이 아랫줄로 떨어졌다(24개월 표본 실측).
+                         넓힌 30px 은 옆의 막대(`flex: 1`)에서 가져오므로 다른 칸은 안 밀린다. */}
+                  <div className="num" style={{ width: 150, textAlign: "right" }}>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>{won(r.margin)}</div>
+                    <div
+                      style={{
+                        fontSize: 10.5,
+                        color: "var(--text-muted)",
+                        marginTop: 1,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      ({wonVat(r.margin)})
+                    </div>
                   </div>
                   <div className="num" style={{ width: 110, textAlign: "right", fontSize: 11.5, color: "var(--text-muted)" }}>
                     취급고 {won(r.revenue)}
