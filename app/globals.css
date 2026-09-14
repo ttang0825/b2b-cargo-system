@@ -3855,6 +3855,15 @@ tbody tr:hover {
   color: var(--pv2-text-3);
   margin-bottom: 2px;
 }
+/* 🔴 36차 B장 — 청구주기 「요청」 아래의 안내 한 줄.
+   🔴 색은 `--pv2-text-2` 다 — `--pv2-text-3`(라벨용)은 더 흐려서 본문 크기에서
+      AA 에 못 미친다(PR #120 이 같은 자리를 재서 `--pv2-text-2` 로 정했다). */
+.pv2-subchoice-help {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--pv2-text-2);
+}
 .pv2-choice-row.pv2-choice-row-auto {
   flex-wrap: wrap;
 }

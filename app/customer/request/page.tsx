@@ -22,7 +22,11 @@ import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import { localInputToISOString } from "@/lib/localDateTime";
 import { PORTAL_ORDER_THIRD_PARTY_CONSENT } from "@/lib/legalInfo";
 import Pv2Select from "@/components/pv2/Pv2Select";
-import { CUSTOMER_COLLECTION_AXIS_LABEL } from "@/lib/settlementLabels";
+import {
+  CUSTOMER_COLLECTION_AXIS_LABEL,
+  CUSTOMER_BILLING_AXIS_LABEL,
+  getCustomerBillingCycleLabel,
+} from "@/lib/settlementLabels";
 import {
   loadPresets,
   savePreset,
@@ -49,11 +53,15 @@ const LOADING_TYPE_CHOICES = [
 ];
 
 /**
- * 🔴 정산방식 (27차 리뷰 4라운드) — **화주가 고르는 것은 이 둘뿐이다**(사용자 확정 A안).
- *    관리자 화면(`components/CollectionMethodInput.tsx`)에는 청구주기(건별/월정산)
- *    축이 하나 더 있지만 **여기에는 넣지 않는다** — 월정산 여부는 화주별 계약 사항
- *    (`companies.billing_cutoff_day`)이라 담당자가 정하고, 화주에게 물으면 답할 수
- *    없는 질문이 된다. 🔴 나중에 "축이 하나 빠졌다"며 더하지 말 것.
+ * 🔴 정산방식 (27차 리뷰 4라운드) — 화주가 고르는 수금방식은 이 둘뿐이다(사용자 확정 A안).
+ *
+ * ⚠️ **27차의 「청구주기 축을 여기에 넣지 말 것」은 36차 B장에 조건부로 풀렸다**(사용자
+ *    원문 *"화주포털 발주요청시 건별정산인지 월별정산인지 선택 옵션이 있어야 한다"*).
+ *    🔴 **그때의 사유는 그대로 살아 있다** — 월정산 여부는 화주별 계약 사항이라
+ *    **확정은 담당자가 한다.** 그래서 아래 청구주기는 **「요청」**이고, 저장되는 칸도
+ *    `requested_billing_cycle` 이며(확정값 `billing_cycle` 이 아니다), 기본값은
+ *    화주의 계약값(`companies.billing_cycle_default`)에서 온다 — 화주가 안 건드리면
+ *    계약 그대로 들어가므로 「답할 수 없는 질문」이 되지 않는다.
  */
 const COLLECTION_METHOD_CHOICES = [
   // 🔴 **화주가 보는 말**이다(5라운드 확정) — 담당자 화면의 「주선사 정산」/「선착불」과
@@ -63,6 +71,19 @@ const COLLECTION_METHOD_CHOICES = [
   { value: "broker" as const, label: "위캐리 수금" },
   { value: "driver_direct" as const, label: "선착불(차주 직접수금)" },
 ];
+
+/**
+ * 🔴 청구주기 **요청** (36차 B장).
+ *
+ *    값은 `quotes`·`orders`·`invoices` 의 `billing_cycle` 과 **같은 문자열**이고
+ *    라벨은 `lib/settlementLabels.ts` 의 **화주 말** 함수에서 가져온다 — 화주가 보는
+ *    다른 화면(견적 확인·정산 확인)과 한 글자도 달라서는 안 된다.
+ *    🔴 라벨을 여기에 문자로 적지 말 것.
+ */
+const BILLING_CYCLE_CHOICES = (["per_order", "monthly"] as const).map((value) => ({
+  value,
+  label: getCustomerBillingCycleLabel(value) as string,
+}));
 
 /**
  * 🔴 당착·내착일 때 `requested_dropoff_at` 에 넣는 **자리 채움 시각**이다.
@@ -168,6 +189,10 @@ export default function PortalRequestPage() {
     //   관리자 견적 등록 폼도 같은 값으로 시작한다(`app/admin/quotes/page.tsx`).
     collection_method: "broker" as "broker" | "driver_direct",
     direct_collection_point: null as "pickup" | "dropoff" | "undecided" | null,
+    // 🔴 36차 B장 — **요청값**이다. 초기값은 화주의 계약값으로 덮어쓴다(아래 init).
+    //   계약이 「미정」이면 `per_order` 로 시작한다 — 대부분의 거래가 건별이고,
+    //   관리자 견적 등록 폼도 같은 값으로 시작한다.
+    requested_billing_cycle: "per_order" as "per_order" | "monthly",
     waitingMinutes: "",
     waypointCount: "",
     item: "",
@@ -301,13 +326,22 @@ export default function PortalRequestPage() {
       if (account) {
         setCompanyId(account.company_id);
 
+        // 🔴 `billing_cycle_default` 하나만 더 읽는다 — 36차 거래조건 5칸 중
+        //    **나머지 넷(마감일·결제일 기준·결제일·여신 한도·계산서 방식)은 내부
+        //    전용이라 포털이 읽지 않는다**(사용자 확정 2026-09-14). 이 한 칸은
+        //    화주가 스스로 고르는 항목의 **기본값**으로만 쓰인다.
         const { data: company } = await supabase
           .from("companies")
-          .select("address")
+          .select("address,billing_cycle_default")
           .eq("id", account.company_id)
           .single();
         if (company?.address) {
           setForm((prev) => ({ ...prev, origin: company.address }));
+        }
+        // 🔴 계약값이 「미정」(null)이면 건드리지 않는다 — 「안 정했다」를 「건별로
+        //    정했다」로 바꿔 읽으면 안 된다(A장 마이그레이션 단언 ⑥ 과 같은 정신).
+        if (company?.billing_cycle_default === "monthly" || company?.billing_cycle_default === "per_order") {
+          setForm((prev) => ({ ...prev, requested_billing_cycle: company.billing_cycle_default }));
         }
 
         await Promise.all([
@@ -533,6 +567,7 @@ export default function PortalRequestPage() {
           collection_method: form.collection_method,
           direct_collection_point:
             form.collection_method === "driver_direct" ? form.direct_collection_point : null,
+          requested_billing_cycle: form.requested_billing_cycle,
           dropoff_arrival_type: dropoffArrival,
           // 🔴 「지금」이면 **제출하는 그 순간**으로 다시 맞춘다 — 칩을 누른 시각을
           //    그대로 보내면 폼을 오래 열어둔 경우 과거 시각이 되어 하한에 걸린다.
@@ -971,6 +1006,41 @@ export default function PortalRequestPage() {
                 </div>
               </div>
             )}
+            {/* 🔴 36차 B장 — 청구주기 **요청**. 수금방식과 **다른 축**이라 같은
+                `pv2-field` 안의 하위 줄로 둔다(선착불 지급조건과 같은 모양).
+                🔴 **블록 순서와 번호 배지를 건드리지 않았다** — ① 구간 ② 일정
+                   ③ 화물·차량 ④ 요청사항 그대로이고, 여기는 ③ 안이다.
+                🔴 화면 라벨을 저장값으로 쓰지 말 것 — 값은 `per_order`/`monthly` 다.
+                🔴 「요청」임이 화면에도 드러나야 한다 — 담당자가 확정하기 때문에
+                   화주가 「정했다」고 읽으면 안 된다. 아래 안내 문장을 지우지 말 것. */}
+            <div className="pv2-subchoice">
+              <span className="pv2-subchoice-label">{CUSTOMER_BILLING_AXIS_LABEL}</span>
+              <div className="pv2-choice-row pv2-choice-row-auto">
+                {BILLING_CYCLE_CHOICES.map((opt) => (
+                  <label
+                    key={opt.value}
+                    className={`pv2-choice pv2-choice-auto${
+                      form.requested_billing_cycle === opt.value ? " is-on" : ""
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="pv2-billing-cycle"
+                      value={opt.value}
+                      checked={form.requested_billing_cycle === opt.value}
+                      onChange={() =>
+                        setForm((prev) => ({ ...prev, requested_billing_cycle: opt.value }))
+                      }
+                    />
+                    <span>{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+              <p className="pv2-subchoice-help">
+                계약하신 조건이 기본으로 선택되어 있습니다. 바꾸어 요청하시면 담당자가
+                확인 후 안내드립니다.
+              </p>
+            </div>
           </div>
           <div className="pv2-field" style={{ marginTop: 14 }}>
             <label className="pv2-field-label" htmlFor="pv2-f-item">

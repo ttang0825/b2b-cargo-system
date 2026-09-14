@@ -35,6 +35,8 @@ type Body = {
   collection_method?: string | null;
   direct_collection_point?: string | null;
   dropoff_arrival_type?: string | null;
+  // 36차 B장 — 🔴 **요청값이다.** 이름의 `requested_` 를 떼지 말 것(아래 주석 참고)
+  requested_billing_cycle?: string | null;
   destination_company_name?: string | null;
   destination_contact_name?: string | null;
   destination_contact_phone?: string | null;
@@ -177,17 +179,28 @@ export async function POST(req: Request) {
     body.dropoff_arrival_type === "same_day" || body.dropoff_arrival_type === "next_day"
       ? body.dropoff_arrival_type
       : null;
+  // 🔴 **36차 B장 — 이것은 「요청」이지 확정이 아니다.**
+  //    27차가 `portal_order_requests` 에 `billing_cycle` 을 더하지 말라고 못박았고
+  //    사유는 *「월정산은 화주별 계약이라 담당자가 정한다」* 였다. **그 사유는 그대로
+  //    살아 있다** — 그래서 이름이 `requested_billing_cycle` 이고, 확정은 담당자가
+  //    견적·오더에서 한다. 🔴 `requested_` 를 떼거나 `billing_cycle` 로 바꾸지 말 것.
+  const requestedBillingCycle =
+    body.requested_billing_cycle === "per_order" || body.requested_billing_cycle === "monthly"
+      ? body.requested_billing_cycle
+      : null;
 
   const settlementPayload = {
     collection_method: collectionMethod,
     direct_collection_point: directCollectionPoint,
     dropoff_arrival_type: dropoffArrivalType,
+    requested_billing_cycle: requestedBillingCycle,
   };
 
   // 🔴 컬럼이 아직 없는 배포본을 위한 단계적 후퇴 — 위 `loading_type` 주석과 같은 이유다.
   //    ① 전부 → ② 정산방식 3개만 빼고 → ③ `loading_type` 까지 빼고.
   //    🔴 **발주 접수 전체가 막히는 것보다 그 값만 빠지는 편이 낫다.**
-  const SETTLEMENT_COLS = /collection_method|direct_collection_point|dropoff_arrival_type/;
+  const SETTLEMENT_COLS =
+    /collection_method|direct_collection_point|dropoff_arrival_type|requested_billing_cycle/;
   let { data: inserted, error: insertError } = await insertRequest({
     ...basePayload,
     loading_type: loadingType,
