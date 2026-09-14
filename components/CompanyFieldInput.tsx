@@ -30,6 +30,12 @@ type Props = {
    *    「펼치고 닫을 때 버벅거림」이 그것이었다(CPU 6배에서 218~238ms).
    */
   value: any;
+  /**
+   * `dynamicOptions` 를 가진 칸 전용 — 그 함수가 목록을 고를 때 보는 폼 값들.
+   * 🔴 **폼 state 전체를 넘기지 말 것**(위 주석) — 그 칸이 실제로 보는 값만 담는다.
+   *    지금은 결제일이 `payment_due_basis` 하나를 본다.
+   */
+  deps?: Record<string, any>;
   /** `address` 전용 — 상세주소 칸 */
   detailValue?: string;
   /** `vehicle` 전용 — 톤수·형태 두 칸 */
@@ -52,6 +58,7 @@ function formatBizRegNo(v: string) {
 function CompanyFieldInput({
   field,
   value,
+  deps,
   detailValue,
   tonnage,
   bodytype,
@@ -151,7 +158,16 @@ function CompanyFieldInput({
   }
 
   // ── 드롭다운 ──────────────────────────────────────────────────────────────
-  if (f.type === "select") {
+  // 🔴 `codedOptions` 는 **저장되는 값과 보이는 글이 다르다**(36차 A장) — 거래조건
+  //    칸들은 DB CHECK 제약이 걸린 코드값이라 한글을 그대로 넣으면 저장이 거부된다.
+  // 🔴 `dynamicOptions` 는 **다른 칸의 값에 따라 목록이 달라지는** 경우다(결제일).
+  //    `null` 을 돌려주면 아래의 원래 위젯(숫자 입력 등)으로 내려간다.
+  const codedList = (deps && f.dynamicOptions?.(deps)) || f.codedOptions || null;
+
+  // 🔴 `type` 이 `select` 가 아니어도 목록이 있으면 드롭다운으로 그린다 — 정산
+  //    마감일·결제일이 그렇다(저장은 숫자, 화면은 날짜 목록). 🔴 `type` 을 바꿔
+  //    해결하지 말 것: `buildCompanyPayload` 가 그 값으로 숫자 변환을 정한다.
+  if (f.type === "select" || codedList) {
     return (
       <div className="field">
         <label>
@@ -159,16 +175,16 @@ function CompanyFieldInput({
           {f.required && " *"}
         </label>
         <select
-          value={value || ""}
+          value={value === null || value === undefined ? "" : String(value)}
           onChange={(e) => onChange(f.key, e.target.value)}
           disabled={disabled}
         >
-          <option value="">선택</option>
-          {/* 🔴 `codedOptions` 는 **저장되는 값과 보이는 글이 다르다**(36차 A장) —
-              거래조건 칸들은 DB CHECK 제약이 걸린 코드값이라 한글을 그대로 넣으면
-              저장이 통째로 거부된다. `options` 와 섞어 쓰지 말 것. */}
-          {f.codedOptions
-            ? f.codedOptions.map((o) => (
+          {/* 🔴 「비어 있음」이 곧 뜻인 칸은 그 뜻을 여기에 적는다 — 정산 마감일은
+              비우면 「말일(달력월 기준)」이 실제 규칙이라(로드맵 ②-B) 「선택」으로
+              두면 규칙이 화면에서 사라진다. */}
+          <option value="">{f.emptyOptionLabel || "선택"}</option>
+          {codedList
+            ? codedList.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>

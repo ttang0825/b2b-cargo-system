@@ -69,11 +69,10 @@ export type CompanyField = {
   /**
    * 등록 폼에 노출하는가(기본 true). 상세 수정 폼에는 **나오되 읽기 전용**이 된다.
    *
-   * 🔴 false 인 이유가 **둘**이다 — 섞어서 읽지 말 것.
-   *    ① **정산이 자동으로 갱신하는 실적값**(「실적」 구획). 신규 화주는 0이고,
-   *       담당자가 손으로 넣어도 다음 정산에서 덮인다.
-   *    ② **새 구조로 대체돼 얼려둔 구형 칸**(`payment_terms`, 36차 A장). 원칙 45번 —
-   *       값을 지우지 않고 읽기 전용으로 남겨 기록을 보존한다. 🔴 **되살려 쓰지 말 것.**
+   * 🔴 false 인 것은 **정산이 자동으로 갱신하는 실적값**이다(「실적」 구획) — 신규
+   *    화주는 0이고, 담당자가 손으로 넣어도 다음 정산에서 덮인다.
+   *    ⚠️ 36차 A장이 한때 `payment_terms` 를 여기에 넣어 얼려 뒀는데, 리뷰 1라운드에
+   *       사용자가 **「특이사항」으로 이름을 바꿔 계속 쓰기로** 정해서 되돌렸다.
    *    (완료조건 2의 「등록 == 수정」은 이 플래그를 제외한 집합을 뜻한다)
    */
   inForm?: boolean;
@@ -90,6 +89,22 @@ export type CompanyField = {
    *    바뀔 때 관리자 화면이 조용히 따라가면 안 된다(사용자 확정 2026-09-14).
    */
   codedOptions?: readonly { value: string; label: string }[];
+  /**
+   * `codedOptions` 가 **화주마다·다른 칸의 값에 따라 달라질 때** 쓴다 (36차 리뷰 1라운드).
+   *
+   * 🔴 결제일이 그 사례다 — 기준이 「매월 고정일」이면 **날짜 드롭다운(말일·1~31)**,
+   *    「마감일 기준」·「세금계산서 발행일 기준」이면 **N일 이내 숫자 입력**이다.
+   *    같은 컬럼인데 뜻이 달라서, 한 위젯으로는 담당자가 무엇을 적는지 알 수 없다.
+   * 🔴 `null` 을 돌려주면 `type` 이 정한 원래 위젯으로 돌아간다.
+   * 🔴 조건을 화면에 적지 말 것 — 등록 폼과 수정 폼이 다르게 판단하게 된다.
+   */
+  dynamicOptions?: (form: Record<string, any>) => readonly { value: string; label: string }[] | null;
+  /**
+   * 드롭다운 맨 위 「빈 값」 항목의 글. 기본은 「선택」이다.
+   * 🔴 **「비어 있음」이 곧 뜻인 칸**에 쓴다 — 정산 마감일은 비우면 「말일(달력월 기준)」이
+   *    이라는 실제 규칙이라(로드맵 ②-B) 「선택」으로 두면 규칙이 안 보인다.
+   */
+  emptyOptionLabel?: string;
   placeholder?: string;
   /** inForm:false 인 이유 — 화면 도움말로 그대로 쓴다 */
   note?: string;
@@ -133,7 +148,8 @@ export const BILLING_CYCLE_DEFAULT_OPTIONS = [
  *
  * 🔴 **기준 + 값 두 칸이라야 「정산 예정일」을 계산할 수 있다.** 자유 입력 한 칸은
  *    지금은 편하지만 미수금 알림·정산 예정일 자동계산에 **영영 못 쓴다**
- *    (그 자리가 바로 `payment_terms` 이고, 그래서 이번에 얼렸다).
+ *    (그 자리가 바로 구형 `payment_terms` 이고, 지금은 **자동계산에 쓰이지 않는**
+ *     「특이사항」으로 이름을 바꿔 사람이 읽는 메모로만 남겼다).
  * 🔴 `negotiated`(협의)는 **값 칸을 안 그린다** — 자동계산에서도 제외 대상이다.
  */
 export const PAYMENT_DUE_BASIS_OPTIONS = [
@@ -141,6 +157,30 @@ export const PAYMENT_DUE_BASIS_OPTIONS = [
   { value: "fixed_day", label: "매월 고정일" },
   { value: "tax_invoice", label: "세금계산서 발행일 기준" },
   { value: "negotiated", label: "협의" },
+] as const;
+
+/**
+ * 1~31 일 (36차 리뷰 1라운드 — *"정산 마감일, 결제일(매월고정일)도 드롭다운으로 선택"*).
+ *
+ * 🔴 **숫자 입력칸을 드롭다운으로 바꾼 이유**는 32일·0일 같은 값이 애초에 들어갈 수
+ *    없게 하려는 것이다. DB CHECK 와 `validateCompanyForm()` 은 그대로 둔다 —
+ *    화면은 편의이고 **방어선은 그 둘이다**(한쪽만 고치지 말 것).
+ */
+const DAY_OF_MONTH_OPTIONS = Array.from({ length: 31 }, (_, i) => ({
+  value: String(i + 1),
+  label: `${i + 1}일`,
+}));
+
+/**
+ * 결제일이 「매월 고정일」일 때의 값 목록.
+ * 🔴 **말일은 `0` 이다** — 달마다 28·29·30·31 로 달라져서 숫자로 못 적는다.
+ *    ⚠️ 정산 마감일(`billing_cutoff_day`)의 말일은 **빈 값**이다 — 그쪽은 로드맵 ②-B
+ *       부터 「비우면 달력월 기준」이 실제 규칙이라 바꾸면 과거 묶음 계산이 흔들린다.
+ *       🔴 **두 칸의 말일 표현이 다른 것은 의도다. 맞추려 들지 말 것.**
+ */
+const PAYMENT_FIXED_DAY_OPTIONS = [
+  { value: "0", label: "말일" },
+  ...DAY_OF_MONTH_OPTIONS,
 ] as const;
 
 /**
@@ -239,14 +279,19 @@ export const COMPANY_FIELDS: CompanyField[] = [
   {
     key: "billing_cutoff_day",
     label: "정산 마감일",
+    // 🔴 `type` 은 `number` 그대로다 — 저장 경로(`buildCompanyPayload`)가 이 값으로
+    //    숫자 변환을 정한다. **드롭다운은 위젯일 뿐이고 저장되는 것은 smallint 다.**
     type: "number",
     section: "거래 조건",
     // 🔴 **신설한 칸이 아니다 — 로드맵 ②-B 부터 있던 컬럼이다**(원칙 46번이 그 이름을
     //    그대로 적는다). 36차 지시서는 「기입이 되어야 한다」고 적었지만 실측하니
     //    이미 있었고 화면에도 나오고 있었다. **두 벌로 만들면 월정산 묶음이 갈린다.**
-    note: "비우면 달력월(1일~말일) 기준 · 바꿔도 과거 묶음은 그대로입니다",
-    emptyLabel: "말일(달력월 기준)",
-    displaySuffix: "일",
+    // 🔴 **말일이 「빈 값」인 것은 로드맵 ②-B 의 실제 규칙이다** — 「0」이나 「31」로
+    //    바꾸지 말 것. 그래서 드롭다운의 빈 항목 글이 「선택」이 아니라 말일이다.
+    codedOptions: DAY_OF_MONTH_OPTIONS,
+    emptyOptionLabel: "말일 (달력월 기준)",
+    note: "바꿔도 이미 만들어진 월정산 묶음은 그대로입니다",
+    emptyLabel: "말일 (달력월 기준)",
   },
   {
     key: "payment_due_basis",
@@ -264,8 +309,15 @@ export const COMPANY_FIELDS: CompanyField[] = [
     label: "결제일",
     type: "number",
     section: "거래 조건",
-    // 🔴 기준에 따라 뜻이 다르다 — 한 칸으로 합치지 말 것(자동계산이 못 읽는다).
-    note: "마감일·세금계산서 기준이면 「N일 이내」, 매월 고정일이면 그 날짜 (0 = 말일)",
+    // 🔴 **기준에 따라 뜻도 위젯도 다르다**(36차 리뷰 1라운드).
+    //      매월 고정일            → 날짜 드롭다운 (말일 · 1~31)
+    //      마감일·세금계산서 기준  → 「N일 이내」 숫자 (45일·60일이 흔해서 31 을 넘는다)
+    //    🔴 한 칸으로 합치지 말 것 — 자동계산이 「30」을 날짜로 읽을지 일수로 읽을지
+    //       알 수 없게 된다. 그래서 값과 **기준이 짝**이고, 기준을 바꾸면 값이 비워진다
+    //       (`applyCompanyFieldChange`).
+    dynamicOptions: (form) =>
+      form.payment_due_basis === "fixed_day" ? PAYMENT_FIXED_DAY_OPTIONS : null,
+    note: "마감일·세금계산서 기준이면 「N일 이내」입니다",
     displaySuffix: "일",
     // 🔴 조건을 화면에 적지 말 것 — 등록 폼과 수정 폼이 다르게 판단하게 된다.
     showWhen: (form) => !!form.payment_due_basis && form.payment_due_basis !== "negotiated",
@@ -288,16 +340,26 @@ export const COMPANY_FIELDS: CompanyField[] = [
     codedOptions: TAX_INVOICE_METHOD_OPTIONS,
     emptyLabel: "미정",
   },
-  // 🔴 **얼려둔 구형 칸이다**(원칙 45번) — 위의 「결제일 기준 + 결제일」이 대체했다.
-  //    자유 문자열이라 정산 예정일을 계산할 수 없어서 바꾼 것이고, 지우면 이미
-  //    적어 둔 조건이 사라지므로 **읽기 전용으로 남긴다.** 🔴 되살려 쓰지 말 것.
+  // 🔴 **구형 「결제조건」 칸을 「특이사항」으로 바꿔 계속 쓴다**(36차 리뷰 1라운드 —
+  //    사용자 지시 *"(구)결제조건 대신 「특이사항」으로 넣어서 기존 화주의 결제조건은
+  //    「특이사항」에 넣고 신규화주도 「특이사항」 항목을 넣자"*).
+  //
+  //    ⚠️ 처음에는 원칙 45번대로 **읽기 전용으로 얼려** 뒀는데, 그러면 새 화주에게는
+  //       구조화되지 않는 거래 조건(예: "파렛트 회수 조건 별도")을 적을 자리가 아예
+  //       없어진다. **이름을 바꾸는 편이 칸을 하나 더 만드는 것보다 낫다** — 기존 값이
+  //       정확히 그런 자유 서술이라 옮길 필요도 없다(컬럼도 그대로 `payment_terms` 다).
+  //
+  // 🔴 **여기에 적은 것은 자동계산에 쓰이지 않는다.** 「정산 예정일」을 계산하는 것은
+  //    위의 「결제일 기준 + 결제일」 두 칸이고, 이 칸은 사람이 읽는 메모다.
+  //    🔴 결제 조건을 이 칸에만 적고 두 칸을 비워 두면 자동계산이 그 화주를 건너뛴다.
+  // ⚠️ 「기본 정보」의 `notes`(메모)와 다른 칸이다 — 그쪽은 영업 메모다.
   {
     key: "payment_terms",
-    label: "(구) 결제조건",
-    type: "text",
+    label: "특이사항",
+    type: "textarea",
     section: "거래 조건",
-    inForm: false,
-    note: "새 건은 위의 「결제일 기준 · 결제일」에 적습니다 (읽기 전용)",
+    placeholder: "예: 파렛트 회수 조건 별도 · 세금계산서는 경리팀 메일로",
+    note: "거래 조건 중 위 칸으로 담기지 않는 것 (자동계산에는 쓰이지 않습니다)",
   },
   { key: "main_pickup_region", label: "주요 상차지역", type: "region-multi", section: "거래 조건" },
   { key: "main_dropoff_region", label: "주요 하차지역", type: "region-multi", section: "거래 조건" },
@@ -388,17 +450,26 @@ export function companyFieldsOf(section: CompanySection): CompanyField[] {
  * 🔴 **화면에 이 규칙을 다시 적지 말 것.** 코드값→라벨 변환이 화면에 있으면
  *    `codedOptions` 를 늘렸을 때 그 화면만 조용히 코드값을 그대로 보여준다.
  */
-export function companyFieldDisplay(f: CompanyField, raw: any): string | null {
+export function companyFieldDisplay(
+  f: CompanyField,
+  raw: any,
+  /** 같은 행의 나머지 값 — `dynamicOptions` 가 다른 칸을 보고 목록을 고를 때 필요하다 */
+  row?: Record<string, any>
+): string | null {
   let shown: any = f.type === "checkbox" ? (raw === true ? "예" : null) : raw;
 
   if (shown === null || shown === undefined || shown === "") {
     // 🔴 「비어 있음」이 곧 규칙인 항목(정산 마감일)은 그 뜻을 그린다.
     return f.emptyLabel ?? null;
   }
-  if (f.codedOptions) {
-    // 🔴 목록에 없는 값이면 **코드값을 그대로 보여준다** — 숨기면 잘못 들어간 값을
+  // 🔴 목록이 있으면 **라벨이 단위까지 담는다**(「25일」·「말일」) — 그래서 아래
+  //    `displaySuffix` 를 건너뛴다. 안 건너뛰면 「25일일」이 된다.
+  const opts = (row && f.dynamicOptions?.(row)) || f.codedOptions;
+  if (opts) {
+    // 🔴 목록에 없는 값이면 **저장된 값을 그대로 보여준다** — 숨기면 잘못 들어간 값을
     //    아무도 못 본다(조용히 사라지는 것이 가장 나쁘다).
-    shown = f.codedOptions.find((o) => o.value === shown)?.label ?? shown;
+    const hit = opts.find((o) => o.value === String(shown));
+    if (hit) return hit.label;
   }
   if (f.displayThousands) shown = Number(shown).toLocaleString();
   if (f.displaySuffix) shown = `${shown}${f.displaySuffix}`;
@@ -487,6 +558,47 @@ export function buildCompanyPayload(
   }
 
   return payload;
+}
+
+/**
+ * `dynamicOptions` 를 가진 칸이 실제로 보는 값들만 뽑는다.
+ *
+ * 🔴 **폼 state 전체를 `CompanyFieldInput` 에 넘기지 않기 위한 것이다** — 통째로
+ *    넘기면 한 칸만 고쳐도 참조가 바뀌어 `React.memo` 가 무력해지고 입력칸 51개가
+ *    전부 다시 그려진다(33차 리뷰 1라운드의 「버벅거림」).
+ * 🔴 `dynamicOptions` 를 가진 칸을 늘리면 **여기에 그 칸이 보는 키를 더할 것** —
+ *    안 더하면 목록이 안 바뀌는데 에러도 안 난다(조용히 옛 위젯이 남는다).
+ */
+export function depsFor(form: Record<string, any>): Record<string, any> {
+  return { payment_due_basis: form.payment_due_basis };
+}
+
+/**
+ * 화면에서 한 칸을 고쳤을 때의 **다음 폼 상태** — 딸림 효과를 여기 한 곳에 모은다.
+ *
+ * 🔴 **결제일 기준을 바꾸면 결제일 값을 비운다**(36차 리뷰 1라운드 — 사용자 질문
+ *    *"결제일 기준을 「마감일기준」,「세금계산서발행일기준」일때 결제일의 값이 자동으로
+ *    바꿔야 하지 않나?"*).
+ *
+ *    같은 컬럼인데 기준에 따라 **뜻이 통째로 달라지기 때문이다** —
+ *    「매월 고정일 + 25」는 *매월 25일*이고 「마감일 기준 + 25」는 *마감 후 25일 이내*다.
+ *    기준만 바꾸고 25 가 남으면 **담당자도 자동계산도 조용히 틀린 값을 읽는다.**
+ *
+ * 🔴 **다른 숫자로 자동으로 채우지 않는다 — 비운다.** 어떤 값이 맞는지는 화주마다
+ *    다르고(사용자 확정 *"이는 화주마다 다르다"*), 추측해서 넣으면 담당자가 그것을
+ *    확인된 값으로 믿는다. 빈 칸은 「다시 골라 주세요」라고 스스로 말한다.
+ * 🔴 화면에 이 규칙을 다시 적지 말 것 — 등록 폼과 수정 폼이 다르게 동작하게 된다.
+ */
+export function applyCompanyFieldChange(
+  form: Record<string, any>,
+  key: string,
+  value: any
+): Record<string, any> {
+  const next = { ...form, [key]: value };
+  if (key === "payment_due_basis" && form[key] !== value) {
+    next.payment_due_value = "";
+  }
+  return next;
 }
 
 /**

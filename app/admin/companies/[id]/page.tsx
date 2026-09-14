@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
@@ -22,6 +22,8 @@ import {
   validateCompanyForm,
   companyFieldsOf,
   companyFieldDisplay,
+  applyCompanyFieldChange,
+  depsFor,
   emptyCompanyForm,
   isRecurringContractActive,
   parseRecommendedVehicle,
@@ -178,8 +180,15 @@ export default function CompanyDetailPage() {
   );
 
   // 🔴 `useCallback` 을 벗기지 말 것(등록 폼과 같은 이유 — memo 가 무력해진다).
+  // 🔴 딸림 효과(결제일 기준을 바꾸면 결제일 값을 비운다)는 정의처 함수가 정한다 —
+  //    화면에 적으면 등록 폼과 수정 폼이 다르게 동작한다(36차 리뷰 1라운드).
+  // 🔴 `depsFor(form)` 을 인라인으로 넘기지 말 것 — 매 렌더 **새 객체**가 되어
+  //    `CompanyFieldInput` 의 `React.memo` 가 통째로 무력해진다(33차 리뷰 1라운드의
+  //    「버벅거림」이 정확히 그것이었다). 실제로 보는 값이 바뀔 때만 참조가 바뀐다.
+  const fieldDeps = useMemo(() => depsFor(editForm), [editForm.payment_due_basis]);
+
   const set = useCallback((key: string, value: any) => {
-    setEditForm((prev) => ({ ...prev, [key]: value }));
+    setEditForm((prev) => applyCompanyFieldChange(prev, key, value));
   }, []);
 
   async function loadCompany() {
@@ -794,6 +803,9 @@ export default function CompanyDetailPage() {
                       key={f.key}
                       field={f}
                       value={editForm[f.key]}
+                      /* 🔴 결제일은 「결제일 기준」에 따라 위젯이 바뀐다 — 그 한 칸만
+                         넘긴다(폼 전체를 넘기면 `React.memo` 가 무력해진다). */
+                      deps={fieldDeps}
                       detailValue={editForm[`${f.key}Detail`]}
                       tonnage={editForm.recommended_vehicle_tonnage}
                       bodytype={editForm.recommended_vehicle_bodytype}
@@ -807,7 +819,7 @@ export default function CompanyDetailPage() {
                 // 🔴 표시 규칙(코드값→라벨 · 「비어 있음」의 뜻 · 단위 · 천단위)은
                 //    정의처 함수 하나가 정한다 — 여기에 다시 적으면 `codedOptions` 를
                 //    늘렸을 때 이 화면만 조용히 코드값을 그대로 보여준다.
-                const shown = companyFieldDisplay(f, company[f.key]);
+                const shown = companyFieldDisplay(f, company[f.key], company);
                 return <Field key={f.key} label={f.label} value={shown} />;
               })}
             </div>
