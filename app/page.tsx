@@ -322,10 +322,26 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
-          <Link href="/apply"
-            style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "22px 52px", background: "#FFD834", color: "#0E0F12", borderRadius: 999, fontSize: 21, fontWeight: 700, letterSpacing: "-0.02em", whiteSpace: "nowrap" }}>
-            운송관리 계정 신청
-          </Link>
+          {/* 🔴 **새 섹션을 만들지 않았다 — 링크 한 줄이다.** 화주 대상 진입 링크가
+              이미 모여 있는 자리가 여기(운송관리 소개 마무리 카드)이고, 「어떻게
+              시작하나요?」 바로 아래라 안내를 찾는 사람이 가장 먼저 보는 자리다.
+              🔴 **두 링크를 한 덩이로 감싼 것은 바깥 `gap: 36` 때문이다** — 그냥 형제로
+                 두면 단추와 이 줄 사이가 36px 이 되어 서로 딴 블록으로 읽힌다.
+              🟢 **리빌 클래스를 따로 붙이지 않았다** — 이 카드(`.landing-tms-foot`)가
+                 통째로 하나의 리빌 대상이라 형제 단추와 **같은 타이밍**에 나타난다.
+                 여기에 `landing-reveal` 을 또 붙이면 이 줄만 늦게 떠서 눈에 띈다.
+              🟢 `/guide` 는 공개 화면이라 `next/link` 로 충분하다 — 서비스워커 구역
+                 밖으로 나가는 `/customer/login` 과 달리 예외가 필요 없다(PR #130). */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+            <Link href="/apply"
+              style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "22px 52px", background: "#FFD834", color: "#0E0F12", borderRadius: 999, fontSize: 21, fontWeight: 700, letterSpacing: "-0.02em", whiteSpace: "nowrap" }}>
+              운송관리 계정 신청
+            </Link>
+            <Link href="/guide"
+              style={{ fontSize: 15, color: "rgba(255,255,255,0.68)", textDecoration: "underline", textUnderlineOffset: 4 }}>
+              운송관리 이용안내
+            </Link>
+          </div>
         </div>
       </section>
 
