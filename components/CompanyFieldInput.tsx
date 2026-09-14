@@ -30,6 +30,12 @@ type Props = {
    *    「펼치고 닫을 때 버벅거림」이 그것이었다(CPU 6배에서 218~238ms).
    */
   value: any;
+  /**
+   * `type: "static"` 전용 — 안내 문장이 실제로 보는 값들만 담는다.
+   * 🔴 **폼 state 전체를 넘기지 말 것**(위 주석) — 통째로 넘기면 한 칸만 고쳐도
+   *    참조가 바뀌어 `React.memo` 가 무력해지고 입력칸 51개가 전부 다시 그려진다.
+   */
+  deps?: Record<string, any>;
   /** `address` 전용 — 상세주소 칸 */
   detailValue?: string;
   /** `vehicle` 전용 — 톤수·형태 두 칸 */
@@ -52,6 +58,7 @@ function formatBizRegNo(v: string) {
 function CompanyFieldInput({
   field,
   value,
+  deps,
   detailValue,
   tonnage,
   bodytype,
@@ -60,6 +67,29 @@ function CompanyFieldInput({
   disabled,
 }: Props) {
   const f = field;
+
+  // ── 읽기 전용 안내 줄 ─────────────────────────────────────────────────────
+  // 🔴 입력칸이 아니다 — 다른 칸의 값에서 파생되는 사실을 알려 준다(36차 리뷰 3라운드).
+  //    `staticText` 가 `null` 을 돌려주면 줄 자체를 그리지 않는다(아직 안 정한 상태).
+  if (f.type === "static") {
+    const text = f.staticText?.(deps || {}) ?? null;
+    if (!text) return null;
+    return (
+      <div className="field">
+        <label>{f.label}</label>
+        <div
+          style={{
+            padding: "8px 0",
+            fontSize: 13,
+            color: "var(--text-muted)",
+            lineHeight: 1.5,
+          }}
+        >
+          {text}
+        </div>
+      </div>
+    );
+  }
 
   // ── 주소 ─────────────────────────────────────────────────────────────────
   // 🔴 원칙 37번 — 주소는 예외 없이 AddressSearch 를 재사용한다. 상세주소는 별도

@@ -113,6 +113,14 @@ export default function CompaniesPage() {
   // 🔴 딸림 효과(결제일 기준을 바꾸면 결제일 값을 비운다)는 정의처 함수가 정한다 —
   //    화면에 적으면 등록 폼과 수정 폼이 다르게 동작한다(36차 리뷰 1라운드).
 
+  // 🔴 `staticDeps` 를 인라인 객체로 넘기지 말 것 — 매 렌더 새 참조가 되어
+  //    `CompanyFieldInput` 의 `React.memo` 가 통째로 무력해진다(33차 리뷰 1라운드의
+  //    「버벅거림」이 그것이었다). 안내 문장이 실제로 보는 값이 바뀔 때만 참조가 바뀐다.
+  const staticDeps = useMemo(
+    () => ({ billing_cycle_default: form.billing_cycle_default }),
+    [form.billing_cycle_default]
+  );
+
   const setField = useCallback((key: string, value: any) => {
     setForm((prev) => applyCompanyFieldChange(prev, key, value));
   }, []);
@@ -391,6 +399,7 @@ export default function CompaniesPage() {
                     {fields.map((f) => (
                       <CompanyFieldInput
                         key={f.key}
+                        deps={staticDeps}
                         field={f}
                         value={form[f.key]}
                         detailValue={form[`${f.key}Detail`]}

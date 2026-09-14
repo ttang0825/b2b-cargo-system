@@ -45,7 +45,12 @@ export type CompanyFieldType =
   | "address" // 🔴 components/AddressSearch.tsx 재사용(원칙 37번). sido/sigungu 를 같이 채운다
   | "region-multi" // REGIONS 중복 선택(MultiSelectTags) — 콤마 구분 문자열로 저장
   | "vehicle" // 톤수 + 형태 두 select → recommended_vehicle 한 컬럼으로 합쳐 저장
-  | "biz-reg"; // 사업자등록번호(자동 하이픈)
+  | "biz-reg" // 사업자등록번호(자동 하이픈)
+  // 🔴 **입력칸이 아니라 읽기 전용 안내 줄이다**(36차 리뷰 3라운드). 다른 칸의 값에서
+  //    파생되는 사실을 담당자에게 알려 줄 때 쓴다 — 지금은 「정산 마감: 월말 기준」.
+  //    🔴 **DB 컬럼이 아니다** — `key` 가 `__` 로 시작하고 `buildCompanyPayload` 가
+  //       걸러낸다. 🔴 이 타입에 저장 경로를 만들지 말 것.
+  | "static";
 
 /** 화면에서 묶어 보여주는 구획. 순서가 곧 화면 순서다. */
 export const COMPANY_SECTIONS = [
@@ -103,6 +108,11 @@ export type CompanyField = {
   displaySuffix?: string;
   /** 표시 모드에서 1,000 단위 쉼표를 넣는가(금액 칸) */
   displayThousands?: boolean;
+  /**
+   * `type: "static"` 전용 — 같은 행의 값에서 만들어 낼 안내 글. `null` 이면 안 그린다.
+   * 🔴 화면에 이 문장을 다시 적지 말 것(등록 폼과 수정 폼이 갈린다).
+   */
+  staticText?: (form: Record<string, any>) => string | null;
   /**
    * 이 조건이 참일 때만 입력칸을 그린다.
    * 🔴 조건을 화면에 적지 말 것 — 등록 폼과 수정 폼이 서로 다르게 판단하게 된다
@@ -269,29 +279,30 @@ export const COMPANY_FIELDS: CompanyField[] = [
     note: "새 오더·발주요청에 기본으로 채워집니다. 건별로 담당자가 바꿀 수 있습니다.",
     emptyLabel: "미정",
   },
-  // 🔴 **정산 마감 — 입력칸이 아니라 청구주기가 정하는 「읽기 전용 설명」이다**
-  //    (36차 리뷰 2라운드, 사용자 지시).
+  // 🔴 **정산 마감은 입력칸이 아니다 — 청구주기가 정하는 읽기 전용 안내다**
+  //    (36차 리뷰 2·3라운드, 사용자 지시).
   //
   //      건별     정산 마감 개념이 없다 → **즉시지급**
   //      월정산   **항상 월말** — *"업체마다 정산마감일이 상이하면 복잡해질것 같다"*
+  //                             *"월정산을 했을때 모두 월말기준으로 바꾸자"*
   //
-  // 🔴 **`billing_cutoff_day` 입력칸을 되살리지 말 것.** 컬럼은 그대로 두고
-  //    **비운 채로** 쓴다 — 로드맵 ②-B 가 「비우면 달력월(1일~말일) 기준」으로
-  //    계산하므로 `null` 이 곧 **월말**이고, 지금 결정과 정확히 맞아떨어진다.
-  //    🟢 그래서 이 결정에 DB 변경이 필요 없었다.
-  // ⚠️ 값이 남아 있는 화주가 **1건** 있다(실측 2026-09-14). 그 건만 월말이 아닌
-  //    마감으로 계산되는데 화면에 안 보이면 아무도 모르므로, 값이 있을 때만
-  //    아래 칸이 경고와 함께 그것을 보여준다(`showWhen`).
+  // 🔴 **`billing_cutoff_day` 입력칸을 되살리지 말 것.** 컬럼은 그대로 두고 **전부
+  //    비웠다**(마이그레이션 `2026-09-14_billing_cutoff_month_end.sql`) — 월정산 묶음
+  //    계산이 「비어 있으면 달력월(1일~말일)」이라 **`null` 이 곧 월말**이기 때문이다.
+  //    🔴 컬럼 자체를 지우지도 말 것(그 계산이 통째로 깨진다).
+  // 🔴 **「월말 기준」 표시는 사용자가 남기라고 한 것이다**(*"정산마감은 월말기준이라는
+  //    표시는 두자"*) — 지우지 말 것. 발주요청 화면에도 같은 문장이 있다.
   {
-    key: "billing_cutoff_day",
-    label: "정산 마감일 (구 설정)",
-    type: "number",
+    key: "__settlement_cutoff",
+    label: "정산 마감",
+    type: "static",
     section: "거래 조건",
-    // 🔴 값이 있는 화주에게만 보인다 — 새로 설정하는 길은 없앴다.
-    showWhen: (form) => form.billing_cutoff_day !== "" && form.billing_cutoff_day != null,
-    inForm: false, // 🔴 읽기 전용 — 새로 넣을 수 없고 지금 값만 보인다
-    note: "지금은 모든 화주가 월말 마감입니다. 이 값은 예전 설정이며 이 화주에게만 적용됩니다.",
-    displaySuffix: "일",
+    staticText: (form) =>
+      form.billing_cycle_default === "monthly"
+        ? "월말 기준 (모든 화주 공통)"
+        : form.billing_cycle_default === "per_order"
+        ? "해당 없음 — 운송 완료 시 즉시지급"
+        : null,
   },
   {
     key: "payment_due_value",
@@ -474,6 +485,8 @@ export function buildCompanyPayload(
 
   for (const f of fields) {
     if (f.type === "vehicle") continue; // 아래에서 합쳐서 넣는다
+    // 🔴 읽기 전용 안내 줄은 DB 컬럼이 아니다 — payload 에 넣으면 저장이 통째로 거부된다.
+    if (f.type === "static") continue;
     let v = form[f.key];
 
     if (f.type === "checkbox") {
@@ -517,10 +530,10 @@ export function buildCompanyPayload(
   //    `payment_due_basis` 는 `COMPANY_FIELDS` 에 없으므로 위 반복문이 만들지 않는다.
   Object.assign(payload, paymentDueFromForm(form.payment_due_value));
 
-  // 🔴 **정산 마감일은 저장하지 않는다** — 모든 화주가 월말 마감이고(36차 리뷰
-  //    2라운드), 비운 값이 곧 월말이다(로드맵 ②-B). 옛 값이 남은 화주 1건은
-  //    화면이 읽기 전용으로 보여줄 뿐이고, 여기서 건드리면 **그 화주의 과거 월정산
-  //    묶음 계산이 조용히 바뀐다.** 🔴 `payload.billing_cutoff_day` 를 만들지 말 것.
+  // 🔴 **정산 마감일은 저장하지 않는다** — 모든 화주가 월말 마감이고(36차 리뷰 2·3라운드)
+  //    비운 값이 곧 월말이다(로드맵 ②-B). 화면에 입력칸이 없지만 **저장 경로도 함께
+  //    막아 둔다** — 칸만 숨기면 다음에 누가 되살려 다시 화주마다 달라진다.
+  //    🔴 `payload.billing_cutoff_day` 를 만들지 말 것.
   delete payload.billing_cutoff_day;
 
   return payload;

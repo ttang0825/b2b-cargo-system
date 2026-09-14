@@ -426,28 +426,12 @@ export default function CompanyDetailPage() {
       return;
     }
 
-    // 🔴 **원칙 46번** — 정산 마감일을 나중에 바꾸면 **이미 만들어진 월정산 묶음은
-    //    따라오지 않는다.** 그 묶음은 만들어질 때의 기간을 그대로 들고 있고, 지금
-    //    설정으로 역산해 찾으면 영영 못 찾는다(로드맵 ②-B 에서 실제로 겪은 버그 —
-    //    확정건을 눌러도 상세가 안 뜨고 세금계산서 발행 버튼까지 같이 사라져 보였다).
-    //    담당자가 그 사실을 모르고 바꾸는 것을 코드가 막을 방법이 없으므로,
-    //    **값이 실제로 바뀌는 순간 한 번 알린다.**
-    // 🔴 이 확인 창을 지우지 말 것. `force`(충돌 후 덮어쓰기)에서는 이미 물어봤다.
-    if (!force) {
-      const norm = (v: any) =>
-        v === "" || v === null || v === undefined ? null : Number(v);
-      const before = norm(company?.billing_cutoff_day);
-      const after = norm(editForm.billing_cutoff_day);
-      if (before !== after) {
-        const say = (v: number | null) => (v === null ? "말일(달력월 기준)" : `${v}일`);
-        const ok = window.confirm(
-          `정산 마감일을 ${say(before)} → ${say(after)} 로 바꿉니다.\n\n` +
-            "이미 만들어진 월정산 묶음은 바뀌지 않습니다 — 그 묶음은 만들어질 때의 기간을 그대로 씁니다.\n" +
-            "새로 만드는 묶음부터 이 마감일이 적용됩니다."
-        );
-        if (!ok) return;
-      }
-    }
+    // ⚠️ **정산 마감일 변경 확인 창은 없앴다**(36차 리뷰 3라운드) — 화면에 입력칸이
+    //    없어져서 절대 뜰 수 없는 죽은 코드가 됐다. 남겨 두면 「아직 고칠 수 있다」로
+    //    읽힌다. 🔴 **원칙 46번의 방어는 두 겹으로 남아 있다**:
+    //      ① `buildCompanyPayload` 가 `billing_cutoff_day` 를 payload 에서 지운다
+    //      ② 마이그레이션 `2026-09-14_billing_cutoff_month_end.sql` 이 값을 전부 비웠다
+    //    🔴 나중에 다시 화주별 마감일을 두기로 한다면 **이 확인 창부터 되살릴 것.**
 
     setSaving(true);
     setError(null);
