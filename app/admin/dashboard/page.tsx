@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 // 🔴 원칙 31번 — 앱 내부 경로는 반드시 next/link. <a href> 로 바꾸면 하드 리로드가 된다.
 import Link from "next/link";
-import { calcMargin } from "@/lib/marginCalc";
-// 🔴 부가세 포함가 병기용 — 공용 함수만 쓴다(`× 1.1` 을 화면에 직접 적지 말 것).
-import { calcInclusiveAmount } from "@/lib/vat";
+import { calcMargin, calcMarginInclusive } from "@/lib/marginCalc";
+// 🔴 담당자 말은 이 함수 하나다 — 엑셀에 라벨을 새로 적지 말 것(화주 말과 갈린다).
+import { getSettlementDisplayLabel } from "@/lib/settlementLabels";
 // 🔴 원칙 8번 — 엑셀은 공용 함수만 쓴다(헤더 굵게+옐로 배경 · 1행 틀고정이 자동).
 //    `xlsx` 가 아니라 `xlsx-js-style` 을 쓰는 것도 그 파일 안에서 처리된다.
 import { exportMultiSheetExcel, buildExportFilename } from "@/lib/exportExcel";
@@ -18,6 +18,11 @@ type InvoiceRow = {
   company_id: string | null;
   individual_customer_id: string | null;
   billing_period: string | null;
+  // 🔴 수금방식 두 축 — 「정산 건별」 시트의 정산방식 라벨이 둘 다 필요하다.
+  //    ⚠️ `marginOf` 는 `inv: any` 로 받아서 이 타입에 없어도 컴파일이 통과했다
+  //       (`strict: false`). 타입에 적힌 것이 실제 조회 컬럼과 같다고 믿지 말 것.
+  collection_method: string | null;
+  billing_cycle: string | null;
   customer_charge_total: number | null;
   driver_payout_total: number | null;
   status: string;
@@ -81,13 +86,24 @@ function manwon(n: number) {
 //
 // 🔴 마진이 공급가액이라 포함가는 정확히 ×1.1 이다(주선사정산은 청구·지급 양쪽이
 //    같은 비율로 커지고, 선착불은 원래 포함가로 입력된 주선수수료로 되돌아간다).
-function wonVat(n: number) {
-  return `부가세 포함 ${won(calcInclusiveAmount(n))}`;
+// 🔴 **이 함수들은 「이미 건별로 더해진 포함가」를 받는다 — 안에서 ×1.1 하지 말 것.**
+//    리뷰 8라운드에 실제로 그렇게 짰다가 1원이 틀렸다(사용자 신고: 25,000원이어야
+//    하는데 24,999원). 부가세는 **세금계산서 단위(건별)로 원 단위가 확정**되므로
+//    합계의 부가세가 아니라 **건별 부가세의 합**이 맞다.
+//
+//      건별 25,000 × 3건            → 75,000  ← 맞는 값(세금계산서 3장의 합)
+//      합계 공급가액 68,181 × 1.1   → 74,999  ← 그전 값. 건수가 늘수록 벌어진다
+//
+//    오차는 건당 최대 0.5원이라 1건이면 안 보이고 **여러 건을 합칠 때만** 나타난다.
+//    🔴 그래서 집계마다 `marginIncl` 을 따로 이고 다닌다 — 마진 합계에서 되계산하면
+//       이 버그가 그대로 돌아온다.
+function wonVat(inclusiveSum: number) {
+  return `부가세 포함 ${won(inclusiveSum)}`;
 }
 
-function manwonVat(n: number) {
-  if (n === 0) return "";
-  return `(${manwon(calcInclusiveAmount(n))})`;
+function manwonVat(inclusiveSum: number) {
+  if (inclusiveSum === 0) return "";
+  return `(${manwon(inclusiveSum)})`;
 }
 
 function addMonths(month: string, delta: number) {
@@ -212,6 +228,17 @@ export default function AdminDashboardPage() {
   //    🔴 다른 두 마진(DB 생성 컬럼 `dispatches.margin` · `settlementCalc` 의 실질마진)을
   //       이 화면에 섞지 말 것(하지말것 5). 실질마진은 `driver_base_fare` 입력이 실측
   //       0건이라 켜면 숫자가 틀린다.
+  // 🔴 **건별 포함가다** — 합계에 ×1.1 을 하면 1원이 틀린다(위 `wonVat` 주석).
+  const marginInclOf = (inv: any, extraCharge: number, extraPayout: number) =>
+    calcMarginInclusive({
+      collectionMethod: inv.collection_method,
+      customerCharge: (inv.customer_charge_total || 0) + extraCharge,
+      customerChargeVatIncluded: inv.customer_charge_vat_included,
+      driverPayout: (inv.driver_payout_total || 0) + extraPayout,
+      driverVatIncluded: inv.driver_vat_included,
+      brokerageFee: inv.brokerage_fee,
+    });
+
   const marginOf = (inv: any, extraCharge: number, extraPayout: number) =>
     calcMargin({
       collectionMethod: inv.collection_method,
@@ -265,7 +292,7 @@ export default function AdminDashboardPage() {
   // 🔴 `revenue` 는 **매출이 아니라 취급고**다 — 선착불 운임이 섞이므로 화면에
   //    「매출」이라고 적지 말 것.
   const revenueByOrderId = useMemo(() => {
-    const map: Record<string, { revenue: number; cost: number; margin: number }> = {};
+    const map: Record<string, { revenue: number; cost: number; margin: number; marginIncl: number }> = {};
     if (!data) return map;
     scoped.invoices.forEach((inv) => {
       if (!inv.order_id) return;
@@ -275,10 +302,11 @@ export default function AdminDashboardPage() {
       const revenue = (inv.customer_charge_total || 0) + extraCharge;
       const cost = (inv.driver_payout_total || 0) + extraPayout;
       const margin = marginOf(inv, extraCharge, extraPayout);
-      const cur = map[inv.order_id] || { revenue: 0, cost: 0, margin: 0 };
+      const cur = map[inv.order_id] || { revenue: 0, cost: 0, margin: 0, marginIncl: 0 };
       cur.revenue += revenue;
       cur.cost += cost;
       cur.margin += margin;
+      cur.marginIncl += marginInclOf(inv, extraCharge, extraPayout);
       map[inv.order_id] = cur;
     });
     return map;
@@ -293,9 +321,12 @@ export default function AdminDashboardPage() {
   //    끼우면 축이 망가지므로 뺀 것이고, 그런 건은 정산 목록에서 봐야 한다.
   const monthlyRows = useMemo(() => {
     if (!data) return [];
-    const map: Record<string, { period: string; revenue: number; margin: number; count: number }> = {};
+    const map: Record<
+      string,
+      { period: string; revenue: number; margin: number; marginIncl: number; count: number }
+    > = {};
     monthsBetween(effFrom, effTo).forEach((m) => {
-      map[m] = { period: m, revenue: 0, margin: 0, count: 0 };
+      map[m] = { period: m, revenue: 0, margin: 0, marginIncl: 0, count: 0 };
     });
     scoped.invoices.forEach((inv) => {
       const key = inv.billing_period as string;
@@ -305,6 +336,7 @@ export default function AdminDashboardPage() {
       const extraPayout = attribution?.driverAmount || 0;
       map[key].revenue += (inv.customer_charge_total || 0) + extraCharge;
       map[key].margin += marginOf(inv, extraCharge, extraPayout);
+      map[key].marginIncl += marginInclOf(inv, extraCharge, extraPayout);
       map[key].count += 1;
     });
     return Object.values(map).sort((a, b) => a.period.localeCompare(b.period));
@@ -317,17 +349,21 @@ export default function AdminDashboardPage() {
     data.staffAccounts.forEach((s) => {
       staffNameById[s.id] = s.name;
     });
-    const map: Record<string, { key: string; name: string; orderCount: number; revenue: number; margin: number }> =
+    const map: Record<
+      string,
+      { key: string; name: string; orderCount: number; revenue: number; margin: number; marginIncl: number }
+    > =
       {};
     scoped.orders.forEach((o) => {
       const key = o.created_by || "__unassigned__";
       const name = o.created_by ? staffNameById[o.created_by] || "알 수 없음(탈퇴 계정)" : "담당자 미배정";
-      const cur = map[key] || { key, name, orderCount: 0, revenue: 0, margin: 0 };
+      const cur = map[key] || { key, name, orderCount: 0, revenue: 0, margin: 0, marginIncl: 0 };
       cur.orderCount += 1;
       const rev = revenueByOrderId[o.id];
       if (rev) {
         cur.revenue += rev.revenue;
         cur.margin += rev.margin;
+        cur.marginIncl += rev.marginIncl;
       }
       map[key] = cur;
     });
@@ -357,17 +393,21 @@ export default function AdminDashboardPage() {
       return o.guest_name || "게스트(이름 미상)";
     }
 
-    const map: Record<string, { key: string; name: string; orderCount: number; revenue: number; margin: number }> =
+    const map: Record<
+      string,
+      { key: string; name: string; orderCount: number; revenue: number; margin: number; marginIncl: number }
+    > =
       {};
     scoped.orders.forEach((o) => {
       const key = keyOf(o);
       const name = nameOf(o);
-      const cur = map[key] || { key, name, orderCount: 0, revenue: 0, margin: 0 };
+      const cur = map[key] || { key, name, orderCount: 0, revenue: 0, margin: 0, marginIncl: 0 };
       cur.orderCount += 1;
       const rev = revenueByOrderId[o.id];
       if (rev) {
         cur.revenue += rev.revenue;
         cur.margin += rev.margin;
+        cur.marginIncl += rev.marginIncl;
       }
       map[key] = cur;
     });
@@ -413,12 +453,17 @@ export default function AdminDashboardPage() {
   //    가장 길게 그려져 「어느 달이 잘 벌었나」를 읽을 수 없었다).
   const maxMonthlyMargin = Math.max(1, ...monthlyRows.map((r) => Math.abs(r.margin)));
   const totalMargin = monthlyRows.reduce((sum, r) => sum + r.margin, 0);
+  // 🔴 `calcInclusiveAmount(totalMargin)` 으로 되돌리지 말 것 — 그것이 1원 오차의 원인이다
+  const totalMarginIncl = monthlyRows.reduce((sum, r) => sum + r.marginIncl, 0);
   const totalVolume = monthlyRows.reduce((sum, r) => sum + r.revenue, 0);
   const totalCount = monthlyRows.reduce((sum, r) => sum + r.count, 0);
   // 🔴 평균선은 **실적이 있는 달**로 나눈다 — 빈 달까지 나누면 「쉬어 간 달」이
   //    평균을 끌어내려, 실제로 일한 달이 전부 평균 위로 올라간다.
   const activeMonthCount = monthlyRows.filter((r) => r.count > 0).length;
   const avgMonthlyMargin = activeMonthCount > 0 ? totalMargin / activeMonthCount : 0;
+  // ⚠️ 평균은 나눗셈이라 어차피 정수가 아니다 — 여기서는 「건별 포함가 합 ÷ 개월수」다.
+  //    나눗셈 결과를 다시 ×1.1 하지 않으므로 위 오차와는 무관하다.
+  const avgMonthlyMarginIncl = activeMonthCount > 0 ? totalMarginIncl / activeMonthCount : 0;
   // 가로축에 연도를 적을지 — 해가 바뀌는 구간에서만 적는다(12개월 이하면 군더더기다)
   const showYear =
     monthlyRows.length > 0 &&
@@ -454,7 +499,8 @@ export default function AdminDashboardPage() {
                   "마진(부가세 제외)": Math.round(r.margin),
                   // 🔴 화면과 같은 것을 낸다(리뷰 7라운드) — 파일에만 없으면
                   //    받은 사람이 세금계산서 금액과 맞춰 볼 수가 없다.
-                  "마진(부가세 포함)": calcInclusiveAmount(Math.round(r.margin)),
+                  "부가세": Math.round(r.marginIncl) - Math.round(r.margin),
+                  "마진(부가세 포함)": Math.round(r.marginIncl),
                   "취급고(참고)": Math.round(r.revenue),
                   정산건수: r.count,
                   "전월 대비(%)": changePct === null ? "" : changePct,
@@ -471,7 +517,7 @@ export default function AdminDashboardPage() {
                 화주: r.name,
                 오더건수: r.orderCount,
                 "마진(부가세 제외)": Math.round(r.margin),
-                "마진(부가세 포함)": calcInclusiveAmount(Math.round(r.margin)),
+                "마진(부가세 포함)": Math.round(r.marginIncl),
                 "취급고(참고)": Math.round(r.revenue),
               }))
             : [{ 안내: "해당 기간 오더 없음" }],
@@ -484,10 +530,30 @@ export default function AdminDashboardPage() {
                 담당자: r.name,
                 오더건수: r.orderCount,
                 "마진(부가세 제외)": Math.round(r.margin),
-                "마진(부가세 포함)": calcInclusiveAmount(Math.round(r.margin)),
+                "마진(부가세 포함)": Math.round(r.marginIncl),
                 "취급고(참고)": Math.round(r.revenue),
               }))
             : [{ 안내: "해당 기간 오더 없음" }],
+      },
+      {
+        // 🔴 **24시콜 세금계산서와 줄 단위로 대조하라고 있는 시트다**(리뷰 8라운드).
+        //    합계만 맞추면 어느 건에서 갈리는지 짚을 수가 없다.
+        //    🔴 공급가액 + 부가세 = 합계가 **줄마다** 맞는다(부가세를 따로 반올림하지
+        //       않고 `합계 − 공급가액` 으로 뽑기 때문이다).
+        //    🔴 차주 성명·연락처·지급액은 넣지 않는다.
+        name: "정산 건별",
+        rows:
+          invoiceDetailRows.length > 0
+            ? invoiceDetailRows.map((r) => ({
+                정산월: r.period,
+                오더번호: r.orderNo,
+                화주: r.name,
+                정산방식: r.collection,
+                "마진(공급가액)": r.supply,
+                부가세: r.vat,
+                "합계(부가세 포함)": r.incl,
+              }))
+            : [{ 안내: "해당 기간 정산 데이터 없음" }],
       },
       {
         name: "클레임·추가비",
@@ -517,6 +583,50 @@ export default function AdminDashboardPage() {
       },
     ]);
   }
+  // 정산 건별 명세 — 🔴 **24시콜 세금계산서와 줄 단위로 대조하라고 있는 것이다**
+  //    (리뷰 8라운드, *"세금계산서 처리에서 우리 시스템과 부가세 금액에서 살짝 차이가
+  //    있다. 이부분을 어떻게 잡을 수 있나?"*).
+  //    합계만 맞춰 놓으면 **어느 건에서 갈리는지**를 짚을 수가 없다.
+  // 🔴 공급가액·부가세·합계를 **건별로** 낸다 — 부가세는 세금계산서 단위로 원 단위가
+  //    확정되므로, 이 표의 세로 합이 곧 위 화면의 합계와 같아야 한다.
+  // 🔴 **차주 성명·연락처·지급액은 넣지 않는다**(엑셀은 파일로 손을 떠난다).
+  const invoiceDetailRows = useMemo(() => {
+    if (!data) return [];
+    const companyNameById: Record<string, string> = {};
+    data.companies.forEach((c) => (companyNameById[c.id] = c.name));
+    const individualNameById: Record<string, string> = {};
+    data.individualCustomers.forEach((c) => (individualNameById[c.id] = c.name));
+    const orderById: Record<string, OrderRow> = {};
+    (data.orders || []).forEach((o) => (orderById[o.id] = o));
+
+    return scoped.invoices
+      .map((inv) => {
+        const attribution = data.extraChargeAttributionByInvoiceId[inv.id];
+        const extraCharge = attribution?.customerAmount || 0;
+        const extraPayout = attribution?.driverAmount || 0;
+        const supply = marginOf(inv, extraCharge, extraPayout);
+        const incl = marginInclOf(inv, extraCharge, extraPayout);
+        const order = inv.order_id ? orderById[inv.order_id] : null;
+        const name = inv.company_id
+          ? companyNameById[inv.company_id] || "(알 수 없는 화주)"
+          : inv.individual_customer_id
+            ? individualNameById[inv.individual_customer_id] || "(개인고객)"
+            : order?.guest_name || "게스트(이름 미상)";
+        return {
+          period: inv.billing_period || "",
+          orderNo: order?.order_no || "",
+          name,
+          collection: getSettlementDisplayLabel(inv.collection_method, inv.billing_cycle),
+          supply,
+          // 🔴 부가세는 `합계 − 공급가액` 이다 — `공급가액 × 0.1` 을 따로 반올림하면
+          //    셋이 서로 안 맞는 줄이 생긴다(공급가액 + 부가세 ≠ 합계).
+          vat: incl - supply,
+          incl,
+        };
+      })
+      .sort((a, b) => (a.period === b.period ? a.orderNo.localeCompare(b.orderNo) : a.period.localeCompare(b.period)));
+  }, [data, scoped]);
+
   // 🔴 35차 C-2 — 정렬·막대 기준을 취급고에서 **마진**으로 바꿨다(사용자 13번)
   const maxStaffMargin = Math.max(1, ...staffRows.map((r) => Math.abs(r.margin)));
   const maxCustomerMargin = Math.max(1, ...customerRows.map((r) => Math.abs(r.margin)));
@@ -633,7 +743,7 @@ export default function AdminDashboardPage() {
               </div>
               {/* 🔴 흐린 보조 글씨다 — 마진과 같은 크기로 올리지 말 것(위 주석 참고) */}
               <div className="num" style={{ fontSize: 12.5, color: "var(--text-muted)" }}>
-                ({wonVat(totalMargin)})
+                ({wonVat(totalMarginIncl)})
               </div>
               <div style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: "auto" }}>
                 취급고(참고) {totalVolume.toLocaleString()}원
@@ -765,11 +875,13 @@ export default function AdminDashboardPage() {
               <div style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: "auto" }}>
                 실적 {activeMonthCount}개월 · 정산 {totalCount}건 · 월평균 마진{" "}
                 <strong className="num">{won(avgMonthlyMargin)}</strong>{" "}
-                <span className="num">({wonVat(avgMonthlyMargin)})</span>
+                <span className="num">({wonVat(avgMonthlyMarginIncl)})</span>
               </div>
             </div>
             <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 0, marginBottom: 18 }}>
-              막대 높이는 <strong>마진(부가세 제외)</strong>이고 그 아래 괄호가
+              {/* 🔴 `{" "}` 를 지우지 말 것 — JSX 가 줄바꿈 앞뒤 공백을 먹어서
+                  「괄호가부가세」로 붙는다(실측으로 잡았다). */}
+              막대 높이는 <strong>마진(부가세 제외)</strong>이고 그 아래 괄호가{" "}
               <strong>부가세 포함가</strong>입니다 · 점선은 <strong>월평균 마진</strong>
               {avgMonthlyMargin > 0 ? ` ${won(avgMonthlyMargin)}` : ""}입니다(실적이 있는 달로만
               나눕니다) · 막대에 마우스를 올리면 취급고·건수·증감이 보입니다 · 현장 추가비는
@@ -834,7 +946,7 @@ export default function AdminDashboardPage() {
                       return (
                         <div
                           key={r.period}
-                          title={`${r.period} · 마진 ${won(r.margin)} (${wonVat(r.margin)}) · 취급고 ${won(r.revenue)} · ${r.count}건${
+                          title={`${r.period} · 마진 ${won(r.margin)} (${wonVat(r.marginIncl)}) · 취급고 ${won(r.revenue)} · ${r.count}건${
                             changePct !== null ? ` · 전월 대비 ${changePct >= 0 ? "+" : ""}${changePct}%` : ""
                           }`}
                           style={{
@@ -869,7 +981,7 @@ export default function AdminDashboardPage() {
                                 marginTop: -4,
                               }}
                             >
-                              {manwonVat(r.margin)}
+                              {manwonVat(r.marginIncl)}
                             </span>
                           )}
                           <div
@@ -966,7 +1078,7 @@ export default function AdminDashboardPage() {
                         whiteSpace: "nowrap",
                       }}
                     >
-                      ({wonVat(r.margin)})
+                      ({wonVat(r.marginIncl)})
                     </div>
                   </div>
                   <div className="num" style={{ width: 110, textAlign: "right", fontSize: 11.5, color: "var(--text-muted)" }}>
@@ -1084,7 +1196,7 @@ export default function AdminDashboardPage() {
                         whiteSpace: "nowrap",
                       }}
                     >
-                      ({wonVat(r.margin)})
+                      ({wonVat(r.marginIncl)})
                     </div>
                   </div>
                   <div className="num" style={{ width: 110, textAlign: "right", fontSize: 11.5, color: "var(--text-muted)" }}>

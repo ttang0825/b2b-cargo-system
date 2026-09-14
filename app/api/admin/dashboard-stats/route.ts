@@ -68,7 +68,11 @@ export async function GET(req: Request) {
         // 🔴 35차 C-1 — 마진을 수금방식별로 계산하려면 `collection_method`·`brokerage_fee`·
         //    부가세 구분이 필요하다. 선착불은 위캐리가 운임을 받지도 주지도 않으므로
         //    **마진이 주선수수료뿐**이고, 청구액으로 세면 취급고가 매출로 둔갑한다.
-        "id,order_id,company_id,individual_customer_id,billing_period,customer_charge_total,driver_payout_total,customer_charge_vat_included,driver_vat_included,collection_method,brokerage_fee,status,created_at"
+        // 🔴 `billing_cycle` 은 **엑셀 「정산 건별」 시트의 정산방식 라벨용**이다(리뷰 8라운드).
+        //    `getSettlementDisplayLabel()` 이 두 축을 다 받아야 「월정산」·「선착불 / 수수료
+        //    월정산」이 나온다 — 빼면 그 함수가 조용히 `-` 를 돌려주고, 그것을 피하려고
+        //    화면에 라벨을 새로 적으면 담당자 말이 두 벌이 된다.
+        "id,order_id,company_id,individual_customer_id,billing_period,customer_charge_total,driver_payout_total,customer_charge_vat_included,driver_vat_included,collection_method,billing_cycle,brokerage_fee,status,created_at"
       )
       .gte("created_at", sinceIso),
     admin

@@ -24,7 +24,7 @@
 //       입력이 없으므로 통계에 쓰면 숫자가 틀린다.
 //    🔴 **대시보드는 이 파일만 쓴다.** 세 개를 한 화면에 섞지 말 것.
 
-import { toSupplyAmount } from "./vat";
+import { toSupplyAmount, splitVat } from "./vat";
 
 export type MarginInput = {
   collectionMethod: string | null | undefined;
@@ -63,4 +63,25 @@ export function calcGrossVolume(input: MarginInput): number {
       ? input.customerCharge || 0
       : input.customerCharge || 0;
   return Math.round(input.customerChargeVatIncluded ? toSupplyAmount(base) : base);
+}
+
+/**
+ * 마진의 **부가세 포함가**. 35차 리뷰 8라운드 신설.
+ *
+ * 🔴 **`calcMargin() × 1.1` 로 되돌리지 말 것** — 그 식은 입력값을 보존하지 못해
+ *    세금계산서와 1원씩 어긋난다(`lib/vat.ts` 의 `splitVat` 주석 참고).
+ *    양쪽 금액을 각자 **자기 입력 기준대로** 가른 뒤 차를 낸다.
+ *
+ * 🔴 **합계에 한 번 곱하지 말고 건별로 구해서 더할 것.** 부가세는 세금계산서
+ *    단위로 원 단위가 확정되므로, 합계의 부가세가 아니라 건별 부가세의 합이 맞다
+ *    (25,000원짜리 3건은 75,000원이지 74,999원이 아니다).
+ */
+export function calcMarginInclusive(input: MarginInput): number {
+  if (input.collectionMethod === "driver_direct") {
+    // 🔴 주선수수료는 **부가세 포함가로 기입된다**(사용자 6·9번) — 적은 값이 곧 합계다
+    return splitVat(input.brokerageFee || 0, true).inclusive;
+  }
+  const charge = splitVat(input.customerCharge || 0, input.customerChargeVatIncluded);
+  const payout = splitVat(input.driverPayout || 0, input.driverVatIncluded);
+  return charge.inclusive - payout.inclusive;
 }
