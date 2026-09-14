@@ -43,6 +43,7 @@ export type PortalIconName =
   | "stats"
   | "locations"
   | "profile"
+  | "guide"
   | "menu";
 
 type PathSpec = {
@@ -129,6 +130,18 @@ const ICONS: Record<PortalIconName, { line: IconSpec; fill: IconSpec }> = {
     ] },
     fill: { fill: "none", stroke: "currentColor", strokeWidth: 1.5, paths: [
       { d: "M15.4 8.6a3.4 3.4 0 1 1-6.8 0 3.4 3.4 0 1 1 6.8 0M5.6 20.2a6.4 6.4 0 0 1 12.8 0", fillRule: "evenodd" },
+    ] },
+  },
+  // 🔴 **10번째 아이콘이다**(2026-09-14, 포털 「이용가이드」). `NavItem.icon` 이 필수라
+  //    항목을 더하면 아이콘도 있어야 한다 — 기존 것을 돌려쓰면 뜻이 안 맞는다(`menu` 는
+  //    모바일 「전체」 탭의 햄버거다). 펼친 책이고, `invoices`·`stats`·`locations`·
+  //    `profile` 과 같이 **line/fill 사양이 동일한 선 아이콘**이다(채움 변형이 없다).
+  guide: {
+    line: { fill: "none", stroke: "currentColor", strokeWidth: 1.4, paths: [
+      { d: "M12 7.6C10.4 6.3 8.3 5.6 5.9 5.6H4.2v11.2h1.7c2.4 0 4.5.7 6.1 2 1.6-1.3 3.7-2 6.1-2h1.7V5.6h-1.7c-2.4 0-4.5.7-6.1 2M12 7.6v11.2", fillRule: "evenodd" },
+    ] },
+    fill: { fill: "none", stroke: "currentColor", strokeWidth: 1.5, paths: [
+      { d: "M12 7.6C10.4 6.3 8.3 5.6 5.9 5.6H4.2v11.2h1.7c2.4 0 4.5.7 6.1 2 1.6-1.3 3.7-2 6.1-2h1.7V5.6h-1.7c-2.4 0-4.5.7-6.1 2M12 7.6v11.2", fillRule: "evenodd" },
     ] },
   },
   menu: {

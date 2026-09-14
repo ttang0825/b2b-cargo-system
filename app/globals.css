@@ -7739,21 +7739,351 @@ tbody tr:hover {
   }
 }
 
-/* 포털 홈 — 이용안내(`/guide`) 진입 줄.
-   🔴 **제목 줄(`.pv2-page-head`) 밖의 별도 줄이다.** 그 줄 안에 넣으면 `flex-end` 정렬
-      때문에 설치 버튼이 아래로 내려앉는다(PR #127 이 맞춰 둔 자리를 건드리게 된다).
-   ⚠️ 제목 줄의 `margin-bottom: 18px` 을 이 줄이 이어받는 모양이라 위 여백은 주지 않고
-      아래만 준다 — 두 줄 사이가 벌어지면 제목과 따로 노는 글로 읽힌다. */
-.pv2-guide-link {
-  margin: -6px 0 20px;
+
+/* ── 화주포털 이용가이드(`/customer/guide`) ──────────────────────────────
+   🔴 **`.pv2-*` 스코프다** — 공개 `/guide` 의 `.guide-*` 를 끌어오지 말 것. 두 화면은
+      같은 글을 서로 다른 껍데기로 그린다(`lib/guideContent.ts` 가 유일 정의처).
+   🔴 **데스크탑은 왼쪽 목차 + 오른쪽 본문, ≤700px 는 목록 → 상세 두 화면**이다.
+      가르는 일을 JS(화면 폭 재기)로 옮기지 말 것 — 첫 그림에서 잘못된 쪽이 번쩍인다.
+      본문은 항상 DOM 에 있고 CSS 가 한쪽만 보여준다.
+   ⚠️ 700px 은 포털이 이미 쓰는 분기점이다(`.pv2-page-head`·`.pv2-sonly-*`) — 새 값을
+      만들지 않았다. */
+.pv2-guide {
+  display: grid;
+  grid-template-columns: 236px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.pv2-guide-toc {
+  position: sticky;
+  top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--pv2-surface);
+  border: 1px solid var(--pv2-border);
+  border-radius: var(--pv2-r-mid);
+  padding: 10px;
+}
+.pv2-guide-toc-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--pv2-r-menu);
   font-size: 13.5px;
-  line-height: 1.5;
-}
-.pv2-guide-link a {
+  font-weight: 600;
+  line-height: 1.45;
   color: var(--pv2-text-2);
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  text-decoration: none;
+  word-break: keep-all;
 }
-.pv2-guide-link a:hover {
+.pv2-guide-toc-item:hover {
+  background: var(--pv2-hover-grey);
   color: var(--pv2-text);
+}
+.pv2-guide-toc-item-on {
+  background: var(--pv2-selected-bg);
+  color: var(--pv2-selected-text);
+}
+.pv2-guide-toc-item-on:hover {
+  background: var(--pv2-selected-hover);
+  color: var(--pv2-selected-text);
+}
+/* 화살표는 좁은 화면에서 「눌러서 들어간다」를 알려주는 표시다 — 데스크탑에서는
+   목차가 이미 선택 상태를 배경색으로 말하므로 감춘다. */
+.pv2-guide-toc-arrow {
+  display: none;
+  font-size: 17px;
+  line-height: 1;
+  color: var(--pv2-text-4);
+}
+.pv2-guide-body {
+  background: var(--pv2-surface);
+  border: 1px solid var(--pv2-border);
+  border-radius: var(--pv2-r-card);
+  padding: 24px 26px 28px;
+}
+.pv2-guide-title {
+  margin: 0 0 14px;
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+  color: var(--pv2-text);
+  word-break: keep-all;
+}
+
+/* 본문 블록 */
+.pv2-guide-p {
+  margin: 0 0 12px;
+  font-size: 14px;
+  line-height: 1.72;
+  color: var(--pv2-text-2);
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+.pv2-guide-p b,
+.pv2-guide-ol b,
+.pv2-guide-note b,
+.pv2-guide-dl dd b {
+  font-weight: 700;
+  color: var(--pv2-text);
+}
+.pv2-guide-ol {
+  margin: 0 0 12px;
+  padding-left: 20px;
+  font-size: 14px;
+  line-height: 1.72;
+  color: var(--pv2-text-2);
+}
+.pv2-guide-ol li {
+  margin-bottom: 5px;
+  word-break: keep-all;
+}
+.pv2-guide-note {
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  background: var(--pv2-yellow-soft);
+  border-radius: var(--pv2-r-sm);
+  font-size: 13.2px;
+  line-height: 1.68;
+  color: var(--pv2-text-2);
+  word-break: keep-all;
+}
+.pv2-guide-note b {
+  color: var(--pv2-yellow-text);
+}
+.pv2-guide-note-plain {
+  margin-top: 8px;
+  padding: 0;
+  background: none;
+  font-size: 12.8px;
+  color: var(--pv2-text-3);
+}
+.pv2-guide-dl {
+  margin: 0 0 4px;
+}
+.pv2-guide-dl-row {
+  display: grid;
+  grid-template-columns: 148px minmax(0, 1fr);
+  gap: 4px 14px;
+  padding: 11px 0;
+  border-top: 1px solid var(--pv2-border-soft);
+}
+.pv2-guide-dl-row:first-child {
+  border-top: none;
+  padding-top: 2px;
+}
+.pv2-guide-dl dt {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--pv2-text);
+  word-break: keep-all;
+}
+.pv2-guide-dl dd {
+  margin: 0;
+  font-size: 13.6px;
+  line-height: 1.68;
+  color: var(--pv2-text-2);
+  word-break: keep-all;
+}
+
+/* 표(메뉴 한눈에 보기) — 🔴 좁은 화면에서는 카드로 바꾼다(원칙 13번) */
+.pv2-guide-tablewrap {
+  overflow-x: auto;
+}
+.pv2-guide-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.6px;
+}
+.pv2-guide-table th,
+.pv2-guide-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--pv2-border-soft);
+  text-align: left;
+  vertical-align: top;
+  line-height: 1.6;
+  word-break: keep-all;
+}
+.pv2-guide-table thead th {
+  font-size: 12.6px;
+  font-weight: 700;
+  color: var(--pv2-text-3);
+  border-bottom: 1px solid var(--pv2-border);
+}
+.pv2-guide-table tbody th {
+  width: 152px;
+  font-weight: 700;
+  color: var(--pv2-text);
+}
+.pv2-guide-table tbody td {
+  color: var(--pv2-text-2);
+}
+.pv2-guide-rowcards {
+  display: none;
+}
+.pv2-guide-rowcard {
+  padding: 11px 0;
+  border-top: 1px solid var(--pv2-border-soft);
+}
+.pv2-guide-rowcard:first-child {
+  border-top: none;
+}
+.pv2-guide-rowcard-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--pv2-text);
+  margin-bottom: 3px;
+}
+.pv2-guide-rowcard-desc {
+  font-size: 13.4px;
+  line-height: 1.66;
+  color: var(--pv2-text-2);
+  word-break: keep-all;
+}
+
+/* 자주 묻는 질문 */
+.pv2-guide-faq-row {
+  padding: 13px 0;
+  border-top: 1px solid var(--pv2-border-soft);
+}
+.pv2-guide-faq-row:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+.pv2-guide-faq-q {
+  font-size: 13.8px;
+  font-weight: 700;
+  color: var(--pv2-text);
+  margin-bottom: 5px;
+  word-break: keep-all;
+}
+.pv2-guide-faq-a {
+  font-size: 13.6px;
+  line-height: 1.7;
+  color: var(--pv2-text-2);
+  word-break: keep-all;
+}
+
+/* 상태 알약 — 색은 인라인 style 로 들어온다(화면이 모듈에서 가져온 값이다) */
+.pv2-guide-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 4px;
+}
+.pv2-guide-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 11px;
+  border-radius: var(--pv2-r-pill);
+  font-size: 12.6px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.pv2-guide-pill-strong {
+  box-shadow: 0 0 0 1.5px rgba(26, 26, 26, 0.16) inset;
+}
+
+/* 설치 버튼 자리 도식 — 🔴 캡처 이미지가 아니다(이미지 파일 0건) */
+.pv2-guide-mock {
+  margin: 4px 0 14px;
+  border: 1px solid var(--pv2-border);
+  border-radius: var(--pv2-r-sm);
+  overflow: hidden;
+  background: var(--pv2-surface);
+}
+.pv2-guide-mock-bar {
+  display: flex;
+  gap: 5px;
+  padding: 8px 10px;
+  background: var(--pv2-bg);
+  border-bottom: 1px solid var(--pv2-border);
+}
+.pv2-guide-mock-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--pv2-text-4);
+}
+.pv2-guide-mock-body {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 12px;
+}
+.pv2-guide-mock-title {
+  width: 108px;
+  height: 11px;
+  border-radius: 4px;
+  background: var(--pv2-border);
+}
+/* 🔴 `margin-left: auto` 가 이 도식의 요점이다 — 「버튼은 오른쪽 끝에 있다」를
+   말하려고 그린 것이라 빼면 그림이 뜻을 잃는다. */
+.pv2-guide-mock-btn {
+  margin-left: auto;
+  padding: 6px 12px;
+  border: 1px solid var(--pv2-input-border);
+  border-radius: var(--pv2-r-pill);
+  font-size: 12.2px;
+  font-weight: 700;
+  color: var(--pv2-text);
+  white-space: nowrap;
+}
+
+.pv2-guide-tel {
+  display: inline-block;
+  margin: 2px 0 0;
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  color: var(--pv2-text);
+  text-decoration: none;
+}
+.pv2-guide-tel:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+@media (max-width: 700px) {
+  /* 🔴 목록 → 상세 두 화면. `topic` 이 없으면 목록만, 있으면 본문만 — **둘이 같이
+     보이면 이번에 없애려던 긴 스크롤로 돌아간다.** 돌아가기는 상단 「←」가 맡는다
+     (PR #129, `router.back()`). 여기에 「목록으로」 버튼을 또 만들지 말 것. */
+  .pv2-guide {
+    display: block;
+  }
+  .pv2-guide-toc {
+    position: static;
+    padding: 6px;
+  }
+  .pv2-guide-toc-item {
+    padding: 13px 12px;
+    font-size: 14.5px;
+  }
+  .pv2-guide-toc-arrow {
+    display: block;
+  }
+  .pv2-guide-body {
+    display: none;
+    padding: 20px 16px 24px;
+  }
+  .pv2-guide-open .pv2-guide-toc {
+    display: none;
+  }
+  .pv2-guide-open .pv2-guide-body {
+    display: block;
+  }
+  /* 표는 좁은 화면에서 카드로 바꾼다 — 가로 스크롤을 만들지 않는다 */
+  .pv2-guide-tablewrap {
+    display: none;
+  }
+  .pv2-guide-rowcards {
+    display: block;
+  }
+  .pv2-guide-dl-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3px;
+  }
 }
