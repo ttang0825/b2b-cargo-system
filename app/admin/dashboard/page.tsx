@@ -60,6 +60,53 @@ function won(n: number) {
   return Math.round(n).toLocaleString("ko-KR") + "원";
 }
 
+/** 막대 위에 얹는 짧은 표기 — 자리가 좁아 원 단위를 다 쓰면 서로 겹친다. */
+function manwon(n: number) {
+  if (n === 0) return "—";
+  return `${Math.round(n / 10000).toLocaleString("ko-KR")}만`;
+}
+
+function addMonths(month: string, delta: number) {
+  const [y, m] = month.split("-").map(Number);
+  const abs = y * 12 + (m - 1) + delta;
+  return `${Math.floor(abs / 12)}-${String((abs % 12) + 1).padStart(2, "0")}`;
+}
+
+function monthsBetween(from: string, to: string) {
+  const out: string[] = [];
+  let cur = from;
+  // 넉넉한 상한 — 무한 루프 방지
+  for (let i = 0; i < 240 && cur <= to; i += 1) {
+    out.push(cur);
+    cur = addMonths(cur, 1);
+  }
+  return out;
+}
+
+function shortMonth(month: string, showYear: boolean) {
+  const [y, m] = month.split("-");
+  return `${showYear ? `'${y.slice(2)} ` : ""}${Number(m)}월`;
+}
+
+// 🔴 위 넷은 화주포털 월별통계(`app/customer/stats/page.tsx`)에 같은 이름으로 있는
+//    것과 **같은 계산이지만 일부러 각자 둔다.** 공용 파일로 빼면 이 차수가
+//    화주포털 파일을 건드리게 되고, 포털 쪽은 시행일·데이터 하한 같은 자기 사정이
+//    얽혀 있어 한쪽을 고치면 다른 쪽이 조용히 따라 바뀐다.
+//    ⚠️ 그래서 **둘 중 하나를 고칠 때 다른 쪽을 따라 고치지 않아도 된다** — 의도된 분리다.
+
+const PERIOD_PRESETS = [
+  { key: "m3", label: "최근 3개월", months: 3 },
+  { key: "m6", label: "최근 6개월", months: 6 },
+  { key: "m12", label: "최근 12개월", months: 12 },
+  { key: "m24", label: "최근 24개월", months: 24 },
+  { key: "all", label: "전체", months: null },
+] as const;
+
+// 🔴 `custom` 은 칩이 아니라 **월 선택기를 직접 손댄 상태**다 — 칩을 하나도 켜지
+//    않기 위해 따로 둔다. 이것 없이 아무 칩 키나 쓰면 「최근 12개월」이 켜진 채로
+//    구간은 다른 모순이 남는다.
+type PeriodKey = (typeof PERIOD_PRESETS)[number]["key"] | "custom";
+
 export default function AdminDashboardPage() {
   const [data, setData] = useState<DashboardApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -68,20 +115,67 @@ export default function AdminDashboardPage() {
   // 이 카드의 원래 쓰임이고, 명단은 "누구인지" 궁금할 때만 편다.
   const [recurringOpen, setRecurringOpen] = useState(false);
 
+  // 🔴 조회기간(35차 리뷰 5라운드) — 그전에는 **최근 12개월 고정**이었다.
+  //    프리셋이 서버 창(`months`)을 정하고, 아래 `fromMonth`~`toMonth` 가 화면에
+  //    그릴 구간을 정한다. 둘을 하나로 합치지 말 것 — 서버 창은 「어디까지
+  //    읽어올지」이고 구간은 「무엇을 보여줄지」라서, 창을 구간에 딱 맞추면
+  //    경계 달의 정산 건이 잘려 그래프가 비어 보인다(정산월 ≠ 생성일).
+  const [period, setPeriod] = useState<PeriodKey>("m12");
+  const thisMonth = useMemo(() => new Date().toISOString().slice(0, 7), []);
+  const [fromMonth, setFromMonth] = useState(() =>
+    addMonths(new Date().toISOString().slice(0, 7), -11)
+  );
+  const [toMonth, setToMonth] = useState(thisMonth);
+
+  function applyPreset(key: Exclude<PeriodKey, "custom">) {
+    setPeriod(key);
+    const preset = PERIOD_PRESETS.find((p) => p.key === key);
+    setToMonth(thisMonth);
+    if (!preset || preset.months == null) {
+      // 「전체」 — 아래 `dataMinMonth` 가 실제 데이터 하한으로 다시 맞춘다.
+      setFromMonth(addMonths(thisMonth, -119));
+      return;
+    }
+    setFromMonth(addMonths(thisMonth, -(preset.months - 1)));
+  }
+
+  /**
+   * 🔴 서버 창은 **고른 구간에서 뽑는다** — 프리셋 키에서 뽑으면 안 된다.
+   *    월 선택기로 직접 더 오래된 달을 고른 순간 창은 그대로라 데이터가 빈다.
+   * 🔴 `+2` 는 창을 구간보다 두 달 넉넉히 잡는 것이다 — 정산월과 생성일이 같은 달이
+   *    아니라서, 창을 구간에 딱 맞추면 경계 달의 정산 건이 잘린다. 빼지 말 것.
+   */
+  const fetchMonths = useMemo(() => {
+    if (period === "all") return "all";
+    const span = monthsBetween(fromMonth > toMonth ? toMonth : fromMonth, thisMonth).length;
+    return String(Math.max(3, span + 2));
+  }, [period, fromMonth, toMonth, thisMonth]);
+
   useEffect(() => {
+    let cancelled = false;
     async function load() {
-      const res = await fetch("/api/admin/dashboard-stats");
+      setLoading(true);
+      const res = await fetch(`/api/admin/dashboard-stats?months=${fetchMonths}`, {
+        // 🔴 원칙 21번 — 서버 라우트가 `createServiceClient()` 를 쓰더라도 호출 쪽에서
+        //    캐시를 끈다. 안 끄면 기간을 바꿔도 옛 응답이 그대로 돌아온다.
+        cache: "no-store",
+      });
       const json = await res.json().catch(() => ({}));
+      if (cancelled) return;
       if (!res.ok) {
         setError(json.error || "대시보드 데이터를 불러오지 못했습니다.");
         setLoading(false);
         return;
       }
+      setError(null);
       setData(json);
       setLoading(false);
     }
     load();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchMonths]);
 
   // 🔴 35차 C-1 — 마진 정의를 `lib/marginCalc.ts` 하나로 옮겼다(사용자 확정 2026-09-11).
   //
@@ -104,6 +198,44 @@ export default function AdminDashboardPage() {
       brokerageFee: inv.brokerage_fee,
     });
 
+  /** 실제 데이터가 있는 가장 오래된 정산월 — 「전체」의 하한이다. */
+  const dataMinMonth = useMemo(() => {
+    let min: string | null = null;
+    (data?.invoices || []).forEach((i) => {
+      if (!i.billing_period) return;
+      if (!min || i.billing_period < min) min = i.billing_period;
+    });
+    return min || thisMonth;
+  }, [data, thisMonth]);
+
+  /**
+   * 🔴 표시 구간 — 화주포털 월별통계가 겪은 함정을 그대로 피한다(60차 ⑨).
+   *      ① 끝월은 이번 달을 넘지 않는다(미래 달을 그리지 않는다)
+   *      ② 시작월은 하한으로 누르지 않는다(눌렀더니 프리셋 넷이 전부 「이번 달 ~
+   *         이번 달」로 붕괴해 화면이 통째로 비었다)
+   *      ③ 시작월 > 끝월 이면 끝월로 맞춘다 — 구간이 거꾸로 잡히는 것만 막는다
+   *    🔴 셋 다 지우지 말 것.
+   */
+  const effTo = toMonth > thisMonth ? thisMonth : toMonth;
+  const rawFrom = period === "all" ? dataMinMonth : fromMonth;
+  const effFrom = rawFrom > effTo ? effTo : rawFrom;
+
+  /**
+   * 🔴 구간으로 자른 원본 — 아래 집계는 전부 이것만 본다.
+   *    ⚠️ **정산은 정산월(`billing_period`), 오더·클레임은 등록월(`created_at`)** 로
+   *       자른다. 두 표에 공통 기준이 없어서이고, 화면 설명에 그 사실을 적었다.
+   *       🔴 오더를 정산월로 자르려 하지 말 것 — 오더에는 정산월이 없다.
+   */
+  const scoped = useMemo(() => {
+    if (!data) return { invoices: [], orders: [], claims: [] };
+    const inRange = (m: string | null | undefined) => !!m && m >= effFrom && m <= effTo;
+    return {
+      invoices: data.invoices.filter((i) => inRange(i.billing_period)),
+      orders: data.orders.filter((o) => inRange((o.created_at || "").slice(0, 7))),
+      claims: data.claims.filter((c) => inRange((c.created_at || "").slice(0, 7))),
+    };
+  }, [data, effFrom, effTo]);
+
   // 오더별 취급고·원가·마진(현장 추가비 표시시점 합산 포함) — 담당자별/화주별 섹션이
   // 공통으로 재사용하는 중간 집계.
   // 🔴 `revenue` 는 **매출이 아니라 취급고**다 — 선착불 운임이 섞이므로 화면에
@@ -111,7 +243,7 @@ export default function AdminDashboardPage() {
   const revenueByOrderId = useMemo(() => {
     const map: Record<string, { revenue: number; cost: number; margin: number }> = {};
     if (!data) return map;
-    data.invoices.forEach((inv) => {
+    scoped.invoices.forEach((inv) => {
       if (!inv.order_id) return;
       const attribution = data.extraChargeAttributionByInvoiceId[inv.id];
       const extraCharge = attribution?.customerAmount || 0;
@@ -126,27 +258,33 @@ export default function AdminDashboardPage() {
       map[inv.order_id] = cur;
     });
     return map;
-  }, [data]);
+  }, [data, scoped]);
 
-  // A. 전사 월별 매출·마진 추이 (billing_period 기준)
+  // A. 전사 월별 마진 추이 (billing_period 기준)
+  // 🔴 **실적이 없는 달도 0 으로 채운다**(35차 리뷰 5라운드) — 추이를 보는 그래프라
+  //    빈 달이 빠지면 가로축이 압축되어 「쉬어 간 달」이 없었던 것처럼 보인다.
+  //    ⚠️ 그전에는 실적이 있는 달만 나열했다.
+  // 🔴 `billing_period` 가 빈 정산 건은 이제 빠진다(구간 필터가 값을 요구한다).
+  //    그전에는 「미지정」이라는 가짜 달로 묶여 그래프 끝에 붙어 있었다 — 추이에
+  //    끼우면 축이 망가지므로 뺀 것이고, 그런 건은 정산 목록에서 봐야 한다.
   const monthlyRows = useMemo(() => {
-    const map: Record<string, { period: string; revenue: number; margin: number; count: number }> = {};
     if (!data) return [];
-    data.invoices.forEach((inv) => {
+    const map: Record<string, { period: string; revenue: number; margin: number; count: number }> = {};
+    monthsBetween(effFrom, effTo).forEach((m) => {
+      map[m] = { period: m, revenue: 0, margin: 0, count: 0 };
+    });
+    scoped.invoices.forEach((inv) => {
+      const key = inv.billing_period as string;
+      if (!map[key]) return;
       const attribution = data.extraChargeAttributionByInvoiceId[inv.id];
       const extraCharge = attribution?.customerAmount || 0;
       const extraPayout = attribution?.driverAmount || 0;
-      const revenue = (inv.customer_charge_total || 0) + extraCharge;
-      const margin = marginOf(inv, extraCharge, extraPayout);
-      const key = inv.billing_period || "미지정";
-      const cur = map[key] || { period: key, revenue: 0, margin: 0, count: 0 };
-      cur.revenue += revenue;
-      cur.margin += margin;
-      cur.count += 1;
-      map[key] = cur;
+      map[key].revenue += (inv.customer_charge_total || 0) + extraCharge;
+      map[key].margin += marginOf(inv, extraCharge, extraPayout);
+      map[key].count += 1;
     });
     return Object.values(map).sort((a, b) => a.period.localeCompare(b.period));
-  }, [data]);
+  }, [data, scoped, effFrom, effTo]);
 
   // B. 담당자별 영업 성과 (orders.created_by 기준 — 오더 처리 담당자 기준)
   const staffRows = useMemo(() => {
@@ -157,7 +295,7 @@ export default function AdminDashboardPage() {
     });
     const map: Record<string, { key: string; name: string; orderCount: number; revenue: number; margin: number }> =
       {};
-    data.orders.forEach((o) => {
+    scoped.orders.forEach((o) => {
       const key = o.created_by || "__unassigned__";
       const name = o.created_by ? staffNameById[o.created_by] || "알 수 없음(탈퇴 계정)" : "담당자 미배정";
       const cur = map[key] || { key, name, orderCount: 0, revenue: 0, margin: 0 };
@@ -170,7 +308,7 @@ export default function AdminDashboardPage() {
       map[key] = cur;
     });
     return Object.values(map).sort((a, b) => b.margin - a.margin);
-  }, [data, revenueByOrderId]);
+  }, [data, scoped, revenueByOrderId]);
 
   // C. 화주별 수익성 순위 (company/개인고객/게스트 순으로 식별, TOP 10)
   const customerRows = useMemo(() => {
@@ -197,7 +335,7 @@ export default function AdminDashboardPage() {
 
     const map: Record<string, { key: string; name: string; orderCount: number; revenue: number; margin: number }> =
       {};
-    data.orders.forEach((o) => {
+    scoped.orders.forEach((o) => {
       const key = keyOf(o);
       const name = nameOf(o);
       const cur = map[key] || { key, name, orderCount: 0, revenue: 0, margin: 0 };
@@ -212,7 +350,7 @@ export default function AdminDashboardPage() {
     return Object.values(map)
       .sort((a, b) => b.margin - a.margin)
       .slice(0, 10);
-  }, [data, revenueByOrderId]);
+  }, [data, scoped, revenueByOrderId]);
 
   // D. 클레임·현장추가비 통계
   const claimStats = useMemo(() => {
@@ -222,7 +360,7 @@ export default function AdminDashboardPage() {
     let compensationCount = 0;
     let claimAmountRefTotal = 0;
     if (data) {
-      data.claims.forEach((c) => {
+      scoped.claims.forEach((c) => {
         totalCount += 1;
         typeCounts[c.claim_type] = (typeCounts[c.claim_type] || 0) + 1;
         if (c.status === "처리완료" && c.compensation_amount != null) {
@@ -233,7 +371,7 @@ export default function AdminDashboardPage() {
       });
     }
     return { typeCounts, totalCount, compensationTotal, compensationCount, claimAmountRefTotal };
-  }, [data]);
+  }, [data, scoped]);
 
   const extraChargeCategoryRows = useMemo(() => {
     return DISPATCH_EXTRA_CHARGE_CATEGORIES.map((cat) => ({
@@ -252,6 +390,16 @@ export default function AdminDashboardPage() {
   const maxMonthlyMargin = Math.max(1, ...monthlyRows.map((r) => Math.abs(r.margin)));
   const totalMargin = monthlyRows.reduce((sum, r) => sum + r.margin, 0);
   const totalVolume = monthlyRows.reduce((sum, r) => sum + r.revenue, 0);
+  const totalCount = monthlyRows.reduce((sum, r) => sum + r.count, 0);
+  // 🔴 평균선은 **실적이 있는 달**로 나눈다 — 빈 달까지 나누면 「쉬어 간 달」이
+  //    평균을 끌어내려, 실제로 일한 달이 전부 평균 위로 올라간다.
+  const activeMonthCount = monthlyRows.filter((r) => r.count > 0).length;
+  const avgMonthlyMargin = activeMonthCount > 0 ? totalMargin / activeMonthCount : 0;
+  // 가로축에 연도를 적을지 — 해가 바뀌는 구간에서만 적는다(12개월 이하면 군더더기다)
+  const showYear =
+    monthlyRows.length > 0 &&
+    monthlyRows[0].period.slice(0, 4) !== monthlyRows[monthlyRows.length - 1].period.slice(0, 4);
+  const periodLabel = `${effFrom.replace("-", ".")} ~ ${effTo.replace("-", ".")}`;
   // 🔴 35차 C-2 — 정렬·막대 기준을 취급고에서 **마진**으로 바꿨다(사용자 13번)
   const maxStaffMargin = Math.max(1, ...staffRows.map((r) => Math.abs(r.margin)));
   const maxCustomerMargin = Math.max(1, ...customerRows.map((r) => Math.abs(r.margin)));
@@ -262,9 +410,78 @@ export default function AdminDashboardPage() {
         <div>
           <h1 className="page-title">운영 대시보드</h1>
           <p className="page-desc">
-            최근 12개월 데이터 기준(관리자 전용). 담당자별 영업 성과는 "오더 처리 담당자"(오더 등록·수정 담당자)
-            기준이며, 견적 상담·정산 등록 담당자와 다를 수 있습니다.
+            관리자 전용 · 조회기간 <strong>{periodLabel}</strong>. 정산은 <strong>정산월</strong>,
+            오더·클레임은 <strong>등록월</strong> 기준으로 자릅니다(두 표에 공통 기준이 없습니다).
           </p>
+        </div>
+      </div>
+
+      {/* ── 조회기간 (35차 리뷰 5라운드 · 사용자 지시) ──────────────────────────────
+          🔴 그전에는 **최근 12개월 고정**이었고 기간을 고를 방법이 없었다.
+          🔴 포털 월별통계의 `Pv2DatePicker`·`Pv2Select` 를 가져오지 않았다 —
+             `--pv2-*` 토큰이 `.portal-v2` 스코프 안에만 있어서 관리자에서는 색이
+             안 나온다(PR #145 에서 실측). 관리자는 네이티브 `select` 가 정상이다
+             (원칙 57번은 **포털 한정**이다). */}
+      <div
+        className="card"
+        style={{
+          padding: 14,
+          marginBottom: 20,
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: 10,
+        }}
+      >
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {PERIOD_PRESETS.map((p) => (
+            <button
+              key={p.key}
+              type="button"
+              onClick={() => applyPreset(p.key)}
+              style={{
+                padding: "6px 12px",
+                borderRadius: 999,
+                fontSize: 12.5,
+                fontWeight: period === p.key ? 700 : 500,
+                whiteSpace: "nowrap",
+                cursor: "pointer",
+                border: "1px solid var(--border)",
+                background: period === p.key ? "var(--brand-yellow)" : "transparent",
+                color: period === p.key ? "#1a1a1a" : "inherit",
+              }}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        {/* 🔴 프리셋을 고른 뒤 직접 손보면 프리셋 표시는 풀어야 한다 — 안 풀면
+            칩은 「최근 6개월」인데 구간은 다른 모순이 남는다. 「전체」로 돌아갈 수
+            있게 프리셋 자체를 지우지는 않고 `m12` 로 두지도 않는다. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
+          <input
+            type="month"
+            value={effFrom}
+            max={effTo}
+            onChange={(e) => {
+              if (!e.target.value) return;
+              setPeriod("custom");
+              setFromMonth(e.target.value);
+            }}
+            style={{ fontSize: 12.5, padding: "5px 8px" }}
+          />
+          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>~</span>
+          <input
+            type="month"
+            value={effTo}
+            max={thisMonth}
+            onChange={(e) => {
+              if (!e.target.value) return;
+              setPeriod("custom");
+              setToMonth(e.target.value);
+            }}
+            style={{ fontSize: 12.5, padding: "5px 8px" }}
+          />
         </div>
       </div>
 
@@ -302,7 +519,7 @@ export default function AdminDashboardPage() {
             </p>
           </section>
           {/* 정기계약 화주 수 (33차 B장)
-              🔴 최근 12개월 조회기간과 무관하게 **지금 유효한 계약 전체**를 센다 —
+              🔴 위에서 고른 조회기간과 무관하게 **지금 유효한 계약 전체**를 센다 —
                  이 화면의 다른 지표(매출·마진)와 기간 기준이 다르므로 캡션으로 밝힌다.
               🔴 종료일이 지난 계약은 빠진다(`isRecurringContractActive`) — 「체크는 켜져
                  있는데 안 세어진다」는 의도된 동작이다. */}
@@ -393,92 +610,173 @@ export default function AdminDashboardPage() {
             </section>
           )}
 
-          {/* A. 전사 월별 매출·마진 추이 */}
+          {/* ── A. 전사 월별 마진 추이 ────────────────────────────────────────────
+              🔴 **세로 막대 그래프다**(35차 리뷰 5라운드, 사용자 지시 *"좀더 월별로
+                 마진추이를 확인하기 편하게 ux를 수정하자"*). 화주포털 월별통계와
+                 같은 어휘 — 막대 위 값 · 평균선 · 가로축(월·건수).
+              ⚠️ 본작업에서는 **가로 막대 목록**이었다. 한 달이 한 줄이라 위아래로
+                 길게 늘어져 추이가 안 읽혔다 — 그 모양으로 되돌리지 말 것.
+              🔴 **포털 부품(`pv2-s*` 클래스)을 가져오지 않았다** — 그 CSS 는
+                 `.portal-v2` 스코프 안이라 관리자에서는 색·간격이 안 나온다.
+                 여기는 인라인 스타일이고, 그래서 `globals.css` 변경이 0 이다.
+              🔴 막대는 **마진**이다(취급고가 아니다). 마진이 작은 큰 건이 가장 길게
+                 그려지면 「어느 달이 잘 벌었나」를 읽을 수 없다. */}
           <section className="card" style={{ padding: 24, marginBottom: 20 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>전사 월별 마진 추이</div>
-            <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 0, marginBottom: 16 }}>
-              {/* 🔴 35차 C-2 — 막대는 **마진** 길이다(그전에는 매출이었다). 마진이 작은 큰
-                  건이 가장 길게 그려져 「어느 달이 잘 벌었나」를 읽을 수 없었다. */}
-              막대 길이는 <strong>마진</strong>입니다. 취급고는 오른쪽에 작게 병기합니다 ·
-              현장 추가비는 그 이후 등록된 것까지 표시 시점에 합산합니다.
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>전사 월별 마진 추이</div>
+              <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{periodLabel}</div>
+              <div style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: "auto" }}>
+                실적 {activeMonthCount}개월 · 정산 {totalCount}건 · 월평균 마진{" "}
+                <strong className="num">{won(avgMonthlyMargin)}</strong>
+              </div>
+            </div>
+            <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 0, marginBottom: 18 }}>
+              막대 높이는 <strong>마진(부가세 제외)</strong>입니다 · 막대에 마우스를 올리면
+              취급고·건수·증감이 보입니다 · 현장 추가비는 그 이후 등록된 것까지 표시 시점에
+              합산합니다.
             </p>
-            {monthlyRows.length === 0 ? (
-              <div className="empty-state">최근 12개월간 정산 데이터가 없습니다.</div>
+            {activeMonthCount === 0 ? (
+              <div className="empty-state">이 기간에 정산 데이터가 없습니다.</div>
             ) : (
-              monthlyRows.map((r, idx) => {
-                const prev = idx > 0 ? monthlyRows[idx - 1] : null;
-                // 🔴 증감률도 마진 기준이다 — 취급고가 늘어도 마진이 줄면 나쁜 달이다
-                const changePct =
-                  prev && prev.margin > 0 ? Math.round(((r.margin - prev.margin) / prev.margin) * 100) : null;
-                return (
-                  <div key={r.period} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-                    <div className="num" style={{ width: 70, fontSize: 12.5, color: "var(--text-muted)" }}>
-                      {r.period}
-                    </div>
-                    <div style={{ flex: 1, background: "var(--bg)", borderRadius: 8, overflow: "hidden", height: 26 }}>
-                      <div
-                        style={{
-                          width: `${(Math.abs(r.margin) / maxMonthlyMargin) * 100}%`,
-                          background: "var(--accent)",
-                          height: "100%",
-                          borderRadius: 8,
-                          minWidth: r.margin !== 0 ? 4 : 0,
-                        }}
-                      />
-                    </div>
-                    <div className="num" style={{ width: 120, textAlign: "right", fontSize: 14, fontWeight: 700 }}>
-                      {won(r.margin)}
-                    </div>
-                    <div className="num" style={{ width: 110, textAlign: "right", fontSize: 11.5, color: "var(--text-muted)" }}>
-                      취급고 {won(r.revenue)}
-                    </div>
-                    <div style={{ width: 40, textAlign: "right", fontSize: 12, color: "var(--text-muted)" }}>
-                      {r.count}건
-                    </div>
-                    <div style={{ width: 50, textAlign: "right", fontSize: 11.5 }}>
-                      {changePct !== null && (
-                        <span style={{ color: changePct >= 0 ? "#1b9c57" : "#e5484d", fontWeight: 700 }}>
-                          {changePct >= 0 ? "▲" : "▼"} {Math.abs(changePct)}%
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </section>
-
-          {/* B. 담당자별 영업 성과 */}
-          <section className="card" style={{ padding: 24, marginBottom: 20 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>담당자별 영업 성과</div>
-            {staffRows.length === 0 ? (
-              <div className="empty-state">최근 12개월간 등록된 오더가 없습니다.</div>
-            ) : (
-              staffRows.map((r) => (
-                <div key={r.key} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-                  <div style={{ width: 110, fontSize: 13, fontWeight: 600 }}>{r.name}</div>
-                  <div style={{ flex: 1, background: "var(--bg)", borderRadius: 8, overflow: "hidden", height: 26 }}>
+              <>
+                {/* 🔴 **스크롤 컨테이너는 하나다** — 막대와 가로축을 각자 감싸면
+                    가로로 밀었을 때 축만 제자리에 남아 달이 어긋난다.
+                    안쪽 두 줄이 **같은 `minWidth`·`gap`** 을 쓰는 것도 같은 이유다. */}
+                <div style={{ overflowX: "auto", overflowY: "hidden" }}>
+                <div
+                  style={{
+                    position: "relative",
+                    height: 200,
+                    // 🔴 `+ 24` 는 양끝 값 라벨(「1,280만」처럼 칸보다 넓다)이 잘리지 않게
+                    //    두는 여백이다. 아래 두 줄의 `padding` 과 **한 벌**이라 같이 고칠 것.
+                    minWidth: monthlyRows.length * 44 + 24,
+                  }}
+                >
+                  {/* 평균선 — 실적이 있는 달로 나눈 값이다(빈 달은 안 센다) */}
+                  {avgMonthlyMargin > 0 && (
                     <div
                       style={{
-                        width: `${(Math.abs(r.margin) / maxStaffMargin) * 100}%`,
-                        background: "var(--accent)",
-                        height: "100%",
-                        borderRadius: 8,
-                        minWidth: r.margin !== 0 ? 4 : 0,
+                        position: "absolute",
+                        left: 0,
+                        right: 0,
+                        bottom: `${Math.min(96, (avgMonthlyMargin / maxMonthlyMargin) * 100)}%`,
+                        borderTop: "1px dashed var(--border)",
+                        pointerEvents: "none",
+                        zIndex: 1,
                       }}
-                    />
-                  </div>
-                  <div className="num" style={{ width: 120, textAlign: "right", fontSize: 14, fontWeight: 700 }}>
-                    {won(r.margin)}
-                  </div>
-                  <div className="num" style={{ width: 110, textAlign: "right", fontSize: 11.5, color: "var(--text-muted)" }}>
-                    취급고 {won(r.revenue)}
-                  </div>
-                  <div style={{ width: 50, textAlign: "right", fontSize: 12, color: "var(--text-muted)" }}>
-                    {r.orderCount}건
+                    >
+                      {/* 🔴 라벨은 **왼쪽**이다 — 오른쪽에 두면 달 수가 많아 내용이 카드보다
+                          넓어졌을 때 처음 보이는 화면 밖으로 밀려 안 보인다(24개월에서 실측). */}
+                      <span
+                        style={{
+                          position: "absolute",
+                          left: 0,
+                          top: -15,
+                          fontSize: 10.5,
+                          color: "var(--text-muted)",
+                          background: "var(--surface)",
+                          padding: "0 4px",
+                        }}
+                      >
+                        평균 {manwon(avgMonthlyMargin)}
+                      </span>
+                    </div>
+                  )}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-end",
+                      gap: 8,
+                      height: "100%",
+                      padding: "0 12px",
+                    }}
+                  >
+                    {monthlyRows.map((r, idx) => {
+                      const prev = idx > 0 ? monthlyRows[idx - 1] : null;
+                      // 🔴 증감률도 마진 기준이다 — 취급고가 늘어도 마진이 줄면 나쁜 달이다
+                      const changePct =
+                        prev && prev.margin > 0
+                          ? Math.round(((r.margin - prev.margin) / prev.margin) * 100)
+                          : null;
+                      const isMax = r.margin === maxMonthlyMargin && r.margin > 0;
+                      return (
+                        <div
+                          key={r.period}
+                          title={`${r.period} · 마진 ${won(r.margin)} · 취급고 ${won(r.revenue)} · ${r.count}건${
+                            changePct !== null ? ` · 전월 대비 ${changePct >= 0 ? "+" : ""}${changePct}%` : ""
+                          }`}
+                          style={{
+                            flex: 1,
+                            minWidth: 0,
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            justifyContent: "flex-end",
+                            gap: 6,
+                            height: "100%",
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: 11,
+                              whiteSpace: "nowrap",
+                              fontWeight: isMax ? 800 : 600,
+                              color: r.margin === 0 ? "var(--text-muted)" : "inherit",
+                            }}
+                          >
+                            {manwon(r.margin)}
+                          </span>
+                          <div
+                            style={{
+                              width: "70%",
+                              maxWidth: 40,
+                              // 🔴 0 인 달도 2px 은 그린다 — 아무것도 없으면 「그 달이 빠졌나」로 읽힌다
+                              height:
+                                r.margin <= 0
+                                  ? 2
+                                  : `${Math.max(3, Math.round((r.margin / maxMonthlyMargin) * 100))}%`,
+                              background:
+                                r.margin <= 0 ? "var(--border)" : isMax ? "#1a1a1a" : "var(--brand-yellow)",
+                              borderRadius: "6px 6px 2px 2px",
+                            }}
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              ))
+                {/* 가로축 — 월·건수. 위 막대와 **같은 gap·minWidth** 라야 칸이 맞는다 */}
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    marginTop: 4,
+                    borderTop: "1px solid var(--border)",
+                    minWidth: monthlyRows.length * 44 + 24,
+                    padding: "8px 12px 0",
+                  }}
+                >
+                  {monthlyRows.map((r) => (
+                    <div
+                      key={r.period}
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        gap: 2,
+                      }}
+                    >
+                      <span style={{ fontSize: 11.5, whiteSpace: "nowrap" }}>
+                        {shortMonth(r.period, showYear)}
+                      </span>
+                      <span style={{ fontSize: 10.5, color: "var(--text-muted)" }}>{r.count}건</span>
+                    </div>
+                  ))}
+                </div>
+                </div>
+              </>
             )}
           </section>
 
@@ -486,7 +784,7 @@ export default function AdminDashboardPage() {
           <section className="card" style={{ padding: 24, marginBottom: 20 }}>
             <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>화주별 수익성 순위 (TOP 10)</div>
             {customerRows.length === 0 ? (
-              <div className="empty-state">최근 12개월간 등록된 오더가 없습니다.</div>
+              <div className="empty-state">이 기간에 등록된 오더가 없습니다.</div>
             ) : (
               customerRows.map((r, idx) => (
                 <div key={r.key} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
@@ -582,6 +880,46 @@ export default function AdminDashboardPage() {
                 </div>
               ))}
             </div>
+          </section>
+
+          {/* B. 담당자별 영업 성과 — 🔴 **맨 아래다**(35차 리뷰 5라운드, 사용자 지시
+              *"담당자별 영업 성과는 지금은 그렇게 중요한 부분이 아니라 하단으로 배치"*).
+              ⚠️ 본작업에서는 월별 추이 바로 다음이었다 — 그 순서로 되돌리지 말 것. */}
+          <section className="card" style={{ padding: 24, marginBottom: 20 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>담당자별 영업 성과</div>
+            <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 0, marginBottom: 16 }}>
+              「오더 처리 담당자」(오더 등록·수정 담당자) 기준이며, 견적 상담·정산 등록
+              담당자와 다를 수 있습니다. 오더는 <strong>등록월</strong>로 자릅니다.
+            </p>
+            {staffRows.length === 0 ? (
+              <div className="empty-state">이 기간에 등록된 오더가 없습니다.</div>
+            ) : (
+              staffRows.map((r) => (
+                <div key={r.key} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+                  <div style={{ width: 110, fontSize: 13, fontWeight: 600 }}>{r.name}</div>
+                  <div style={{ flex: 1, background: "var(--bg)", borderRadius: 8, overflow: "hidden", height: 26 }}>
+                    <div
+                      style={{
+                        width: `${(Math.abs(r.margin) / maxStaffMargin) * 100}%`,
+                        background: "var(--accent)",
+                        height: "100%",
+                        borderRadius: 8,
+                        minWidth: r.margin !== 0 ? 4 : 0,
+                      }}
+                    />
+                  </div>
+                  <div className="num" style={{ width: 120, textAlign: "right", fontSize: 14, fontWeight: 700 }}>
+                    {won(r.margin)}
+                  </div>
+                  <div className="num" style={{ width: 110, textAlign: "right", fontSize: 11.5, color: "var(--text-muted)" }}>
+                    취급고 {won(r.revenue)}
+                  </div>
+                  <div style={{ width: 50, textAlign: "right", fontSize: 12, color: "var(--text-muted)" }}>
+                    {r.orderCount}건
+                  </div>
+                </div>
+              ))
+            )}
           </section>
         </>
       )}
