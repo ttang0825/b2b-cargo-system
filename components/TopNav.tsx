@@ -42,9 +42,14 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/admin/rates", label: "운임기준표" },
       { href: "/admin/quotes", label: "견적 관리", key: "approvedQuotes" },
       { href: "/admin/orders", label: "운송오더" },
-      { href: "/admin/drivers", label: "차주 관리" },
       { href: "/admin/dispatches", label: "배차 관리" },
       { href: "/admin/invoices", label: "정산 관리" },
+      // 🔴 차주 관리는 **정산 관리 아래**다(35차 리뷰 4라운드, 사용자 지시).
+      //    ⚠️ 원칙 14번이 이 그룹을 「운임기준표·견적·오더·차주·배차·정산」으로 적고
+      //       있는데 그 순서보다 이쪽이 나중이다 — 위에서 아래로 운송 한 건이 흘러가는
+      //       순서(견적 → 오더 → 배차 → 정산)를 끊지 않으려고 차주를 뒤로 뺀 것이다.
+      //    🔴 원칙 14번 문장을 근거로 되돌리지 말 것.
+      { href: "/admin/drivers", label: "차주 관리" },
       { href: "/admin/settings/external-networks", label: "외부 정보망 관리" },
     ],
   },
