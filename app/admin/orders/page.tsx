@@ -77,11 +77,15 @@ function OrdersPageInner() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // 🔴 35차 B-2 (사용자 1번) — 운송오더 관리에 들어오면 **바로 신규 등록 폼이 열려 있다.**
+  // 🔴 들어오면 **목록이 보인다** — 폼은 접혀 있고 「+ 신규 오더 등록」으로 편다
+  //    (35차 리뷰 3라운드, 사용자 지시).
+  //    ⚠️ 35차 본작업(B-2 · 사용자 1번)은 반대였다 — *"운송오더 관리에 들어가면 바로
+  //       신규오더 등록창으로 시작하게 하자"*. 실제로 써 보고 뒤집힌 것이니
+  //       **그 옛 지시를 근거로 `true` 로 되돌리지 말 것.**
   //    🔴 **목록을 숨기지 않는다.** PR #144 가 「폼 열림 시 목록 미렌더」 분기를 없앴고
   //       「다시 만들지 말 것」으로 못박았다 — 그 분기가 34차 리뷰에서 「눌렀는데 아무것도
-  //       안 뜬다」를 한 번 만들었다. 폼과 목록이 같이 보이는 것이 정상이다.
-  const [showForm, setShowForm] = useState(true);
+  //       안 뜬다」를 한 번 만들었다. 폼을 펴도 목록은 같이 보이는 것이 정상이다.
+  const [showForm, setShowForm] = useState(false);
   const [lastOrderNote, setLastOrderNote] = useState<string | null>(null);
 
   const [saving, setSaving] = useState(false);
@@ -585,12 +589,19 @@ function OrdersPageInner() {
           <p className="page-desc">
             수주된 견적 또는 직접 접수된 운송 건을 관리합니다.
           </p>
+          {/* 🔴 등록 버튼은 **제목 아래 왼쪽**이다(35차 리뷰 3라운드, 사용자 지시).
+              오른쪽 기간 필터 옆으로 되돌리지 말 것 — 거기서는 조회 도구와 섞여
+              보인다. */}
+          <button
+            className="btn"
+            onClick={() => setShowForm((v) => !v)}
+            style={{ marginTop: 10 }}
+          >
+            {showForm ? "닫기" : "+ 신규 오더 등록"}
+          </button>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <DateRangeFilter value={period} onChange={setPeriod} />
-          <button className="btn" onClick={() => setShowForm((v) => !v)}>
-            {showForm ? "닫기" : "+ 신규 오더 등록"}
-          </button>
         </div>
       </div>
 
