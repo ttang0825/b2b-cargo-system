@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 // 🔴 원칙 31번 — 앱 내부 경로는 반드시 next/link. <a href> 로 바꾸면 하드 리로드가 된다.
 import Link from "next/link";
 import { calcMargin } from "@/lib/marginCalc";
+// 🔴 원칙 8번 — 엑셀은 공용 함수만 쓴다(헤더 굵게+옐로 배경 · 1행 틀고정이 자동).
+//    `xlsx` 가 아니라 `xlsx-js-style` 을 쓰는 것도 그 파일 안에서 처리된다.
+import { exportMultiSheetExcel, buildExportFilename } from "@/lib/exportExcel";
 import { CLAIM_TYPES, getClaimTypeLabel } from "@/lib/claims";
 import { DISPATCH_EXTRA_CHARGE_CATEGORIES, getDispatchExtraChargeCategoryLabel } from "@/lib/dispatchExtraCharges";
 
@@ -400,6 +403,94 @@ export default function AdminDashboardPage() {
     monthlyRows.length > 0 &&
     monthlyRows[0].period.slice(0, 4) !== monthlyRows[monthlyRows.length - 1].period.slice(0, 4);
   const periodLabel = `${effFrom.replace("-", ".")} ~ ${effTo.replace("-", ".")}`;
+
+  /**
+   * 엑셀 내려받기(35차 리뷰 6라운드 · 사용자 지시 *"운영 대시보드 데이터를 엑셀로도
+   * 다운받을 수 있게 설정하자"*).
+   *
+   * 🔴 **화면에 보이는 그대로를 넣는다** — 지금 고른 조회기간의 네 섹션이 시트 넷이다.
+   *    화면은 마진 기준으로 정렬·표시하는데 엑셀만 다른 값을 담으면 두 숫자가 갈린다.
+   * 🔴 **마진은 `lib/marginCalc.ts` 를 거친 값 그대로다** — 여기서 다시 계산하지 말 것.
+   * 🔴 관리자 전용 화면이라 차주 지급액이 섞인 「취급고」를 넣어도 된다. ⚠️ 다만 이
+   *    파일을 화주에게 그대로 보내면 안 된다 — 화주에게 보낼 것은 화주포털의
+   *    월별통계 엑셀이다.
+   */
+  function handleExportExcel() {
+    const filename = buildExportFilename("", "운영대시보드", periodLabel.replace(/ /g, ""));
+    exportMultiSheetExcel(filename, [
+      {
+        name: "월별 마진",
+        rows:
+          monthlyRows.length > 0
+            ? monthlyRows.map((r, idx) => {
+                const prev = idx > 0 ? monthlyRows[idx - 1] : null;
+                const changePct =
+                  prev && prev.margin > 0
+                    ? Math.round(((r.margin - prev.margin) / prev.margin) * 100)
+                    : null;
+                return {
+                  정산월: r.period,
+                  "마진(부가세 제외)": Math.round(r.margin),
+                  "취급고(참고)": Math.round(r.revenue),
+                  정산건수: r.count,
+                  "전월 대비(%)": changePct === null ? "" : changePct,
+                };
+              })
+            : [{ 안내: "해당 기간 정산 데이터 없음" }],
+      },
+      {
+        name: "화주별 수익성",
+        rows:
+          customerRows.length > 0
+            ? customerRows.map((r, idx) => ({
+                순위: idx + 1,
+                화주: r.name,
+                오더건수: r.orderCount,
+                "마진(부가세 제외)": Math.round(r.margin),
+                "취급고(참고)": Math.round(r.revenue),
+              }))
+            : [{ 안내: "해당 기간 오더 없음" }],
+      },
+      {
+        name: "담당자별",
+        rows:
+          staffRows.length > 0
+            ? staffRows.map((r) => ({
+                담당자: r.name,
+                오더건수: r.orderCount,
+                "마진(부가세 제외)": Math.round(r.margin),
+                "취급고(참고)": Math.round(r.revenue),
+              }))
+            : [{ 안내: "해당 기간 오더 없음" }],
+      },
+      {
+        name: "클레임·추가비",
+        rows: [
+          ...CLAIM_TYPES.map((t) => ({
+            구분: "클레임",
+            항목: getClaimTypeLabel(t),
+            건수: claimStats.typeCounts[t] || 0,
+            "화주 청구액": "",
+            "차주 지급액": "",
+          })),
+          {
+            구분: "클레임",
+            항목: "배상 완료 합계",
+            건수: claimStats.compensationCount,
+            "화주 청구액": Math.round(claimStats.compensationTotal),
+            "차주 지급액": "",
+          },
+          ...extraChargeCategoryRows.map((r) => ({
+            구분: "현장 추가비",
+            항목: r.label,
+            건수: r.count,
+            "화주 청구액": Math.round(r.customerAmount),
+            "차주 지급액": Math.round(r.driverAmount),
+          })),
+        ],
+      },
+    ]);
+  }
   // 🔴 35차 C-2 — 정렬·막대 기준을 취급고에서 **마진**으로 바꿨다(사용자 13번)
   const maxStaffMargin = Math.max(1, ...staffRows.map((r) => Math.abs(r.margin)));
   const maxCustomerMargin = Math.max(1, ...customerRows.map((r) => Math.abs(r.margin)));
@@ -482,6 +573,18 @@ export default function AdminDashboardPage() {
             }}
             style={{ fontSize: 12.5, padding: "5px 8px" }}
           />
+          {/* 🔴 엑셀은 **지금 고른 조회기간 그대로** 담는다(35차 리뷰 6라운드) —
+              화면과 다른 구간을 담으면 두 숫자가 갈린다.
+              🔴 불러오는 중에는 막는다 — 빈 배열이 그대로 파일이 된다. */}
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={handleExportExcel}
+            disabled={loading || !!error || !data}
+            style={{ whiteSpace: "nowrap", fontSize: 12.5, padding: "6px 12px" }}
+          >
+            엑셀 다운로드
+          </button>
         </div>
       </div>
 
