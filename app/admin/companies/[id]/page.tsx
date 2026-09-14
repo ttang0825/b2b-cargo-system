@@ -806,7 +806,7 @@ export default function CompanyDetailPage() {
                   f.key === "payment_due_value"
                     ? paymentDueToForm(company)
                     : company[f.key];
-                const shown = companyFieldDisplay(f, raw);
+                const shown = companyFieldDisplay(f, raw, company);
                 return <Field key={f.key} label={f.label} value={shown} />;
               })}
             </div>

@@ -429,7 +429,17 @@ export function companyFieldsOf(section: CompanySection): CompanyField[] {
  * 🔴 **화면에 이 규칙을 다시 적지 말 것.** 코드값→라벨 변환이 화면에 있으면
  *    `codedOptions` 를 늘렸을 때 그 화면만 조용히 코드값을 그대로 보여준다.
  */
-export function companyFieldDisplay(f: CompanyField, raw: any): string | null {
+export function companyFieldDisplay(
+  f: CompanyField,
+  raw: any,
+  /** `type: "static"` 전용 — 안내 문장이 보는 같은 행의 값들 */
+  row?: Record<string, any>
+): string | null {
+  // 🔴 읽기 전용 안내 줄은 저장된 값이 아니라 **같은 행에서 파생**된다 — 표시 모드에서도
+  //    보여야 한다(사용자 지시 *"정산마감은 월말기준이라는 표시는 두자"*).
+  //    ⚠️ 이 분기가 없으면 `raw` 가 undefined 라 **수정 중에만 보이고 평소에는 사라진다.**
+  if (f.type === "static") return f.staticText?.(row || {}) ?? null;
+
   let shown: any = f.type === "checkbox" ? (raw === true ? "예" : null) : raw;
 
   if (shown === null || shown === undefined || shown === "") {
