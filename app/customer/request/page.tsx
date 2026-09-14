@@ -86,6 +86,26 @@ const BILLING_CYCLE_CHOICES = (["per_order", "monthly"] as const).map((value) =>
 }));
 
 /**
+ * 🔴 월정산일 때 고르는 **결제일 요청** (36차 리뷰 2라운드).
+ *
+ *    사용자 지시: *"발주요청에서 월정산일경우 옆에 정산마감은 월말기준이라고 명시하고
+ *    결제일을 선택할수 있는 항목이 생기게 하자. 기본적으로 화주상세에 적힌 결제일이
+ *    표시되게."*
+ *
+ * 🔴 **정산 마감은 월말 고정이다** — 그래서 결제일은 「익월 며칠」 하나로 충분하고,
+ *    관리자 화면(`PAYMENT_DUE_CHOICES`)과 **같은 값·같은 말**을 쓴다.
+ *    🔴 여기에 「협의」를 넣지 말 것 — 협의는 화주가 고르는 것이 아니라 담당자와 이미
+ *       정해 둔 계약 형태이고, 그런 화주에게는 이 칸을 아예 그리지 않는다.
+ */
+const PAYMENT_DUE_REQUEST_CHOICES = [
+  { value: "0", label: "익월 말일" },
+  ...Array.from({ length: 31 }, (_, i) => ({
+    value: String(i + 1),
+    label: `익월 ${i + 1}일`,
+  })),
+];
+
+/**
  * 🔴 당착·내착일 때 `requested_dropoff_at` 에 넣는 **자리 채움 시각**이다.
  *    `components/pv2/Pv2DateTimeField.tsx` 의 같은 값과 반드시 일치해야 한다 —
  *    상차일을 바꿀 때 이 화면이 하차 날짜를 다시 계산하기 때문이다.
@@ -123,6 +143,8 @@ const EMPTY_LEG_CONTACT = {
 
 export default function PortalRequestPage() {
   const [companyId, setCompanyId] = useState<string | null>(null);
+  // 🔴 계약 결제일이 「협의」인 화주 — 결제일 칸을 그리지 않는다(36차 리뷰 2라운드).
+  const [paymentDueNegotiated, setPaymentDueNegotiated] = useState(false);
   const [savedLocations, setSavedLocations] = useState<SavedLocation[]>([]);
   const [surcharges, setSurcharges] = useState<Surcharge[]>([]);
   const [cargoPresets, setCargoPresets] = useState<CustomerPreset<CargoPresetPayload>[]>([]);
@@ -193,6 +215,9 @@ export default function PortalRequestPage() {
     //   계약이 「미정」이면 `per_order` 로 시작한다 — 대부분의 거래가 건별이고,
     //   관리자 견적 등록 폼도 같은 값으로 시작한다.
     requested_billing_cycle: "per_order" as "per_order" | "monthly",
+    // 🔴 36차 리뷰 2라운드 — 월정산일 때만 쓴다. 초기값은 화주 계약값으로 덮어쓴다.
+    //    빈 문자열이면 「요청 없음」이고 서버가 null 로 저장한다(계약값을 따른다).
+    requested_payment_due_value: "",
     waitingMinutes: "",
     waypointCount: "",
     item: "",
@@ -332,7 +357,7 @@ export default function PortalRequestPage() {
         //    화주가 스스로 고르는 항목의 **기본값**으로만 쓰인다.
         const { data: company } = await supabase
           .from("companies")
-          .select("address,billing_cycle_default")
+          .select("address,billing_cycle_default,payment_due_basis,payment_due_value")
           .eq("id", account.company_id)
           .single();
         if (company?.address) {
@@ -343,6 +368,21 @@ export default function PortalRequestPage() {
         if (company?.billing_cycle_default === "monthly" || company?.billing_cycle_default === "per_order") {
           setForm((prev) => ({ ...prev, requested_billing_cycle: company.billing_cycle_default }));
         }
+        // 🔴 **화주 상세에 적힌 결제일이 기본으로 보여야 한다**(사용자 지시).
+        //    🔴 계약이 「협의」(`payment_due_basis === 'negotiated'`)면 채우지 않는다 —
+        //       숫자가 없고, 그런 화주에게는 아래에서 칸 자체를 안 그린다.
+        if (
+          company?.payment_due_basis !== "negotiated" &&
+          company?.payment_due_value !== null &&
+          company?.payment_due_value !== undefined
+        ) {
+          setForm((prev) => ({
+            ...prev,
+            requested_payment_due_value: String(company.payment_due_value),
+          }));
+        }
+        // 🔴 계약이 「협의」인지 기억해 둔다 — 그 화주에게는 결제일 칸을 그리지 않는다.
+        setPaymentDueNegotiated(company?.payment_due_basis === "negotiated");
 
         await Promise.all([
           loadSavedLocations(account.company_id),
@@ -568,6 +608,11 @@ export default function PortalRequestPage() {
           direct_collection_point:
             form.collection_method === "driver_direct" ? form.direct_collection_point : null,
           requested_billing_cycle: form.requested_billing_cycle,
+          // 🔴 월정산일 때만 보낸다 — 서버도 같은 조건으로 한 번 더 거른다(원칙 25번).
+          requested_payment_due_value:
+            form.requested_billing_cycle === "monthly" && form.requested_payment_due_value !== ""
+              ? Number(form.requested_payment_due_value)
+              : null,
           dropoff_arrival_type: dropoffArrival,
           // 🔴 「지금」이면 **제출하는 그 순간**으로 다시 맞춘다 — 칩을 누른 시각을
           //    그대로 보내면 폼을 오래 열어둔 경우 과거 시각이 되어 하한에 걸린다.
@@ -1037,10 +1082,37 @@ export default function PortalRequestPage() {
                 ))}
               </div>
               <p className="pv2-subchoice-help">
-                계약하신 조건이 기본으로 선택되어 있습니다. 바꾸어 요청하시면 담당자가
-                확인 후 안내드립니다.
+                {form.requested_billing_cycle === "monthly"
+                  ? /* 🔴 36차 리뷰 2라운드 — 사용자 지시 *"월정산일경우 옆에 정산마감은
+                       월말기준이라고 명시하고"*. 🔴 이 문장을 지우지 말 것: 마감일이
+                       화주마다 다르던 구조를 월말 고정으로 단순화한 것이 이번 결정이고,
+                       화주가 그것을 모르면 「언제까지가 이번 달인가」를 되묻는다. */
+                    "정산 마감은 월말 기준입니다. 계약하신 조건이 기본으로 선택되어 있고, 바꾸어 요청하시면 담당자가 확인 후 안내드립니다."
+                  : "운송이 끝나면 바로 정산합니다. 계약하신 조건이 기본으로 선택되어 있고, 바꾸어 요청하시면 담당자가 확인 후 안내드립니다."}
               </p>
             </div>
+            {/* 🔴 결제일 요청 — **월정산일 때만** 그린다(건별은 즉시지급이라 결제일이
+                라는 개념이 없다). 계약이 「협의」인 화주에게도 그리지 않는다 —
+                숫자로 정해 둔 날이 없고, 담당자와 이미 따로 정한 형태다. */}
+            {form.requested_billing_cycle === "monthly" && !paymentDueNegotiated && (
+              <div className="pv2-subchoice">
+                <span className="pv2-subchoice-label">결제일</span>
+                {/* 🔴 항목이 32개라 라디오 줄로 그리면 화면을 덮는다 — 여기만
+                    `Pv2Select` 다(원칙 57번 — 네이티브 `select` 를 쓰지 말 것). */}
+                <Pv2Select
+                  value={form.requested_payment_due_value}
+                  onChange={(v) => setField("requested_payment_due_value", v)}
+                  options={PAYMENT_DUE_REQUEST_CHOICES}
+                  placeholder="계약하신 결제일"
+                  scroll
+                  ariaLabel="결제일 요청"
+                />
+                <p className="pv2-subchoice-help">
+                  위캐리에 운임을 입금하시는 날입니다. 비워 두시면 계약하신 결제일로
+                  진행합니다.
+                </p>
+              </div>
+            )}
           </div>
           <div className="pv2-field" style={{ marginTop: 14 }}>
             <label className="pv2-field-label" htmlFor="pv2-f-item">

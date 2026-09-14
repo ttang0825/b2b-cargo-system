@@ -19,7 +19,6 @@ import {
   buildCompanyPayload,
   validateCompanyForm,
   applyCompanyFieldChange,
-  depsFor,
   companyFormFieldsOf,
   emptyCompanyForm,
   isRecurringContractActive,
@@ -113,10 +112,6 @@ export default function CompaniesPage() {
   //    `React.memo` 가 무력해져 입력칸 51개가 전부 다시 그려진다(리뷰 1라운드 「버벅거림」).
   // 🔴 딸림 효과(결제일 기준을 바꾸면 결제일 값을 비운다)는 정의처 함수가 정한다 —
   //    화면에 적으면 등록 폼과 수정 폼이 다르게 동작한다(36차 리뷰 1라운드).
-  // 🔴 `depsFor(form)` 을 인라인으로 넘기지 말 것 — 매 렌더 **새 객체**가 되어
-  //    `CompanyFieldInput` 의 `React.memo` 가 통째로 무력해진다(33차 리뷰 1라운드의
-  //    「버벅거림」이 정확히 그것이었다). 실제로 보는 값이 바뀔 때만 참조가 바뀐다.
-  const fieldDeps = useMemo(() => depsFor(form), [form.payment_due_basis]);
 
   const setField = useCallback((key: string, value: any) => {
     setForm((prev) => applyCompanyFieldChange(prev, key, value));
@@ -395,9 +390,6 @@ export default function CompaniesPage() {
                   >
                     {fields.map((f) => (
                       <CompanyFieldInput
-                        /* 🔴 결제일은 「결제일 기준」에 따라 위젯이 바뀐다 — 그 한 칸만
-                           넘긴다(폼 전체를 넘기면 `React.memo` 가 무력해진다). */
-                        deps={fieldDeps}
                         key={f.key}
                         field={f}
                         value={form[f.key]}

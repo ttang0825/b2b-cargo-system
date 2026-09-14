@@ -23,7 +23,7 @@ import {
   companyFieldsOf,
   companyFieldDisplay,
   applyCompanyFieldChange,
-  depsFor,
+  paymentDueToForm,
   emptyCompanyForm,
   isRecurringContractActive,
   parseRecommendedVehicle,
@@ -182,10 +182,6 @@ export default function CompanyDetailPage() {
   // 🔴 `useCallback` 을 벗기지 말 것(등록 폼과 같은 이유 — memo 가 무력해진다).
   // 🔴 딸림 효과(결제일 기준을 바꾸면 결제일 값을 비운다)는 정의처 함수가 정한다 —
   //    화면에 적으면 등록 폼과 수정 폼이 다르게 동작한다(36차 리뷰 1라운드).
-  // 🔴 `depsFor(form)` 을 인라인으로 넘기지 말 것 — 매 렌더 **새 객체**가 되어
-  //    `CompanyFieldInput` 의 `React.memo` 가 통째로 무력해진다(33차 리뷰 1라운드의
-  //    「버벅거림」이 정확히 그것이었다). 실제로 보는 값이 바뀔 때만 참조가 바뀐다.
-  const fieldDeps = useMemo(() => depsFor(editForm), [editForm.payment_due_basis]);
 
   const set = useCallback((key: string, value: any) => {
     setEditForm((prev) => applyCompanyFieldChange(prev, key, value));
@@ -211,6 +207,10 @@ export default function CompanyDetailPage() {
       for (const f of COMPANY_FIELDS) {
         initial[f.key] = data[f.key] ?? (f.type === "checkbox" ? false : "");
       }
+      // 🔴 결제일만 예외다 — 화면 값 하나가 DB 두 칸(`payment_due_basis` +
+      //    `payment_due_value`)에 대응한다. 위 반복문은 「협의」를 되살리지 못한다
+      //    (그 행은 값 칸이 null 이라 「미정」으로 보인다). 🔴 이 한 줄을 지우지 말 것.
+      initial.payment_due_value = paymentDueToForm(data);
       // 주소검색이 채우는 파생 컬럼 — 정의에는 없지만 저장할 때 같이 쓴다.
       for (const k of [
         "main_pickup_sido",
@@ -803,9 +803,6 @@ export default function CompanyDetailPage() {
                       key={f.key}
                       field={f}
                       value={editForm[f.key]}
-                      /* 🔴 결제일은 「결제일 기준」에 따라 위젯이 바뀐다 — 그 한 칸만
-                         넘긴다(폼 전체를 넘기면 `React.memo` 가 무력해진다). */
-                      deps={fieldDeps}
                       detailValue={editForm[`${f.key}Detail`]}
                       tonnage={editForm.recommended_vehicle_tonnage}
                       bodytype={editForm.recommended_vehicle_bodytype}
@@ -819,7 +816,13 @@ export default function CompanyDetailPage() {
                 // 🔴 표시 규칙(코드값→라벨 · 「비어 있음」의 뜻 · 단위 · 천단위)은
                 //    정의처 함수 하나가 정한다 — 여기에 다시 적으면 `codedOptions` 를
                 //    늘렸을 때 이 화면만 조용히 코드값을 그대로 보여준다.
-                const shown = companyFieldDisplay(f, company[f.key], company);
+                // 🔴 결제일만 예외 — DB 두 칸을 화면 값 하나로 되돌린 뒤 라벨을 찾는다
+                //    (「협의」가 값 칸이 아니라 기준 칸에 들어 있다).
+                const raw =
+                  f.key === "payment_due_value"
+                    ? paymentDueToForm(company)
+                    : company[f.key];
+                const shown = companyFieldDisplay(f, raw);
                 return <Field key={f.key} label={f.label} value={shown} />;
               })}
             </div>

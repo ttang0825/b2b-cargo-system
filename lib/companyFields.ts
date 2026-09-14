@@ -89,22 +89,6 @@ export type CompanyField = {
    *    바뀔 때 관리자 화면이 조용히 따라가면 안 된다(사용자 확정 2026-09-14).
    */
   codedOptions?: readonly { value: string; label: string }[];
-  /**
-   * `codedOptions` 가 **화주마다·다른 칸의 값에 따라 달라질 때** 쓴다 (36차 리뷰 1라운드).
-   *
-   * 🔴 결제일이 그 사례다 — 기준이 「매월 고정일」이면 **날짜 드롭다운(말일·1~31)**,
-   *    「마감일 기준」·「세금계산서 발행일 기준」이면 **N일 이내 숫자 입력**이다.
-   *    같은 컬럼인데 뜻이 달라서, 한 위젯으로는 담당자가 무엇을 적는지 알 수 없다.
-   * 🔴 `null` 을 돌려주면 `type` 이 정한 원래 위젯으로 돌아간다.
-   * 🔴 조건을 화면에 적지 말 것 — 등록 폼과 수정 폼이 다르게 판단하게 된다.
-   */
-  dynamicOptions?: (form: Record<string, any>) => readonly { value: string; label: string }[] | null;
-  /**
-   * 드롭다운 맨 위 「빈 값」 항목의 글. 기본은 「선택」이다.
-   * 🔴 **「비어 있음」이 곧 뜻인 칸**에 쓴다 — 정산 마감일은 비우면 「말일(달력월 기준)」이
-   *    이라는 실제 규칙이라(로드맵 ②-B) 「선택」으로 두면 규칙이 안 보인다.
-   */
-  emptyOptionLabel?: string;
   placeholder?: string;
   /** inForm:false 인 이유 — 화면 도움말로 그대로 쓴다 */
   note?: string;
@@ -144,13 +128,24 @@ export const BILLING_CYCLE_DEFAULT_OPTIONS = [
 ] as const;
 
 /**
- * 화주 거래조건 — 결제일 **기준** (36차 A장).
+ * 화주 거래조건 — 결제일 **기준** (36차 A장 · DB `payment_due_basis`).
  *
- * 🔴 **기준 + 값 두 칸이라야 「정산 예정일」을 계산할 수 있다.** 자유 입력 한 칸은
- *    지금은 편하지만 미수금 알림·정산 예정일 자동계산에 **영영 못 쓴다**
- *    (그 자리가 바로 구형 `payment_terms` 이고, 지금은 **자동계산에 쓰이지 않는**
- *     「특이사항」으로 이름을 바꿔 사람이 읽는 메모로만 남겼다).
- * 🔴 `negotiated`(협의)는 **값 칸을 안 그린다** — 자동계산에서도 제외 대상이다.
+ * ⚠️ **화면에서는 고르지 않는다**(36차 리뷰 2라운드). 사용자 지시로 정산 구조가
+ *    이렇게 단순해졌기 때문이다 —
+ *
+ *      건별      정산 마감 개념 없음 · **즉시지급**
+ *      월정산    정산 마감 **항상 월말** · 결제일 = **정산 익월 며칠**
+ *
+ *    *"업체마다 정산마감일이 상이하면 복잡해질것 같다"* · *"결제일은 (정산 다음달 기준)"*
+ *
+ *    월말 마감이 고정이므로 「익월 25일」은 `fixed_day` + 25 로 정확히 표현된다.
+ *    그래서 **저장되는 기준은 `fixed_day`(협의면 `negotiated`) 둘뿐**이고,
+ *    담당자는 결제일 한 칸만 고른다.
+ *
+ * 🔴 **컬럼과 이 목록을 지우지 말 것** — 화면에서 안 고를 뿐 저장은 계속 하고,
+ *    나중에 「세금계산서 발행일 기준」 같은 것이 필요해지면 화면만 되살리면 된다.
+ *    DB CHECK 제약도 네 값을 그대로 허용한다.
+ * 🔴 `negotiated`(협의)는 **값이 없다** — 자동계산에서 제외 대상이다.
  */
 export const PAYMENT_DUE_BASIS_OPTIONS = [
   { value: "cutoff", label: "마감일 기준" },
@@ -160,27 +155,22 @@ export const PAYMENT_DUE_BASIS_OPTIONS = [
 ] as const;
 
 /**
- * 1~31 일 (36차 리뷰 1라운드 — *"정산 마감일, 결제일(매월고정일)도 드롭다운으로 선택"*).
+ * 🔴 화면이 고르는 결제일 값 — **기준까지 이 한 칸이 정한다**(36차 리뷰 2라운드).
  *
- * 🔴 **숫자 입력칸을 드롭다운으로 바꾼 이유**는 32일·0일 같은 값이 애초에 들어갈 수
- *    없게 하려는 것이다. DB CHECK 와 `validateCompanyForm()` 은 그대로 둔다 —
- *    화면은 편의이고 **방어선은 그 둘이다**(한쪽만 고치지 말 것).
+ *    `"negotiated"` 를 고르면 `payment_due_basis = 'negotiated'` · 값은 비운다.
+ *    나머지는 `payment_due_basis = 'fixed_day'` · 값은 고른 날짜다(말일 = 0).
+ *
+ * 🔴 **화면 값과 DB 값이 1:1 이 아니다** — 그래서 저장·표시가 반드시
+ *    `paymentDueToForm()` / `paymentDueFromForm()` 두 함수를 거쳐야 한다.
+ *    🔴 화면에서 `payment_due_basis` 를 직접 건드리지 말 것.
  */
-const DAY_OF_MONTH_OPTIONS = Array.from({ length: 31 }, (_, i) => ({
-  value: String(i + 1),
-  label: `${i + 1}일`,
-}));
-
-/**
- * 결제일이 「매월 고정일」일 때의 값 목록.
- * 🔴 **말일은 `0` 이다** — 달마다 28·29·30·31 로 달라져서 숫자로 못 적는다.
- *    ⚠️ 정산 마감일(`billing_cutoff_day`)의 말일은 **빈 값**이다 — 그쪽은 로드맵 ②-B
- *       부터 「비우면 달력월 기준」이 실제 규칙이라 바꾸면 과거 묶음 계산이 흔들린다.
- *       🔴 **두 칸의 말일 표현이 다른 것은 의도다. 맞추려 들지 말 것.**
- */
-const PAYMENT_FIXED_DAY_OPTIONS = [
-  { value: "0", label: "말일" },
-  ...DAY_OF_MONTH_OPTIONS,
+export const PAYMENT_DUE_CHOICES = [
+  { value: "0", label: "익월 말일" },
+  ...Array.from({ length: 31 }, (_, i) => ({
+    value: String(i + 1),
+    label: `익월 ${i + 1}일`,
+  })),
+  { value: "negotiated", label: "협의" },
 ] as const;
 
 /**
@@ -269,77 +259,60 @@ export const COMPANY_FIELDS: CompanyField[] = [
   //    「안 정했다」와 「건별로 정했다」가 구분되지 않는다(지시서가 정할 것 ④).
   {
     key: "billing_cycle_default",
-    label: "청구주기 (기본값)",
+    label: "청구주기",
     type: "select",
     section: "거래 조건",
     codedOptions: BILLING_CYCLE_DEFAULT_OPTIONS,
+    // 🔴 **기본값(제안)이지 강제가 아니다** — 오더·발주요청을 만들 때 복사해 채우고,
+    //    그 뒤로는 그 건의 값이 이긴다. 강제로 만들면 화주 설정을 바꾸는 순간
+    //    진행 중인 건의 정산방식이 조용히 바뀐다.
     note: "새 오더·발주요청에 기본으로 채워집니다. 건별로 담당자가 바꿀 수 있습니다.",
     emptyLabel: "미정",
   },
+  // 🔴 **정산 마감 — 입력칸이 아니라 청구주기가 정하는 「읽기 전용 설명」이다**
+  //    (36차 리뷰 2라운드, 사용자 지시).
+  //
+  //      건별     정산 마감 개념이 없다 → **즉시지급**
+  //      월정산   **항상 월말** — *"업체마다 정산마감일이 상이하면 복잡해질것 같다"*
+  //
+  // 🔴 **`billing_cutoff_day` 입력칸을 되살리지 말 것.** 컬럼은 그대로 두고
+  //    **비운 채로** 쓴다 — 로드맵 ②-B 가 「비우면 달력월(1일~말일) 기준」으로
+  //    계산하므로 `null` 이 곧 **월말**이고, 지금 결정과 정확히 맞아떨어진다.
+  //    🟢 그래서 이 결정에 DB 변경이 필요 없었다.
+  // ⚠️ 값이 남아 있는 화주가 **1건** 있다(실측 2026-09-14). 그 건만 월말이 아닌
+  //    마감으로 계산되는데 화면에 안 보이면 아무도 모르므로, 값이 있을 때만
+  //    아래 칸이 경고와 함께 그것을 보여준다(`showWhen`).
   {
     key: "billing_cutoff_day",
-    label: "정산 마감일",
-    // 🔴 `type` 은 `number` 그대로다 — 저장 경로(`buildCompanyPayload`)가 이 값으로
-    //    숫자 변환을 정한다. **드롭다운은 위젯일 뿐이고 저장되는 것은 smallint 다.**
+    label: "정산 마감일 (구 설정)",
     type: "number",
     section: "거래 조건",
-    // 🔴 **신설한 칸이 아니다 — 로드맵 ②-B 부터 있던 컬럼이다**(원칙 46번이 그 이름을
-    //    그대로 적는다). 36차 지시서는 「기입이 되어야 한다」고 적었지만 실측하니
-    //    이미 있었고 화면에도 나오고 있었다. **두 벌로 만들면 월정산 묶음이 갈린다.**
-    // 🔴 **말일이 「빈 값」인 것은 로드맵 ②-B 의 실제 규칙이다** — 「0」이나 「31」로
-    //    바꾸지 말 것. 그래서 드롭다운의 빈 항목 글이 「선택」이 아니라 말일이다.
-    codedOptions: DAY_OF_MONTH_OPTIONS,
-    emptyOptionLabel: "말일 (달력월 기준)",
-    note: "바꿔도 이미 만들어진 월정산 묶음은 그대로입니다",
-    emptyLabel: "말일 (달력월 기준)",
-  },
-  {
-    key: "payment_due_basis",
-    label: "결제일 기준",
-    type: "select",
-    section: "거래 조건",
-    codedOptions: PAYMENT_DUE_BASIS_OPTIONS,
-    // 🔴 결제일 = **화주가 위캐리에 입금하는 날**이다(사용자 확정 2026-09-14).
-    //    차주 지급일이 아니다 — 라벨을 「지급일」로 바꾸지 말 것.
-    note: "화주가 위캐리에 입금하는 날의 기준입니다",
-    emptyLabel: "미정",
+    // 🔴 값이 있는 화주에게만 보인다 — 새로 설정하는 길은 없앴다.
+    showWhen: (form) => form.billing_cutoff_day !== "" && form.billing_cutoff_day != null,
+    inForm: false, // 🔴 읽기 전용 — 새로 넣을 수 없고 지금 값만 보인다
+    note: "지금은 모든 화주가 월말 마감입니다. 이 값은 예전 설정이며 이 화주에게만 적용됩니다.",
+    displaySuffix: "일",
   },
   {
     key: "payment_due_value",
     label: "결제일",
     type: "number",
     section: "거래 조건",
-    // 🔴 **기준에 따라 뜻도 위젯도 다르다**(36차 리뷰 1라운드).
-    //      매월 고정일            → 날짜 드롭다운 (말일 · 1~31)
-    //      마감일·세금계산서 기준  → 「N일 이내」 숫자 (45일·60일이 흔해서 31 을 넘는다)
-    //    🔴 한 칸으로 합치지 말 것 — 자동계산이 「30」을 날짜로 읽을지 일수로 읽을지
-    //       알 수 없게 된다. 그래서 값과 **기준이 짝**이고, 기준을 바꾸면 값이 비워진다
-    //       (`applyCompanyFieldChange`).
-    dynamicOptions: (form) =>
-      form.payment_due_basis === "fixed_day" ? PAYMENT_FIXED_DAY_OPTIONS : null,
-    note: "마감일·세금계산서 기준이면 「N일 이내」입니다",
-    displaySuffix: "일",
-    // 🔴 조건을 화면에 적지 말 것 — 등록 폼과 수정 폼이 다르게 판단하게 된다.
-    showWhen: (form) => !!form.payment_due_basis && form.payment_due_basis !== "negotiated",
-  },
-  {
-    key: "credit_limit",
-    label: "여신 한도 (원)",
-    type: "number",
-    section: "거래 조건",
-    // 🔴 **값만 받는다 — 넘어도 막지 않는다**(지시서가 정할 것 ③ 권장안).
-    //    「어디서 무엇을 막을지」는 별개 설계라 이번 차수에 넣지 않았다.
-    note: "참고용입니다 — 넘어도 등록·배차를 막지 않습니다",
-    displayThousands: true,
-  },
-  {
-    key: "tax_invoice_method",
-    label: "세금계산서 발행 방식",
-    type: "select",
-    section: "거래 조건",
-    codedOptions: TAX_INVOICE_METHOD_OPTIONS,
+    // 🔴 **정산 익월 기준이다**(사용자 지시 *"결제일은 (정산 다음달 기준)"*).
+    //    마감이 월말로 고정이라 「익월 25일」이 곧 「마감 후 25일」이고, 담당자가
+    //    고를 것은 날짜 하나뿐이다.
+    // 🔴 **화면 값과 DB 값이 1:1 이 아니다** — 「협의」를 고르면 이 컬럼이 아니라
+    //    `payment_due_basis` 가 바뀐다. 그래서 화면은 `paymentDue*` 두 함수를 거친다.
+    codedOptions: PAYMENT_DUE_CHOICES,
+    note: "화주가 위캐리에 입금하는 날 (정산 익월 기준)",
     emptyLabel: "미정",
+    // 🔴 **건별에는 결제일이 없다** — 운송 완료 시 즉시지급이라 물을 것이 없다.
+    showWhen: (form) => form.billing_cycle_default === "monthly",
   },
+  { key: "main_pickup_region", label: "주요 상차지역", type: "region-multi", section: "거래 조건" },
+  { key: "main_dropoff_region", label: "주요 하차지역", type: "region-multi", section: "거래 조건" },
+  { key: "main_pickup_address", label: "주요 상차지 정확주소", type: "address", section: "거래 조건" },
+  { key: "main_dropoff_address", label: "주요 하차지 정확주소", type: "address", section: "거래 조건" },
   // 🔴 **구형 「결제조건」 칸을 「특이사항」으로 바꿔 계속 쓴다**(36차 리뷰 1라운드 —
   //    사용자 지시 *"(구)결제조건 대신 「특이사항」으로 넣어서 기존 화주의 결제조건은
   //    「특이사항」에 넣고 신규화주도 「특이사항」 항목을 넣자"*).
@@ -350,8 +323,7 @@ export const COMPANY_FIELDS: CompanyField[] = [
   //       정확히 그런 자유 서술이라 옮길 필요도 없다(컬럼도 그대로 `payment_terms` 다).
   //
   // 🔴 **여기에 적은 것은 자동계산에 쓰이지 않는다.** 「정산 예정일」을 계산하는 것은
-  //    위의 「결제일 기준 + 결제일」 두 칸이고, 이 칸은 사람이 읽는 메모다.
-  //    🔴 결제 조건을 이 칸에만 적고 두 칸을 비워 두면 자동계산이 그 화주를 건너뛴다.
+  //    위의 청구주기·결제일이고, 이 칸은 사람이 읽는 메모다.
   // ⚠️ 「기본 정보」의 `notes`(메모)와 다른 칸이다 — 그쪽은 영업 메모다.
   {
     key: "payment_terms",
@@ -361,10 +333,6 @@ export const COMPANY_FIELDS: CompanyField[] = [
     placeholder: "예: 파렛트 회수 조건 별도 · 세금계산서는 경리팀 메일로",
     note: "거래 조건 중 위 칸으로 담기지 않는 것 (자동계산에는 쓰이지 않습니다)",
   },
-  { key: "main_pickup_region", label: "주요 상차지역", type: "region-multi", section: "거래 조건" },
-  { key: "main_dropoff_region", label: "주요 하차지역", type: "region-multi", section: "거래 조건" },
-  { key: "main_pickup_address", label: "주요 상차지 정확주소", type: "address", section: "거래 조건" },
-  { key: "main_dropoff_address", label: "주요 하차지 정확주소", type: "address", section: "거래 조건" },
 
   // ── 정기계약 (33차 신설) ───────────────────────────────────────────────────
   // 🔴 `status`(거래 상태)와 **다른 축**이다 — 상태는 「지금 어느 단계인가」, 정기계약은
@@ -450,21 +418,16 @@ export function companyFieldsOf(section: CompanySection): CompanyField[] {
  * 🔴 **화면에 이 규칙을 다시 적지 말 것.** 코드값→라벨 변환이 화면에 있으면
  *    `codedOptions` 를 늘렸을 때 그 화면만 조용히 코드값을 그대로 보여준다.
  */
-export function companyFieldDisplay(
-  f: CompanyField,
-  raw: any,
-  /** 같은 행의 나머지 값 — `dynamicOptions` 가 다른 칸을 보고 목록을 고를 때 필요하다 */
-  row?: Record<string, any>
-): string | null {
+export function companyFieldDisplay(f: CompanyField, raw: any): string | null {
   let shown: any = f.type === "checkbox" ? (raw === true ? "예" : null) : raw;
 
   if (shown === null || shown === undefined || shown === "") {
     // 🔴 「비어 있음」이 곧 규칙인 항목(정산 마감일)은 그 뜻을 그린다.
     return f.emptyLabel ?? null;
   }
-  // 🔴 목록이 있으면 **라벨이 단위까지 담는다**(「25일」·「말일」) — 그래서 아래
-  //    `displaySuffix` 를 건너뛴다. 안 건너뛰면 「25일일」이 된다.
-  const opts = (row && f.dynamicOptions?.(row)) || f.codedOptions;
+  // 🔴 목록이 있으면 **라벨이 단위까지 담는다**(「익월 25일」) — 그래서 아래
+  //    `displaySuffix` 를 건너뛴다. 안 건너뛰면 「익월 25일일」이 된다.
+  const opts = f.codedOptions;
   if (opts) {
     // 🔴 목록에 없는 값이면 **저장된 값을 그대로 보여준다** — 숨기면 잘못 들어간 값을
     //    아무도 못 본다(조용히 사라지는 것이 가장 나쁘다).
@@ -550,27 +513,44 @@ export function buildCompanyPayload(
     payload.manual_source_note = null;
   }
 
-  // 🔴 결제일 기준이 없거나 「협의」면 값 칸도 비운다 — `showWhen` 과 **한 벌**이다.
-  //    안 비우면 기준을 「협의」로 바꿔도 옛 숫자가 남아, 나중에 정산 예정일을
-  //    계산하는 코드가 「협의인데 30일」이라는 있을 수 없는 조합을 읽는다.
-  if (!payload.payment_due_basis || payload.payment_due_basis === "negotiated") {
-    payload.payment_due_value = null;
-  }
+  // 🔴 결제일 — 화면의 한 값을 DB 두 칸으로 되돌린다(위 두 함수가 유일한 변환처).
+  //    `payment_due_basis` 는 `COMPANY_FIELDS` 에 없으므로 위 반복문이 만들지 않는다.
+  Object.assign(payload, paymentDueFromForm(form.payment_due_value));
+
+  // 🔴 **정산 마감일은 저장하지 않는다** — 모든 화주가 월말 마감이고(36차 리뷰
+  //    2라운드), 비운 값이 곧 월말이다(로드맵 ②-B). 옛 값이 남은 화주 1건은
+  //    화면이 읽기 전용으로 보여줄 뿐이고, 여기서 건드리면 **그 화주의 과거 월정산
+  //    묶음 계산이 조용히 바뀐다.** 🔴 `payload.billing_cutoff_day` 를 만들지 말 것.
+  delete payload.billing_cutoff_day;
 
   return payload;
 }
 
 /**
- * `dynamicOptions` 를 가진 칸이 실제로 보는 값들만 뽑는다.
+ * DB 두 칸(`payment_due_basis` + `payment_due_value`) → **화면이 고르는 한 값**.
  *
- * 🔴 **폼 state 전체를 `CompanyFieldInput` 에 넘기지 않기 위한 것이다** — 통째로
- *    넘기면 한 칸만 고쳐도 참조가 바뀌어 `React.memo` 가 무력해지고 입력칸 51개가
- *    전부 다시 그려진다(33차 리뷰 1라운드의 「버벅거림」).
- * 🔴 `dynamicOptions` 를 가진 칸을 늘리면 **여기에 그 칸이 보는 키를 더할 것** —
- *    안 더하면 목록이 안 바뀌는데 에러도 안 난다(조용히 옛 위젯이 남는다).
+ * 🔴 **화면 값과 DB 값이 1:1 이 아니다**(36차 리뷰 2라운드) — 담당자는 결제일 하나만
+ *    고르는데 저장은 기준까지 정해야 한다. 두 함수가 그 변환을 **혼자** 맡는다.
+ *    🔴 화면에서 `payment_due_basis` 를 직접 읽거나 쓰지 말 것.
  */
-export function depsFor(form: Record<string, any>): Record<string, any> {
-  return { payment_due_basis: form.payment_due_basis };
+export function paymentDueToForm(row: Record<string, any> | null | undefined): string {
+  if (!row) return "";
+  if (row.payment_due_basis === "negotiated") return "negotiated";
+  if (row.payment_due_value === null || row.payment_due_value === undefined) return "";
+  return String(row.payment_due_value);
+}
+
+/** 화면 값 → DB 두 칸. `paymentDueToForm()` 의 짝이다. */
+export function paymentDueFromForm(v: any): {
+  payment_due_basis: string | null;
+  payment_due_value: number | null;
+} {
+  if (v === "negotiated") return { payment_due_basis: "negotiated", payment_due_value: null };
+  if (v === "" || v === null || v === undefined)
+    return { payment_due_basis: null, payment_due_value: null };
+  // 🔴 마감이 **월말로 고정**이라 「익월 25일」은 `fixed_day` + 25 로 정확히 표현된다
+  //    (사용자 지시 *"결제일은 (정산 다음달 기준)"* · *"정산 마감일은 자동 월말기준"*).
+  return { payment_due_basis: "fixed_day", payment_due_value: Number(v) };
 }
 
 /**
@@ -595,7 +575,9 @@ export function applyCompanyFieldChange(
   value: any
 ): Record<string, any> {
   const next = { ...form, [key]: value };
-  if (key === "payment_due_basis" && form[key] !== value) {
+  // 🔴 **건별에는 결제일이 없다** — 운송 완료 시 즉시지급이라 물을 것이 없다.
+  //    칸만 숨기고 값을 남기면 나중에 월정산으로 바꿨을 때 **옛 날짜가 되살아난다.**
+  if (key === "billing_cycle_default" && value !== "monthly") {
     next.payment_due_value = "";
   }
   return next;
@@ -612,26 +594,14 @@ export function applyCompanyFieldChange(
 export function validateCompanyForm(form: Record<string, any>): string | null {
   if (!String(form.name ?? "").trim()) return "회사명을 입력해주세요.";
 
-  const cutoff = form.billing_cutoff_day;
-  if (cutoff !== "" && cutoff !== null && cutoff !== undefined) {
-    const n = Number(cutoff);
-    if (!Number.isInteger(n) || n < 1 || n > 31)
-      return "정산 마감일은 1~31 사이의 날짜입니다. 말일이면 비워 두세요.";
-  }
-
-  const due = form.payment_due_value;
-  if (due !== "" && due !== null && due !== undefined) {
-    const n = Number(due);
-    if (!Number.isInteger(n) || n < 0 || n > 180)
-      return "결제일은 0~180 사이입니다. (매월 고정일이면 0 = 말일, 1~31)";
-    if (form.payment_due_basis === "fixed_day" && n > 31)
-      return "「매월 고정일」의 결제일은 0(말일) 또는 1~31 입니다.";
-  }
-
-  const credit = form.credit_limit;
-  if (credit !== "" && credit !== null && credit !== undefined) {
-    const n = Number(credit);
-    if (!Number.isFinite(n) || n < 0) return "여신 한도는 0 이상의 금액입니다.";
+  // 🔴 결제일은 드롭다운이라 화면으로는 이상한 값이 들어갈 수 없지만, DB CHECK 와
+  //    **같은 범위**를 한 번 더 본다(브라우저 콘솔로 직접 보내는 길이 있다).
+  //    🔴 화면은 편의이고 방어선은 DB 제약이다 — 한쪽만 고치지 말 것.
+  const due = paymentDueFromForm(form.payment_due_value);
+  if (due.payment_due_value !== null) {
+    const n = due.payment_due_value;
+    if (!Number.isInteger(n) || n < 0 || n > 31)
+      return "결제일은 익월 말일(0) 또는 1~31일입니다.";
   }
 
   return null;

@@ -37,6 +37,8 @@ type Body = {
   dropoff_arrival_type?: string | null;
   // 36차 B장 — 🔴 **요청값이다.** 이름의 `requested_` 를 떼지 말 것(아래 주석 참고)
   requested_billing_cycle?: string | null;
+  /** 36차 리뷰 2라운드 — 「정산 익월 며칠」. 0 = 익월 말일 */
+  requested_payment_due_value?: number | null;
   destination_company_name?: string | null;
   destination_contact_name?: string | null;
   destination_contact_phone?: string | null;
@@ -189,18 +191,32 @@ export async function POST(req: Request) {
       ? body.requested_billing_cycle
       : null;
 
+  // 🔴 **결제일 요청은 월정산일 때만 남긴다** — 건별은 즉시지급이라 결제일이라는
+  //    개념이 없다(36차 리뷰 2라운드). 화면이 칸을 숨기더라도 서버가 다시 본다
+  //    (원칙 25번 — 콘솔에서 아무 값이나 보낼 수 있다).
+  // 🔴 값의 뜻은 `companies.payment_due_value` 와 같다 — **익월 며칠**(0 = 말일).
+  const dueRaw = Number(body.requested_payment_due_value);
+  const requestedPaymentDueValue =
+    requestedBillingCycle === "monthly" &&
+    Number.isInteger(dueRaw) &&
+    dueRaw >= 0 &&
+    dueRaw <= 31
+      ? dueRaw
+      : null;
+
   const settlementPayload = {
     collection_method: collectionMethod,
     direct_collection_point: directCollectionPoint,
     dropoff_arrival_type: dropoffArrivalType,
     requested_billing_cycle: requestedBillingCycle,
+    requested_payment_due_value: requestedPaymentDueValue,
   };
 
   // 🔴 컬럼이 아직 없는 배포본을 위한 단계적 후퇴 — 위 `loading_type` 주석과 같은 이유다.
   //    ① 전부 → ② 정산방식 3개만 빼고 → ③ `loading_type` 까지 빼고.
   //    🔴 **발주 접수 전체가 막히는 것보다 그 값만 빠지는 편이 낫다.**
   const SETTLEMENT_COLS =
-    /collection_method|direct_collection_point|dropoff_arrival_type|requested_billing_cycle/;
+    /collection_method|direct_collection_point|dropoff_arrival_type|requested_billing_cycle|requested_payment_due_value/;
   let { data: inserted, error: insertError } = await insertRequest({
     ...basePayload,
     loading_type: loadingType,
