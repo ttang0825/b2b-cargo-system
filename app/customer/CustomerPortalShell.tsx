@@ -30,7 +30,7 @@ type NotifyKey = "quotes" | "dispatches" | "invoices";
 
 type NavItem = { href: string; label: string; icon: PortalIconName; key?: NotifyKey };
 
-// 🔴 **4그룹 8항목. 그룹 라벨 텍스트는 없다** — 그룹 사이를 1px 구분선 + 위아래 12px
+// 🔴 **5그룹 9항목. 그룹 라벨 텍스트는 없다** — 그룹 사이를 1px 구분선 + 위아래 12px
 // 여백으로만 나눈다(시안 §6). 배열을 중첩으로 둔 것이 곧 구분선 위치다.
 //
 // 🔴 **캘린더·공지사항·비밀번호 변경이 메뉴에서 빠진 것은 확정이다**(2026-08-26).
@@ -58,6 +58,14 @@ const NAV_GROUPS: NavItem[][] = [
     { href: "/customer/locations", label: "배송지·화물 관리", icon: "locations" },
     { href: "/customer/profile", label: "담당자 정보", icon: "profile" },
   ],
+  // 🔴 **「이용가이드」는 맨 아래 혼자 한 그룹이다**(2026-09-14) — 매일 쓰는 메뉴가
+  //    아니라 처음 쓰는 사람이 한 번 찾아보는 자리다.
+  // 🔴 라벨이 공개 화면의 「운송관리 이용안내」와 **일부러 다르다** — 같은 말이면 같은
+  //    화면으로 오해한다. 글은 `lib/guideContent.ts` 한 곳이고 화면만 둘이다.
+  // ⚠️ 배지(`NavCountBadge`)를 붙이지 않는다 — 셀 것이 없다.
+  // 🔴 **캘린더·공지사항·비밀번호 변경을 이 김에 메뉴에 넣지 말 것**(위 주석 참고) —
+  //    메뉴 밖인 것이 확정이다.
+  [{ href: "/customer/guide", label: "이용가이드", icon: "guide" }],
 ];
 
 // 모바일 하단 탭 5개 — 마지막 "전체"는 화면 이동이 아니라 바텀시트 토글이다.
