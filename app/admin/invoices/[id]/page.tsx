@@ -21,6 +21,7 @@ import {
   mapToLegacySettlementType,
 } from "@/lib/settlementLabels";
 import { calcVatAmount, calcInclusiveAmount, toSupplyAmount } from "@/lib/vat";
+import { calcMargin } from "@/lib/marginCalc";
 import { vatBasisLabel } from "@/components/VatBasisSelect";
 import MixableBadge from "@/components/MixableBadge";
 import LockedBadge from "@/components/LockedBadge";
@@ -79,8 +80,7 @@ export default function InvoiceDetailPage() {
     driver_paid_date: "",
     brokerage_fee_paid: false,
     brokerage_fee_paid_at: "",
-    // 35차 A-4·A-5 — 「수수료 지급자」 대신 면제 체크 · 차주 수수료 세금계산서
-    brokerage_fee_waived: false,
+    // 35차 A-5 — 차주에게 발행하는 수수료분 세금계산서(화주쪽과 다른 칸)
     driver_tax_invoice_issued: false,
     driver_tax_invoice_date: "",
   });
@@ -153,7 +153,6 @@ export default function InvoiceDetailPage() {
       driver_paid: data.driver_paid || false,
       driver_paid_date: data.driver_paid_date || "",
       brokerage_fee_paid: data.brokerage_fee_paid || false,
-      brokerage_fee_waived: data.brokerage_fee_waived || false,
       driver_tax_invoice_issued: data.driver_tax_invoice_issued || false,
       driver_tax_invoice_date: data.driver_tax_invoice_date
         ? String(data.driver_tax_invoice_date).slice(0, 10)
@@ -285,7 +284,6 @@ export default function InvoiceDetailPage() {
     } else {
       payload.brokerage_fee_paid = editForm.brokerage_fee_paid;
       payload.brokerage_fee_paid_at = editForm.brokerage_fee_paid_at || null;
-      payload.brokerage_fee_waived = editForm.brokerage_fee_waived;
       payload.driver_tax_invoice_issued = editForm.driver_tax_invoice_issued;
       payload.driver_tax_invoice_date = editForm.driver_tax_invoice_date || null;
     }
@@ -346,25 +344,28 @@ export default function InvoiceDetailPage() {
   }
 
   // driver_direct(선착불) 건은 "정산확정 가능 조건"(작업지시서 4-5)을 실제로
-  // 강제한다 — brokerage_fee>0이면 입금완료 체크가 먼저 필요하고, 0원+면제인
-  // 경우만 입금확인 없이 바로 확정 가능. broker 건은 기존처럼 리마인더
+  // 강제한다 — brokerage_fee>0이면 입금완료 체크가 먼저 필요하고, 0원이면
+  // 「정말 안 받는 건인가」를 한 번 묻는다(35차 리뷰 2라운드). broker 건은 기존처럼 리마인더
   // 안내만 하고 강제 검증은 하지 않음(상태값 조합이 다양해 하드 검증이
   // 부적절하다고 판단, 기존 동작 유지).
   async function handleConfirmSettlement() {
     if (!invoice) return;
     if (settlementValue.collection_method === "driver_direct") {
       const fee = invoice.brokerage_fee || 0;
-      // 🔴 판정 근거를 `brokerage_fee_payer === "waived"` 에서 전용 플래그로 옮겼다
-      //    (35차 A-4). 게이트를 **없앤 것이 아니다** — 없애면 「정말 0원」과
-      //    「아직 안 적었다」를 가릴 수 없어 미수금이 조용히 사라진다.
-      const waived = !!invoice.brokerage_fee_waived;
       if (fee > 0 && !invoice.brokerage_fee_paid) {
         setSaveError("주선수수료가 아직 입금완료 처리되지 않았습니다. 먼저 입금완료를 체크하고 저장해주세요.");
         return;
       }
-      if (fee === 0 && !waived) {
-        setSaveError("주선수수료가 0원입니다. 정말 받지 않는 건이면 아래 '주선수수료 면제'를 체크하고 저장해주세요.");
-        return;
+      // 🔴 수수료 0원 게이트를 **없애지 않고 확인 창으로 옮겼다**(35차 리뷰 2라운드).
+      //    사용자가 「주선수수료 면제」 체크박스를 빼라고 했는데, 그 체크가 게이트의
+      //    판정 근거였다. 게이트까지 같이 없애면 **입력을 빠뜨린 건이 미수금 없이
+      //    조용히 확정된다** — 그래서 별도 컬럼·체크박스 없이 한 번 묻기만 한다.
+      //    🔴 이 확인을 지우지 말 것. 지우면 0원인 이유를 아무도 확인하지 않게 된다.
+      if (fee === 0) {
+        const zeroFeeOk = window.confirm(
+          "주선수수료가 0원입니다.\n\n정말 이 건은 수수료를 받지 않습니까?\n입력을 빠뜨린 것이라면 취소하고 금액을 먼저 적어주세요."
+        );
+        if (!zeroFeeOk) return;
       }
     }
     const confirmed = window.confirm(
@@ -488,6 +489,17 @@ export default function InvoiceDetailPage() {
 
   const statusColor = getInvoiceStatusColor(editForm.status);
   const fieldsLocked = invoice.locked && !isAdmin;
+  // 🔴 마진은 표시 시점 계산이다 — 위 「마진(부가세 제외)」 주석 참고.
+  //    저장된 금액·부가세 구분·수금방식만 있으면 되므로 **옛 건도 자동으로 맞는
+  //    값이 된다**(재동기화를 안 눌러도 마진은 바로 고쳐진다).
+  const invoiceMargin = calcMargin({
+    collectionMethod: invoice.collection_method,
+    customerCharge: invoice.customer_charge_total,
+    customerChargeVatIncluded: invoice.customer_charge_vat_included,
+    driverPayout: invoice.driver_payout_total,
+    driverVatIncluded: invoice.driver_vat_included,
+    brokerageFee: invoice.brokerage_fee,
+  });
   // 로드맵 ②-B(작업지시서 6-2): 화주 측 상태의 기준값은 월정산 묶음이다 —
   // 이 건이 묶음에 담기면(customer_side_locked=true) 화주 측 필드(정산상태/
   // 정산방식/세금계산서/화주입금)는 개별 화면에서 손대지 않고 묶음 쪽
@@ -729,12 +741,15 @@ export default function InvoiceDetailPage() {
                 )}
               </div>
               <div>
+                {/* 🔴 저장된 `commission_total` 을 읽지 않고 **표시 시점에 계산한다**
+                    (35차 리뷰 2라운드). 저장값은 부가세 구분을 무시한 옛 공식
+                    (`청구액 × 1.1 − 지급액`)이라 「부가세 포함」으로 적은 건의 마진이
+                    부풀려져 있었고, 운영 대시보드가 쓰는 값과도 달랐다.
+                    🔴 `lib/marginCalc.ts` 가 유일한 정의처다 — 여기에 공식을 적지 말 것. */}
                 <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
-                  수수료(마진)
+                  마진(부가세 제외)
                 </div>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>
-                  {won(invoice.commission_total)}
-                </div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>{won(invoiceMargin)}</div>
               </div>
             </>
           ) : (
@@ -758,15 +773,22 @@ export default function InvoiceDetailPage() {
                   <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
                     공급가액 {won(toSupplyAmount(invoice.brokerage_fee))} · 부가세{" "}
                     {won(invoice.brokerage_fee - toSupplyAmount(invoice.brokerage_fee))}
+                    <br />
+                    {/* 🔴 선착불은 운임이 위캐리를 안 거치므로 수수료의 공급가액이 곧
+                        마진이다. 이 줄이 없으면 「선착불 건은 마진 0」으로 읽힌다. */}
+                    마진(부가세 제외) {won(invoiceMargin)}
                   </div>
                 )}
+                {/* 🔴 과거에 「면제」로 기록된 건만 그 사실을 남겨 보여준다 — 읽기
+                    전용이고 화면에서 켜고 끌 수 없다(원칙 45번). */}
                 {invoice.brokerage_fee_waived && (
-                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>면제</div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>면제(과거 기록)</div>
                 )}
               </div>
               {/* 🔴 「수수료 지급자」는 35차에 없앴다 — 수수료는 무조건 차주가 지급한다
-                  (사용자 10번). 그 값의 `waived`(면제)만 정산확정 게이트에 쓰이고 있어서
-                  `brokerage_fee_waived` 체크로 옮겼다. **다시 만들지 말 것.** */}
+                  (사용자 10번). **다시 만들지 말 것.**
+                  🔴 「주선수수료 면제」 체크도 리뷰 2라운드에 없앴다 — 0원 확인은
+                     정산확정 직전 확인 창이 대신한다(`handleConfirmSettlement`). */}
             </>
           )}
           {invoice.orders?.id && (
@@ -1027,22 +1049,15 @@ export default function InvoiceDetailPage() {
                 onChange={(e) => setEditForm({ ...editForm, brokerage_fee_paid_at: e.target.value })}
                 disabled={fieldsLocked || !editForm.brokerage_fee_paid}
               />
-              <label
-                style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13, marginTop: 10 }}
-              >
-                <input
-                  type="checkbox"
-                  checked={editForm.brokerage_fee_waived}
-                  disabled={fieldsLocked}
-                  onChange={(e) => setEditForm({ ...editForm, brokerage_fee_waived: e.target.checked })}
-                />
-                주선수수료 면제
-              </label>
-              {/* 🔴 이 체크가 **정산확정 게이트의 판정 근거**다(35차 A-4). 수수료가 0원인
-                  건을 확정하려면 이것이 켜져 있어야 한다 — 「정말 0원」과 「아직 안 적었다」를
-                  가리는 유일한 장치라서, 없애면 미수금이 조용히 사라진다.
-                  ⚠️ 그전에는 「수수료 지급자 = 면제」가 그 자리였고, 사용자 10번으로 그
-                     드롭다운을 없애면서 이 체크로 옮겼다. */}
+              {/* 🔴 「주선수수료 면제」 체크는 **없앴다**(35차 리뷰 2라운드 · 사용자 지시
+                  *"「주선수수료 면제」 옵션은 따로 있을 필요가 없을 것 같다"*).
+                  ⚠️ 그 체크는 A-4 에 「수수료 지급자 = 면제」 드롭다운을 없애면서 옮겨 온
+                     것이었고, 정산확정 게이트의 판정 근거로 쓰이고 있었다.
+                  🔴 **게이트를 통째로 없애지는 않았다** — 「정말 0원」과 「아직 안 적었다」를
+                     가릴 장치가 하나도 없으면 받을 수수료가 조용히 사라진다. 대신 체크박스
+                     없이 **정산확정 직전에 한 번 묻는 방식**으로 옮겼다
+                     (`handleConfirmSettlement` 참고). 컬럼은 백필된 과거 기록 보존용으로
+                     남겨 두고 읽기 전용이다(원칙 45번). */}
 
               {/* ── 차주 세금계산서 (35차 A-5 · 사용자 8번) ───────────────────────
                   🔴 위쪽 화주 세금계산서와 **다른 칸이다**(`driver_tax_invoice_issued`).

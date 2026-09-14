@@ -218,7 +218,8 @@ export default function DispatchDetailPage() {
     // 🔴 `brokerage_fee_payer` 는 35차에 화면에서 뺐다(수수료는 무조건 차주 부담).
     //    컬럼은 과거 기록 보존용으로 DB 에 남아 있지만 **여기서 읽지도 쓰지도 않는다**
     //    (원칙 45번 — 구형 필드는 얼려두고 역방향 동기화를 만들지 않는다).
-    brokerage_fee_waived: false,
+    // 🔴 `brokerage_fee_waived` 도 리뷰 2라운드에 같은 자리로 갔다 — 화면에서 뺐고
+    //    컬럼만 과거 기록 보존용으로 남는다. **여기서 읽지도 쓰지도 않는다.**
     ...EMPTY_PICKUP_DROPOFF_CONTACT,
   });
   const [settlementValue, setSettlementValue] = useState<CollectionMethodValue>({
@@ -260,7 +261,6 @@ export default function DispatchDetailPage() {
       driver_direct_collection_amount:
         data.driver_direct_collection_amount != null ? String(data.driver_direct_collection_amount) : "",
       brokerage_fee: data.brokerage_fee != null ? String(data.brokerage_fee) : "",
-      brokerage_fee_waived: !!data.brokerage_fee_waived,
       origin_company_name: data.origin_company_name || "",
       origin_contact_name: data.origin_contact_name || "",
       origin_contact_phone: data.origin_contact_phone || "",
@@ -855,7 +855,6 @@ export default function DispatchDetailPage() {
         ? Number(editForm.driver_direct_collection_amount)
         : null,
       brokerageFee: editForm.brokerage_fee ? Number(editForm.brokerage_fee) : null,
-      brokerageFeeWaived: editForm.brokerage_fee_waived,
       customerChargeVatIncluded: editForm.customer_charge_vat_included,
       driverVatIncluded: editForm.driver_vat_included,
     });
@@ -971,9 +970,7 @@ export default function DispatchDetailPage() {
             driver_direct_collection_amount: editForm.driver_direct_collection_amount
               ? Number(editForm.driver_direct_collection_amount)
               : null,
-            brokerage_fee:
-              editForm.brokerage_fee_waived ? 0 : editForm.brokerage_fee ? Number(editForm.brokerage_fee) : null,
-            brokerage_fee_waived: editForm.brokerage_fee_waived,
+            brokerage_fee: editForm.brokerage_fee ? Number(editForm.brokerage_fee) : null,
           }
         : {}),
       updated_by: await getCurrentStaffId(),
@@ -1572,39 +1569,23 @@ export default function DispatchDetailPage() {
                      「공급가액」이었고, 그래서 DB 에 5,000(포함가)과 4,545(공급가액)가
                      **섞여 들어가 있다**(실측). 통계는 항상 ÷1.1 해서 공급가액으로 쓴다.
                   🔴 **「수수료 지급자」를 없앴다** — 수수료는 무조건 차주가 지급한다
-                     (사용자 10번). 그 드롭다운의 `waived`(면제)만 정산확정 게이트에
-                     실제로 쓰이고 있어서 **체크 하나로 옮겨 담았다.**
-                     🔴 게이트를 없앤 것이 아니다 — 없애면 「정말 0원」과 「아직 안 적었다」를
-                        가릴 수 없어 미수금이 조용히 사라진다. */}
+                     (사용자 10번). **다시 만들지 말 것.** */}
               <div className="field">
                 <label>주선수수료(부가세 포함가, 원)</label>
                 <MoneyInput
-                  value={editForm.brokerage_fee_waived ? "0" : editForm.brokerage_fee}
+                  value={editForm.brokerage_fee}
                   onChange={(v) => setEditForm({ ...editForm, brokerage_fee: v })}
-                  disabled={editForm.brokerage_fee_waived}
                 />
-                {editForm.brokerage_fee && Number(editForm.brokerage_fee) > 0 && !editForm.brokerage_fee_waived && (
+                {editForm.brokerage_fee && Number(editForm.brokerage_fee) > 0 && (
                   <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, marginBottom: 0 }}>
                     공급가액 {won(toSupplyAmount(Number(editForm.brokerage_fee)))} · 부가세{" "}
                     {won(Number(editForm.brokerage_fee) - toSupplyAmount(Number(editForm.brokerage_fee)))}
                   </p>
                 )}
-                <label
-                  style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, fontSize: 12.5 }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={editForm.brokerage_fee_waived}
-                    onChange={(e) =>
-                      setEditForm({
-                        ...editForm,
-                        brokerage_fee_waived: e.target.checked,
-                        brokerage_fee: e.target.checked ? "0" : editForm.brokerage_fee,
-                      })
-                    }
-                  />
-                  주선수수료 면제
-                </label>
+                {/* 🔴 「주선수수료 면제」 체크는 리뷰 2라운드에 **없앴다**(사용자 지시).
+                    0원이어도 그대로 두면 되고, 정말 안 받는 건인지는 정산확정 직전에
+                    한 번 묻는다(`app/admin/invoices/[id]` 의 handleConfirmSettlement).
+                    🔴 **체크박스를 다시 만들지 말 것.** */}
               </div>
             </div>
           </div>

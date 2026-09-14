@@ -35,7 +35,7 @@
 
 import { supabase } from "./supabaseClient";
 import { fetchActiveExtraCharges } from "./fetchDispatchExtraCharges";
-import { calcInclusiveAmount } from "./vat";
+import { calcMargin } from "./marginCalc";
 import { getCurrentStaffId } from "./currentStaff";
 
 export type AutoCreateInvoiceInput = {
@@ -57,8 +57,6 @@ export type AutoCreateInvoiceInput = {
   driverDirectCollectionAmount: number | null;
   /** 🔴 주선수수료는 **부가세 포함가**로 기입한다(사용자 6·9번 확정, 35차 A-3) */
   brokerageFee: number | null;
-  /** 수수료 면제 — 수수료 0원인 선착불 건을 정산확정할 수 있는 유일한 근거(35차 A-4) */
-  brokerageFeeWaived?: boolean;
 
   /** 화주 청구금액이 부가세 포함가인가. 기본 false = 공급가액 (35차 A-3) */
   customerChargeVatIncluded?: boolean;
@@ -120,13 +118,21 @@ export async function autoCreateInvoice(
   const billingPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const completedOn = input.completedOn || now.toISOString().slice(0, 10);
 
-  // 화주 청구금액은 공급가액, 차주 지급금액은 실제 지급되는 최종금액(부가세
-  // 포함 기준)이라 기준이 달랐음 — 청구금액을 부가세 포함가로 환산해서 맞춘 뒤
-  // 차감(PR #63 리뷰 피드백)
-  const commission = calcInclusiveAmount(charge) - payout;
-
   const isDirect = input.collectionMethod === "driver_direct";
+
+  // 🔴 `commission_total` 은 **화면이 읽지 않는다** — 정산 목록·상세·대시보드가 전부
+  //    `lib/marginCalc.ts` 로 표시 시점에 계산한다(35차 리뷰 2라운드). 그래도 저장값을
+  //    같은 공식으로 맞춰 두어야 나중에 이 컬럼을 읽는 코드가 또 갈리지 않는다.
+  //    ⚠️ 그전 공식은 `청구액 × 1.1 − 지급액` 이라 부가세 구분을 무시했다.
   const fee = input.brokerageFee ?? null;
+  const commission = calcMargin({
+    collectionMethod: input.collectionMethod,
+    customerCharge: charge,
+    customerChargeVatIncluded: input.customerChargeVatIncluded,
+    driverPayout: payout,
+    driverVatIncluded: input.driverVatIncluded,
+    brokerageFee: fee,
+  });
 
   // 🔴 A-1 — 받을 돈·줄 돈은 수금방식이 정한다(위 주석 참고).
   const receivable = isDirect ? fee : charge || null;
@@ -157,7 +163,6 @@ export async function autoCreateInvoice(
     total_freight_amount: input.totalFreightAmount ?? charge ?? null,
     driver_direct_collection_amount: input.driverDirectCollectionAmount ?? null,
     brokerage_fee: fee,
-    brokerage_fee_waived: !!input.brokerageFeeWaived,
     customer_charge_vat_included: !!input.customerChargeVatIncluded,
     driver_vat_included: !!input.driverVatIncluded,
     payment_received: isDirect ? true : false,

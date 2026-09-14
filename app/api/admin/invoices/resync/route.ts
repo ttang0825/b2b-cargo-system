@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
-import { calcInclusiveAmount } from "@/lib/vat";
+import { calcMargin } from "@/lib/marginCalc";
 
 // 정산 건을 **배차의 현재 값으로 다시 맞추는** 경로 (35차 A-7 · PR #146 리뷰 1라운드).
 //
@@ -124,7 +124,6 @@ export async function POST(req: Request) {
 
   const charge = (dispatch.customer_charge || 0) + extraCharge;
   const payout = (dispatch.driver_payout || 0) + extraPayout;
-  const commission = calcInclusiveAmount(charge) - payout;
 
   // 🔴 A-1 과 같은 규칙 — 받을 돈·줄 돈은 수금방식이 정한다.
   //    `lib/autoCreateInvoice.ts` 와 **같은 식**이어야 한다. 한쪽만 고치면 새로
@@ -132,6 +131,17 @@ export async function POST(req: Request) {
   const collectionMethod = dispatch.collection_method || "broker";
   const isDirect = collectionMethod === "driver_direct";
   const fee = dispatch.brokerage_fee ?? null;
+
+  // 🔴 마진도 `lib/marginCalc.ts` 하나로 — 화면은 이 저장값을 읽지 않지만
+  //    (표시 시점 계산), 저장값이 옛 공식으로 남으면 다시 갈린다.
+  const commission = calcMargin({
+    collectionMethod,
+    customerCharge: charge,
+    customerChargeVatIncluded: !!dispatch.customer_charge_vat_included,
+    driverPayout: payout,
+    driverVatIncluded: !!dispatch.driver_vat_included,
+    brokerageFee: fee,
+  });
 
   const patch: Record<string, any> = {
     customer_charge_total: charge || null,
@@ -146,7 +156,6 @@ export async function POST(req: Request) {
     direct_collection_point:
       dispatch.direct_collection_point ?? current.direct_collection_point ?? null,
     brokerage_fee: fee,
-    brokerage_fee_waived: !!dispatch.brokerage_fee_waived,
     total_freight_amount: dispatch.total_freight_amount ?? charge ?? null,
     driver_direct_collection_amount: dispatch.driver_direct_collection_amount ?? null,
     updated_by: currentStaff.id,
