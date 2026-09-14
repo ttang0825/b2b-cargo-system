@@ -181,6 +181,21 @@
 .landing-tms-track { scrollbar-width: none; -ms-overflow-style: none; -webkit-overflow-scrolling: touch; }
 .landing-tms-track::-webkit-scrollbar { display: none; width: 0; height: 0; }
 
+/* 🔴 **히어로 제목 높이 보정 — 지우면 제목이 트럭 로고에 가린다**(2026-09-14).
+   히어로 본문은 `justify-content: center` 라 **버튼이 한 줄 늘면 제목이 그 절반만큼
+   위로 올라간다.** 「운송관리 계정 신청」을 넣었더니 1366~1440px 에서 제목 마지막
+   글자 「다.」가 차체의 WeCarry 로고에 정확히 겹쳐 읽히지 않았다(원칙 54번과 같은 자리 —
+   본문이 사진 위로 266~432px 걸쳐 있고 그 겹침 폭 자체는 전부터 있던 것이다).
+   🔴 **위 여백에 버튼 한 줄(83) + 간격(12) = 95px 을 더해 제목을 원래 높이로 되돌린다**
+      (120 → 215). 가운데 정렬이라 늘어난 95 의 절반인 47px 이 정확히 상쇄된다.
+   🔴 **히어로 버튼을 더하거나 빼거나 크기를 바꾸면 이 값도 같이 고칠 것** —
+      안 고치면 제목이 조용히 위아래로 움직이고, 그 증상이 「글자가 트럭에 묻힌다」로 나타난다.
+   ⚠️ **1321px 이상에만 건다** — `max-width: 1320px` 부터는 바로 아래 규칙이
+      `height: auto` 로 바꿔 가운데 정렬 자체가 없어서, 거기 걸면 그냥 95px 밀려 내려간다. */
+@media (min-width: 1321px) {
+  .landing-hero { padding-top: 215px !important; }
+}
+
 /* ── 브레이크포인트 ─────────────────────────────────── */
 @media (max-width: 1320px) {
   .landing-hero { height: auto !important; padding-bottom: 0 !important; }
