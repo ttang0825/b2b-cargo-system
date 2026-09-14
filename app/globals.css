@@ -7540,14 +7540,6 @@ tbody tr:hover {
   padding: 0;
   color: var(--text-muted);
 }
-.guide-code {
-  padding: 1px 6px;
-  border-radius: 5px;
-  background: #ecebe6;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12.8px;
-}
-
 /* 설명 목록 — 좌측 라벨 고정폭 + 우측 설명. 좁아지면 두 줄로 쌓인다. */
 .guide-dl {
   margin: 0;
