@@ -226,7 +226,7 @@ export default function QuoteDetailPage() {
     setLoading(true);
     const { data, error } = await supabase
       .from("quotes")
-      .select("*, companies(id,name,phone)")
+      .select("*, companies(id,name,phone,billing_cycle_default)")
       .eq("id", id)
       .single();
     if (error) {
@@ -945,6 +945,8 @@ export default function QuoteDetailPage() {
 
             <CollectionMethodInput
               namePrefix="quote_edit"
+              /* 🔴 36차 — 계약과 다르면 알린다(막지 않는다). */
+              contractBillingCycle={(quote as any)?.companies?.billing_cycle_default}
               value={{
                 collection_method: editForm.collection_method,
                 billing_cycle: editForm.billing_cycle,

@@ -74,6 +74,8 @@ type CompanyLite = {
   phone: string | null;
   address: string | null;
   status: string;
+  /** 36차 A장 — 계약 청구주기. 🔴 「제안」이고 이 건의 값이 진실이다 */
+  billing_cycle_default?: string | null;
 };
 
 /** 견적목록 맨 위에 얹는 대기 중 발주요청 한 줄 */
@@ -339,7 +341,7 @@ function QuotesPageInner() {
       const { data: reqData } = await supabase
         .from("portal_order_requests")
         .select(
-          "id,company_id,origin,origin_sido,origin_sigungu,destination,destination_sido,destination_sigungu,origin_company_name,origin_contact_name,origin_contact_phone,destination_company_name,destination_contact_name,destination_contact_phone,vehicle_type,body_type,item,load_condition,unload_condition,item_condition,transport_time,urgency,trip_type,loading_type,collection_method,direct_collection_point,dropoff_arrival_type,waiting_minutes,waypoint_count,requested_pickup_at,requested_dropoff_at,notes,companies(id,name,phone,address,status)"
+          "id,company_id,origin,origin_sido,origin_sigungu,destination,destination_sido,destination_sigungu,origin_company_name,origin_contact_name,origin_contact_phone,destination_company_name,destination_contact_name,destination_contact_phone,vehicle_type,body_type,item,load_condition,unload_condition,item_condition,transport_time,urgency,trip_type,loading_type,collection_method,direct_collection_point,requested_billing_cycle,dropoff_arrival_type,waiting_minutes,waypoint_count,requested_pickup_at,requested_dropoff_at,notes,companies(id,name,phone,address,status,billing_cycle_default)"
         )
         .eq("id", fromRequestId)
         .single();
@@ -383,10 +385,16 @@ function QuotesPageInner() {
         // 🔴 화주가 발주 요청에서 고른 정산방식을 그대로 이어받는다(27차 리뷰 4라운드).
         //   빠뜨리면 화주가 선착불을 골라도 견적이 주선사 정산으로 저장돼, 담당자가
         //   되물어야 하고 화주에게 나가는 견적서의 정산방식도 사실과 달라진다.
-        //   ⚠️ 청구주기(`billing_cycle`)는 발주 요청에 없다 — 화주별 계약 사항이라
-        //   담당자가 이 화면에서 정한다. `prev` 값(건별)을 그대로 둔다.
         collection_method:
           ((reqData as any).collection_method as "broker" | "driver_direct") || prev.collection_method,
+        // 🔴 36차 B장 — 청구주기도 이어받는다. ⚠️ 이 자리에는 한동안 *「청구주기는
+        //   발주 요청에 없다」* 는 주석이 있었는데 **B장이 그 칸을 만들었다.**
+        //   🔴 그래도 **요청값이지 확정이 아니다** — 담당자가 이 화면에서 바꿀 수 있고,
+        //   화주 계약과 다르면 정산방식 칸에 「계약과 다름」이 뜬다.
+        billing_cycle:
+          ((reqData as any).requested_billing_cycle as "per_order" | "monthly") ||
+          ((reqData as any).companies?.billing_cycle_default as "per_order" | "monthly") ||
+          prev.billing_cycle,
         direct_collection_point:
           (reqData as any).collection_method === "driver_direct"
             ? ((reqData as any).direct_collection_point as any) || "undecided"
@@ -433,8 +441,8 @@ function QuotesPageInner() {
 
       // 연락처로 기존 화주가 있는지 확인해서 있으면 기존 화주 모드로, 없으면 개인/신규 고객으로 프리필
       const [byPhone, byContactMobile] = await Promise.all([
-        supabase.from("companies").select("id,name,phone,address,status").eq("phone", reqData.phone).limit(1),
-        supabase.from("companies").select("id,name,phone,address,status").eq("contact_mobile", reqData.phone).limit(1),
+        supabase.from("companies").select("id,name,phone,address,status,billing_cycle_default").eq("phone", reqData.phone).limit(1),
+        supabase.from("companies").select("id,name,phone,address,status,billing_cycle_default").eq("contact_mobile", reqData.phone).limit(1),
       ]);
       const matchedCompany = byPhone.data?.[0] || byContactMobile.data?.[0] || null;
 
@@ -482,7 +490,7 @@ function QuotesPageInner() {
       }
       const { data } = await supabase
         .from("companies")
-        .select("id,name,phone,address,status")
+        .select("id,name,phone,address,status,billing_cycle_default")
         .ilike("name", `%${companySearch}%`)
         .limit(8);
       if (active) setCompanyResults((data as CompanyLite[]) || []);
@@ -1087,6 +1095,11 @@ function QuotesPageInner() {
             <div style={{ marginBottom: 14 }}>
               <CollectionMethodInput
                 namePrefix="quote_new"
+                /* 🔴 36차 — 화주 계약 청구주기와 다르면 「계약과 다름」이 뜬다.
+                   막지 않고 알리기만 한다(화주 값은 제안이고 이 건의 값이 진실이다). */
+                contractBillingCycle={
+                  customerMode === "company" ? selectedCompany?.billing_cycle_default : null
+                }
                 value={{
                   collection_method: form.collection_method,
                   billing_cycle: form.billing_cycle,
@@ -1130,6 +1143,17 @@ function QuotesPageInner() {
                         onClick={() => {
                           setSelectedCompany(c);
                           setCompanyResults([]);
+                          // 🔴 36차 A장 — 계약 청구주기를 **기본값으로 복사**한다.
+                          //   🔴 아직 손대지 않은 초기값(`per_order`)일 때만 갈아끼운다 —
+                          //      35차 자동 기입의 「차량만 예외」와 같은 규칙이고,
+                          //      담당자가 이미 고른 값을 조용히 덮으면 안 된다.
+                          //   🔴 계약이 「미정」(null)이면 건드리지 않는다.
+                          if (
+                            c.billing_cycle_default === "monthly" &&
+                            form.billing_cycle === "per_order"
+                          ) {
+                            setForm((prev) => ({ ...prev, billing_cycle: "monthly" }));
+                          }
                           // 출발지가 비어있으면 화주의 등록 주소를 기본값으로 채워줍니다 (수정 가능)
                           if (c.address && !form.origin.trim()) {
                             setForm((prev) => ({ ...prev, origin: c.address || "" }));

@@ -36,7 +36,13 @@ import { shortAddress } from "@/lib/shortAddress";
 import CollectionMethodInput, { CollectionMethodValue } from "@/components/CollectionMethodInput";
 import { getSettlementDisplayLabel, mapToLegacySettlementType } from "@/lib/settlementLabels";
 
-type CompanyLite = { id: string; name: string; phone: string | null };
+type CompanyLite = {
+  id: string;
+  name: string;
+  phone: string | null;
+  /** 36차 A장 — 계약 청구주기. 🔴 「제안」이고 이 건의 값이 진실이다 */
+  billing_cycle_default?: string | null;
+};
 
 type OrderRow = {
   id: string;
@@ -280,7 +286,7 @@ function OrdersPageInner() {
       const { data: q } = await supabase
         .from("quotes")
         .select(
-          "id,company_id,guest_name,guest_phone,origin,origin_sido,origin_sigungu,destination,destination_sido,destination_sigungu,origin_company_name,origin_contact_name,origin_contact_phone,destination_company_name,destination_contact_name,destination_contact_phone,vehicle_type,settlement_type,collection_method,billing_cycle,direct_collection_point,loading_type,mixed_shipper_consent,mixed_discount_type,mixed_discount_amount,mixed_discount_percent,mixed_note,item,selected_options,notes,requested_pickup_at,requested_dropoff_at,companies(id,name,phone)"
+          "id,company_id,guest_name,guest_phone,origin,origin_sido,origin_sigungu,destination,destination_sido,destination_sigungu,origin_company_name,origin_contact_name,origin_contact_phone,destination_company_name,destination_contact_name,destination_contact_phone,vehicle_type,settlement_type,collection_method,billing_cycle,direct_collection_point,loading_type,mixed_shipper_consent,mixed_discount_type,mixed_discount_amount,mixed_discount_percent,mixed_note,item,selected_options,notes,requested_pickup_at,requested_dropoff_at,companies(id,name,phone,billing_cycle_default)"
         )
         .eq("id", fromQuoteId)
         .single();
@@ -727,6 +733,17 @@ function OrdersPageInner() {
                         onClick={() => {
                           setSelectedCompany(c);
                           setCompanyResults([]);
+                          // 🔴 36차 A장 — 계약 청구주기를 **기본값으로 복사**한다.
+                          //   🔴 아직 손대지 않은 초기값(`per_order`)일 때만 갈아끼운다 —
+                          //      35차 자동 기입의 「차량만 예외」와 같은 규칙이고,
+                          //      담당자가 이미 고른 값을 조용히 덮으면 안 된다.
+                          //   🔴 계약이 「미정」(null)이면 건드리지 않는다.
+                          if (
+                            c.billing_cycle_default === "monthly" &&
+                            form.billing_cycle === "per_order"
+                          ) {
+                            setForm((prev) => ({ ...prev, billing_cycle: "monthly" }));
+                          }
                           prefillFromLastOrder(c.id);
                         }}
                         style={{
@@ -948,6 +965,10 @@ function OrdersPageInner() {
               </div>
               <CollectionMethodInput
                 namePrefix="order_new"
+                /* 🔴 36차 — 계약과 다르면 알린다(막지 않는다). */
+                contractBillingCycle={
+                  customerMode === "company" ? selectedCompany?.billing_cycle_default : null
+                }
                 value={{
                   collection_method: form.collection_method,
                   billing_cycle: form.billing_cycle,
