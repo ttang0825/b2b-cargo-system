@@ -7739,24 +7739,6 @@ tbody tr:hover {
   }
 }
 
-/* 포털 홈 — 이용안내(`/guide`) 진입 줄.
-   🔴 **제목 줄(`.pv2-page-head`) 밖의 별도 줄이다.** 그 줄 안에 넣으면 `flex-end` 정렬
-      때문에 설치 버튼이 아래로 내려앉는다(PR #127 이 맞춰 둔 자리를 건드리게 된다).
-   ⚠️ 제목 줄의 `margin-bottom: 18px` 을 이 줄이 이어받는 모양이라 위 여백은 주지 않고
-      아래만 준다 — 두 줄 사이가 벌어지면 제목과 따로 노는 글로 읽힌다. */
-.pv2-guide-link {
-  margin: -6px 0 20px;
-  font-size: 13.5px;
-  line-height: 1.5;
-}
-.pv2-guide-link a {
-  color: var(--pv2-text-2);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.pv2-guide-link a:hover {
-  color: var(--pv2-text);
-}
 
 /* ── 화주포털 이용가이드(`/customer/guide`) ──────────────────────────────
    🔴 **`.pv2-*` 스코프다** — 공개 `/guide` 의 `.guide-*` 를 끌어오지 말 것. 두 화면은

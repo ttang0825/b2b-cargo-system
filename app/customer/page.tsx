@@ -208,21 +208,6 @@ export default function CustomerHomePage() {
         <InstallAppButton appName="운송관리" className="pv2-install-btn" />
       </div>
 
-      {/* 처음 들어온 담당자가 막히는 자리를 미리 답해 두는 공개 화면(`/guide`)으로 보낸다.
-          🔴 **제목 줄(`.pv2-page-head`) 안에 넣지 않았다 — 별도 줄이다.** 그 줄은
-             `align-items: flex-end` 라 왼쪽 덩이가 한 줄 길어지면 **설치 버튼이 그만큼
-             아래로 내려가** 앉는다. 줄을 나눠 두면 그 줄의 두 자식이 그대로라 버튼 위치가
-             변하지 않는다 — PR #127 이 맞춰 둔 자리다.
-          🔴 **`margin-left: auto`(설치 버튼)를 빼지 말 것** — 그 한 줄이 버튼을 오른쪽
-             끝에 붙들고 있다.
-          🔴 **포털 메뉴 배열(8종)에 「이용안내」를 넣지 말 것**(확정 13번). 캘린더·공지를
-             메뉴에서 뺀 판단과 부딪힌다 — 이 링크 하나로 끝낸다.
-          🔴 **포털 안에 별도 안내 화면을 만들지 말 것** — 페이지는 `/guide` 하나이고
-             두 벌을 두면 한쪽만 낡는다(사용자 확정). */}
-      <div className="pv2-guide-link">
-        <Link href="/guide">운송관리 이용안내 보기</Link>
-      </div>
-
       {/* ② 발주 CTA + 응답 확인하기 */}
       <div className="pv2-home-top">
         <Link href="/customer/request" className="pv2-cta">
