@@ -174,6 +174,7 @@ function TopNavInner() {
     pathname === "/" ||
     pathname?.startsWith("/quote") ||
     pathname?.startsWith("/apply") ||
+    pathname?.startsWith("/guide") ||
     pathname?.startsWith("/terms") ||
     pathname?.startsWith("/privacy") ||
     pathname?.startsWith("/email-policy");

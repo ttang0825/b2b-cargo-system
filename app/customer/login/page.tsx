@@ -232,6 +232,22 @@ export default function CustomerLoginPage() {
                 운송관리 계정 신청
               </Link>
             </div>
+
+            {/* 처음 들어온 거래처가 여기서 멈춘다 — 아이디를 이메일로 착각하거나, 임시
+                비밀번호를 잊고 화면에서 찾으려 하거나, 설치가 안 된다고 연락이 온다.
+                그 다섯 가지를 미리 답해 두는 화면이 `/guide` 다.
+                🔴 **이 한 줄을 빼지 말 것** — 로그인 화면은 그 문의가 실제로 생기는
+                   자리이고, 여기 없으면 랜딩까지 되돌아가야 안내를 만난다.
+                🔴 **이 줄을 더하면서 모바일 한 화면 높이가 넘지 않도록 `app/landing.css`
+                   의 여백 네 곳을 그만큼 줄였다**(카드 아래 패딩·본문 아래 패딩·구분선
+                   위아래·설치 버튼 위). 문구는 하나도 지우지 않았다. 이 줄과 그 여백
+                   조정은 **한 벌이다** — 한쪽만 되돌리면 한 화면에서 넘친다. */}
+            <div className="landing-login-guide" style={{ marginTop: 16, textAlign: "center", fontSize: 13.2, color: "#8B8A85" }}>
+              처음이신가요?{" "}
+              <Link href="/guide" style={{ color: "#4A4945", fontWeight: 600, textDecoration: "underline", textUnderlineOffset: 3 }}>
+                이용안내 보기
+              </Link>
+            </div>
           </div>
 
           {/* 🔴 「홈 화면에 추가」는 카드 아래 가운데다(사용자 지시 2026-09-08).
