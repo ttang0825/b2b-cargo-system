@@ -18,7 +18,7 @@ function getAdminClient() {
   return createServiceClient(url, serviceKey);
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const currentStaff = await getCurrentStaff();
   if (!currentStaff || currentStaff.role !== "admin") {
     return NextResponse.json({ error: "운영 대시보드는 관리자만 조회할 수 있습니다." }, { status: 403 });
@@ -32,8 +32,27 @@ export async function GET() {
     );
   }
 
-  // 조회기간은 최근 12개월 고정(1차 범위 — 기간선택 UI 없음)
-  const sinceIso = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
+  // 🔴 조회기간 — 화면이 고른 개월 수로 창을 잡는다(35차 리뷰 5라운드, 사용자 지시
+  //    *"조회기간 검색도 있어야 하고"*). ⚠️ 그전에는 **최근 12개월 고정**이었다.
+  //
+  //    🔴 **창은 넉넉히, 구간은 화면이 정한다** — 이 창은 「어디까지 읽어올지」일 뿐이고
+  //       실제 표시 구간은 화면이 `billing_period` 로 다시 자른다. 창을 구간과 똑같이
+  //       맞추면 경계 달의 정산 건이 잘려 그래프가 비어 보인다(정산월과 생성일은
+  //       같은 달이 아니다).
+  //    🔴 상한을 두는 이유는 `all` 이 커졌을 때 이 라우트가 통째로 무거워지는 것을
+  //       막기 위함이다. 120개월(10년)이면 이 업력에서는 사실상 전체다.
+  const MAX_MONTHS = 120;
+  const rawMonths = new URL(req.url).searchParams.get("months");
+  const months =
+    rawMonths === "all"
+      ? MAX_MONTHS
+      : Math.min(MAX_MONTHS, Math.max(1, Number(rawMonths) || 12));
+  const since = new Date();
+  // 🔴 달 수로 뺀다 — 365일로 빼면 「최근 12개월」이 달 경계와 안 맞아 첫 달이 반쯤 잘린다.
+  since.setMonth(since.getMonth() - months);
+  since.setDate(1);
+  since.setHours(0, 0, 0, 0);
+  const sinceIso = since.toISOString();
 
   const [
     { data: invoices, error: invoicesError },
@@ -46,7 +65,14 @@ export async function GET() {
     admin
       .from("invoices")
       .select(
-        "id,order_id,company_id,individual_customer_id,billing_period,customer_charge_total,driver_payout_total,status,created_at"
+        // 🔴 35차 C-1 — 마진을 수금방식별로 계산하려면 `collection_method`·`brokerage_fee`·
+        //    부가세 구분이 필요하다. 선착불은 위캐리가 운임을 받지도 주지도 않으므로
+        //    **마진이 주선수수료뿐**이고, 청구액으로 세면 취급고가 매출로 둔갑한다.
+        // 🔴 `billing_cycle` 은 **엑셀 「정산 건별」 시트의 정산방식 라벨용**이다(리뷰 8라운드).
+        //    `getSettlementDisplayLabel()` 이 두 축을 다 받아야 「월정산」·「선착불 / 수수료
+        //    월정산」이 나온다 — 빼면 그 함수가 조용히 `-` 를 돌려주고, 그것을 피하려고
+        //    화면에 라벨을 새로 적으면 담당자 말이 두 벌이 된다.
+        "id,order_id,company_id,individual_customer_id,billing_period,customer_charge_total,driver_payout_total,customer_charge_vat_included,driver_vat_included,collection_method,billing_cycle,brokerage_fee,status,created_at"
       )
       .gte("created_at", sinceIso),
     admin

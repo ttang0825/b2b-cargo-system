@@ -492,3 +492,144 @@ select
   (select count(*) from orders)                                           as 오더_전체,
   (select count(*) from customer_accounts where is_active)                as 포털계정_활성;
 \echo ''
+
+\echo ''
+\echo '=== ⑯ 🔴 35차 착수 전 실측 (내부 정합 — 오더·배차·정산) ================='
+-- 🔴 지시서 §1 착수 전 확인 1·5·6·7번의 근거다. 전부 **읽기 전용**이고
+--    화주명·차주명·직원명·연락처는 한 글자도 찍지 않는다(32차 규칙 —
+--    이 저장소와 Actions 로그는 공개다). 건수·금액대·컬럼 이름만 본다.
+
+\echo ''
+\echo '--- ⑯-a 🔴 1번: 정산 건이 배차 운임보다 먼저 만들어졌는가 (원칙 47) ---'
+-- invoices 의 금액은 생성 시점 스냅샷이고 그 뒤 배차에서 운임을 고쳐도 안 따라온다.
+-- 「차주지급액이 표시가 안 된다」의 가장 유력한 원인이 이것이다.
+select
+  count(*)                                                        as invoice_전체,
+  count(*) filter (where i.driver_payout_total is null)           as 차주지급_빈칸,
+  count(*) filter (where i.customer_charge_total is null)          as 화주청구_빈칸,
+  count(*) filter (where i.driver_payout_total is null
+                     and coalesce(d.driver_payout, 0) > 0)         as 배차엔있는데_정산은빈칸,
+  count(*) filter (where i.driver_payout_total is not null
+                     and coalesce(d.driver_payout, 0) > 0
+                     and i.driver_payout_total <> d.driver_payout) as 금액이_서로다름
+from invoices i
+left join orders o on o.id = i.order_id
+left join dispatches d on d.order_id = o.id;
+
+\echo ''
+\echo '--- ⑯-b 그 건들의 시각 관계 (누가 먼저 만들어졌나 · 금액만) ---'
+select
+  i.billing_period                                   as 정산월,
+  i.status                                           as 정산상태,
+  coalesce(i.collection_method, '(빈칸)')            as 수금방식,
+  i.driver_payout_total                              as 정산_차주지급,
+  d.driver_payout                                    as 배차_차주지급,
+  (i.created_at < d.updated_at)                      as 정산이_먼저,
+  i.locked                                           as 잠김
+from invoices i
+join orders o on o.id = i.order_id
+join dispatches d on d.order_id = o.id
+where i.driver_payout_total is distinct from d.driver_payout
+order by i.created_at desc
+limit 20;
+
+\echo ''
+\echo '--- ⑯-c 🔴 1번: 정산확정을 막는 두 게이트에 걸리는 건 (선착불만) ---'
+-- app/admin/invoices/[id]/page.tsx handleConfirmSettlement
+--   ① 수수료 > 0 인데 입금완료 미체크    ② 수수료 = 0 인데 지급자가 '면제' 가 아님
+select
+  count(*)                                                                   as 선착불_전체,
+  count(*) filter (where coalesce(brokerage_fee,0) > 0
+                     and coalesce(brokerage_fee_paid,false) = false)          as 게이트1_입금미체크,
+  count(*) filter (where coalesce(brokerage_fee,0) = 0
+                     and coalesce(brokerage_fee_payer,'') <> 'waived')        as 게이트2_면제아님,
+  count(*) filter (where locked)                                             as 이미확정
+from invoices
+where collection_method = 'driver_direct';
+
+\echo ''
+\echo '--- ⑯-d 확정 버튼을 볼 수 있는 사람 (role 분포 · 이름 안 찍음) ---'
+select role, status, count(*) as 계정수
+from staff_accounts group by role, status order by role, status;
+
+\echo ''
+\echo '--- ⑯-e 🔴 5번: 마진이 몇 개인가 (dispatches.margin 의 정체) ---'
+select column_name as 컬럼, is_generated as 생성컬럼, generation_expression as 계산식
+from information_schema.columns
+where table_name = 'dispatches'
+  and column_name in ('margin','customer_charge','driver_payout','driver_base_fare',
+                      'industrial_insurance_applicable','industrial_insurance_rate',
+                      'industrial_insurance_base_amount','industrial_insurance_driver_share',
+                      'industrial_insurance_broker_share')
+order by column_name;
+
+\echo ''
+\echo '--- ⑯-f 🔴 6번: 부가세 포함/별도 컬럼이 정말 없는가 (7차에 삭제됨) ---'
+select table_name as 표, column_name as 컬럼
+from information_schema.columns
+where table_schema = 'public' and column_name ilike '%vat%'
+order by table_name, column_name;
+
+\echo ''
+\echo '--- ⑯-g 🔴 7번: 계산기를 거친 배차가 몇 건인가 ---'
+select
+  count(*)                                                          as 배차_전체,
+  count(*) filter (where driver_base_fare is not null)               as 계산기_거침,
+  count(*) filter (where industrial_insurance_applicable)            as 산재_적용대상,
+  count(*) filter (where coalesce(industrial_insurance_broker_share,0) > 0) as 주선사부담_있음,
+  count(*) filter (where driver_payout is not null)                  as 지급운임_입력됨
+from dispatches;
+
+\echo ''
+\echo '--- ⑯-h 🔴 13번: 대시보드가 쓸 수 있는 마진 원천 ---'
+select
+  count(*)                                        as invoice_전체,
+  count(*) filter (where commission_total is not null) as 수수료합계_있음,
+  count(*) filter (where receivable_amount is not null) as 죽은컬럼_receivable,
+  count(*) filter (where payable_amount is not null)    as 죽은컬럼_payable
+from invoices;
+
+\echo ''
+\echo '--- ⑯-i 정산 5건 한눈에 (🔴 이름·번호 없이 플래그만) ---'
+-- ⑯-a 의 「차주지급 빈칸 1건」과 ⑯-c 의 「게이트2 에 걸린 1건」이 같은 건인지 가른다.
+select
+  i.billing_period                                as 정산월,
+  i.status                                        as 상태,
+  i.locked                                        as 잠김,
+  coalesce(i.collection_method,'(빈칸)')          as 수금방식,
+  (i.customer_charge_total is not null)           as 화주청구_있음,
+  (i.driver_payout_total is not null)             as 차주지급_있음,
+  coalesce(i.brokerage_fee,0)                     as 수수료,
+  coalesce(i.brokerage_fee_payer,'(빈칸)')        as 지급자,
+  coalesce(i.brokerage_fee_paid,false)            as 입금완료,
+  (exists (select 1 from orders o join dispatches d on d.order_id = o.id
+            where o.id = i.order_id))             as 배차있음
+from invoices i
+order by i.created_at;
+
+\echo ''
+\echo '--- ⑯-j 배차 6건 한눈에 (🔴 정산 건이 아예 없는 배차를 찾는다) ---'
+-- invoices 5건 < dispatches 6건 이라 정산이 아예 안 만들어진 배차가 있다.
+-- 「정산관리에서 표시가 안 된다」의 또 다른 후보다(스냅샷 문제와 원인이 다르다).
+select
+  d.dispatch_status                                   as 배차상태,
+  coalesce(d.collection_method,'(빈칸)')              as 수금방식,
+  (d.customer_charge is not null)                     as 청구운임_입력,
+  (d.driver_payout is not null)                       as 지급운임_입력,
+  (d.driver_base_fare is not null)                    as 계산기_거침,
+  (o.id is not null)                                  as 오더연결,
+  (exists (select 1 from invoices i where i.order_id = d.order_id)) as 정산건_있음,
+  (d.updated_at > coalesce((select max(i.created_at) from invoices i
+                             where i.order_id = d.order_id), d.created_at))
+                                                      as 정산뒤에_배차수정됨
+from dispatches d
+left join orders o on o.id = d.order_id
+order by d.created_at;
+
+\echo ''
+\echo '--- ⑯-k 🔴 원칙 27번: 새 컬럼을 넣기 전에 이미 있는지 본다 ---'
+select table_name as 표,
+       string_agg(column_name, ', ' order by ordinal_position) as 컬럼
+from information_schema.columns
+where table_schema = 'public' and table_name in ('orders','dispatches','invoices')
+group by table_name order by table_name;

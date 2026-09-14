@@ -17,7 +17,8 @@ import MixableBadge from "@/components/MixableBadge";
 import AdminMobileList from "@/components/AdminMobileList";
 import LockedBadge from "@/components/LockedBadge";
 import { getSettlementDisplayLabel, mapToLegacySettlementType } from "@/lib/settlementLabels";
-import { calcInclusiveAmount } from "@/lib/vat";
+import { calcMargin } from "@/lib/marginCalc";
+import { vatBasisLabel } from "@/components/VatBasisSelect";
 import MonthlyBillingBatchPanel from "@/components/MonthlyBillingBatchPanel";
 
 type OrderLite = {
@@ -41,6 +42,11 @@ type InvoiceRow = {
   customer_charge_total: number | null;
   driver_payout_total: number | null;
   commission_total: number | null;
+  // 35차 리뷰 2라운드 — 마진을 화면에서 계산하려면 부가세 구분이 있어야 한다.
+  // 🔴 이게 없어서 목록이 저장된 구분값을 못 읽고 「부가세 별도」를 글자로 박아두고
+  //    있었다(배차에서 「포함」으로 정해도 목록은 계속 「별도」라고 썼다).
+  customer_charge_vat_included: boolean | null;
+  driver_vat_included: boolean | null;
   tax_invoice_issued: boolean;
   payment_received: boolean;
   driver_paid: boolean;
@@ -87,6 +93,40 @@ const FILTERED_PERIOD_LIMIT = 500;
 function won(n: number | null) {
   if (n === null || n === undefined) return "-";
   return Math.round(n).toLocaleString("ko-KR") + "원";
+}
+
+// 🔴 마진은 **저장된 `commission_total` 을 읽지 않고 표시 시점에 계산한다**
+//    (35차 리뷰 2라운드 · 사용자 신고 "배차에서 정해진 지급운임 및 마진이 제대로
+//    적용이 안 된다").
+//
+//    ⚠️ 그전에는 정산 화면 한 곳에서만 **마진 공식이 셋**이었다 —
+//      ① 신규 등록 폼 미리보기 : 청구액 − 지급액
+//      ② 저장되는 commission_total : 청구액 × 1.1 − 지급액
+//      ③ 운영 대시보드 : lib/marginCalc.ts
+//    그래서 등록할 때 본 숫자와 목록에 뜨는 숫자와 대시보드 숫자가 **셋 다 달랐다.**
+//    게다가 ②는 부가세 구분을 무시해서, 청구액을 「부가세 포함」으로 적은 건은
+//    ×1.1 이 한 번 더 걸려 마진이 부풀려졌다.
+//
+// 🔴 표시 시점 계산이라 **옛 건도 자동으로 맞는 값이 된다** — 저장된 금액·부가세
+//    구분·수금방식만 있으면 되므로 재동기화를 안 눌러도 마진은 바로 고쳐진다.
+//    (재동기화는 금액 자체가 배차와 다른 건을 위한 것이라 여전히 필요하다.)
+// 🔴 `lib/marginCalc.ts` 가 유일한 정의처다 — 화면에 공식을 다시 적지 말 것.
+function marginOf(i: {
+  collection_method: string | null;
+  customer_charge_total: number | null;
+  customer_charge_vat_included: boolean | null;
+  driver_payout_total: number | null;
+  driver_vat_included: boolean | null;
+  brokerage_fee: number | null;
+}) {
+  return calcMargin({
+    collectionMethod: i.collection_method,
+    customerCharge: i.customer_charge_total,
+    customerChargeVatIncluded: i.customer_charge_vat_included,
+    driverPayout: i.driver_payout_total,
+    driverVatIncluded: i.driver_vat_included,
+    brokerageFee: i.brokerage_fee,
+  });
 }
 
 function currentMonth() {
@@ -150,7 +190,9 @@ function InvoicesPageInner() {
     total_freight_amount: number | null;
     driver_direct_collection_amount: number | null;
     brokerage_fee: number | null;
-    brokerage_fee_payer: string | null;
+    // 🔴 `brokerage_fee_payer` 는 35차 A-4 에 뺐다(수수료는 무조건 차주 부담).
+    customer_charge_vat_included: boolean;
+    driver_vat_included: boolean;
   } | null>(null);
 
   async function loadInvoices(preset: DatePreset = period) {
@@ -159,7 +201,7 @@ function InvoicesPageInner() {
     let query = supabase
       .from("invoices")
       .select(
-        "id,order_id,billing_period,customer_charge_total,driver_payout_total,commission_total,tax_invoice_issued,payment_received,driver_paid,status,settlement_type,collection_method,billing_cycle,brokerage_fee,brokerage_fee_paid,total_freight_amount,locked,created_at,orders(order_no,guest_name,loading_type),companies(name)"
+        "id,order_id,billing_period,customer_charge_total,driver_payout_total,commission_total,customer_charge_vat_included,driver_vat_included,tax_invoice_issued,payment_received,driver_paid,status,settlement_type,collection_method,billing_cycle,brokerage_fee,brokerage_fee_paid,total_freight_amount,locked,created_at,orders(order_no,guest_name,loading_type),companies(name)"
       )
       .order("created_at", { ascending: false })
       .limit(preset === "all" ? ALL_PERIOD_LIMIT : FILTERED_PERIOD_LIMIT);
@@ -295,7 +337,7 @@ function InvoicesPageInner() {
     const { data: dispatch } = await supabase
       .from("dispatches")
       .select(
-        "id, customer_charge, driver_payout, collection_method, billing_cycle, direct_collection_point, network_settlement_type, total_freight_amount, driver_direct_collection_amount, brokerage_fee, brokerage_fee_payer"
+        "id, customer_charge, driver_payout, customer_charge_vat_included, driver_vat_included, collection_method, billing_cycle, direct_collection_point, network_settlement_type, total_freight_amount, driver_direct_collection_amount, brokerage_fee"
       )
       .eq("order_id", orderId)
       .maybeSingle();
@@ -309,7 +351,8 @@ function InvoicesPageInner() {
         total_freight_amount: dispatch.total_freight_amount ?? null,
         driver_direct_collection_amount: dispatch.driver_direct_collection_amount ?? null,
         brokerage_fee: dispatch.brokerage_fee ?? null,
-        brokerage_fee_payer: dispatch.brokerage_fee_payer ?? null,
+        customer_charge_vat_included: !!dispatch.customer_charge_vat_included,
+        driver_vat_included: !!dispatch.driver_vat_included,
       });
     } else {
       setSettlementSnapshot({
@@ -320,7 +363,8 @@ function InvoicesPageInner() {
         total_freight_amount: null,
         driver_direct_collection_amount: null,
         brokerage_fee: null,
-        brokerage_fee_payer: null,
+        customer_charge_vat_included: false,
+        driver_vat_included: false,
       });
     }
 
@@ -371,11 +415,20 @@ function InvoicesPageInner() {
     const order = availableOrders.find((o) => o.id === selectedOrderId);
     const chargeNum = Number(customerChargeTotal) || 0;
     const payoutNum = Number(driverPayoutTotal) || 0;
-    // 화주 청구금액(customer_charge_total)은 항상 공급가액(부가세 별도)으로
-    // 저장되지만, 차주 지급금액(driver_payout_total)은 실제로 차주에게
-    // 지급되는 최종 금액(부가세 포함 기준)이므로, 기준을 맞추기 위해
-    // 화주 청구금액도 부가세 포함가로 환산한 뒤 차감한다(PR #63 리뷰 피드백)
-    const commission = calcInclusiveAmount(chargeNum) - payoutNum;
+    const isDirect = settlementSnapshot?.collection_method === "driver_direct";
+    // 🔴 저장값도 화면과 **같은 공식**으로 맞춘다(35차 리뷰 2라운드).
+    //    ⚠️ 그전에는 저장이 `청구액 × 1.1 − 지급액` 이고 바로 위 미리보기가
+    //    `청구액 − 지급액` 이라, **등록할 때 본 숫자와 저장된 숫자가 달랐다.**
+    //    화면은 이제 `commission_total` 을 읽지 않고 `marginOf()` 로 그리지만,
+    //    저장값이 옛 공식으로 남으면 나중에 이 컬럼을 읽는 코드가 또 갈린다.
+    const commission = calcMargin({
+      collectionMethod: settlementSnapshot?.collection_method || "broker",
+      customerCharge: chargeNum,
+      customerChargeVatIncluded: settlementSnapshot?.customer_charge_vat_included ?? false,
+      driverPayout: payoutNum,
+      driverVatIncluded: settlementSnapshot?.driver_vat_included ?? false,
+      brokerageFee: settlementSnapshot?.brokerage_fee ?? null,
+    });
 
     const { error } = await supabase.from("invoices").insert({
       order_id: selectedOrderId,
@@ -387,8 +440,11 @@ function InvoicesPageInner() {
       driver_payout_total: payoutNum || null,
       commission_total: commission || null,
       payment_due_date: paymentDueDate || null,
-      receivable_amount: chargeNum || null,
-      payable_amount: payoutNum || null,
+      // 🔴 35차 A-1 — 받을 돈·줄 돈은 수금방식이 정한다. 선착불은 운임이 위캐리를
+      //    거치지 않으므로 받을 돈이 **주선수수료**이고 줄 돈은 **0**이다.
+      //    ⚠️ `lib/autoCreateInvoice.ts` 와 **같은 규칙이다** — 한쪽만 고치지 말 것.
+      receivable_amount: isDirect ? settlementSnapshot?.brokerage_fee ?? null : chargeNum || null,
+      payable_amount: isDirect ? 0 : payoutNum || null,
       settlement_type: order?.settlement_type || "general",
       collection_method: settlementSnapshot?.collection_method || "broker",
       billing_cycle: settlementSnapshot?.billing_cycle || "per_order",
@@ -397,7 +453,14 @@ function InvoicesPageInner() {
       total_freight_amount: settlementSnapshot?.total_freight_amount ?? chargeNum ?? null,
       driver_direct_collection_amount: settlementSnapshot?.driver_direct_collection_amount ?? null,
       brokerage_fee: settlementSnapshot?.brokerage_fee ?? null,
-      brokerage_fee_payer: settlementSnapshot?.brokerage_fee_payer ?? null,
+      customer_charge_vat_included: settlementSnapshot?.customer_charge_vat_included ?? false,
+      driver_vat_included: settlementSnapshot?.driver_vat_included ?? false,
+      // 선착불은 운송완료 시점에 입금·지급이 완료다(35차 A-2) — 오갈 돈이 위캐리를
+      // 안 거친다. 🔴 받을 주선수수료는 `brokerage_fee_paid` 로 따로 남는다.
+      payment_received: isDirect,
+      payment_received_date: isDirect ? settlementReferenceDate || null : null,
+      driver_paid: isDirect,
+      driver_paid_date: isDirect ? settlementReferenceDate || null : null,
       status: "정산대기",
       created_by: await getCurrentStaffId(),
     });
@@ -420,7 +483,11 @@ function InvoicesPageInner() {
 
       const { data: allInvoices } = await supabase
         .from("invoices")
-        .select("customer_charge_total,commission_total,payment_received")
+        // 🔴 마진은 저장된 `commission_total` 이 아니라 `calcMargin()` 으로 센다 —
+        //    옛 행의 저장값은 부가세 구분을 무시한 옛 공식이라 섞이면 합계가 틀어진다.
+        .select(
+          "customer_charge_total,customer_charge_vat_included,driver_payout_total,driver_vat_included,collection_method,brokerage_fee,payment_received"
+        )
         .eq("company_id", order.company_id);
 
       const list = allInvoices || [];
@@ -429,10 +496,7 @@ function InvoicesPageInner() {
         (sum, i) => sum + (i.customer_charge_total || 0),
         0
       );
-      const totalMargin = list.reduce(
-        (sum, i) => sum + (i.commission_total || 0),
-        0
-      );
+      const totalMargin = list.reduce((sum, i) => sum + marginOf(i as any), 0);
       const outstandingAmount = list
         .filter((i) => !i.payment_received)
         .reduce((sum, i) => sum + (i.customer_charge_total || 0), 0);
@@ -609,9 +673,19 @@ function InvoicesPageInner() {
 
             {customerChargeTotal && driverPayoutTotal && (
               <p style={{ fontSize: 13, marginTop: 10 }}>
-                수수료(마진):{" "}
+                마진(부가세 제외):{" "}
                 <strong className="num">
-                  {won(Number(customerChargeTotal) - Number(driverPayoutTotal))}
+                  {won(
+                    calcMargin({
+                      collectionMethod: settlementSnapshot?.collection_method || "broker",
+                      customerCharge: Number(customerChargeTotal) || 0,
+                      customerChargeVatIncluded:
+                        settlementSnapshot?.customer_charge_vat_included ?? false,
+                      driverPayout: Number(driverPayoutTotal) || 0,
+                      driverVatIncluded: settlementSnapshot?.driver_vat_included ?? false,
+                      brokerageFee: settlementSnapshot?.brokerage_fee ?? null,
+                    })
+                  )}
                 </strong>
               </p>
             )}
@@ -764,8 +838,14 @@ function InvoicesPageInner() {
                     <>
                       <td style={{ whiteSpace: "nowrap" }}>
                         <span className="num">{won(i.customer_charge_total)}</span>
+                        {/* 🔴 「부가세 별도」를 글자로 박아두던 자리다 — 저장된 구분값을
+                            읽는다(35차 리뷰 2라운드). 상세는 A-3 에 고쳤는데 목록만
+                            빠져 있어서, 배차에서 「포함」으로 정해도 목록은 계속
+                            「별도」라고 쓰고 있었다. */}
                         {i.customer_charge_total != null && (
-                          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>부가세 별도</div>
+                          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                            {vatBasisLabel(i.customer_charge_vat_included)}
+                          </div>
                         )}
                         {extraChargeInfoByInvoiceId[i.id]?.charge > 0 && (
                           <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
@@ -778,17 +858,24 @@ function InvoicesPageInner() {
                         <span className="num" style={{ whiteSpace: "nowrap" }}>
                           {won(i.driver_payout_total)}
                         </span>
-                        {i.driver_payout_total != null && i.order_id && driverCalcInfoByOrderId[i.order_id]?.throughCalc && (
-                          <div style={{ fontSize: 11, color: "var(--text-muted)", whiteSpace: "normal", maxWidth: 100 }}>
-                            부가세 포함
-                            {driverCalcInfoByOrderId[i.order_id].insuranceApplied && (
-                              <>
-                                <br />
-                                산재보험료 차감
-                              </>
-                            )}
-                          </div>
-                        )}
+                        {/* 계산기를 거친 금액은 계산식 구조상 항상 부가세 포함이라 고정이고,
+                            직접 입력한 금액은 저장된 구분값을 따른다(상세와 같은 규칙) */}
+                        {i.driver_payout_total != null &&
+                          (i.order_id && driverCalcInfoByOrderId[i.order_id]?.throughCalc ? (
+                            <div style={{ fontSize: 11, color: "var(--text-muted)", whiteSpace: "normal", maxWidth: 100 }}>
+                              부가세 포함
+                              {driverCalcInfoByOrderId[i.order_id].insuranceApplied && (
+                                <>
+                                  <br />
+                                  산재보험료 차감
+                                </>
+                              )}
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                              {vatBasisLabel(i.driver_vat_included)}
+                            </div>
+                          ))}
                         {extraChargeInfoByInvoiceId[i.id]?.payout > 0 && (
                           <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
                             현장 추가비 +{won(extraChargeInfoByInvoiceId[i.id].payout)}
@@ -796,7 +883,8 @@ function InvoicesPageInner() {
                         )}
                       </td>
                       <td style={{ whiteSpace: "nowrap" }}>
-                        <span className="num">{won(i.commission_total)}</span>
+                        <span className="num">{won(marginOf(i))}</span>
+                        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>부가세 제외</div>
                       </td>
                     </>
                   ) : (
@@ -819,6 +907,15 @@ function InvoicesPageInner() {
                           주선수수료
                           <br />
                           {i.brokerage_fee_paid ? "입금완료" : "입금대기"}
+                          {/* 🔴 선착불에도 마진을 적는다 — 이 칸이 비어 있으면 「선착불 건은
+                              마진이 0」으로 읽힌다. 운임은 위캐리를 안 거치므로 수수료의
+                              공급가액이 곧 마진이다. */}
+                          {i.brokerage_fee != null && i.brokerage_fee > 0 && (
+                            <>
+                              <br />
+                              마진 {won(marginOf(i))}
+                            </>
+                          )}
                         </div>
                       </td>
                     </>
@@ -910,7 +1007,7 @@ function InvoicesPageInner() {
                       ? { label: "지급금액", value: <span className="num">{won(i.driver_payout_total)}</span> }
                       : { label: "전체 운송료", value: <span className="num">{won(i.total_freight_amount)}</span> },
                     isBroker
-                      ? { label: "수수료", value: <span className="num">{won(i.commission_total)}</span> }
+                      ? { label: "마진(부가세 제외)", value: <span className="num">{won(marginOf(i))}</span> }
                       : {
                           label: "주선수수료",
                           value: (
@@ -918,6 +1015,9 @@ function InvoicesPageInner() {
                               <span className="num">{won(i.brokerage_fee)}</span>
                               <div style={{ fontSize: 10.5, color: "var(--text-muted)" }}>
                                 {i.brokerage_fee_paid ? "입금완료" : "입금대기"}
+                                {i.brokerage_fee != null && i.brokerage_fee > 0 && (
+                                  <> · 마진 {won(marginOf(i))}</>
+                                )}
                               </div>
                             </>
                           ),

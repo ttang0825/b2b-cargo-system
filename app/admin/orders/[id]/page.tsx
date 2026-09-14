@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { ORDER_STATUS_OPTIONS, getOrderStatusColor } from "@/lib/orderStatusColors";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import DateTimePicker from "@/components/DateTimePicker";
+import VatBasisSelect, { vatBasisLabel } from "@/components/VatBasisSelect";
 import AddressSearch from "@/components/AddressSearch";
 import PickupDropoffContactFields, {
   EMPTY_PICKUP_DROPOFF_CONTACT,
@@ -45,6 +46,8 @@ type OrderDetail = {
   destination_contact_name: string | null;
   destination_contact_phone: string | null;
   vehicle_type: string | null;
+  customer_charge: number | null;
+  customer_charge_vat_included: boolean | null;
   item: string | null;
   status: string;
   settlement_type: string | null;
@@ -148,6 +151,8 @@ export default function OrderDetailPage() {
     destinationSigungu: "",
     ...EMPTY_PICKUP_DROPOFF_CONTACT,
     vehicle_type: "",
+    customer_charge: "",
+    customer_charge_vat_included: false,
     loading_type: "exclusive" as "exclusive" | "mixable",
     mixed_shipper_consent: false,
     mixed_discount_type: null as "amount" | "percent" | null,
@@ -192,6 +197,8 @@ export default function OrderDetailPage() {
       destination_contact_name: data.destination_contact_name || "",
       destination_contact_phone: data.destination_contact_phone || "",
       vehicle_type: data.vehicle_type || "",
+      customer_charge: data.customer_charge != null ? String(data.customer_charge) : "",
+      customer_charge_vat_included: !!data.customer_charge_vat_included,
       loading_type: (data.loading_type as "exclusive" | "mixable") || "exclusive",
       mixed_shipper_consent: data.mixed_shipper_consent || false,
       mixed_discount_type: (data.mixed_discount_type as "amount" | "percent" | null) || null,
@@ -284,6 +291,8 @@ export default function OrderDetailPage() {
       destination_contact_name: editForm.destination_contact_name.trim() || null,
       destination_contact_phone: editForm.destination_contact_phone.trim() || null,
       vehicle_type: editForm.vehicle_type || null,
+      customer_charge: editForm.customer_charge ? Number(editForm.customer_charge) : null,
+      customer_charge_vat_included: editForm.customer_charge_vat_included,
       loading_type: editForm.loading_type,
       mixed_shipper_consent: editForm.loading_type === "mixable" ? editForm.mixed_shipper_consent : false,
       mixed_discount_type: editForm.loading_type === "mixable" ? editForm.mixed_discount_type : null,
@@ -679,6 +688,25 @@ export default function OrderDetailPage() {
                 }
               />
             </div>
+            {/* ── 금액 (35차 B-3 · 사용자 2번) ────────────────────────────────────
+                🔴 **오더에는 금액 칸이 하나도 없었다** — 금액은 배차 등록 때 처음
+                   들어갔고 오더 화면에서는 볼 수가 없었다.
+                🔴 부가세 구분은 배차·정산과 **같은 부품**(`VatBasisSelect`)이다(A-3).
+                ⚠️ 이 화면은 낙관적 잠금(원칙 28번)을 쓴다 — 금액도 그 저장 경로를
+                   그대로 탄다(별도 즉시저장 컨트롤로 빼지 않았다). */}
+            <div className="field">
+              <label>화주 청구금액(원)</label>
+              <MoneyInput
+                value={editForm.customer_charge}
+                onChange={(v) => setEditForm({ ...editForm, customer_charge: v })}
+              />
+              <div style={{ marginTop: 4 }}>
+                <VatBasisSelect
+                  value={editForm.customer_charge_vat_included}
+                  onChange={(v) => setEditForm({ ...editForm, customer_charge_vat_included: v })}
+                />
+              </div>
+            </div>
             <div style={{ gridColumn: "1 / -1" }}>
               <DateTimePicker
                 label="상차 예정일시"
@@ -939,6 +967,14 @@ export default function OrderDetailPage() {
                 .join(" · ")}
             />
             <Field label="차량" value={order.vehicle_type} />
+            <Field
+              label="화주 청구금액"
+              value={
+                order.customer_charge != null
+                  ? `${order.customer_charge.toLocaleString()}원 (${vatBasisLabel(order.customer_charge_vat_included)})`
+                  : null
+              }
+            />
             <Field
               label="상차 예정일시"
               value={
