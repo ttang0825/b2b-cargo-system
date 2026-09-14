@@ -7407,3 +7407,342 @@ tbody tr:hover {
     gap: 3px;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   이용안내(`/guide`) 전용 — 공개 화면이다.
+
+   🔴 **`.guide-` 접두사만 쓴다.** 이 화면을 맞추려고 `container`·`card`·`page-*`
+      같은 **공용 클래스를 고치지 말 것** — 관리자 31화면과 화주포털 7화면, 다른 공개
+      화면 6개가 같이 쓴다(34차가 `.container` 를 고칠 뻔한 자리와 같은 결).
+   🔴 **화주포털 토큰(`.portal-v2` 스코프 변수)을 가져오지 말 것** — 그 변수는 그
+      스코프 안에만 있어서 여기서는 **색이 아예 안 나온다**(PR #145 실측). 이 화면의
+      색은 전역 토큰(`--text` 계열)과 리터럴만 쓴다.
+   ⚠️ 이 블록은 **순수 추가**다(삭제된 줄 0) — 이 파일을 만질 때 지켜온 규칙이다.
+   ───────────────────────────────────────────────────────────────────────────── */
+.guide-main {
+  max-width: 860px;
+  /* 🔴 한글이 어절 중간에서 끊기지 않게 화면 단위로 건다 — `<br />` 로 줄을 고정하면
+     서체를 CDN 에서 받아와 폭이 달라질 때 엉뚱한 자리에서 끊긴다(37차). */
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+.guide-lead {
+  max-width: 640px;
+  line-height: 1.75;
+}
+.guide-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 36px;
+}
+.guide-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* 손가락으로 누를 수 있는 최소 크기 */
+  min-height: 48px;
+  padding: 14px 26px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.guide-btn-dark {
+  background: #0e0f12;
+  color: #ffffff;
+}
+.guide-btn-dark:hover {
+  background: #000000;
+  color: #ffffff;
+}
+/* 🔴 옐로는 전역 토큰 `--brand-yellow` 다 — 리터럴로 다시 적지 말 것(PR #145 와 같은
+   규칙). 랜딩·로그인 화면의 「계정 신청」과 같은 행동이라 같은 색으로 읽혀야 한다.
+   ⚠️ 랜딩 쪽 리터럴은 `#FFD834` 로 이 토큰(`#ffd833`)과 **마지막 한 자리가 다르다** —
+      눈에 보이지 않는 차이이고, 맞추겠다고 랜딩 리터럴을 여기로 옮기면 랜딩 전용 값이
+      공개 화면 전역으로 새어 나온다. 이 화면은 전역 토큰 쪽을 따른다. */
+.guide-btn-yellow {
+  background: var(--brand-yellow);
+  color: #0e0f12;
+}
+.guide-btn-yellow:hover {
+  background: var(--brand-yellow);
+  color: #0e0f12;
+  filter: brightness(0.96);
+}
+
+.guide-section {
+  margin-top: 44px;
+}
+.guide-h2 {
+  margin: 0 0 16px;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.guide-h3 {
+  margin: 0 0 10px;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.guide-h3-sub {
+  margin-left: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.guide-p {
+  margin: 0 0 14px;
+  font-size: 14.5px;
+  line-height: 1.8;
+  color: var(--text-muted);
+}
+.guide-card {
+  position: relative;
+  padding: 26px 28px;
+  margin-bottom: 14px;
+}
+/* 단계 번호는 카드 오른쪽 위에 옅게 — 본문 폭을 먹지 않게 흐름 밖에 둔다. */
+.guide-step-no {
+  position: absolute;
+  top: 20px;
+  right: 24px;
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1;
+  color: #e6e5e0;
+}
+.guide-ol {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14.5px;
+  line-height: 1.85;
+}
+.guide-ol li {
+  margin-bottom: 4px;
+}
+.guide-note {
+  margin: 16px 0 0;
+  padding: 13px 15px;
+  border-radius: 10px;
+  background: #fbf9f1;
+  border: 1px solid #eeeade;
+  font-size: 13.8px;
+  line-height: 1.75;
+}
+.guide-note-plain {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--text-muted);
+}
+.guide-code {
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: #ecebe6;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.8px;
+}
+
+/* 설명 목록 — 좌측 라벨 고정폭 + 우측 설명. 좁아지면 두 줄로 쌓인다. */
+.guide-dl {
+  margin: 0;
+}
+.guide-dl-row {
+  display: flex;
+  gap: 16px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+.guide-dl-row:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+.guide-dl-row dt {
+  flex: 0 0 116px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.guide-dl-row dd {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--text-muted);
+}
+
+/* 🔴 캡처 이미지가 아니라 도식이다 — 이미지 파일 0건이고 화면을 고쳐도 낡지 않는다.
+   「설치 버튼이 오른쪽 위에 있다」만 전달하면 되므로 더 그리지 말 것. */
+.guide-mock {
+  margin: 6px 0 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #ffffff;
+}
+.guide-mock-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px;
+  background: #f3f2ee;
+  border-bottom: 1px solid var(--border);
+}
+.guide-mock-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #d8d6cf;
+}
+.guide-mock-body {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 16px 22px;
+}
+.guide-mock-title {
+  flex: 0 1 auto;
+  width: 220px;
+  height: 12px;
+  border-radius: 999px;
+  background: #eceae4;
+}
+/* 🔴 `margin-left: auto` 가 이 도식의 전부다 — 버튼이 **오른쪽 위**에 있다는 것만
+   보여주면 되므로 빼면 도식이 아무것도 말하지 않게 된다. */
+.guide-mock-btn {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 7px 14px;
+  border: 1px solid #e8e7e2;
+  border-radius: 999px;
+  background: #ffffff;
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.guide-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.guide-table th,
+.guide-table td {
+  padding: 12px 14px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+  line-height: 1.75;
+}
+.guide-table thead th {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: #faf9f5;
+}
+.guide-table tbody th {
+  width: 168px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.guide-table tbody td {
+  color: var(--text-muted);
+}
+.guide-table tbody tr:last-child th,
+.guide-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.guide-menu-card {
+  padding: 16px 18px;
+}
+.guide-menu-name {
+  font-size: 14.5px;
+  font-weight: 700;
+}
+.guide-menu-desc {
+  margin-top: 5px;
+  font-size: 13.6px;
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+
+.guide-pills {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.guide-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 13px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.guide-pill-strong {
+  font-weight: 800;
+  box-shadow: 0 0 0 1px currentColor inset;
+}
+
+.guide-faq-row {
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+}
+.guide-faq-row:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+.guide-faq-q {
+  font-size: 14.5px;
+  font-weight: 700;
+}
+.guide-faq-a {
+  margin-top: 7px;
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--text-muted);
+}
+
+.guide-contact {
+  text-align: center;
+}
+.guide-tel {
+  display: inline-block;
+  font-size: 25px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+  color: var(--text);
+}
+
+@media (max-width: 760px) {
+  .guide-card {
+    padding: 20px 18px;
+  }
+  .guide-step-no {
+    top: 16px;
+    right: 18px;
+    font-size: 22px;
+  }
+  /* 라벨·설명이 한 줄에 들어가지 않는 폭이라 위아래로 쌓는다. */
+  .guide-dl-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+  .guide-dl-row dt {
+    flex: 0 0 auto;
+  }
+  .guide-btn {
+    flex: 1 1 auto;
+  }
+  .guide-tel {
+    font-size: 21px;
+  }
+}
