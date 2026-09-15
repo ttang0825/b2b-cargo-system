@@ -143,14 +143,30 @@ function currentMonthInput() {
 //    🔴 **이 파일에 다시 적지 말 것.**
 
 async function callBatchApi(path: string, body: Record<string, any>) {
-  const res = await fetch(`/api/admin/billing-batches/${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json().catch(() => ({}));
+  // 🔴 **왜 실패했는지가 화면에 남아야 한다.** 그전에는 서버가 401/500 을 주고
+  //    본문이 JSON 이 아니면 `reason: "unknown"` 하나로 뭉개져서
+  //    「처리할 수 없습니다. (unknown)」만 떴다 — 로그인이 풀린 것인지, 서버 키가
+  //    Preview 에 없는 것인지(자주 겪는 함정이다), 진짜 거절인지 가릴 수 없었다.
+  let res: Response;
+  try {
+    res = await fetch(`/api/admin/billing-batches/${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch (e: any) {
+    return { success: false, error: `서버에 연결하지 못했습니다: ${e?.message || e}` };
+  }
+  const data = await res.json().catch(() => ({} as any));
   if (!res.ok) {
-    return { success: false, reason: data?.error ? undefined : "unknown", error: data?.error };
+    return {
+      success: false,
+      error:
+        data?.error ||
+        (res.status === 401
+          ? "로그인이 만료되었습니다. 새로고침 후 다시 로그인해주세요. (401)"
+          : `서버가 요청을 거절했습니다. (HTTP ${res.status})`),
+    };
   }
   return data;
 }
@@ -173,7 +189,32 @@ export default function MonthlyBillingBatchPanel({
   const [activeItems, setActiveItems] = useState<ActiveItem[]>([]);
   const [orderInfoByInvoiceId, setOrderInfoByInvoiceId] = useState<Record<string, OrderInfo>>({});
   const [loading, setLoading] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
+  /**
+   * 🔴 **오류는 「누른 자리」에 떠야 한다**(원칙 33번 · PR #153 이 운송오더에서 겪은 것과
+   *    같은 자리). 처음에는 이 패널 **맨 위 한 곳**에만 그렸는데, 「새 묶음 만들기」는
+   *    화면 맨 아래 접힌 칸이고 묶음 상세는 중간이라, 실패 메시지가 **1000px 위**에
+   *    떠서 담당자에게는 「눌렀는데 아무 일도 안 일어난다」로 보였다
+   *    (실사용 리뷰 3라운드 — *"새 묶음 만들기가 안되고 역시 담기도 안된다"*).
+   * 🔴 `scope` 를 빼고 한 곳으로 되돌리지 말 것.
+   */
+  const [actionError, setActionError] = useState<{
+    scope: "top" | "batch" | "create";
+    message: string;
+  } | null>(null);
+
+  function fail(scope: "top" | "batch" | "create", message: string) {
+    setActionError({ scope, message });
+  }
+
+  /** 그 자리에 뜨는 오류 줄. 🔴 어느 자리든 **같은 모양**이어야 한다. */
+  function ErrorLine({ scope }: { scope: "top" | "batch" | "create" }) {
+    if (!actionError || actionError.scope !== scope) return null;
+    return (
+      <div className="error-box" style={{ margin: "10px 0", fontSize: 13 }}>
+        오류: {actionError.message}
+      </div>
+    );
+  }
   const [releaseReason, setReleaseReason] = useState("");
   const [showReleaseReason, setShowReleaseReason] = useState(false);
   const [forceDeleteReason, setForceDeleteReason] = useState("");
@@ -196,6 +237,10 @@ export default function MonthlyBillingBatchPanel({
   const [draftTotalByBatchId, setDraftTotalByBatchId] = useState<Record<string, number>>({});
   // 「새 묶음 만들기」에서 고른 화주·정산월의 상태. 🔴 펼친 묶음(`batch`)과 **다른
   //    상태다** — 섞으면 목록에서 펼친 묶음이 검색창 값에 따라 바뀐다.
+  // 🔴 「불러오는 중」과 「불러오지 못했다」를 구분한다 — 그전에는 둘 다 `null` 이라
+  //    **화면에 아무것도 안 그려졌고**, 그래서 「새 묶음 만들기가 안된다」가 됐다
+  //    (실사용 리뷰 3라운드). 🔴 **아무것도 안 그리는 분기를 다시 만들지 말 것.**
+  const [createLoading, setCreateLoading] = useState(false);
   const [createTarget, setCreateTarget] = useState<{
     existing: Batch | null;
     candidateCount: number;
@@ -282,7 +327,7 @@ export default function MonthlyBillingBatchPanel({
       .limit(30);
     // 🔴 `error` 를 버리면 조회 실패가 「묶음이 하나도 없습니다」로 보인다(원칙 55번).
     if (error) {
-      setActionError(`묶음 목록을 불러오지 못했습니다: ${error.message}`);
+      fail("top", `묶음 목록을 불러오지 못했습니다: ${error.message}`);
       return;
     }
     const list = (data as any[]) || [];
@@ -299,7 +344,7 @@ export default function MonthlyBillingBatchPanel({
       .in("batch_id", draftIds)
       .is("released_at", null);
     if (itemError) {
-      setActionError(`묶음 금액을 불러오지 못했습니다: ${itemError.message}`);
+      fail("top", `묶음 금액을 불러오지 못했습니다: ${itemError.message}`);
       return;
     }
     const sums: Record<string, number> = {};
@@ -362,7 +407,10 @@ export default function MonthlyBillingBatchPanel({
   }
 
   /** 화주 거래조건을 fresh 로 읽어 화면 state 에 넣고 그 값을 돌려준다. */
-  async function loadCompanyTerms(targetCompanyId: string) {
+  async function loadCompanyTerms(
+    targetCompanyId: string,
+    scope: "top" | "batch" | "create" = "batch"
+  ) {
     const { data, error } = await supabase
       .from("companies")
       .select("billing_cutoff_day,payment_due_basis,payment_due_value")
@@ -371,7 +419,7 @@ export default function MonthlyBillingBatchPanel({
     if (error) {
       // 🔴 조회 실패를 조용히 넘기지 말 것(원칙 55번) — 그냥 넘기면 마감일이 없는
       //    것처럼 달력월로 계산해서 **엉뚱한 기간의 묶음을 만들** 수 있다.
-      setActionError(`화주 거래조건을 불러오지 못했습니다: ${error.message}`);
+      fail(scope, `화주 거래조건을 불러오지 못했습니다: ${error.message}`);
       return null;
     }
     return (data as any) || { billing_cutoff_day: null, payment_due_basis: null, payment_due_value: null };
@@ -439,7 +487,7 @@ export default function MonthlyBillingBatchPanel({
       .eq("id", batch.id)
       .maybeSingle();
     if (error) {
-      setActionError(`묶음을 다시 불러오지 못했습니다: ${error.message}`);
+      fail("batch", `묶음을 다시 불러오지 못했습니다: ${error.message}`);
       return;
     }
     if (!data) {
@@ -473,8 +521,16 @@ export default function MonthlyBillingBatchPanel({
   async function loadCreateTarget(targetCompanyId: string, targetMonth: string) {
     setCreateTarget(null);
     if (!targetCompanyId || !targetMonth) return;
+    setCreateLoading(true);
+    try {
+      await loadCreateTargetInner(targetCompanyId, targetMonth);
+    } finally {
+      setCreateLoading(false);
+    }
+  }
 
-    const terms = await loadCompanyTerms(targetCompanyId);
+  async function loadCreateTargetInner(targetCompanyId: string, targetMonth: string) {
+    const terms = await loadCompanyTerms(targetCompanyId, "create");
     if (!terms) return;
     const cutoffDay = terms.billing_cutoff_day ?? null;
 
@@ -492,7 +548,7 @@ export default function MonthlyBillingBatchPanel({
       .limit(1)
       .maybeSingle();
     if (latestError) {
-      setActionError(`묶음을 조회하지 못했습니다: ${latestError.message}`);
+      fail("create", `묶음을 조회하지 못했습니다: ${latestError.message}`);
       return;
     }
 
@@ -507,7 +563,7 @@ export default function MonthlyBillingBatchPanel({
       .gte("settlement_reference_date", period.period_start)
       .lte("settlement_reference_date", period.period_end);
     if (candError) {
-      setActionError(`후보를 조회하지 못했습니다: ${candError.message}`);
+      fail("create", `후보를 조회하지 못했습니다: ${candError.message}`);
       return;
     }
 
@@ -611,7 +667,7 @@ export default function MonthlyBillingBatchPanel({
     });
     const result = await res.json().catch(() => ({}));
     if (!result.success) {
-      setActionError(result.error || getBillingBatchReasonLabel(result.reason));
+      fail("batch", result.error || getBillingBatchReasonLabel(result.reason));
       return;
     }
     if (batch) {
@@ -630,7 +686,7 @@ export default function MonthlyBillingBatchPanel({
       .select("id,order_id")
       .in("id", ids);
     if (invError) {
-      setActionError(`운송 정보를 불러오지 못했습니다: ${invError.message}`);
+      fail("batch", `운송 정보를 불러오지 못했습니다: ${invError.message}`);
       return;
     }
     const orderIds = ((invs as any[]) || []).map((i) => i.order_id).filter(Boolean);
@@ -640,7 +696,7 @@ export default function MonthlyBillingBatchPanel({
       .select("id,order_no,origin,destination,vehicle_type,item,requested_pickup_at")
       .in("id", orderIds);
     if (orderError) {
-      setActionError(`운송 정보를 불러오지 못했습니다: ${orderError.message}`);
+      fail("batch", `운송 정보를 불러오지 못했습니다: ${orderError.message}`);
       return;
     }
     const infoByOrderId: Record<string, OrderInfo> = {};
@@ -667,12 +723,17 @@ export default function MonthlyBillingBatchPanel({
   }, [companyId, month]);
 
   async function handleCreateBatch() {
-    if (!createTarget) return;
+    // 🔴 조용히 돌아가지 말 것 — 그전에는 `if (!createTarget) return;` 이라
+    //    버튼을 눌러도 **아무 일도 안 일어나고 이유도 안 보였다.**
+    if (!createTarget) {
+      fail("create", "화주 거래조건을 아직 불러오지 못했습니다. 화주를 다시 선택해주세요.");
+      return;
+    }
     setActionError(null);
     const { period_start, period_end } = createTarget.period;
     const result = await callBatchApi("create", { company_id: companyId, period_start, period_end });
     if (!result.success) {
-      setActionError(result.error || getBillingBatchReasonLabel(result.reason));
+      fail("create", result.error || getBillingBatchReasonLabel(result.reason));
       return;
     }
     await refreshOverview();
@@ -714,7 +775,7 @@ export default function MonthlyBillingBatchPanel({
     if (failed.length > 0) {
       // 🔴 한 건이 실패해도 나머지는 담긴다 — 통째로 멈추면 담당자가 무엇이
       //    담겼는지 알 수 없다. 실패한 이유는 한 번만 모아 보여준다.
-      setActionError(`${failed.length}건을 담지 못했습니다: ${Array.from(new Set(failed)).join(" / ")}`);
+      fail("batch", `${failed.length}건을 담지 못했습니다: ${Array.from(new Set(failed)).join(" / ")}`);
     }
     await reloadOpenBatch();
     await refreshOverview();
@@ -748,7 +809,7 @@ export default function MonthlyBillingBatchPanel({
     const result = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      setActionError(result?.error || "묶음에 담지 못했습니다.");
+      fail("top", result?.error || "묶음에 담지 못했습니다.");
       return;
     }
 
@@ -773,7 +834,7 @@ export default function MonthlyBillingBatchPanel({
           period_end: period.period_end,
         });
         if (!created.success) {
-          setActionError(created.error || getBillingBatchReasonLabel(created.reason));
+          fail("top", created.error || getBillingBatchReasonLabel(created.reason));
           return;
         }
         batchId = created.batch_id;
@@ -782,11 +843,11 @@ export default function MonthlyBillingBatchPanel({
           invoice_id: orphan.invoice_id,
         });
         if (!added.success) {
-          setActionError(added.error || getBillingBatchReasonLabel(added.reason));
+          fail("top", added.error || getBillingBatchReasonLabel(added.reason));
           return;
         }
       } else {
-        setActionError(
+        fail("top", 
           result?.reason
             ? `묶음에 담지 못했습니다: ${getBillingBatchReasonLabel(result.reason)}`
             : "묶음에 담지 못했습니다."
@@ -815,7 +876,7 @@ export default function MonthlyBillingBatchPanel({
     setActionError(null);
     const result = await callBatchApi("remove-item", { batch_id: batch.id, item_id: itemId });
     if (!result.success) {
-      setActionError(result.error || getBillingBatchReasonLabel(result.reason));
+      fail("batch", result.error || getBillingBatchReasonLabel(result.reason));
       return;
     }
     await reloadOpenBatch();
@@ -831,7 +892,7 @@ export default function MonthlyBillingBatchPanel({
     setActionError(null);
     const result = await callBatchApi("delete", { batch_id: batch.id });
     if (!result.success) {
-      setActionError(result.error || getBillingBatchReasonLabel(result.reason));
+      fail("batch", result.error || getBillingBatchReasonLabel(result.reason));
       return;
     }
     await reloadOpenBatch();
@@ -845,7 +906,7 @@ export default function MonthlyBillingBatchPanel({
   async function handleForceDelete() {
     if (!batch) return;
     if (!forceDeleteReason.trim()) {
-      setActionError("삭제 사유를 입력해주세요.");
+      fail("batch", "삭제 사유를 입력해주세요.");
       return;
     }
     if (
@@ -857,7 +918,7 @@ export default function MonthlyBillingBatchPanel({
     setActionError(null);
     const result = await callBatchApi("force-delete", { batch_id: batch.id, reason: forceDeleteReason });
     if (!result.success) {
-      setActionError(result.error || getBillingBatchReasonLabel(result.reason));
+      fail("batch", result.error || getBillingBatchReasonLabel(result.reason));
       return;
     }
     setShowForceDeleteReason(false);
@@ -872,7 +933,7 @@ export default function MonthlyBillingBatchPanel({
     setActionError(null);
     const result = await callBatchApi("confirm", { batch_id: batch.id });
     if (!result.success) {
-      setActionError(result.error || getBillingBatchReasonLabel(result.reason));
+      fail("batch", result.error || getBillingBatchReasonLabel(result.reason));
       return;
     }
     await reloadOpenBatch();
@@ -882,13 +943,13 @@ export default function MonthlyBillingBatchPanel({
   async function handleRelease() {
     if (!batch) return;
     if (!releaseReason.trim()) {
-      setActionError("해제 사유를 입력해주세요.");
+      fail("batch", "해제 사유를 입력해주세요.");
       return;
     }
     setActionError(null);
     const result = await callBatchApi("release", { batch_id: batch.id, reason: releaseReason });
     if (!result.success) {
-      setActionError(result.error || getBillingBatchReasonLabel(result.reason));
+      fail("batch", result.error || getBillingBatchReasonLabel(result.reason));
       return;
     }
     setShowReleaseReason(false);
@@ -902,7 +963,7 @@ export default function MonthlyBillingBatchPanel({
     setActionError(null);
     const result = await callBatchApi("mark-tax-invoice-issued", { batch_id: batch.id });
     if (!result.success) {
-      setActionError(result.error || getBillingBatchReasonLabel(result.reason));
+      fail("batch", result.error || getBillingBatchReasonLabel(result.reason));
       return;
     }
     await reloadOpenBatch();
@@ -915,7 +976,7 @@ export default function MonthlyBillingBatchPanel({
     setActionError(null);
     const result = await callBatchApi("mark-payment-received", { batch_id: batch.id });
     if (!result.success) {
-      setActionError(result.error || getBillingBatchReasonLabel(result.reason));
+      fail("batch", result.error || getBillingBatchReasonLabel(result.reason));
       return;
     }
     await reloadOpenBatch();
@@ -927,7 +988,7 @@ export default function MonthlyBillingBatchPanel({
     setActionError(null);
     const result = await callBatchApi("set-payment-due-date", { batch_id: batch.id, due_date: dueDate });
     if (!result.success) {
-      setActionError(result.error || getBillingBatchReasonLabel(result.reason));
+      fail("batch", result.error || getBillingBatchReasonLabel(result.reason));
       return;
     }
     await reloadOpenBatch();
@@ -971,6 +1032,11 @@ export default function MonthlyBillingBatchPanel({
 
     return (
       <>
+        {/* 🔴 묶음 안에서 난 오류는 **여기**에 뜬다 — 맨 위에만 그리면 담당자가
+            누른 버튼에서 한참 떨어진 곳에 떠서 「눌러도 아무 일이 없다」가 된다
+            (원칙 33번 · 실사용 리뷰 3라운드). */}
+        <ErrorLine scope="batch" />
+
         {/* 🔴 **정산 일정** — 사용자 신고 *"결제일 부분이 표시가 되어야 하고 실제
             정산마감일이 지나고 어떻게 진행되는지도 알아야 한다"*(2026-09-15).
             그전에는 확정된 묶음에만 납부기한 **입력칸**이 있었고(실측 0건 입력),
@@ -1349,7 +1415,9 @@ export default function MonthlyBillingBatchPanel({
 
   return (
     <div>
-      {actionError && <div className="error-box" style={{ marginBottom: 16 }}>오류: {actionError}</div>}
+      {/* 🔴 맨 위 오류는 **목록·경고 줄에서 난 것만** 뜬다 — 「새 묶음 만들기」와
+          묶음 상세의 오류는 각각 그 자리에서 뜬다(위 `actionError` 주석 참고). */}
+      <ErrorLine scope="top" />
 
       {/* 🔴 자동으로 담기지 **못한** 건이 있을 때만 뜬다 — 0건이면 아무것도 그리지
           않는다. 정상 운영에서는 보이지 않는 줄이다(위 `orphans` 주석 참고). */}
@@ -1550,6 +1618,15 @@ export default function MonthlyBillingBatchPanel({
                   setSelectedCompany(c);
                   setCompanyId(c.id);
                   setCompanyResults([]);
+                  // 🔴 **정산월을 그 화주의 「담기지 않은 건」이 있는 달로 맞춘다.**
+                  //    기본값이 이번 달이라, 담을 건이 지난달 것이면 「담을 수 있는
+                  //    정산 건 0건」이 뜨고 버튼이 비활성이 된다 — 담당자에게는
+                  //    「새 묶음 만들기가 안된다」로 보인다(실사용 리뷰 3라운드).
+                  //    🔴 달을 직접 고르는 것은 그대로 되므로 길을 막지 않는다.
+                  const mine = orphans.find(
+                    (o) => o.company_id === c.id && o.cycle_month && o.cycle_month !== "-"
+                  );
+                  if (mine) setMonth(mine.cycle_month);
                 }}
                 style={{
                   padding: "8px 12px",
@@ -1562,6 +1639,20 @@ export default function MonthlyBillingBatchPanel({
               </div>
             ))}
           </div>
+        )}
+
+        <ErrorLine scope="create" />
+
+        {/* 🔴 **아무것도 안 그리는 분기를 만들지 말 것.** 그전에는
+            `selectedCompany && createTarget` 이라, 거래조건 조회가 실패하면
+            `createTarget` 이 `null` 로 남아 **버튼이 아예 렌더링되지 않았다** —
+            담당자에게는 「새 묶음 만들기가 안된다」로 보인다(실사용 리뷰 3라운드). */}
+        {selectedCompany && !createTarget && (
+          <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "0 0 10px" }}>
+            {createLoading
+              ? "이 화주·정산월의 상태를 확인하는 중입니다..."
+              : "이 화주·정산월의 상태를 확인하지 못했습니다. 위 오류를 확인하거나 화주를 다시 선택해주세요."}
+          </p>
         )}
 
         {selectedCompany && createTarget && (
@@ -1601,9 +1692,24 @@ export default function MonthlyBillingBatchPanel({
                 ? "보충 묶음 만들기"
                 : "묶음 만들기"}
             </button>
+            {/* 🔴 **비활성인 이유와 「그럼 어디로 가야 하는지」를 같이 말한다.**
+                버튼이 회색이기만 하면 담당자는 고장으로 읽는다. */}
             {createTarget.candidateCount === 0 && (
-              <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 8 }}>
-                담을 수 있는 정산 건(주선사 정산·월정산, 정산대기 상태)이 없습니다.
+              <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 8, lineHeight: 1.7 }}>
+                {createTarget.period.period_start} ~ {createTarget.period.period_end} 기간에 담을 수
+                있는 정산 건(주선사 정산·월정산, 정산대기 상태)이 없습니다.
+                {(() => {
+                  const mine = orphans.filter((o) => o.company_id === companyId);
+                  if (mine.length === 0) return null;
+                  const months = Array.from(new Set(mine.map((o) => o.cycle_month))).join(", ");
+                  return ` 이 화주는 ${months} 정산월에 담기지 않은 건이 ${mine.length}건 있습니다 — 정산월을 그 달로 바꾸거나, 맨 위 「담기」를 누르면 바로 담깁니다.`;
+                })()}
+              </p>
+            )}
+            {!!createTarget.existing && createTarget.existing.batch_status === "draft" && (
+              <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 8, lineHeight: 1.7 }}>
+                이미 작성 중인 묶음이 있어 새로 만들 수 없습니다 — 위 목록에서 그 묶음을 펼쳐
+                「모두 담기」로 담아주세요. (한 화주·기간에 작성 중 묶음은 하나만 둡니다.)
               </p>
             )}
           </div>
