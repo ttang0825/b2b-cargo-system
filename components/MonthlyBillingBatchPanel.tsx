@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { fetchExtraChargesByDispatchIds } from "@/lib/fetchDispatchExtraCharges";
 import { getCurrentStaffRole } from "@/lib/currentStaff";
 import { getBillingBatchReasonLabel } from "@/lib/billingBatchReasons";
-import { monthToPeriod, monthLabelForDate, monthRangeOf, fmtDate } from "@/lib/billingPeriod";
+import { monthToPeriod, monthLabelForDate, monthRangeOf } from "@/lib/billingPeriod";
 import {
   calcPaymentDueDate,
   describePaymentDue,
@@ -103,11 +103,14 @@ function shortPlace(v: string | null | undefined) {
 function ItemTransportCells({ info }: { info: OrderInfo | undefined }) {
   return (
     <>
+      {/* 🔴 `nowrap` 을 빼지 말 것 — 좁은 화면에서 표가 줄어들면서 주소가
+          **한 글자씩** 끊겼다(390px 에서 실제로 그랬다). 표 자체에 `minWidth` 가
+          있어서 안 줄고 가로로 스크롤된다. */}
       <td style={{ whiteSpace: "nowrap" }}>{shortDateTime(info?.requested_pickup_at)}</td>
-      <td style={{ fontSize: 12.5 }}>
+      <td style={{ fontSize: 12.5, whiteSpace: "nowrap" }}>
         {shortPlace(info?.origin)} → {shortPlace(info?.destination)}
       </td>
-      <td style={{ fontSize: 12.5 }}>
+      <td style={{ fontSize: 12.5, whiteSpace: "nowrap" }}>
         {info?.vehicle_type || "-"}
         {info?.item ? (
           <span style={{ color: "var(--text-muted)" }}> · {info.item}</span>
@@ -171,14 +174,34 @@ export default function MonthlyBillingBatchPanel({
   const [orderInfoByInvoiceId, setOrderInfoByInvoiceId] = useState<Record<string, OrderInfo>>({});
   const [loading, setLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [validatePreview, setValidatePreview] = useState<any>(null);
   const [releaseReason, setReleaseReason] = useState("");
   const [showReleaseReason, setShowReleaseReason] = useState(false);
   const [forceDeleteReason, setForceDeleteReason] = useState("");
   const [showForceDeleteReason, setShowForceDeleteReason] = useState(false);
   const [dueDate, setDueDate] = useState("");
   const [recentBatches, setRecentBatches] = useState<Batch[]>([]);
-  const [allCandidates, setAllCandidates] = useState<AllCandidateRow[]>([]);
+  // 🔴 「전체 묶음 후보」 표를 없앴다(실사용 리뷰 1라운드 — *"오더시 월정산으로
+  //    체크된건 월정산 묶음으로 자동 구성되고 따로 전체 묶음 후보는 필요없을 것
+  //    같다"*). 자동으로 담기면 이 목록은 **항상 비어 있는 것이 정상**이다.
+  //    🔴 **그래도 조회는 남겼다** — 자동으로 담기지 **못한** 건(그 달 묶음이 이미
+  //    확정·해제됐거나 자동 처리가 실패한 경우)이 생기면 아무 화면에도 안 나타나
+  //    조용히 청구에서 빠진다. 대신 **0건이면 아무것도 그리지 않고**, 있을 때만
+  //    한 줄 경고로 뜬다. 🔴 표와 「선택」 버튼으로 되돌리지 말 것.
+  const [orphans, setOrphans] = useState<AllCandidateRow[]>([]);
+  // 🔴 **작성 중 묶음에는 `total_amount` 가 없다** — 확정할 때 채워지는 컬럼이라,
+  //    목록의 금액 칸이 작성 중인 묶음마다 `-` 로 비어 있었다(렌더링해 보고 발견).
+  //    목록이 이제 기본 화면이라 가장 흔한 상태의 금액이 안 보이면 쓸모가 없다.
+  //    담긴 항목의 스냅샷 합계를 따로 세서 보여준다.
+  //    🔴 확정된 묶음에는 쓰지 말 것 — 그쪽은 확정 시점에 **얼려진** 값이 정본이다.
+  const [draftTotalByBatchId, setDraftTotalByBatchId] = useState<Record<string, number>>({});
+  // 「새 묶음 만들기」에서 고른 화주·정산월의 상태. 🔴 펼친 묶음(`batch`)과 **다른
+  //    상태다** — 섞으면 목록에서 펼친 묶음이 검색창 값에 따라 바뀐다.
+  const [createTarget, setCreateTarget] = useState<{
+    existing: Batch | null;
+    candidateCount: number;
+    cutoffDay: number | null;
+    period: { period_start: string; period_end: string };
+  } | null>(null);
   const [companyCutoffDay, setCompanyCutoffDay] = useState<number | null>(null);
   // 화주 거래조건의 결제일 설정(36차 A장) — 납부기한 계산·안내에 쓴다
   const [companyPaymentDue, setCompanyPaymentDue] = useState<PaymentDueSetting | null>(null);
@@ -188,7 +211,7 @@ export default function MonthlyBillingBatchPanel({
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
     loadRecentBatches();
-    loadAllCandidates();
+    loadOrphans();
     if (initialCompanyId) {
       supabase
         .from("companies")
@@ -196,9 +219,33 @@ export default function MonthlyBillingBatchPanel({
         .eq("id", initialCompanyId)
         .maybeSingle()
         .then(({ data }) => data && setSelectedCompany(data as Company));
+      // 🔴 **정산 상세에서 들어오는 깊은 링크를 살려 둔다**
+      //    (`/admin/invoices/[id]` 의 「월정산 묶음 보기」 → `?tab=monthly&company=..&month=..`).
+      //    그전에는 화주·정산월이 주어지면 그 묶음 상세가 **바로 열렸다.** 목록
+      //    아코디언으로 바꾸면서 그냥 두면 「눌렀는데 목록만 뜬다」가 된다.
+      if (initialMonth) openInitialBatch(initialCompanyId, initialMonth);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /** 깊은 링크로 들어왔을 때 그 화주·정산월의 묶음을 찾아 펼친다. */
+  async function openInitialBatch(targetCompanyId: string, targetMonth: string) {
+    // 🔴 기간 완전일치로 찾지 말 것(원칙 46번) — `period_end` 가 그 달력월 안인지로 찾는다.
+    const { start, end } = monthRangeOf(targetMonth);
+    const { data, error } = await supabase
+      .from("customer_billing_batches")
+      .select(BATCH_SELECT)
+      .eq("company_id", targetCompanyId)
+      .gte("period_end", start)
+      .lte("period_end", end)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    // 🔴 못 찾아도 오류가 아니다 — 아직 묶음이 없는 달일 수 있다(아래 「새 묶음
+    //    만들기」가 그 화주·정산월로 이미 채워져 있다).
+    if (error || !data) return;
+    await openBatch(data as any);
+  }
 
   // 화주 업체 검색(admin/orders의 화주 검색과 동일한 패턴) — 업체 수가
   // 많아지면 드롭다운을 스크롤하며 찾아야 해서 불편하다는 실사용 피드백으로
@@ -226,21 +273,47 @@ export default function MonthlyBillingBatchPanel({
   }, [companySearch]);
 
   async function loadRecentBatches() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("customer_billing_batches")
       .select(
         "id,company_id,period_start,period_end,batch_status,tax_invoice_status,tax_invoice_issued_at,payment_status,payment_due_date,paid_at,supply_amount,vat_amount,total_amount,cancel_reason,confirmed_by_name_snapshot,cancelled_by_name_snapshot,companies(name)"
       )
       .order("period_start", { ascending: false })
       .limit(30);
-    setRecentBatches((data as any) || []);
+    // 🔴 `error` 를 버리면 조회 실패가 「묶음이 하나도 없습니다」로 보인다(원칙 55번).
+    if (error) {
+      setActionError(`묶음 목록을 불러오지 못했습니다: ${error.message}`);
+      return;
+    }
+    const list = (data as any[]) || [];
+    setRecentBatches(list as any);
+
+    const draftIds = list.filter((b) => b.batch_status === "draft").map((b) => b.id);
+    if (draftIds.length === 0) {
+      setDraftTotalByBatchId({});
+      return;
+    }
+    const { data: items, error: itemError } = await supabase
+      .from("customer_billing_batch_items")
+      .select("batch_id,total_amount_snapshot")
+      .in("batch_id", draftIds)
+      .is("released_at", null);
+    if (itemError) {
+      setActionError(`묶음 금액을 불러오지 못했습니다: ${itemError.message}`);
+      return;
+    }
+    const sums: Record<string, number> = {};
+    ((items as any[]) || []).forEach((it) => {
+      sums[it.batch_id] = (sums[it.batch_id] || 0) + (it.total_amount_snapshot || 0);
+    });
+    setDraftTotalByBatchId(sums);
   }
 
   // 화주를 하나씩 찾아서 확인하지 않아도 조건에 맞는 후보(주선사정산·월정산·
   // 정산대기, 아직 어느 묶음에도 안 담긴 건)가 전체 화주 기준으로 한눈에
   // 보이도록 함(PR #64 실사용 피드백) — customer_billing_batch_candidates
   // 뷰는 회사명/오더번호가 없어서 별도로 조회해 붙여줌
-  async function loadAllCandidates() {
+  async function loadOrphans() {
     const { data: rows } = await supabase
       .from("customer_billing_batch_candidates")
       .select("invoice_id,company_id,billing_period,customer_charge_total,order_id,settlement_reference_date")
@@ -248,7 +321,7 @@ export default function MonthlyBillingBatchPanel({
       .limit(200);
     const list = (rows as CandidateRow[]) || [];
     if (list.length === 0) {
-      setAllCandidates([]);
+      setOrphans([]);
       return;
     }
 
@@ -271,7 +344,7 @@ export default function MonthlyBillingBatchPanel({
     const orderNoById: Record<string, string> = {};
     (ordersData || []).forEach((o: any) => (orderNoById[o.id] = o.order_no || "-"));
 
-    setAllCandidates(
+    setOrphans(
       list.map((r) => ({
         ...r,
         company_name: companyNameById[r.company_id] || "-",
@@ -285,101 +358,167 @@ export default function MonthlyBillingBatchPanel({
 
   async function refreshOverview() {
     await loadRecentBatches();
-    await loadAllCandidates();
+    await loadOrphans();
   }
 
-  async function loadBatchFor(targetCompanyId: string, targetMonth: string) {
-    setActionError(null);
-    setValidatePreview(null);
-    setBatch(null);
-    setCandidates([]);
-    setActiveItems([]);
-    if (!targetCompanyId || !targetMonth) return;
-    setLoading(true);
-
-    // 화주별 정산 마감일 설정을 매번 fresh 조회 — 이 값에 따라 기간 계산
-    // 방식이 달라짐(PR #64 리뷰 피드백)
-    const { data: companyRow, error: companyError } = await supabase
+  /** 화주 거래조건을 fresh 로 읽어 화면 state 에 넣고 그 값을 돌려준다. */
+  async function loadCompanyTerms(targetCompanyId: string) {
+    const { data, error } = await supabase
       .from("companies")
       .select("billing_cutoff_day,payment_due_basis,payment_due_value")
       .eq("id", targetCompanyId)
       .maybeSingle();
-    if (companyError) {
+    if (error) {
       // 🔴 조회 실패를 조용히 넘기지 말 것(원칙 55번) — 그냥 넘기면 마감일이 없는
       //    것처럼 달력월로 계산해서 **엉뚱한 기간의 묶음을 만들** 수 있다.
-      setActionError(`화주 거래조건을 불러오지 못했습니다: ${companyError.message}`);
-      setLoading(false);
+      setActionError(`화주 거래조건을 불러오지 못했습니다: ${error.message}`);
+      return null;
+    }
+    return (data as any) || { billing_cutoff_day: null, payment_due_basis: null, payment_due_value: null };
+  }
+
+  const BATCH_SELECT =
+    "id,company_id,period_start,period_end,batch_status,tax_invoice_status,tax_invoice_issued_at,payment_status,payment_due_date,paid_at,supply_amount,vat_amount,total_amount,cancel_reason,confirmed_by_name_snapshot,cancelled_by_name_snapshot";
+
+  /**
+   * 목록에서 묶음 한 줄을 **펼친다**(실사용 리뷰 1라운드 — *"묶음 목록에 있는 건은
+   * 상세로 펼치고 접을수 있는 기능이 있어야 한다"*).
+   *
+   * 🔴 **그 줄을 그대로 연다** — 그전에는 화주·정산월로 「가장 최근 묶음」을 다시
+   *    찾아서 열었기 때문에, 같은 달에 해제된 묶음과 새 묶음이 둘 있으면 **클릭한
+   *    줄이 아닌 다른 묶음**이 열렸다.
+   * 🔴 **한 번에 하나만 펼친다**(27차 견적 확인 아코디언과 같은 규칙) — 펼친 것이
+   *    곧 선택된 묶음이라 state 가 하나로 끝난다.
+   */
+  async function openBatch(row: any) {
+    if (batch?.id === row.id) {
+      setBatch(null);
+      setActiveItems([]);
+      setCandidates([]);
       return;
     }
-    const cutoffDay = (companyRow as any)?.billing_cutoff_day ?? null;
-    setCompanyCutoffDay(cutoffDay);
-    setCompanyPaymentDue({
-      payment_due_basis: (companyRow as any)?.payment_due_basis ?? null,
-      payment_due_value: (companyRow as any)?.payment_due_value ?? null,
-    });
+    setActionError(null);
+    setShowReleaseReason(false);
+    setShowForceDeleteReason(false);
+    setBatch(row);
+    setActiveItems([]);
+    setCandidates([]);
+    setLoading(true);
 
-    const commonSelect =
-      "id,company_id,period_start,period_end,batch_status,tax_invoice_status,tax_invoice_issued_at,payment_status,payment_due_date,paid_at,supply_amount,vat_amount,total_amount,cancel_reason,confirmed_by_name_snapshot,cancelled_by_name_snapshot";
+    const terms = await loadCompanyTerms(row.company_id);
+    if (terms) {
+      setCompanyCutoffDay(terms.billing_cutoff_day ?? null);
+      setCompanyPaymentDue({
+        payment_due_basis: terms.payment_due_basis ?? null,
+        payment_due_value: terms.payment_due_value ?? null,
+      });
+    }
 
-    // 기존 묶음 검색은 "화주의 현재 마감일 설정으로 역산한 기간"과 정확히
-    // 일치하는지 비교하지 않는다 — 마감일 설정이 묶음 생성 이후에 바뀌면
-    // (예: 처음엔 마감일 미설정으로 달력월 묶음을 만들고, 나중에 마감일을
-    // 지정한 경우) 과거 묶음의 저장된 period_start/end는 그 당시 계산값
-    // 그대로라 재계산한 값과 어긋나 못 찾게 된다(실사용 버그 — "최근 묶음"
-    // 목록에서 확정건을 클릭해도 상세가 안 뜨던 문제). 대신 "이 정산월
-    // 라벨에 해당하는 period_end"는 마감일 설정과 무관하게 항상 그 달력월
-    // 안에 있다는 성질(monthToPeriod의 end 계산 방식상 항상 같은 달)을
-    // 이용해, period_end가 이 달력월 범위 안에 있는 묶음을 찾는다.
-    const { start: monthRangeStart, end: monthRangeEnd } = monthRangeOf(targetMonth);
+    // 🔴 저장된 납부기한이 없으면 **화주 설정으로 계산한 값을 입력칸에 미리 넣는다.**
+    //    실측에서 결제일이 채워진 묶음이 0건이었던 것은 담당자가 안 넣은 것이 아니라
+    //    **빈 칸 하나만 덩그러니 있어서 무엇을 넣어야 하는지 알 수 없었기 때문**이다.
+    //    🔴 넣어두기만 하고 저장하지는 않는다 — 저장은 담당자가 누른다.
+    //    🔴 `companyPaymentDue` state 를 읽지 말 것(같은 렌더에서는 아직 옛 값이다).
+    setDueDate(row.payment_due_date || (terms ? calcPaymentDueDate(row.period_end, terms) : null) || "");
 
-    // 이 화주·기간의 가장 최근 묶음을 가져온다. draft/confirmed(=아직
-    // 살아있는 묶음)면 그 내용을 그대로 보여주고, cancelled(해제됨)면
-    // 참고용으로 보여주면서도 새 묶음을 다시 만들 수 있게 후보를 같이
-    // 조회한다(해제 후 재묶음이 안 되던 버그, PR #64 리뷰 피드백)
-    const { data: latest } = await supabase
+    await loadActiveItems(row.id);
+    // 🔴 **묶음에 저장된 자기 기간**으로 후보를 찾는다(원칙 46번) — 화주의 현재
+    //    마감일로 역산하면 설정이 바뀐 뒤에는 과거 묶음의 후보를 못 찾는다.
+    if (row.batch_status !== "cancelled") {
+      await loadCandidatesOnly(row.company_id, row.period_start, row.period_end);
+    }
+    setLoading(false);
+  }
+
+  /** 펼쳐둔 묶음을 그대로 다시 읽는다 — 어떤 처리를 한 뒤에 쓴다. */
+  async function reloadOpenBatch() {
+    if (!batch) return;
+    const { data, error } = await supabase
       .from("customer_billing_batches")
-      .select(commonSelect)
+      .select(BATCH_SELECT)
+      .eq("id", batch.id)
+      .maybeSingle();
+    if (error) {
+      setActionError(`묶음을 다시 불러오지 못했습니다: ${error.message}`);
+      return;
+    }
+    if (!data) {
+      // 삭제된 경우 — 접는다
+      setBatch(null);
+      setActiveItems([]);
+      setCandidates([]);
+      return;
+    }
+    setBatch(data as any);
+    setDueDate(
+      (data as any).payment_due_date ||
+        calcPaymentDueDate((data as any).period_end, companyPaymentDue) ||
+        ""
+    );
+    await loadActiveItems((data as any).id);
+    if ((data as any).batch_status !== "cancelled") {
+      await loadCandidatesOnly(
+        (data as any).company_id,
+        (data as any).period_start,
+        (data as any).period_end
+      );
+    }
+  }
+
+  /**
+   * 「새 묶음 만들기」에서 고른 화주·정산월의 상태를 읽는다.
+   * 🔴 여기서 `batch` 를 건드리지 않는다 — 검색창을 만질 때마다 목록에서 펼쳐둔
+   *    묶음이 바뀌면 안 된다.
+   */
+  async function loadCreateTarget(targetCompanyId: string, targetMonth: string) {
+    setCreateTarget(null);
+    if (!targetCompanyId || !targetMonth) return;
+
+    const terms = await loadCompanyTerms(targetCompanyId);
+    if (!terms) return;
+    const cutoffDay = terms.billing_cutoff_day ?? null;
+
+    // 🔴 기존 묶음은 "현재 마감일로 역산한 기간"과 완전일치로 찾지 않는다(원칙 46번) —
+    //    마감일 설정이 묶음 생성 뒤에 바뀌면 영영 못 찾는다. `period_end` 가 그
+    //    달력월 안에 있는지로 찾는다.
+    const { start: monthRangeStart, end: monthRangeEnd } = monthRangeOf(targetMonth);
+    const { data: latest, error: latestError } = await supabase
+      .from("customer_billing_batches")
+      .select(BATCH_SELECT)
       .eq("company_id", targetCompanyId)
       .gte("period_end", monthRangeStart)
       .lte("period_end", monthRangeEnd)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+    if (latestError) {
+      setActionError(`묶음을 조회하지 못했습니다: ${latestError.message}`);
+      return;
+    }
 
-    // 새 묶음을 만들 때 쓸 기간은 화주의 현재 마감일 설정 기준으로 계산하되,
-    // 기존 묶음을 찾았으면 그 묶음 고유의 저장된 기간을 그대로 쓴다(재계산값과
-    // 어긋날 수 있으므로 화면에 보여주는 후보·항목도 실제 저장된 기간 기준이어야 함)
-    const { period_start, period_end } = latest
+    const period = latest
       ? { period_start: (latest as any).period_start, period_end: (latest as any).period_end }
       : monthToPeriod(targetMonth, cutoffDay);
 
-    if (latest && (latest as any).batch_status !== "cancelled") {
-      setBatch(latest as any);
-      // 🔴 저장된 납부기한이 없으면 **화주 설정으로 계산한 값을 입력칸에 미리 넣는다.**
-      //    실측에서 결제일이 채워진 묶음이 0건이었던 것은 담당자가 안 넣은 것이 아니라
-      //    **빈 칸 하나만 덩그러니 있어서 무엇을 넣어야 하는지 알 수 없었기 때문**이다.
-      //    🔴 넣어두기만 하고 저장하지는 않는다 — 저장은 담당자가 누른다.
-      //    🔴 `companyPaymentDue` state 를 읽지 말 것(같은 렌더에서는 아직 옛 값이다).
-      setDueDate(
-        (latest as any).payment_due_date ||
-          calcPaymentDueDate((latest as any).period_end, companyRow as any) ||
-          ""
-      );
-      if ((latest as any).batch_status === "draft") {
-        await loadDraftContents((latest as any).id, targetCompanyId, period_start, period_end);
-      } else {
-        // 확정된 묶음이어도, 확정 이후에 새로 정산등록된 건이 있으면
-        // 보충 묶음으로 담을 수 있어야 하므로 후보도 같이 조회해둔다
-        // (PR #64 리뷰 피드백 — "묶음 확정되면 추가되는 정산은 어떻게
-        // 추가하나?")
-        await loadActiveItems((latest as any).id);
-        await loadCandidatesOnly(targetCompanyId, period_start, period_end);
-      }
-    } else {
-      if (latest) setBatch(latest as any);
-      await loadCandidatesOnly(targetCompanyId, period_start, period_end);
+    const { data: cands, error: candError } = await supabase
+      .from("customer_billing_batch_candidates")
+      .select("invoice_id")
+      .eq("company_id", targetCompanyId)
+      .gte("settlement_reference_date", period.period_start)
+      .lte("settlement_reference_date", period.period_end);
+    if (candError) {
+      setActionError(`후보를 조회하지 못했습니다: ${candError.message}`);
+      return;
     }
-    setLoading(false);
+
+    setCreateTarget({
+      existing: (latest as any) || null,
+      candidateCount: ((cands as any[]) || []).length,
+      cutoffDay,
+      // 🔴 새로 만들 때 쓸 기간은 **현재 마감일 기준**이다(기존 묶음이 해제된
+      //    경우에도 새 묶음은 지금 설정으로 만든다).
+      period: monthToPeriod(targetMonth, cutoffDay),
+    });
   }
 
   // 후보 판정은 billing_period 텍스트 일치가 아니라 settlement_reference_date가
@@ -395,11 +534,6 @@ export default function MonthlyBillingBatchPanel({
       .lte("settlement_reference_date", periodEnd);
     setCandidates((data as any) || []);
     await loadOrderInfo((data as any) || []);
-  }
-
-  async function loadDraftContents(batchId: string, targetCompanyId: string, periodStart: string, periodEnd: string) {
-    await loadCandidatesOnly(targetCompanyId, periodStart, periodEnd);
-    await loadActiveItems(batchId);
   }
 
   async function loadActiveItems(batchId: string) {
@@ -481,7 +615,7 @@ export default function MonthlyBillingBatchPanel({
       return;
     }
     if (batch) {
-      await loadDraftContents(batch.id, companyId, batch.period_start, batch.period_end);
+      await reloadOpenBatch();
     }
   }
 
@@ -528,31 +662,62 @@ export default function MonthlyBillingBatchPanel({
   }
 
   useEffect(() => {
-    loadBatchFor(companyId, month);
+    loadCreateTarget(companyId, month);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId, month]);
 
   async function handleCreateBatch() {
+    if (!createTarget) return;
     setActionError(null);
-    const { period_start, period_end } = monthToPeriod(month, companyCutoffDay);
+    const { period_start, period_end } = createTarget.period;
     const result = await callBatchApi("create", { company_id: companyId, period_start, period_end });
     if (!result.success) {
       setActionError(result.error || getBillingBatchReasonLabel(result.reason));
       return;
     }
-    await loadBatchFor(companyId, month);
     await refreshOverview();
+    await loadCreateTarget(companyId, month);
+    // 🔴 만든 묶음을 **바로 펼친다** — 만들고 나서 목록에서 다시 찾아 눌러야 하면
+    //    「만들었는데 아무 일도 안 일어난다」로 읽힌다.
+    const { data: created } = await supabase
+      .from("customer_billing_batches")
+      .select(BATCH_SELECT)
+      .eq("id", result.batch_id)
+      .maybeSingle();
+    if (created) {
+      setBatch(null);
+      await openBatch(created as any);
+    }
   }
 
-  async function handleAddItem(invoiceId: string) {
+  /**
+   * 이 묶음 기간의 **담기지 않은 건을 한 번에 담는다.**
+   * 🔴 줄마다 「추가」 버튼을 두던 것을 없앴다(실사용 리뷰 1라운드 —
+   *    *"「추가」 버튼과 「확정전 미리보기」 버튼은 기능상 불필요해 보인다"*).
+   *    이제 운송완료 시점에 자동으로 담기므로, 여기 남는 건은 **자동 처리가
+   *    닿지 못한 건**뿐이고 그것은 골라 담을 이유가 없다 — 전부 담으면 된다.
+   * 🔴 **버튼 자체를 없애지는 않았다** — 없애면 자동 처리가 실패한 건을 묶음에
+   *    넣을 길이 하나도 남지 않아 조용히 청구에서 빠진다. 담을 것이 0건이면
+   *    이 버튼은 아예 그려지지 않는다.
+   */
+  async function handleAddAllCandidates() {
     if (!batch) return;
     setActionError(null);
-    const result = await callBatchApi("add-item", { batch_id: batch.id, invoice_id: invoiceId });
-    if (!result.success) {
-      setActionError(result.error || getBillingBatchReasonLabel(result.reason));
-      return;
+    const targets = availableCandidates.map((c) => c.invoice_id);
+    const failed: string[] = [];
+    for (const invoiceId of targets) {
+      const result = await callBatchApi("add-item", { batch_id: batch.id, invoice_id: invoiceId });
+      if (!result.success) {
+        failed.push(result.error || getBillingBatchReasonLabel(result.reason));
+      }
     }
-    await loadDraftContents(batch.id, companyId, batch.period_start, batch.period_end);
+    if (failed.length > 0) {
+      // 🔴 한 건이 실패해도 나머지는 담긴다 — 통째로 멈추면 담당자가 무엇이
+      //    담겼는지 알 수 없다. 실패한 이유는 한 번만 모아 보여준다.
+      setActionError(`${failed.length}건을 담지 못했습니다: ${Array.from(new Set(failed)).join(" / ")}`);
+    }
+    await reloadOpenBatch();
+    await refreshOverview();
   }
 
   async function handleRemoveItem(itemId: string) {
@@ -563,7 +728,7 @@ export default function MonthlyBillingBatchPanel({
       setActionError(result.error || getBillingBatchReasonLabel(result.reason));
       return;
     }
-    await loadDraftContents(batch.id, companyId, batch.period_start, batch.period_end);
+    await reloadOpenBatch();
   }
 
   async function handleDeleteBatch() {
@@ -579,43 +744,10 @@ export default function MonthlyBillingBatchPanel({
       setActionError(result.error || getBillingBatchReasonLabel(result.reason));
       return;
     }
-    await loadBatchFor(companyId, month);
+    await reloadOpenBatch();
     await refreshOverview();
   }
 
-  // "최근 묶음" 목록에서 바로 삭제(현재 화면에 로드된 batch와 무관한 다른
-  // 행일 수 있음) — 테스트 기록 정리 목적(PR #64 리뷰 피드백). 확정된
-  // 묶음은 사유 입력이 필요해 별도로 force-delete API를 탄다(관리자 전용,
-  // 아래 handleForceDelete와 동일한 경로).
-  async function handleDeleteRecentBatch(batchId: string, batchStatus: string) {
-    setActionError(null);
-    if (batchStatus === "confirmed") {
-      const reason = window.prompt(
-        "확정된 묶음을 완전삭제합니다. 담긴 정산 건은 개별 정산(정산대기)으로 되돌아가고, 세금계산서·입금 처리 기록은 사라집니다. 삭제 사유를 입력해주세요:"
-      );
-      if (reason === null) return;
-      if (!reason.trim()) {
-        setActionError("삭제 사유를 입력해주세요.");
-        return;
-      }
-      const result = await callBatchApi("force-delete", { batch_id: batchId, reason });
-      if (!result.success) {
-        setActionError(result.error || getBillingBatchReasonLabel(result.reason));
-        return;
-      }
-    } else {
-      if (!confirm("이 묶음 기록을 삭제할까요? 되돌릴 수 없습니다.")) return;
-      const result = await callBatchApi("delete", { batch_id: batchId });
-      if (!result.success) {
-        setActionError(result.error || getBillingBatchReasonLabel(result.reason));
-        return;
-      }
-    }
-    if (batch?.id === batchId) {
-      await loadBatchFor(companyId, month);
-    }
-    await refreshOverview();
-  }
 
   // 확정 화면 안에서 바로 완전삭제(관리자 전용) — 정상 해제(release)는
   // 세금계산서 발행/입금 처리가 시작되면 막혀있는데, 테스트 중 만든 기록을
@@ -640,20 +772,8 @@ export default function MonthlyBillingBatchPanel({
     }
     setShowForceDeleteReason(false);
     setForceDeleteReason("");
-    await loadBatchFor(companyId, month);
+    await reloadOpenBatch();
     await refreshOverview();
-  }
-
-  async function handleValidate() {
-    if (!batch) return;
-    setActionError(null);
-    const result = await callBatchApi("validate", { batch_id: batch.id });
-    if (!result.success) {
-      setActionError(result.error || getBillingBatchReasonLabel(result.reason));
-      setValidatePreview(null);
-      return;
-    }
-    setValidatePreview(result);
   }
 
   async function handleConfirm() {
@@ -665,8 +785,7 @@ export default function MonthlyBillingBatchPanel({
       setActionError(result.error || getBillingBatchReasonLabel(result.reason));
       return;
     }
-    setValidatePreview(null);
-    await loadBatchFor(companyId, month);
+    await reloadOpenBatch();
     await refreshOverview();
   }
 
@@ -684,7 +803,7 @@ export default function MonthlyBillingBatchPanel({
     }
     setShowReleaseReason(false);
     setReleaseReason("");
-    await loadBatchFor(companyId, month);
+    await reloadOpenBatch();
     await refreshOverview();
   }
 
@@ -696,7 +815,7 @@ export default function MonthlyBillingBatchPanel({
       setActionError(result.error || getBillingBatchReasonLabel(result.reason));
       return;
     }
-    await loadBatchFor(companyId, month);
+    await reloadOpenBatch();
     await refreshOverview();
   }
 
@@ -709,7 +828,7 @@ export default function MonthlyBillingBatchPanel({
       setActionError(result.error || getBillingBatchReasonLabel(result.reason));
       return;
     }
-    await loadBatchFor(companyId, month);
+    await reloadOpenBatch();
     await refreshOverview();
   }
 
@@ -721,7 +840,7 @@ export default function MonthlyBillingBatchPanel({
       setActionError(result.error || getBillingBatchReasonLabel(result.reason));
       return;
     }
-    await loadBatchFor(companyId, month);
+    await reloadOpenBatch();
     await refreshOverview();
   }
 
@@ -748,290 +867,171 @@ export default function MonthlyBillingBatchPanel({
     batch.payment_status !== "paid" &&
     (batch.payment_status === "overdue" || isPastDue(batch.payment_due_date));
 
-  return (
-    <div>
-      <div className="card" style={{ padding: 20, marginBottom: 20 }}>
-        <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 4 }}>
-          전체 묶음 후보 ({allCandidates.length}건)
-        </h3>
-        <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 0, marginBottom: 12 }}>
-          운송이 완료되면 월정산 건은 <b>그 화주·정산월의 묶음에 자동으로 담깁니다</b>(묶음이
-          없으면 작성 중 묶음이 새로 만들어집니다). 여기 남는 것은 <b>자동으로 담기지 못한
-          건</b>입니다 — 그 달 묶음이 이미 확정·해제됐거나(보충 묶음이 필요합니다), 자동 처리가
-          실패한 경우입니다. "선택"을 누르면 그 화주·정산월로 바로 이동합니다.
-        </p>
-        {allCandidates.length === 0 ? (
-          <p style={{ fontSize: 13, color: "var(--text-muted)" }}>현재 묶을 수 있는 후보가 없습니다.</p>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>화주</th>
-                <th>정산 기준일</th>
-                <th>해당 정산월</th>
-                <th>오더번호</th>
-                <th>화주 청구금액</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {allCandidates.map((c) => (
-                <tr key={c.invoice_id}>
-                  <td>{c.company_name}</td>
-                  <td>{c.settlement_reference_date || "-"}</td>
-                  <td>{c.cycle_month}</td>
-                  <td>{c.order_no}</td>
-                  <td>{won(c.customer_charge_total)}</td>
-                  <td>
-                    <button
-                      className="btn btn-ghost"
-                      style={{ fontSize: 12, padding: "4px 10px" }}
-                      onClick={() => {
-                        setSelectedCompany({ id: c.company_id, name: c.company_name });
-                        setCompanyId(c.company_id);
-                        setMonth(c.cycle_month !== "-" ? c.cycle_month : currentMonthInput());
-                      }}
-                    >
-                      선택
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
 
-      <div className="form-grid" style={{ padding: 0, marginBottom: 6, maxWidth: 480 }}>
-        <div className="field">
-          <label>화주 검색</label>
-          <input
-            value={selectedCompany ? selectedCompany.name : companySearch}
-            onChange={(e) => {
-              setSelectedCompany(null);
-              setCompanyId("");
-              setCompanySearch(e.target.value);
+  /**
+   * 펼친 묶음의 속. 🔴 상태(작성중·확정·해제)마다 **보여줄 것과 누를 것이 다르다.**
+   * 🔴 컴포넌트 밖으로 빼지 말 것 — state 를 그대로 읽으려고 안에 둔 것이고,
+   *    밖으로 빼면 인자를 20개쯤 넘겨야 한다.
+   */
+  function BatchDetail() {
+    if (!batch) return null;
+    const draft = batch.batch_status === "draft";
+    const confirmed = batch.batch_status === "confirmed";
+    const cancelled = batch.batch_status === "cancelled";
+
+    return (
+      <>
+        {/* 🔴 **정산 일정** — 사용자 신고 *"결제일 부분이 표시가 되어야 하고 실제
+            정산마감일이 지나고 어떻게 진행되는지도 알아야 한다"*(2026-09-15).
+            그전에는 확정된 묶음에만 납부기한 **입력칸**이 있었고(실측 0건 입력),
+            마감일이 지났다는 것도 어디에도 안 나왔다. */}
+        {!cancelled && (
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 18,
+              padding: "10px 0 14px",
+              borderBottom: "1px solid var(--border)",
+              marginBottom: 14,
             }}
-            placeholder="회사명을 입력해서 검색"
-            autoComplete="off"
-          />
-        </div>
-        <div className="field">
-          <label>정산월</label>
-          <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
-        </div>
-      </div>
-      {selectedCompany && month && (
-        <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 0, marginBottom: 16 }}>
-          실제 정산 기간:{" "}
-          {(() => {
-            const { period_start, period_end } = monthToPeriod(month, companyCutoffDay);
-            return `${period_start} ~ ${period_end}`;
-          })()}
-          {companyCutoffDay
-            ? ` (이 화주는 매달 ${companyCutoffDay}일 마감으로 설정되어 있습니다)`
-            : " (정산 마감일 미설정 — 달력월 기준)"}
-        </p>
-      )}
-      {!selectedCompany && companyResults.length > 0 && (
-        <div className="card" style={{ maxWidth: 220, marginBottom: 16, maxHeight: 180, overflowY: "auto" }}>
-          {companyResults.map((c) => (
-            <div
-              key={c.id}
-              onClick={() => {
-                setSelectedCompany(c);
-                setCompanyId(c.id);
-                setCompanyResults([]);
-              }}
-              style={{
-                padding: "8px 12px",
-                fontSize: 13,
-                cursor: "pointer",
-                borderBottom: "1px solid var(--border)",
-              }}
-            >
-              {c.name}
+          >
+            <div>
+              <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>정산 기간</div>
+              <div style={{ fontSize: 13.5, fontWeight: 600 }}>
+                {batch.period_start} ~ {batch.period_end}
+              </div>
             </div>
-          ))}
-        </div>
-      )}
-      {!selectedCompany && <div style={{ marginBottom: 16 }} />}
-
-      <details style={{ marginBottom: 16, fontSize: 12.5, color: "var(--text-muted)" }}>
-        <summary style={{ cursor: "pointer" }}>묶음 후보가 되는 조건 보기</summary>
-        <ul style={{ marginTop: 8, paddingLeft: 18, lineHeight: 1.7 }}>
-          <li>정산방식이 "주선사 정산 · 월정산"(수금방식 broker, 청구주기 monthly)인 건</li>
-          <li>정산 상태가 "정산대기"인 건(이미 청구·입금 처리가 시작된 건은 제외)</li>
-          <li>
-            정산 기준일(등록 시 자동으로 오늘 날짜가 채워짐)이 위에서 고른 정산월의 실제 기간 안에
-            있는 건 — 화주별 정산 마감일(화주 상세에서 설정)이 있으면 그 기준으로, 없으면 달력월
-            (1일~말일) 기준으로 계산됩니다
-          </li>
-          <li>화주 청구금액이 확정되어 있고(0원·미입력 아님), 아직 다른 묶음에 포함되지 않은 건</li>
-        </ul>
-        <p style={{ marginTop: 10, lineHeight: 1.7 }}>
-          이 조건에 맞는 건은 <b>운송완료 시점에 자동으로 묶음에 담깁니다.</b> 다만 그 달 묶음이
-          이미 <b>확정</b>되었거나 <b>해제</b>된 상태면 자동으로 담지 않습니다 — 확정된 금액이
-          담당자도 모르게 흔들리거나, 일부러 해제한 묶음이 되살아나면 안 되기 때문입니다.
-          그때는 아래에서 <b>보충 묶음</b>을 만들어 담아주세요.
-        </p>
-        <p style={{ marginTop: 8, lineHeight: 1.7 }}>
-          <b>마감일이 지나면</b> 작성 중인 묶음에 「마감 지남」 표시가 붙습니다. 확정은 담당자가
-          직접 누릅니다 — 마감 직후에 뒤늦게 등록되는 운송 건이 있어서 자동으로 굳히지 않습니다.
-          확정하면 화주 결제일 설정으로 <b>납부기한</b>이 채워지고, 그 날짜가 지나도록 입금이
-          없으면 매일 도는 작업이 <b>연체</b>로 표시합니다.
-        </p>
-      </details>
-
-      {actionError && <div className="error-box">오류: {actionError}</div>}
-
-      {loading && <div className="empty-state">불러오는 중...</div>}
-
-      {!loading && companyId && month && (
-        <div className="card" style={{ padding: 20, marginBottom: 24 }}>
-          {/* 🔴 **정산 일정** — 사용자 신고 *"결제일 부분이 표시가 되어야 하고 실제
-              정산마감일이 지나고 어떻게 진행되는지도 알아야 한다"*(2026-09-15).
-              그전에는 확정된 묶음에만 납부기한 **입력칸**이 있었고(실측 0건 입력),
-              마감일이 지났다는 것도 어디에도 안 나왔다. */}
-          {batch && (
-            <div
-              style={{
-                border: "1px solid var(--border)",
-                borderRadius: 8,
-                padding: "12px 14px",
-                marginBottom: 16,
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 18,
-              }}
-            >
-              <div>
-                <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>정산 기간</div>
-                <div style={{ fontSize: 13.5, fontWeight: 600 }}>
-                  {batch.period_start} ~ {batch.period_end}
-                </div>
+            <div>
+              <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>정산 마감일</div>
+              <div style={{ fontSize: 13.5, fontWeight: 600 }}>
+                {batch.period_end}
+                {batchPeriodClosed && (
+                  <span style={{ color: "var(--text-muted)", fontWeight: 400 }}> (지남)</span>
+                )}
               </div>
-              <div>
-                <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>정산 마감일</div>
-                <div style={{ fontSize: 13.5, fontWeight: 600 }}>
-                  {batch.period_end}
-                  {batchPeriodClosed && (
-                    <span style={{ color: "var(--text-muted)", fontWeight: 400 }}> (지남)</span>
-                  )}
-                </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>화주 결제일</div>
+              <div style={{ fontSize: 13.5, fontWeight: 600 }}>
+                {describePaymentDue(companyPaymentDue)}
               </div>
-              <div>
-                <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>화주 결제일 설정</div>
-                <div style={{ fontSize: 13.5, fontWeight: 600 }}>
-                  {describePaymentDue(companyPaymentDue)}
-                </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>납부기한</div>
+              <div style={{ fontSize: 13.5, fontWeight: 600 }}>
+                {batchDueDate || "미정"}
+                {/* 🔴 계산값과 저장값을 **눈으로 구분할 수 있어야 한다** — 아직
+                    저장되지 않은 값을 확정된 날짜처럼 보여주면 담당자가 화주에게
+                    그 날짜를 말하고, 확정하지 않으면 연체 판정도 안 돈다. */}
+                {batchDueIsComputed && (
+                  <span style={{ color: "var(--text-muted)", fontWeight: 400, fontSize: 12 }}>
+                    {" "}(예정)
+                  </span>
+                )}
               </div>
-              <div>
-                <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>납부기한</div>
-                <div style={{ fontSize: 13.5, fontWeight: 600 }}>
-                  {batchDueDate || "미정"}
-                  {/* 🔴 계산값과 저장값을 **눈으로 구분할 수 있어야 한다** — 아직
-                      저장되지 않은 값을 확정된 날짜처럼 보여주면 담당자가 화주에게
-                      그 날짜를 말하고, 확정하지 않으면 연체 판정도 안 돈다. */}
-                  {batchDueIsComputed && (
-                    <span style={{ color: "var(--text-muted)", fontWeight: 400, fontSize: 12 }}>
-                      {" "}
-                      (예정 — 확정 시 적용)
-                    </span>
-                  )}
-                </div>
-              </div>
-              {batchOverdue && (
+            </div>
+            {confirmed && (
+              <>
                 <div>
-                  <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>입금</div>
-                  <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--danger)" }}>
-                    연체 — 납부기한 지남
+                  <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>세금계산서</div>
+                  <div style={{ fontSize: 13.5, fontWeight: 600 }}>
+                    {batch.tax_invoice_status === "issued" ? "발행완료" : "미발행"}
                   </div>
                 </div>
-              )}
-            </div>
-          )}
+                <div>
+                  <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>입금</div>
+                  {/* 🔴 컬럼만 읽지 않는다 — 납부기한이 지난 그 순간부터 연체로
+                      보여야 한다(`batchOverdue` 주석 참고). */}
+                  <div
+                    style={{
+                      fontSize: 13.5,
+                      fontWeight: 600,
+                      color: batchOverdue ? "var(--danger)" : undefined,
+                    }}
+                  >
+                    {batch.payment_status === "paid" ? "입금완료" : batchOverdue ? "연체" : "미입금"}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
-          {/* 🔴 마감이 지났는데 아직 작성 중이면 알린다. **막지는 않는다** —
-              늦게 등록되는 운송 건이 있어서 마감 당일에 금액이 굳지 않는다.
-              (A)안의 「표시」가 이것이고, 확정은 담당자가 손으로 누른다. */}
-          {batch && batch.batch_status === "draft" && batchPeriodClosed && (
-            <div
-              className="error-box"
-              style={{ marginBottom: 16, fontSize: 13, lineHeight: 1.7 }}
-            >
-              정산 마감일({batch.period_end})이 지났는데 아직 <b>작성 중</b>입니다. 담긴 건을
-              확인하고 확정해주세요 — 확정하면 화주 결제일 설정으로 납부기한이
-              {batchDueDate ? ` ${batchDueDate}로 ` : " "}
-              채워지고, 그 날짜가 지나면 자동으로 <b>연체</b>로 표시됩니다.
-              {!batchDueDate &&
-                " (이 화주는 결제일이 「협의」이거나 미설정이라 납부기한을 아래에서 직접 넣어주세요.)"}
-            </div>
-          )}
+        {/* 🔴 마감이 지났는데 아직 작성 중이면 알린다. **막지는 않는다** —
+            늦게 등록되는 운송 건이 있어서 마감 당일에 금액이 굳지 않는다.
+            (A)안의 「표시」가 이것이고, 확정은 담당자가 손으로 누른다. */}
+        {draft && batchPeriodClosed && (
+          <div className="error-box" style={{ marginBottom: 14, fontSize: 13, lineHeight: 1.7 }}>
+            정산 마감일({batch.period_end})이 지났는데 아직 <b>작성 중</b>입니다. 담긴 건을 확인하고
+            확정해주세요 — 확정하면 납부기한이{batchDueDate ? ` ${batchDueDate}로 ` : " "}채워지고, 그
+            날짜가 지나면 자동으로 <b>연체</b>로 표시됩니다.
+            {!batchDueDate &&
+              " (이 화주는 결제일이 「협의」이거나 미설정이라 납부기한을 아래에서 직접 넣어주세요.)"}
+          </div>
+        )}
 
-          {!batch && (
-            <>
-              <p style={{ fontSize: 13.5, color: "var(--text-muted)", marginTop: 0 }}>
-                이 화주·기간에는 아직 묶음이 없습니다. 후보 {candidates.length}건을 확인했습니다.
-                {candidates.length > 0 &&
-                  " (운송완료 시점에 자동으로 담기지 못한 건입니다 — 아래에서 묶음을 만들면 담을 수 있습니다.)"}
-              </p>
-              <button className="btn" onClick={handleCreateBatch} disabled={candidates.length === 0}>
-                묶음 만들기
+        {cancelled ? (
+          <div style={{ fontSize: 13, lineHeight: 1.8 }}>
+            <p style={{ margin: 0 }}>
+              <b>해제된 묶음입니다.</b> 사유: {batch.cancel_reason || "-"}
+            </p>
+            <p style={{ margin: "4px 0 12px", color: "var(--text-muted)", fontSize: 12.5 }}>
+              해제 처리자: {batch.cancelled_by_name_snapshot || "-"} · 담겼던 건은 개별 정산
+              (정산대기)으로 되돌아갔습니다.
+            </p>
+            {isAdmin && (
+              <button
+                className="btn-danger"
+                style={{ fontSize: 12.5, padding: "6px 10px" }}
+                onClick={handleDeleteBatch}
+              >
+                기록 삭제
               </button>
-              {candidates.length === 0 && (
-                <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 8 }}>
-                  묶을 수 있는 정산 건(주선사 정산·월정산, 정산대기 상태)이 없습니다.
-                </p>
-              )}
-            </>
-          )}
-
-          {batch && batch.batch_status === "draft" && (
-            <>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                <h3 style={{ fontSize: 14, margin: 0 }}>작성 중(draft)</h3>
-                <button className="btn-danger" style={{ fontSize: 12.5, padding: "6px 10px" }} onClick={handleDeleteBatch}>
-                  묶음 삭제
-                </button>
-              </div>
-
-              <div style={{ marginBottom: 16 }}>
-                <h4 style={{ fontSize: 13, marginBottom: 8 }}>포함된 정산 건 ({activeItems.length})</h4>
-                {activeItems.length === 0 ? (
-                  <p style={{ fontSize: 12.5, color: "var(--text-muted)" }}>아직 담긴 건이 없습니다.</p>
-                ) : (
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>오더번호</th>
-                        <ItemTransportHeads />
-                        <th>공급가액</th>
-                        <th>부가세</th>
-                        <th>합계</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {activeItems.map((it) => (
-                        <tr key={it.id}>
-                          <td>
-                            <Link href={`/admin/invoices/${it.invoice_id}`}>
-                              {orderInfoByInvoiceId[it.invoice_id]?.order_no || "-"}
-                            </Link>
-                            {needsRefreshByItemId[it.id] && (
-                              <div style={{ marginTop: 4 }}>
-                                <span className="badge" style={{ fontSize: 11 }}>
-                                  현장 추가비 등록됨 — 새로고침 필요
-                                </span>
-                              </div>
-                            )}
-                          </td>
-                          <ItemTransportCells info={orderInfoByInvoiceId[it.invoice_id]} />
-                          <td>{won(it.supply_amount_snapshot)}</td>
-                          <td>{won(it.vat_amount_snapshot)}</td>
-                          <td>{won(it.total_amount_snapshot)}</td>
-                          <td>
+            )}
+          </div>
+        ) : (
+          <>
+            <h4 style={{ fontSize: 13, margin: "0 0 8px" }}>담긴 정산 건 {activeItems.length}건</h4>
+            {activeItems.length === 0 ? (
+              <p style={{ fontSize: 12.5, color: "var(--text-muted)" }}>아직 담긴 건이 없습니다.</p>
+            ) : (
+              // 🔴 감싸개의 `overflow-x` 와 표의 `min-width` 는 **한 벌이다** —
+              //    감싸개만 두면 표가 줄어들며 글자가 세로로 끊기고, `min-width` 만
+              //    두면 페이지 자체가 옆으로 밀려 제목·필터까지 잘려 나간다(34차 실측).
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ minWidth: 680 }}>
+                  <thead>
+                    <tr>
+                      <th>오더번호</th>
+                      <ItemTransportHeads />
+                      <th>공급가액</th>
+                      <th>부가세</th>
+                      <th>합계</th>
+                      {draft && <th></th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeItems.map((it) => (
+                      <tr key={it.id}>
+                        <td style={{ whiteSpace: "nowrap" }}>
+                          <Link href={`/admin/invoices/${it.invoice_id}`}>
+                            {orderInfoByInvoiceId[it.invoice_id]?.order_no || "-"}
+                          </Link>
+                          {draft && needsRefreshByItemId[it.id] && (
+                            <div style={{ marginTop: 4 }}>
+                              <span className="badge" style={{ fontSize: 11 }}>
+                                현장 추가비 등록됨
+                              </span>
+                            </div>
+                          )}
+                        </td>
+                        <ItemTransportCells info={orderInfoByInvoiceId[it.invoice_id]} />
+                        <td>{won(it.supply_amount_snapshot)}</td>
+                        <td>{won(it.vat_amount_snapshot)}</td>
+                        <td>{won(it.total_amount_snapshot)}</td>
+                        {draft && (
+                          <td style={{ whiteSpace: "nowrap" }}>
                             {needsRefreshByItemId[it.id] && (
                               <button
                                 className="btn btn-ghost"
@@ -1041,394 +1041,475 @@ export default function MonthlyBillingBatchPanel({
                                 새로고침
                               </button>
                             )}
-                            <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => handleRemoveItem(it.id)}>
+                            <button
+                              className="btn btn-ghost"
+                              style={{ fontSize: 12 }}
+                              onClick={() => handleRemoveItem(it.id)}
+                            >
                               제거
                             </button>
                           </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-                <p style={{ fontSize: 13.5, fontWeight: 600, marginTop: 10 }}>
-                  합계: 공급가액 {won(activeSupply)} · 부가세 {won(activeVat)} · 총액 {won(activeTotal)}
-                </p>
-              </div>
-
-              <div style={{ marginBottom: 16 }}>
-                <h4 style={{ fontSize: 13, marginBottom: 8 }}>추가 가능한 후보 ({availableCandidates.length})</h4>
-                {availableCandidates.length === 0 ? (
-                  <p style={{ fontSize: 12.5, color: "var(--text-muted)" }}>추가할 수 있는 건이 없습니다.</p>
-                ) : (
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>오더번호</th>
-                        <ItemTransportHeads />
-                        <th>정산 기준일</th>
-                        <th>화주 청구금액(공급가액)</th>
-                        <th></th>
+                        )}
                       </tr>
-                    </thead>
-                    <tbody>
-                      {availableCandidates.map((c) => (
-                        <tr key={c.invoice_id}>
-                          <td>{orderInfoByInvoiceId[c.invoice_id]?.order_no || "-"}</td>
-                          <ItemTransportCells info={orderInfoByInvoiceId[c.invoice_id]} />
-                          <td>{c.settlement_reference_date || "-"}</td>
-                          <td>{won(c.customer_charge_total)}</td>
-                          <td>
-                            <button className="btn" style={{ fontSize: 12 }} onClick={() => handleAddItem(c.invoice_id)}>
-                              추가
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
+                    ))}
+                  </tbody>
+                </table>
               </div>
+            )}
+            <p style={{ fontSize: 13.5, fontWeight: 600, marginTop: 10 }}>
+              합계: 공급가액 {won(confirmed ? batch.supply_amount : activeSupply)} · 부가세{" "}
+              {won(confirmed ? batch.vat_amount : activeVat)} · 총액{" "}
+              {won(confirmed ? batch.total_amount : activeTotal)}
+            </p>
 
-              <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14 }}>
-                <button className="btn btn-ghost" onClick={handleValidate} style={{ marginRight: 8 }}>
-                  확정 전 미리보기
+            {/* 🔴 줄마다 「추가」 버튼을 두던 것을 한 줄로 합쳤다 — 자동으로 담기는
+                지금 여기 남는 건은 골라 담을 이유가 없다(위 `handleAddAllCandidates`
+                주석 참고). 🔴 0건이면 아예 안 그린다. */}
+            {draft && availableCandidates.length > 0 && (
+              <div
+                style={{
+                  marginTop: 12,
+                  padding: "10px 12px",
+                  border: "1px solid var(--border)",
+                  borderRadius: 8,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  flexWrap: "wrap",
+                }}
+              >
+                <span style={{ fontSize: 13 }}>
+                  이 기간에 <b>아직 담기지 않은 정산 건 {availableCandidates.length}건</b>이 있습니다.
+                </span>
+                <button className="btn" style={{ fontSize: 12.5 }} onClick={handleAddAllCandidates}>
+                  모두 담기
                 </button>
-                {isAdmin ? (
-                  <button className="btn" onClick={handleConfirm} disabled={activeItems.length === 0}>
-                    확정
-                  </button>
-                ) : (
-                  <span style={{ fontSize: 12, color: "var(--text-muted)" }}>확정은 관리자만 할 수 있습니다.</span>
-                )}
-                {validatePreview && (
-                  <div style={{ marginTop: 12, fontSize: 12.5 }}>
-                    <p style={{ margin: "4px 0" }}>
-                      미리보기 합계: 공급가액 {won(validatePreview.preview_supply_amount)} · 부가세{" "}
-                      {won(validatePreview.preview_vat_amount)} · 총액 {won(validatePreview.preview_total_amount)}
-                    </p>
-                    <p style={{ margin: "4px 0", color: validatePreview.can_confirm ? "var(--accent)" : "var(--danger)" }}>
-                      {validatePreview.can_confirm ? "확정 가능한 상태입니다." : "확정 전 확인이 필요한 항목이 있습니다."}
-                    </p>
-                  </div>
-                )}
               </div>
-            </>
-          )}
+            )}
 
-          {batch && batch.batch_status === "confirmed" && (
-            <>
-              <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 12 }}>확정됨</h3>
-              <div className="form-grid" style={{ padding: 0, marginBottom: 14 }}>
-                <div>
-                  <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>공급가액</div>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>{won(batch.supply_amount)}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>부가세</div>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>{won(batch.vat_amount)}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>총액</div>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>{won(batch.total_amount)}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>세금계산서</div>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>
-                    {batch.tax_invoice_status === "issued" ? "발행완료" : "미발행"}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>입금상태</div>
-                  {/* 🔴 컬럼만 읽지 않는다 — 납부기한이 지난 그 순간부터 연체로
-                      보여야 한다(위 `batchOverdue` 주석 참고). */}
-                  <div
-                    style={{
-                      fontSize: 14,
-                      fontWeight: 600,
-                      color: batchOverdue ? "var(--danger)" : undefined,
-                    }}
+            {confirmed && candidates.length > 0 && (
+              <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginTop: 12, lineHeight: 1.7 }}>
+                이 묶음이 확정된 뒤 새로 정산등록된 건이 {candidates.length}건 있습니다. 확정된
+                묶음에는 담을 수 없으니, 아래 「새 묶음 만들기」에서 같은 화주·정산월로 <b>보충 묶음</b>
+                을 만들어주세요.
+              </p>
+            )}
+
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14, marginTop: 14 }}>
+              {draft && (
+                <>
+                  {/* 🔴 「확정 전 미리보기」 버튼을 없앴다(실사용 리뷰 1라운드) —
+                      위 합계가 곧 그 미리보기 값이고, 확정 자체가 확인 창을 띄운다. */}
+                  {isAdmin ? (
+                    <button className="btn" onClick={handleConfirm} disabled={activeItems.length === 0}>
+                      확정
+                    </button>
+                  ) : (
+                    <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                      확정은 관리자만 할 수 있습니다.
+                    </span>
+                  )}
+                  <button
+                    className="btn-danger"
+                    style={{ fontSize: 12.5, padding: "6px 10px", marginLeft: 8 }}
+                    onClick={handleDeleteBatch}
                   >
-                    {batch.payment_status === "paid" ? "입금완료" : batchOverdue ? "연체" : "미입금"}
+                    묶음 삭제
+                  </button>
+                </>
+              )}
+
+              {confirmed && (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+                  {batch.tax_invoice_status !== "issued" && (
+                    <button className="btn" onClick={handleMarkTaxInvoiceIssued}>
+                      세금계산서 발행 처리
+                    </button>
+                  )}
+                  {batch.payment_status !== "paid" && (
+                    <button className="btn" onClick={handleMarkPaymentReceived}>
+                      입금완료 처리
+                    </button>
+                  )}
+                  <div className="field" style={{ margin: 0, maxWidth: 260 }}>
+                    <label style={{ fontSize: 11.5 }}>납부기한</label>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+                      {/* 🔴 `nowrap` 을 빼지 말 것 — 좁은 칸이라 「저 / 장」으로 두 줄이 된다
+                          (렌더링해 보고 발견). */}
+                      <button
+                        className="btn btn-ghost"
+                        style={{ fontSize: 12.5, whiteSpace: "nowrap" }}
+                        onClick={handleSetDueDate}
+                      >
+                        저장
+                      </button>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>포함 건수</div>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>{activeItems.length}건</div>
-                </div>
-              </div>
+              )}
 
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-                {batch.tax_invoice_status !== "issued" && (
-                  <button className="btn" onClick={handleMarkTaxInvoiceIssued}>
-                    세금계산서 발행 처리
-                  </button>
-                )}
-                {batch.payment_status !== "paid" && (
-                  <button className="btn" onClick={handleMarkPaymentReceived}>
-                    입금완료 처리
-                  </button>
-                )}
-              </div>
-
-              <div className="field" style={{ maxWidth: 320, marginBottom: 14 }}>
-                <label>납부기한</label>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-                  <button className="btn btn-ghost" onClick={handleSetDueDate}>
-                    저장
-                  </button>
-                </div>
-                {/* 🔴 「협의」 화주는 계산이 안 되는 것이 정상이다 — 없는 날짜를
-                    지어내면 합의하지 않은 날에 연체가 붙는다. */}
-                <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 6 }}>
+              {confirmed && (
+                /* 🔴 「협의」 화주는 계산이 안 되는 것이 정상이다 — 없는 날짜를
+                    지어내면 합의하지 않은 날에 연체가 붙는다. */
+                <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 8 }}>
                   {batch.payment_due_date
                     ? `화주 결제일 설정: ${describePaymentDue(companyPaymentDue)} · 확정 시 자동으로 채워집니다.`
                     : batchDueDate
                     ? `화주 결제일 설정(${describePaymentDue(companyPaymentDue)})으로 계산한 ${batchDueDate}을 넣어뒀습니다 — 저장을 누르면 적용됩니다.`
                     : "이 화주는 결제일이 「협의」이거나 미설정이라 자동 계산되지 않습니다. 화주와 합의한 날짜를 직접 넣어주세요."}
                 </p>
-              </div>
-
-              <div style={{ marginBottom: 14 }}>
-                <h4 style={{ fontSize: 13, marginBottom: 8 }}>포함된 정산 건</h4>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>오더번호</th>
-                      <ItemTransportHeads />
-                      <th>공급가액</th>
-                      <th>부가세</th>
-                      <th>합계</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {activeItems.map((it) => (
-                      <tr key={it.id}>
-                        <td>
-                          <Link href={`/admin/invoices/${it.invoice_id}`}>
-                            {orderInfoByInvoiceId[it.invoice_id]?.order_no || "-"}
-                          </Link>
-                        </td>
-                        <ItemTransportCells info={orderInfoByInvoiceId[it.invoice_id]} />
-                        <td>{won(it.supply_amount_snapshot)}</td>
-                        <td>{won(it.vat_amount_snapshot)}</td>
-                        <td>{won(it.total_amount_snapshot)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {candidates.length > 0 && (
-                <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14, marginBottom: 14 }}>
-                  <p style={{ fontSize: 13, marginTop: 0 }}>
-                    이 묶음이 확정된 뒤 새로 정산등록된 건이 {candidates.length}건 있습니다. 확정된
-                    묶음에는 항목을 추가할 수 없으므로, 이 건들을 담을 <b>보충 묶음</b>을 같은 화주·
-                    정산월로 새로 만들 수 있습니다.
-                  </p>
-                  <button className="btn" onClick={handleCreateBatch}>
-                    보충 묶음 만들기
-                  </button>
-                </div>
               )}
 
-              {isAdmin && (
-                <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14 }}>
-                  {!showReleaseReason ? (
-                    <button
-                      className="btn-danger"
-                      onClick={() => setShowReleaseReason(true)}
-                      disabled={batch.tax_invoice_status === "issued" || batch.payment_status !== "unpaid"}
-                    >
-                      묶음 해제
-                    </button>
-                  ) : (
-                    <div>
-                      <div className="field" style={{ maxWidth: 400 }}>
-                        <label>해제 사유 *</label>
-                        <input
-                          type="text"
-                          value={releaseReason}
-                          onChange={(e) => setReleaseReason(e.target.value)}
-                          placeholder="해제 사유를 입력해주세요"
-                        />
+              {confirmed && isAdmin && (
+                <details style={{ marginTop: 14, fontSize: 12.5 }}>
+                  <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>
+                    묶음 해제 · 완전삭제 (관리자)
+                  </summary>
+                  <div style={{ marginTop: 10 }}>
+                    {!showReleaseReason ? (
+                      <button
+                        className="btn-danger"
+                        onClick={() => setShowReleaseReason(true)}
+                        disabled={batch.tax_invoice_status === "issued" || batch.payment_status !== "unpaid"}
+                      >
+                        묶음 해제
+                      </button>
+                    ) : (
+                      <div>
+                        <div className="field" style={{ maxWidth: 400 }}>
+                          <label>해제 사유 *</label>
+                          <input
+                            type="text"
+                            value={releaseReason}
+                            onChange={(e) => setReleaseReason(e.target.value)}
+                            placeholder="해제 사유를 입력해주세요"
+                          />
+                        </div>
+                        <div style={{ marginTop: 8 }}>
+                          <button className="btn-danger" onClick={handleRelease} style={{ marginRight: 8 }}>
+                            해제 확정
+                          </button>
+                          <button className="btn btn-ghost" onClick={() => setShowReleaseReason(false)}>
+                            취소
+                          </button>
+                        </div>
                       </div>
-                      <div style={{ marginTop: 8 }}>
-                        <button className="btn-danger" onClick={handleRelease} style={{ marginRight: 8 }}>
-                          해제 확정
+                    )}
+                    {/* 🔴 「연체」도 해제를 막는다 — `release_billing_batch` 가
+                        `payment_status in ('paid','overdue')` 를 거절한다(함수 본문
+                        실측 2026-09-15 · `_verify.sql` ⑲). 이미 청구가 나간 묶음을
+                        조용히 되돌리지 않겠다는 뜻이라 **의도된 동작**이다. */}
+                    <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 8 }}>
+                      세금계산서가 발행됐거나, 입금 처리가 진행됐거나, <b>연체로 표시된</b> 묶음은
+                      해제할 수 없습니다 — 이미 화주에게 청구가 나간 묶음이라서입니다.
+                    </p>
+
+                    <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12, marginTop: 12 }}>
+                      {!showForceDeleteReason ? (
+                        <button className="btn-danger" onClick={() => setShowForceDeleteReason(true)}>
+                          완전삭제(테스트 정리용)
                         </button>
-                        <button className="btn btn-ghost" onClick={() => setShowReleaseReason(false)}>
-                          취소
-                        </button>
-                      </div>
+                      ) : (
+                        <div>
+                          <div className="field" style={{ maxWidth: 400 }}>
+                            <label>삭제 사유 *</label>
+                            <input
+                              type="text"
+                              value={forceDeleteReason}
+                              onChange={(e) => setForceDeleteReason(e.target.value)}
+                              placeholder="삭제 사유를 입력해주세요"
+                            />
+                          </div>
+                          <div style={{ marginTop: 8 }}>
+                            <button className="btn-danger" onClick={handleForceDelete} style={{ marginRight: 8 }}>
+                              완전삭제 확정
+                            </button>
+                            <button className="btn btn-ghost" onClick={() => setShowForceDeleteReason(false)}>
+                              취소
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 8 }}>
+                        위 「묶음 해제」가 막힌 경우에도 쓸 수 있는 관리자 전용 예외 경로입니다. 담긴
+                        정산 건은 개별 정산(정산대기)으로 되돌아가고, 세금계산서·입금 처리 기록은
+                        사라집니다 — 되돌릴 수 없으니 테스트 데이터 정리 용도로만 사용해주세요.
+                      </p>
                     </div>
-                  )}
-                  {/* 🔴 「연체」도 해제를 막는다 — `release_billing_batch` 가
-                      `payment_status in ('paid','overdue')` 를 거절한다(함수 본문
-                      실측 2026-09-15 · `_verify.sql` ⑲). 이미 청구가 나간 묶음을
-                      조용히 되돌리지 않겠다는 뜻이라 **의도된 동작**이고, 버튼의
-                      `disabled` 조건(`payment_status !== "unpaid"`)도 원래 그랬다.
-                      안내 문구만 그 사실을 말하지 않고 있었다. */}
-                  <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 8 }}>
-                    세금계산서가 발행됐거나, 입금 처리가 진행됐거나, <b>연체로 표시된</b> 묶음은
-                    해제할 수 없습니다 — 이미 화주에게 청구가 나간 묶음이라서입니다. 그래도
-                    되돌려야 하면 아래 「완전삭제」를 쓰십시오.
-                  </p>
-                </div>
+                  </div>
+                </details>
               )}
+            </div>
+          </>
+        )}
+      </>
+    );
+  }
 
-              {isAdmin && (
-                <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14, marginTop: 14 }}>
-                  {!showForceDeleteReason ? (
-                    <button className="btn-danger" onClick={() => setShowForceDeleteReason(true)}>
-                      완전삭제(테스트 정리용)
-                    </button>
-                  ) : (
-                    <div>
-                      <div className="field" style={{ maxWidth: 400 }}>
-                        <label>삭제 사유 *</label>
-                        <input
-                          type="text"
-                          value={forceDeleteReason}
-                          onChange={(e) => setForceDeleteReason(e.target.value)}
-                          placeholder="삭제 사유를 입력해주세요"
-                        />
-                      </div>
-                      <div style={{ marginTop: 8 }}>
-                        <button className="btn-danger" onClick={handleForceDelete} style={{ marginRight: 8 }}>
-                          완전삭제 확정
-                        </button>
-                        <button className="btn btn-ghost" onClick={() => setShowForceDeleteReason(false)}>
-                          취소
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 8 }}>
-                    세금계산서 발행/입금 처리가 진행돼 위 "묶음 해제"가 막힌 경우에도 쓸 수 있는
-                    관리자 전용 예외 경로입니다. 담긴 정산 건은 개별 정산(정산대기)으로 되돌아가고,
-                    이 묶음의 세금계산서·입금 처리 기록은 사라집니다 — 되돌릴 수 없으니 테스트 데이터
-                    정리 용도로만 사용해주세요.
-                  </p>
-                </div>
-              )}
-            </>
-          )}
+  /** 목록 한 줄의 상태 배지들 — 🔴 표시 시점에 다시 센다(위 주석과 같은 이유). */
+  function rowBadges(b: any) {
+    const overdue =
+      b.batch_status === "confirmed" &&
+      b.payment_status !== "paid" &&
+      (b.payment_status === "overdue" || isPastDue(b.payment_due_date));
+    const late = b.batch_status === "draft" && isPeriodClosed(b.period_end);
+    return { overdue, late };
+  }
 
-          {batch && batch.batch_status === "cancelled" && (
-            <>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <h3 style={{ fontSize: 14, margin: 0 }}>해제됨(취소)</h3>
-                {isAdmin && (
-                  <button className="btn-danger" style={{ fontSize: 12.5, padding: "6px 10px" }} onClick={handleDeleteBatch}>
-                    기록 삭제
-                  </button>
-                )}
+  return (
+    <div>
+      {actionError && <div className="error-box" style={{ marginBottom: 16 }}>오류: {actionError}</div>}
+
+      {/* 🔴 자동으로 담기지 **못한** 건이 있을 때만 뜬다 — 0건이면 아무것도 그리지
+          않는다. 정상 운영에서는 보이지 않는 줄이다(위 `orphans` 주석 참고). */}
+      {orphans.length > 0 && (
+        <div className="error-box" style={{ marginBottom: 16, fontSize: 13, lineHeight: 1.8 }}>
+          <b>자동으로 묶음에 담기지 못한 정산 건이 {orphans.length}건 있습니다.</b> 그 달 묶음이 이미
+          확정·해제되었거나 자동 처리가 닿지 못한 건입니다 — 아래에서 해당 화주·정산월의 묶음을
+          펼쳐 「담기지 않은 건 담기」를 누르거나, 묶음이 없으면 새로 만들어주세요.
+          <div style={{ marginTop: 8, fontSize: 12.5, color: "var(--text-muted)" }}>
+            {orphans.slice(0, 8).map((c) => (
+              <div key={c.invoice_id}>
+                · {c.company_name} · {c.cycle_month} · {c.order_no} · {won(c.customer_charge_total)}
               </div>
-              <p style={{ fontSize: 13, color: "var(--text-muted)" }}>사유: {batch.cancel_reason || "-"}</p>
-              <p style={{ fontSize: 12.5, color: "var(--text-muted)" }}>
-                해제 처리자: {batch.cancelled_by_name_snapshot || "-"}
-              </p>
-              <p style={{ fontSize: 13.5, marginTop: 12 }}>
-                같은 화주·기간으로 새 묶음을 다시 만들 수 있습니다.
-              </p>
-              <button className="btn" onClick={handleCreateBatch} disabled={candidates.length === 0}>
-                새 묶음 만들기
-              </button>
-              {candidates.length === 0 && (
-                <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 8 }}>
-                  묶을 수 있는 정산 건(주선사 정산·월정산, 정산대기 상태)이 없습니다.
-                </p>
-              )}
-            </>
-          )}
+            ))}
+            {orphans.length > 8 && <div>· 외 {orphans.length - 8}건</div>}
+          </div>
         </div>
       )}
 
-      <div className="card" style={{ padding: 20 }}>
-        <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 4 }}>최근 묶음 30건</h3>
-        {recentBatches.length >= 30 && (
-          <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 0, marginBottom: 12 }}>
-            최근 30건만 표시 중입니다. 더 오래된 묶음은 위에서 화주·정산월을 직접 선택해서 확인해주세요.
-          </p>
-        )}
+      <div className="card" style={{ padding: 20, marginBottom: 20 }}>
+        <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 4 }}>월정산 묶음 {recentBatches.length}건</h3>
+        <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 0, marginBottom: 14 }}>
+          운송이 완료되면 월정산 건은 그 화주·정산월의 묶음에 <b>자동으로 담깁니다</b>. 줄을 눌러
+          펼치면 담긴 건과 정산 일정을 보고 확정·세금계산서·입금을 처리할 수 있습니다.
+        </p>
+
         {recentBatches.length === 0 ? (
           <p style={{ fontSize: 13, color: "var(--text-muted)" }}>아직 만들어진 묶음이 없습니다.</p>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>화주</th>
-                <th>기간</th>
-                <th>상태</th>
-                <th>세금계산서</th>
-                <th>입금</th>
-                <th>총액</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentBatches.map((b: any) => {
-                const canDelete = b.batch_status === "draft" || isAdmin;
-                // 🔴 목록에서도 **표시 시점에 다시 센다** — 상세에서만 연체가 보이면
-                //    담당자가 묶음을 하나씩 열어봐야 무엇이 밀렸는지 알 수 있다.
-                const rowOverdue =
-                  b.batch_status === "confirmed" &&
-                  b.payment_status !== "paid" &&
-                  (b.payment_status === "overdue" || isPastDue(b.payment_due_date));
-                const rowLate = b.batch_status === "draft" && isPeriodClosed(b.period_end);
-                return (
-                  <tr key={b.id}>
-                    <td
-                      style={{ cursor: "pointer" }}
-                      onClick={() => {
-                        setSelectedCompany({ id: b.company_id, name: b.companies?.name || "-" });
-                        setCompanyId(b.company_id);
-                        // 정산 마감일이 설정된 화주는 period_start가 전월에 걸쳐있어
-                        // period_start 기준으로 월을 구하면 다른 주기로 계산되어
-                        // 확정된 묶음을 못 찾는 버그가 있었음(PR #64 리뷰 피드백) —
-                        // period_end의 날짜가 항상 그 주기의 라벨 월과 같으므로
-                        // period_end 기준으로 구함
-                        setMonth(String(b.period_end).slice(0, 7));
+          <div>
+            {recentBatches.map((b: any) => {
+              const open = batch?.id === b.id;
+              const { overdue, late } = rowBadges(b);
+              return (
+                <div
+                  key={b.id}
+                  style={{
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    marginBottom: 8,
+                    overflow: "hidden",
+                  }}
+                >
+                  {/* 🔴 줄 전체가 펼침 버튼이다 — 그전에는 **회사명만** 눌러야 했고
+                      무엇을 눌러야 하는지 보이지 않았다. */}
+                  <button
+                    onClick={() => openBatch(b)}
+                    style={{
+                      width: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      flexWrap: "wrap",
+                      padding: "11px 14px",
+                      background: open ? "var(--bg-subtle, #fafafa)" : "transparent",
+                      border: "none",
+                      borderBottom: open ? "1px solid var(--border)" : "none",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      font: "inherit",
+                    }}
+                    aria-expanded={open}
+                  >
+                    <span style={{ fontSize: 12, color: "var(--text-muted)", width: 12 }}>
+                      {open ? "▾" : "▸"}
+                    </span>
+                    <span style={{ fontSize: 13.5, fontWeight: 600, minWidth: 120 }}>
+                      {b.companies?.name || "-"}
+                    </span>
+                    <span style={{ fontSize: 12.5, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+                      {String(b.period_end).slice(0, 7)} 정산
+                    </span>
+                    <span style={{ fontSize: 12, whiteSpace: "nowrap" }}>
+                      {b.batch_status === "draft"
+                        ? "작성중"
+                        : b.batch_status === "confirmed"
+                        ? "확정"
+                        : "해제됨"}
+                    </span>
+                    {late && (
+                      <span style={{ fontSize: 11.5, color: "var(--danger)", whiteSpace: "nowrap" }}>
+                        마감 지남
+                      </span>
+                    )}
+                    {b.batch_status === "confirmed" && (
+                      <span
+                        style={{
+                          fontSize: 11.5,
+                          whiteSpace: "nowrap",
+                          color: overdue ? "var(--danger)" : "var(--text-muted)",
+                        }}
+                      >
+                        {b.payment_status === "paid"
+                          ? "입금완료"
+                          : overdue
+                          ? "연체"
+                          : b.tax_invoice_status === "issued"
+                          ? "발행완료 · 입금대기"
+                          : "세금계산서 미발행"}
+                      </span>
+                    )}
+                    <span
+                      style={{
+                        marginLeft: "auto",
+                        fontSize: 13.5,
+                        fontWeight: 600,
+                        whiteSpace: "nowrap",
                       }}
                     >
-                      {b.companies?.name || "-"}
-                    </td>
-                    <td>{b.period_start} ~ {b.period_end}</td>
-                    <td style={{ whiteSpace: "nowrap" }}>
-                      {b.batch_status === "draft" ? "작성중" : b.batch_status === "confirmed" ? "확정" : "해제됨"}
-                      {rowLate && (
-                        <div style={{ fontSize: 11, color: "var(--danger)" }}>마감 지남</div>
+                      {b.batch_status === "draft"
+                        ? draftTotalByBatchId[b.id]
+                          ? won(draftTotalByBatchId[b.id])
+                          : "담긴 건 없음"
+                        : won(b.total_amount ?? null)}
+                    </span>
+                  </button>
+
+                  {open && (
+                    <div style={{ padding: "14px 14px 16px" }}>
+                      {loading ? (
+                        <div className="empty-state">불러오는 중...</div>
+                      ) : (
+                        <BatchDetail />
                       )}
-                    </td>
-                    <td>{b.tax_invoice_status === "issued" ? "발행완료" : "미발행"}</td>
-                    <td style={{ whiteSpace: "nowrap", color: rowOverdue ? "var(--danger)" : undefined }}>
-                      {b.payment_status === "paid" ? "완료" : rowOverdue ? "연체" : "대기"}
-                      {b.payment_due_date && b.payment_status !== "paid" && (
-                        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                          기한 {b.payment_due_date}
-                        </div>
-                      )}
-                    </td>
-                    <td>{won(b.total_amount)}</td>
-                    <td>
-                      {canDelete && (
-                        <button
-                          className="btn btn-ghost"
-                          style={{ fontSize: 11.5, padding: "4px 8px" }}
-                          onClick={() => handleDeleteRecentBatch(b.id, b.batch_status)}
-                        >
-                          삭제
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
+
+      {/* 🔴 「새 묶음 만들기」는 접어 뒀다 — 자동 생성이 도는 지금은 **평소에 쓸 일이
+          없는 길**이고(보충 묶음 · 자동 처리가 실패한 달), 펼쳐 두면 화면의 첫인상이
+          검색창이 된다. 🔴 없애지는 말 것 — 확정된 달에 늦게 들어온 건을 담을
+          유일한 경로다. */}
+      <details className="card" style={{ padding: 20 }}>
+        <summary style={{ cursor: "pointer", fontSize: 14, fontWeight: 600 }}>
+          새 묶음 만들기 (보충 묶음 · 자동으로 만들어지지 않은 달)
+        </summary>
+
+        <div className="form-grid" style={{ padding: 0, marginTop: 14, marginBottom: 6, maxWidth: 480 }}>
+          <div className="field">
+            <label>화주 검색</label>
+            <input
+              value={selectedCompany ? selectedCompany.name : companySearch}
+              onChange={(e) => {
+                setSelectedCompany(null);
+                setCompanyId("");
+                setCompanySearch(e.target.value);
+              }}
+              placeholder="회사명을 입력해서 검색"
+              autoComplete="off"
+            />
+          </div>
+          <div className="field">
+            <label>정산월</label>
+            <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
+          </div>
+        </div>
+
+        {!selectedCompany && companyResults.length > 0 && (
+          <div className="card" style={{ maxWidth: 220, marginBottom: 12, maxHeight: 180, overflowY: "auto" }}>
+            {companyResults.map((c) => (
+              <div
+                key={c.id}
+                onClick={() => {
+                  setSelectedCompany(c);
+                  setCompanyId(c.id);
+                  setCompanyResults([]);
+                }}
+                style={{
+                  padding: "8px 12px",
+                  fontSize: 13,
+                  cursor: "pointer",
+                  borderBottom: "1px solid var(--border)",
+                }}
+              >
+                {c.name}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {selectedCompany && createTarget && (
+          <div style={{ fontSize: 13, lineHeight: 1.8 }}>
+            <p style={{ margin: "0 0 8px", color: "var(--text-muted)" }}>
+              실제 정산 기간: {createTarget.period.period_start} ~ {createTarget.period.period_end}
+              {createTarget.cutoffDay
+                ? ` (이 화주는 매달 ${createTarget.cutoffDay}일 마감)`
+                : " (정산 마감일 미설정 — 달력월 기준)"}
+            </p>
+            {createTarget.existing && createTarget.existing.batch_status !== "cancelled" ? (
+              <p style={{ margin: "0 0 10px" }}>
+                이 화주·정산월에는 이미{" "}
+                <b>{createTarget.existing.batch_status === "draft" ? "작성 중" : "확정된"}</b> 묶음이
+                있습니다 — 위 목록에서 펼쳐 확인해주세요.
+                {createTarget.existing.batch_status === "confirmed" && createTarget.candidateCount > 0 && (
+                  <>
+                    {" "}확정 이후 새로 등록된 {createTarget.candidateCount}건은 <b>보충 묶음</b>으로
+                    담을 수 있습니다.
+                  </>
+                )}
+              </p>
+            ) : (
+              <p style={{ margin: "0 0 10px" }}>
+                담을 수 있는 정산 건 {createTarget.candidateCount}건을 확인했습니다.
+              </p>
+            )}
+            <button
+              className="btn"
+              onClick={handleCreateBatch}
+              disabled={
+                createTarget.candidateCount === 0 ||
+                (!!createTarget.existing && createTarget.existing.batch_status === "draft")
+              }
+            >
+              {createTarget.existing && createTarget.existing.batch_status === "confirmed"
+                ? "보충 묶음 만들기"
+                : "묶음 만들기"}
+            </button>
+            {createTarget.candidateCount === 0 && (
+              <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 8 }}>
+                담을 수 있는 정산 건(주선사 정산·월정산, 정산대기 상태)이 없습니다.
+              </p>
+            )}
+          </div>
+        )}
+
+        <details style={{ marginTop: 14, fontSize: 12.5, color: "var(--text-muted)" }}>
+          <summary style={{ cursor: "pointer" }}>묶음에 담기는 조건 · 마감 이후 흐름</summary>
+          <ul style={{ marginTop: 8, paddingLeft: 18, lineHeight: 1.7 }}>
+            <li>정산방식이 "주선사 정산 · 월정산"(수금방식 broker, 청구주기 monthly)인 건</li>
+            <li>정산 상태가 "정산대기"인 건(이미 청구·입금 처리가 시작된 건은 제외)</li>
+            <li>화주 청구금액이 확정되어 있고(0원·미입력 아님), 아직 다른 묶음에 포함되지 않은 건</li>
+          </ul>
+          <p style={{ marginTop: 10, lineHeight: 1.7 }}>
+            이 조건에 맞는 건은 <b>운송완료 시점에 자동으로 담깁니다.</b> 다만 그 달 묶음이 이미{" "}
+            <b>확정</b>되었거나 <b>해제</b>된 상태면 자동으로 담지 않습니다 — 확정된 금액이 담당자도
+            모르게 흔들리거나, 일부러 해제한 묶음이 되살아나면 안 되기 때문입니다.
+          </p>
+          <p style={{ marginTop: 8, lineHeight: 1.7 }}>
+            <b>마감일(월말)이 지나면</b> 작성 중인 묶음에 「마감 지남」 표시가 붙습니다. 확정은
+            담당자가 직접 누릅니다 — 마감 직후에 뒤늦게 등록되는 운송 건이 있어서 자동으로 굳히지
+            않습니다. 확정하면 화주 결제일 설정으로 <b>납부기한</b>이 채워지고, 그 날짜가 지나도록
+            입금이 없으면 매일 도는 작업이 <b>연체</b>로 표시합니다.
+          </p>
+        </details>
+      </details>
     </div>
   );
 }
