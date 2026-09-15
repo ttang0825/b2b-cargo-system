@@ -733,3 +733,40 @@ from information_schema.columns
 where table_schema='public' and table_name='portal_order_requests'
   and column_name in ('collection_method','direct_collection_point','dropoff_arrival_type','billing_cycle','requested_billing_cycle')
 order by column_name;
+
+\echo ''
+\echo '=== ⑯ 🔴 quotes 전체 컬럼 (36차 PR 2 — 견적서 공유 링크) =='
+--   🔴 왜 전체 목록인가. 공유 링크 API 가 컬럼을 **손으로 열거**해서 조회하는데,
+--      `quotes` 는 상차조건·차량형태·운송시간 같은 값을 **`selected_options`(jsonb)**
+--      안에 한글 키로 담는다(orders 는 반대로 flat 컬럼). 그래서 있을 것 같은
+--      이름(`trip_type`·`transport_time` 등)이 실제로는 없을 수 있고, 없는 컬럼을
+--      select 하면 PostgREST 가 42703 을 돌려준다 — 원칙 55번대로 error 를 받지
+--      않으면 그것이 **「견적서를 찾을 수 없습니다」(404)** 로 둔갑한다.
+select string_agg(column_name, ', ' order by ordinal_position) as 컬럼
+  from information_schema.columns
+ where table_schema = 'public' and table_name = 'quotes';
+
+\echo ''
+\echo '--- ⑯-b 공유 토큰 발급 현황 (🔴 토큰 값 자체는 찍지 않는다 — 열쇠다) ---'
+select count(*)                                              as 견적_전체,
+       count(*) filter (where share_token is not null)        as 토큰_발급,
+       count(*) filter (where share_token is not null
+                          and company_id is not null)         as "발급_회사건",
+       count(*) filter (where share_token is not null
+                          and company_id is null)             as "발급_게스트건"
+  from quotes;
+
+\echo ''
+\echo '--- ⑯-c 토큰 발급 건의 연락처 유무 (🔴 번호 자체는 찍지 않는다) ---'
+--   뒤 4자리 확인은 「문자를 받은 그 번호」와 대조한다 — 그 번호가 null 이면
+--   무엇을 입력해도 통과할 수 없다. 그 상태가 실제로 있는지 본다.
+select q.id is not null                                       as _dummy,
+       count(*)                                               as 토큰_발급건,
+       count(*) filter (where c.contact_mobile is not null)    as 회사담당자번호_있음,
+       count(*) filter (where q.guest_phone is not null)       as 게스트번호_있음,
+       count(*) filter (where coalesce(c.contact_mobile, q.guest_phone) is null)
+                                                              as "🔴 번호없음_확인불가"
+  from quotes q
+  left join companies c on c.id = q.company_id
+ where q.share_token is not null
+ group by 1;
