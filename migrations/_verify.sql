@@ -772,14 +772,18 @@ select q.id is not null                                       as _dummy,
  group by 1;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- ⑰ 월정산 묶음 실태 (2026-09-15 · 사용자 신고 「정보나 방식이 애매하다」)
+-- ⑱ 월정산 묶음 실태 (2026-09-15 · 사용자 신고 「정보나 방식이 애매하다」)
+--
+--   ⚠️ 활성 항목 판정은 `is_active` 가 아니라 **`released_at is null`** 이다
+--      (화면 `loadActiveItems()` 와 같은 조건). 처음에 `is_active` 로 적었다가
+--      42703 으로 멈췄다 — **컬럼은 짐작하지 말 것**(원칙 55번과 같은 자리).
 --
 --   🔴 **묶음 로직은 이 저장소에 없다** — `create_billing_batch` 등 DB 함수는
 --      마이그레이션 자동화(47차) 이전인 14차 세션에 만들어져 **DB 에만 있다.**
 --      그래서 함수 목록·정의 유무를 여기서 확인한다.
 -- ─────────────────────────────────────────────────────────────────────────────
 \echo ''
-\echo '--- ⑰-a 월정산 대상이 실제로 얼마나 있나 ---'
+\echo '--- ⑱-a 월정산 대상이 실제로 얼마나 있나 ---'
 select count(*)                                                  as 정산건_전체,
        count(*) filter (where billing_cycle = 'monthly')          as 월정산건,
        count(*) filter (where billing_cycle = 'monthly'
@@ -789,7 +793,7 @@ select count(*)                                                  as 정산건_�
   from invoices;
 
 \echo ''
-\echo '--- ⑰-b 만들어진 묶음 ---'
+\echo '--- ⑱-b 만들어진 묶음 ---'
 select count(*)                                                  as 묶음_전체,
        count(*) filter (where batch_status = 'draft')             as 작성중,
        count(*) filter (where batch_status = 'confirmed')         as 확정,
@@ -800,15 +804,15 @@ select count(*)                                                  as 묶음_전�
   from customer_billing_batches;
 
 \echo ''
-\echo '--- ⑰-c 🔴 묶음에 안 담긴 월정산 정산 건 (자동 생성이 없어서 생기는 자리) ---'
+\echo '--- ⑱-c 🔴 묶음에 안 담긴 월정산 정산 건 (자동 생성이 없어서 생기는 자리) ---'
 select count(*)                                                  as 월정산건_묶음없음
   from invoices i
  where i.billing_cycle = 'monthly'
    and not exists (select 1 from customer_billing_batch_items bi
-                    where bi.invoice_id = i.id and bi.is_active);
+                    where bi.invoice_id = i.id and bi.released_at is null);
 
 \echo ''
-\echo '--- ⑰-d 결제일 설정을 가진 화주 (36차 A장 · 묶음이 이 값을 읽는지 보려고) ---'
+\echo '--- ⑱-d 결제일 설정을 가진 화주 (36차 A장 · 묶음이 이 값을 읽는지 보려고) ---'
 select count(*)                                                  as 화주_전체,
        count(*) filter (where payment_due_basis is not null)      as 결제일기준_설정,
        count(*) filter (where payment_due_value is not null)      as 결제일값_설정,
@@ -816,7 +820,7 @@ select count(*)                                                  as 화주_전�
   from companies;
 
 \echo ''
-\echo '--- ⑰-e 묶음 관련 DB 함수 목록 (저장소에 없는 로직) ---'
+\echo '--- ⑱-e 묶음 관련 DB 함수 목록 (저장소에 없는 로직) ---'
 select p.proname                                                 as 함수명,
        pg_get_function_identity_arguments(p.oid)                 as 인자
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -825,7 +829,7 @@ select p.proname                                                 as 함수명,
  order by 1;
 
 \echo ''
-\echo '--- ⑰-f 묶음 표의 컬럼 (화면이 무엇을 그릴 수 있는지) ---'
+\echo '--- ⑱-f 묶음 표의 컬럼 (화면이 무엇을 그릴 수 있는지) ---'
 select table_name, column_name, data_type
   from information_schema.columns
  where table_schema = 'public'
