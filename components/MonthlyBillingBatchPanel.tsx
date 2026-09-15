@@ -289,7 +289,7 @@ export default function MonthlyBillingBatchPanel({
     // 🔴 못 찾아도 오류가 아니다 — 아직 묶음이 없는 달일 수 있다(아래 「새 묶음
     //    만들기」가 그 화주·정산월로 이미 채워져 있다).
     if (error || !data) return;
-    await openBatch(data as any);
+    await openBatchRow(data as any);
   }
 
   // 화주 업체 검색(admin/orders의 화주 검색과 동일한 패턴) — 업체 수가
@@ -438,13 +438,29 @@ export default function MonthlyBillingBatchPanel({
    * 🔴 **한 번에 하나만 펼친다**(27차 견적 확인 아코디언과 같은 규칙) — 펼친 것이
    *    곧 선택된 묶음이라 state 가 하나로 끝난다.
    */
-  async function openBatch(row: any) {
+  /**
+   * 목록 줄을 **누를 때**의 동작 — 열려 있으면 접고, 아니면 연다.
+   * 🔴 **접기 판정은 여기에만 있다.** 그전에는 `openBatch()` 안에 있었는데,
+   *    「담기」·「묶음 만들기」가 끝나고 그 묶음을 열려고 `setBatch(null)` 뒤에
+   *    `openBatch()` 를 부르면 — **`batch` 는 그 핸들러가 만들어질 때의 값이라
+   *    아직 옛 묶음이었다**(React state 는 그 자리에서 바뀌지 않는다). 그래서
+   *    「이미 열려 있다」로 판정해 **묶음을 열지 않고 접어버렸고**, 항목 목록까지
+   *    비웠다. 담당자에게는 **담았는데 안 담긴 것**으로 보였다
+   *    (실사용 리뷰 4라운드 — *"「담기」나 「모두담기」를 해도 담기지 않는다"*).
+   * 🔴 **핸들러에서 이 함수를 부르지 말 것** — 항상 `openBatchRow()` 를 쓴다.
+   */
+  async function toggleBatch(row: any) {
     if (batch?.id === row.id) {
       setBatch(null);
       setActiveItems([]);
       setCandidates([]);
       return;
     }
+    await openBatchRow(row);
+  }
+
+  /** 그 묶음을 **무조건 연다**(접기 판정 없음). */
+  async function openBatchRow(row: any) {
     setActionError(null);
     setShowReleaseReason(false);
     setShowForceDeleteReason(false);
@@ -476,6 +492,32 @@ export default function MonthlyBillingBatchPanel({
       await loadCandidatesOnly(row.company_id, row.period_start, row.period_end);
     }
     setLoading(false);
+  }
+
+  /**
+   * 🔴 **정말로 담겼는지 DB 에 다시 물어본다.** 「담았다고 했는데 안 담겼다」는
+   *    신고를 두 번 받았고(실사용 리뷰 3·4라운드), 그때마다 화면은 조용했다.
+   *    담기 결과를 **화면 상태로 짐작하지 말고 원본으로 확인**하면, 남은 실패가
+   *    무엇이든 「안 담겼다」는 사실 자체는 반드시 눈에 보인다.
+   * 🔴 이 확인을 지우지 말 것.
+   */
+  async function assertAttached(invoiceIds: string[], scope: "top" | "batch") {
+    if (invoiceIds.length === 0) return;
+    const { data, error } = await supabase
+      .from("customer_billing_batch_items")
+      .select("invoice_id")
+      .in("invoice_id", invoiceIds)
+      .is("released_at", null);
+    if (error) return; // 확인 자체가 실패한 것은 담기 실패가 아니다
+    const got = new Set(((data as any[]) || []).map((r) => r.invoice_id));
+    const missing = invoiceIds.filter((id) => !got.has(id));
+    if (missing.length > 0) {
+      fail(
+        scope,
+        `${missing.length}건이 묶음에 담기지 않았습니다. 새로고침 후 다시 시도해주세요. ` +
+          "(계속 같으면 그 정산 건이 이미 확정·잠금 상태일 수 있습니다)"
+      );
+    }
   }
 
   /** 펼쳐둔 묶음을 그대로 다시 읽는다 — 어떤 처리를 한 뒤에 쓴다. */
@@ -746,8 +788,7 @@ export default function MonthlyBillingBatchPanel({
       .eq("id", result.batch_id)
       .maybeSingle();
     if (created) {
-      setBatch(null);
-      await openBatch(created as any);
+      await openBatchRow(created as any);
     }
   }
 
@@ -776,6 +817,8 @@ export default function MonthlyBillingBatchPanel({
       // 🔴 한 건이 실패해도 나머지는 담긴다 — 통째로 멈추면 담당자가 무엇이
       //    담겼는지 알 수 없다. 실패한 이유는 한 번만 모아 보여준다.
       fail("batch", `${failed.length}건을 담지 못했습니다: ${Array.from(new Set(failed)).join(" / ")}`);
+    } else {
+      await assertAttached(targets, "batch");
     }
     await reloadOpenBatch();
     await refreshOverview();
@@ -856,6 +899,7 @@ export default function MonthlyBillingBatchPanel({
       }
     }
 
+    await assertAttached([orphan.invoice_id], "top");
     await refreshOverview();
     // 🔴 담은 묶음을 **바로 펼친다** — 어디에 담겼는지 보여줘야 담당자가 확인한다.
     if (batchId) {
@@ -865,8 +909,7 @@ export default function MonthlyBillingBatchPanel({
         .eq("id", batchId)
         .maybeSingle();
       if (row) {
-        setBatch(null);
-        await openBatch(row as any);
+        await openBatchRow(row as any);
       }
     }
   }
@@ -1493,7 +1536,7 @@ export default function MonthlyBillingBatchPanel({
                   {/* 🔴 줄 전체가 펼침 버튼이다 — 그전에는 **회사명만** 눌러야 했고
                       무엇을 눌러야 하는지 보이지 않았다. */}
                   <button
-                    onClick={() => openBatch(b)}
+                    onClick={() => toggleBatch(b)}
                     style={{
                       width: "100%",
                       display: "flex",
