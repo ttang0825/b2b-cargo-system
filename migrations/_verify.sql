@@ -875,3 +875,70 @@ select pg_get_functiondef(p.oid) as 본문
   from pg_proc p
   join pg_namespace n on n.oid = p.pronamespace
  where n.nspname = 'public' and p.proname = 'create_billing_batch';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- ⑳ 🔴 「담기가 안 된다」 실측 (2026-09-15 · 실사용 리뷰 5라운드)
+--
+-- 🔴 **왜 이 절이 필요한가** — 「담기를 눌러도 담기지 않는다」를 세 번 받는 동안
+--    나는 화면 쪽 원인만 고쳤다(오류 위치 · 빈 렌더 · 오래된 클로저). 전부 실재하는
+--    결함이었지만 **운영 DB 의 그 행이 실제로 어느 관문에 걸리는지는 한 번도 재지
+--    않았다.** 목(mock)으로는 통과하는데 운영에서 막히면 목이 헐거운 것이다(원칙 56번).
+--
+-- 🔴 `add_item_to_billing_batch` 의 관문을 **행마다 그대로 다시 계산해서** 어디서
+--    걸리는지 이름으로 찍는다. 짐작하지 않기 위한 절이다.
+--
+-- 🟢 공개 저장소다 — **화주명·오더번호를 찍지 않는다.** id 는 앞 8자만.
+-- ─────────────────────────────────────────────────────────────────────────────
+\echo ''
+\echo '--- ⑳-a is_billing_batch_candidate() 본문 (무엇을 후보로 보는가) ---'
+select pg_get_functiondef(p.oid) as 본문
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+ where n.nspname = 'public' and p.proname = 'is_billing_batch_candidate';
+
+\echo ''
+\echo '--- ⑳-b 아직 묶음에 안 담긴 월정산 정산 건의 관문별 판정 ---'
+select left(i.id::text, 8)                                   as 정산건,
+       i.billing_period                                      as 저장된_정산월,
+       i.settlement_reference_date                           as 정산기준일,
+       i.status                                              as 상태,
+       i.customer_charge_total                               as 청구금액,
+       coalesce(i.locked, false)                             as 잠김,
+       coalesce(i.customer_side_locked, false)               as 화주측잠김,
+       public.is_billing_batch_candidate(i.*)                as 후보인가,
+       -- 🔴 이 셋 중 하나라도 false/true 로 걸리면 add_item 이 거절한다
+       case
+         when coalesce(i.customer_side_locked, false) then 'already_customer_side_locked'
+         when coalesce(i.locked, false)               then 'invoice_locked'
+         when i.customer_charge_total is null
+           or i.customer_charge_total <= 0            then 'amount_not_finalized'
+         when not public.is_billing_batch_candidate(i.*) then 'invoice_no_longer_eligible'
+         else '(통과 — 담길 수 있어야 한다)'
+       end                                                   as 예상_거절사유
+  from invoices i
+ where i.billing_cycle = 'monthly'
+   and i.collection_method = 'broker'
+   and not exists (
+     select 1 from customer_billing_batch_items bi
+      where bi.invoice_id = i.id and bi.released_at is null
+   )
+ order by i.settlement_reference_date nulls last;
+
+\echo ''
+\echo '--- ⑳-c 후보 뷰에 실제로 보이는 행 (화면이 「담기」를 그리는 근거) ---'
+select left(invoice_id::text, 8) as 정산건,
+       billing_period            as 저장된_정산월,
+       settlement_reference_date as 정산기준일,
+       customer_charge_total     as 청구금액
+  from customer_billing_batch_candidates
+ order by settlement_reference_date nulls last;
+
+\echo ''
+\echo '--- ⑳-d 그 화주들의 같은 달 묶음 상태 (auto-attach 가 건너뛰는 조건) ---'
+select left(b.id::text, 8)  as 묶음,
+       b.period_start, b.period_end,
+       b.batch_status       as 상태,
+       b.payment_status     as 입금,
+       (select count(*) from customer_billing_batch_items x
+         where x.batch_id = b.id and x.released_at is null) as 담긴건수
+  from customer_billing_batches b
+ order by b.period_end desc, b.created_at desc;
