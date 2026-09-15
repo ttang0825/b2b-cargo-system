@@ -13,7 +13,7 @@ import {
   formatAdjustment,
   QUOTE_ADJUSTMENT_LABEL,
 } from "@/lib/quoteAdjustment";
-import { buildQuoteFareLines, QUOTE_SURCHARGE_LINE_LABEL } from "@/lib/quoteFareLines";
+import { buildQuoteFareLines } from "@/lib/quoteFareLines";
 
 type QuoteItem = { id: string; item_name: string | null; amount: number | null };
 
@@ -295,7 +295,7 @@ export default function QuotePrintPage() {
             </tr>
             {fare.surcharge !== 0 && (
               <tr>
-                <td>{QUOTE_SURCHARGE_LINE_LABEL}</td>
+                <td>{fare.surchargeLabel}</td>
                 <td className="num" style={{ textAlign: "right" }}>
                   {won(fare.surcharge)}
                 </td>

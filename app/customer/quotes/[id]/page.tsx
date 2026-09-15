@@ -29,7 +29,7 @@ import {
   formatAdjustment,
   QUOTE_ADJUSTMENT_LABEL,
 } from "@/lib/quoteAdjustment";
-import { buildQuoteFareLines, QUOTE_SURCHARGE_LINE_LABEL } from "@/lib/quoteFareLines";
+import { buildQuoteFareLines } from "@/lib/quoteFareLines";
 
 type QuoteItem = { id: string; item_name: string | null; amount: number | null };
 
@@ -303,7 +303,7 @@ export default function CustomerQuoteDetailPage() {
           </div>
           {fare.surcharge !== 0 && (
             <div className="pv2-qd-row">
-              <span className="pv2-qd-k">{QUOTE_SURCHARGE_LINE_LABEL}</span>
+              <span className="pv2-qd-k">{fare.surchargeLabel}</span>
               <span className="pv2-qd-v-right">{money(fare.surcharge)}</span>
             </div>
           )}

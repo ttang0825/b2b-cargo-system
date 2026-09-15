@@ -13,7 +13,7 @@ import {
   formatAdjustment,
   QUOTE_ADJUSTMENT_LABEL,
 } from "@/lib/quoteAdjustment";
-import { buildQuoteFareLines, QUOTE_SURCHARGE_LINE_LABEL } from "@/lib/quoteFareLines";
+import { buildQuoteFareLines } from "@/lib/quoteFareLines";
 // 🔴 **`lib/quoteShare.ts` 에서 가져오지 말 것** — 그 파일은 `crypto` 를 쓰고
 //    이 화면은 클라이언트 컴포넌트다(번들러가 노드 모듈을 끌어온다).
 import { QUOTE_VALID_DAYS } from "@/lib/quoteValidity";
@@ -235,7 +235,7 @@ export default function QuoteSharePage({ params }: { params: { token: string } }
               </tr>
               {fare.surcharge !== 0 && (
                 <tr>
-                  <td>{QUOTE_SURCHARGE_LINE_LABEL}</td>
+                  <td>{fare.surchargeLabel}</td>
                   <td style={{ textAlign: "right" }}>{won(fare.surcharge)}</td>
                 </tr>
               )}

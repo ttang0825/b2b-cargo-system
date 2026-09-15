@@ -17,7 +17,7 @@ import Pv2PeriodFilter, {
 } from "@/components/pv2/Pv2PeriodFilter";
 import { calcVatAmount } from "@/lib/vat";
 import { downloadQuoteExcel } from "@/lib/quoteExcel";
-import { buildQuoteFareLines, QUOTE_SURCHARGE_LINE_LABEL } from "@/lib/quoteFareLines";
+import { buildQuoteFareLines } from "@/lib/quoteFareLines";
 import {
   quoteStatusStyle,
   isQuoteConfirmed,
@@ -591,7 +591,7 @@ export default function CustomerQuotesPage() {
                               <>
                                 {fare.surcharge !== 0 && (
                                   <div className="pv2-qfare-i">
-                                    <div className="pv2-qfare-k">{QUOTE_SURCHARGE_LINE_LABEL}</div>
+                                    <div className="pv2-qfare-k">{fare.surchargeLabel}</div>
                                     <div className="pv2-qfare-v">{won(fare.surcharge)}</div>
                                   </div>
                                 )}

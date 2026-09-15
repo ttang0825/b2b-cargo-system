@@ -41,11 +41,37 @@ export type QuoteFareItem = { item_name?: string | null; amount?: number | null 
 /** 합쳐진 가산 줄의 이름 — 🔴 여섯 산출물이 같은 말을 쓰도록 여기서 정한다. */
 export const QUOTE_SURCHARGE_LINE_LABEL = "가산";
 
+// ── 🔴 무엇에 대한 가산인지는 **적는다** (사용자 지시 2026-09-15) ─────
+//
+//   *"견적서에 가산금에 대한 내용이 있어야 한다. 지금은 그냥 「가산」으로만 되어 있어
+//     고객입장에서 오해할수 있다."*
+//
+//   🔴 **이름은 적고 금액·요율은 적지 않습니다.** 28차 확정(가산 「금액」은 화주에게
+//      비공개 — `/api/customer/surcharge-options` 가 **이름만** 내려줍니다)과 이 지시가
+//      부딪히지 않는 지점이 정확히 여기입니다.
+//
+//        가산 (윙바디 · 새벽 · 왕복 · 상차 수작업 · 대기료)      90,000원
+//
+//   🔴 **요율 표기 `(80%)` 는 떼어냅니다** — 기본운임이 바로 윗줄에 있어서 요율을 보면
+//      그 줄의 금액이 그대로 계산됩니다(왕복 80% × 기본운임). 금액을 감추기로 한 결정이
+//      요율 한 글자로 무너집니다. 🔴 **되살리지 마십시오.**
+//   ⚠️ `(47분)`·`2곳` 처럼 **금액이 계산되지 않는 괄호는 남깁니다** — 무엇에 대한
+//      가산인지 알려주는 정보이고, 이 지시가 원하는 바로 그것입니다.
+
+/** 이름에서 요율 표기만 떼어낸다 — `왕복 (80%)` → `왕복` */
+export function stripRateSuffix(name: string): string {
+  return name.replace(/\s*\(\s*-?[\d.]+\s*%\s*\)\s*$/, "").trim();
+}
+
 export type QuoteFareLines = {
   /** 운임기준표에서 산출된 기본운임 */
   base: number;
   /** 한 줄로 합쳐진 가산 (0이면 줄을 그리지 않는다) */
   surcharge: number;
+  /** 🔴 그 가산이 **무엇에 대한 것인지** — 이름만, 요율·금액 없이 */
+  surchargeNames: string[];
+  /** 화면이 그대로 쓰는 라벨 — `가산` 또는 `가산 (윙바디 · 새벽)` */
+  surchargeLabel: string;
   /** 할인(음수) 줄 — 원래 이름과 금액 그대로 */
   discountLines: { item_name: string; amount: number }[];
   /** 🔴 수동 조정 차액. 0이면 줄을 그리지 않는다(반올림은 여기 안 온다) */
@@ -80,11 +106,25 @@ export function buildQuoteFareLines(
       ? Number(quote.surcharge_amount)
       : list.reduce((sum, it) => sum + Math.max(it.amount || 0, 0), 0);
 
+  // 🔴 이름은 **양수 줄에서만** 모은다 — 할인 줄은 제 이름으로 따로 그려진다.
+  //    중복은 없앤다(상차·하차가 같은 조건이면 한 번만 적는 편이 읽기 쉽다).
+  const surchargeNames = Array.from(
+    new Set(
+      list
+        .filter((it) => (it.amount || 0) > 0)
+        .map((it) => stripRateSuffix(it.item_name || ""))
+        .filter(Boolean)
+    )
+  );
+  const surchargeLabel = surchargeNames.length
+    ? `${QUOTE_SURCHARGE_LINE_LABEL} (${surchargeNames.join(" · ")})`
+    : QUOTE_SURCHARGE_LINE_LABEL;
+
   const final = quote.final_amount;
   const adjustment =
     final === null || final === undefined
       ? 0
       : Math.round(Number(final) - (base + surcharge + discountTotal));
 
-  return { base, surcharge, discountLines, adjustment };
+  return { base, surcharge, surchargeNames, surchargeLabel, discountLines, adjustment };
 }

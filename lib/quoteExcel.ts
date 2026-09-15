@@ -7,7 +7,7 @@ import {
   shouldShowAdjustment,
   QUOTE_ADJUSTMENT_LABEL,
 } from "./quoteAdjustment";
-import { buildQuoteFareLines, QUOTE_SURCHARGE_LINE_LABEL } from "./quoteFareLines";
+import { buildQuoteFareLines } from "./quoteFareLines";
 
 // 견적서 엑셀 출력. 관리자 화면과 운송관리(화주포털) 화면이 **같은 함수를 공유**하므로
 // 두 곳에서 받은 파일의 내용이 갈리지 않는다.
@@ -142,7 +142,7 @@ export function buildQuoteDocRows({ quote, items }: QuoteExcelData): DocRow[] {
   //    할인(음수) 줄은 그대로 남긴다.
   const fare = buildQuoteFareLines(quote, items);
   if (fare.surcharge !== 0) {
-    rows.push({ kind: "money", label: QUOTE_SURCHARGE_LINE_LABEL, value: fare.surcharge });
+    rows.push({ kind: "money", label: fare.surchargeLabel, value: fare.surcharge });
   }
   fare.discountLines.forEach((it) => {
     rows.push({ kind: "money", label: it.item_name, value: it.amount });
