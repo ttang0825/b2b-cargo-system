@@ -79,3 +79,46 @@ export function customerOutstandingOf(invoices: CustomerReceivableInput[]): numb
  */
 export const CUSTOMER_RECEIVABLE_SELECT =
   "collection_method,receivable_amount,customer_charge_total,payment_received";
+
+// ───────────────────────────────────────────────────────────────────────────
+// 🔴 **표시 시점 계산** (36차 PR 2 리뷰 1라운드 · 사용자 신고 2026-09-15)
+//
+// 사용자 원문:
+//   *"여전히 활성화주 목록에서는 미수금이 뜬다. 선착불 오더이고 화주가 차주에게
+//     모두 지급한 건이다."*
+//
+// 🔴 **위 계산을 고친 것만으로는 화면이 안 바뀐다.** `companies.outstanding_amount` 는
+//    **저장 시점 스냅샷**이고, 그 값을 다시 쓰는 경로가 **둘뿐**이기 때문이다 —
+//    ① 새 정산 건 등록 ② 정산 상세에서 **입금완료 체크가 바뀔 때**.
+//    이미 틀리게 적힌 화주는 **둘 중 하나가 일어나기 전까지 영영 틀린 값**을 보여준다.
+//    (그 화주는 선착불이라 앞으로도 입금완료를 누를 일이 없다 — 받을 것이 없으니까.)
+//
+// 🟢 **그래서 목록·상세가 저장값을 믿지 않고 매번 다시 센다** — 35차가 마진에서 쓴 것과
+//    같은 수법이다(*"표시 시점 계산이라 옛 건도 자동으로 맞는다"*).
+//    🔴 **`won(c.outstanding_amount)` 로 되돌리지 말 것** — 되돌리는 순간 이 신고가
+//       그대로 돌아온다. 🔴 **옛 값을 SQL 로 일괄 수정해서 때우지도 말 것** —
+//       한 번 맞춰도 다음에 같은 방식으로 또 어긋난다(고치는 것은 계산이 아니라 **출처**다).
+//
+// 🟢 **저장 경로는 그대로 뒀다** — 이제 식이 맞으므로 저장값도 점점 맞아 간다.
+//    지우지 않은 이유는 그 컬럼이 `lib/companyFields.ts` 의 「실적」 항목이라
+//    화면에서 없애는 것과 컬럼을 버리는 것이 다른 크기의 일이기 때문이다.
+
+/** 표시 시점 계산에 쓰는 select — 🔴 `company_id` 가 있어야 화주별로 묶을 수 있다 */
+export const CUSTOMER_RECEIVABLE_SELECT_BY_COMPANY = `company_id,${CUSTOMER_RECEIVABLE_SELECT}`;
+
+/**
+ * 정산 건 전체를 화주별 미수금 합계로 묶는다 — 목록 화면이 한 번의 조회로 쓴다.
+ *
+ * 🔴 **`company_id` 가 없는 건(게스트 오더)은 건너뛴다** — 화주가 없으니 화주 미수금도 없다.
+ */
+export function customerOutstandingByCompany(
+  invoices: (CustomerReceivableInput & { company_id?: string | null })[]
+): Record<string, number> {
+  const byCompany: Record<string, number> = {};
+  for (const inv of invoices || []) {
+    if (!inv.company_id) continue;
+    byCompany[inv.company_id] =
+      (byCompany[inv.company_id] || 0) + (inv.payment_received ? 0 : customerReceivableOf(inv));
+  }
+  return byCompany;
+}
