@@ -117,6 +117,22 @@ a {
   top: 0;
   z-index: 30;
 }
+/* 🔴 **상단바 높이 — `position: sticky` 로 겹치는 것을 피해야 하는 쪽이 읽는 값이다.**
+ *
+ * PR #150 이 상단바를 `sticky` 로 만들면서, 그 아래에서 따로 `sticky` 하던 요소들이
+ * **헤더 뒤로 들어가기 시작했다**(견적 등록 화면의 「자동계산결과」 창이 실제로 그랬다 —
+ * `top: 20` 이라 데스크탑에서 **59px 이 가려졌다.** 36차 PR 2 리뷰 2라운드 신고).
+ *
+ * 🔴 **새로 `sticky` 를 쓸 때는 `top` 에 이 변수를 더할 것** — 숫자를 화면마다 적으면
+ *    헤더 여백이 바뀔 때 어디가 가려지는지 아무도 모른다.
+ * 🔴 **값은 실측이다**(Chromium · 2026-09-15): 데스크탑 79px · ≤700px 71px.
+ *    `.top-nav-inner` 의 `padding`(18px/14px)이나 로고 크기를 바꾸면 **여기도 같이 잴 것.**
+ * ⚠️ 모바일 계산창은 `.drag-panel`(`position: fixed`)이라 이 변수를 쓰지 않는다 —
+ *    그래도 값을 적어두는 것은 이 변수가 「헤더 높이」를 뜻하지 「계산창 위치」를 뜻하지
+ *    않기 때문이다. */
+:root {
+  --admin-topnav-h: 79px;
+}
 .top-nav-inner {
   max-width: 1100px;
   margin: 0 auto;
@@ -1218,6 +1234,10 @@ tbody tr:hover {
   /* 🔴 폭이 좁으니 좌우 여백을 줄인다 — 로고 + 뒤로 + 로그아웃 + 메뉴가 한 줄에 들어가야 한다 */
   .top-nav-inner {
     padding: 14px 14px;
+  }
+  /* 🔴 위 `padding` 과 **한 벌이다** — 여백을 바꾸면 이 값도 다시 잴 것(실측 71px) */
+  :root {
+    --admin-topnav-h: 71px;
   }
   .nav-mobile-icon-btn {
     width: 36px;

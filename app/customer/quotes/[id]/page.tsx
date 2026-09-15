@@ -23,6 +23,12 @@ import { getQuoteSettlementLine, CUSTOMER_COLLECTION_AXIS_LABEL } from "@/lib/se
 import MixableBadge from "@/components/MixableBadge";
 import Pv2PrintModal from "@/components/pv2/Pv2PrintModal";
 import { formatPhoneNumber } from "@/lib/constants";
+import {
+  calcQuoteAdjustment,
+  shouldShowAdjustment,
+  formatAdjustment,
+  QUOTE_ADJUSTMENT_LABEL,
+} from "@/lib/quoteAdjustment";
 
 type QuoteItem = { id: string; item_name: string | null; amount: number | null };
 
@@ -165,6 +171,9 @@ export default function CustomerQuoteDetailPage() {
   );
   const priceless = !supply;
 
+  // 🔴 items 조회가 끝난 뒤에 계산한다 — 빈 배열이면 가산액이 통째로 「조정」으로 보인다.
+  const quoteAdjustment = calcQuoteAdjustment(quote, items);
+
   return (
     <>
       <div className="pv2-qd-actions">
@@ -294,6 +303,17 @@ export default function CustomerQuoteDetailPage() {
               <span className="pv2-qd-v-right">{money(it.amount)}</span>
             </div>
           ))}
+          {/* 🔴 「조정」 — 담당자가 최종금액을 직접 고쳤을 때 항목 합과의 차이(36차 E장).
+              이것이 없으면 화주가 더해도 공급가액이 안 나온다(사용자 지시의 이유다).
+              0이면 그리지 않으므로 조정 없는 견적은 종전과 한 글자도 같다. */}
+          {shouldShowAdjustment(quoteAdjustment) && (
+            <div className="pv2-qd-row">
+              <span className="pv2-qd-k">{QUOTE_ADJUSTMENT_LABEL}</span>
+              <span className="pv2-qd-v-right">
+                {formatAdjustment(quoteAdjustment, (n) => money(n) || "")}
+              </span>
+            </div>
+          )}
           {/* 🔴 「공급가액 (부가세 별도)」 줄 — 견적서 PDF 와 **줄 단위로 같아야 한다**.
               27차 리뷰 전까지 이 줄이 상세에만 없어서, 같은 견적을 PDF 로 받으면
               부가세 별도 금액이 보이고 화면에서는 안 보였다(31차 "쌍으로 움직인다"와

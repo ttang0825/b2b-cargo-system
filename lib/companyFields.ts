@@ -320,6 +320,19 @@ export const COMPANY_FIELDS: CompanyField[] = [
     // 🔴 **건별에는 결제일이 없다** — 운송 완료 시 즉시지급이라 물을 것이 없다.
     showWhen: (form) => form.billing_cycle_default === "monthly",
   },
+  // 🔴 **한 번 사라졌던 항목이다 — 지우지 말 것.** 36차 A장에 넣었다가 **리뷰 2라운드에
+  //    `credit_limit`(여신 한도)을 지우면서 바로 아래 붙어 있던 이 항목까지 같이 지워져**
+  //    PR #150 이 컬럼·상수만 있고 입력칸이 없는 채로 merge 됐다(merge 직후 발견).
+  //    🔴 **인접한 항목을 함께 지우지 않았는지 지운 뒤에 세어 볼 것** — 「무엇을 지웠나」가
+  //    아니라 **「무엇이 남았나」**를 세야 잡힌다(`grep -c 'key: "..."'` 한 줄이면 됐다).
+  {
+    key: "tax_invoice_method",
+    label: "세금계산서 발행 방식",
+    type: "select",
+    section: "거래 조건",
+    codedOptions: TAX_INVOICE_METHOD_OPTIONS,
+    emptyLabel: "미정",
+  },
   { key: "main_pickup_region", label: "주요 상차지역", type: "region-multi", section: "거래 조건" },
   { key: "main_dropoff_region", label: "주요 하차지역", type: "region-multi", section: "거래 조건" },
   { key: "main_pickup_address", label: "주요 상차지 정확주소", type: "address", section: "거래 조건" },

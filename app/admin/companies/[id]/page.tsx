@@ -28,6 +28,11 @@ import {
   isRecurringContractActive,
   parseRecommendedVehicle,
 } from "@/lib/companyFields";
+// 🔴 미수금은 저장값이 아니라 표시 시점 계산이다 — 정의처는 이 파일 하나다(36차 PR 2).
+import {
+  CUSTOMER_RECEIVABLE_SELECT,
+  customerOutstandingOf,
+} from "@/lib/receivableCalc";
 import CompanyFieldInput from "@/components/CompanyFieldInput";
 import RecurringContractBadge from "@/components/RecurringContractBadge";
 import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
@@ -111,6 +116,8 @@ export default function CompanyDetailPage() {
 
   const [company, setCompany] = useState<CompanyDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  /** 표시 시점 계산한 미수금 — 🔴 `company.outstanding_amount` 를 쓰지 말 것 */
+  const [outstanding, setOutstanding] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -195,6 +202,16 @@ export default function CompanyDetailPage() {
       .select("*")
       .eq("id", id)
       .single();
+
+    // 🔴 미수금은 저장값(`companies.outstanding_amount`)이 아니라 **여기서 다시 센다**
+    //    (36차 PR 2 리뷰 1라운드 — 활성 화주 목록과 **같은 이유·같은 함수**다).
+    //    저장값은 정산을 저장할 때만 갱신돼서, 이미 틀리게 적힌 화주는 영영 그 값을
+    //    보여준다. 🔴 **목록만 고치고 여기를 두면 두 화면이 서로 다른 금액을 말한다.**
+    const { data: invoiceRows } = await supabase
+      .from("invoices")
+      .select(CUSTOMER_RECEIVABLE_SELECT)
+      .eq("company_id", id);
+    setOutstanding(customerOutstandingOf((invoiceRows || []) as any));
 
     if (error) {
       setError(error.message);
@@ -802,9 +819,13 @@ export default function CompanyDetailPage() {
                 //    늘렸을 때 이 화면만 조용히 코드값을 그대로 보여준다.
                 // 🔴 결제일만 예외 — DB 두 칸을 화면 값 하나로 되돌린 뒤 라벨을 찾는다
                 //    (「협의」가 값 칸이 아니라 기준 칸에 들어 있다).
+                // 🔴 미수금만 예외 — 저장값이 아니라 표시 시점 계산값을 그린다
+                //    (바로 위 `loadCompany()` 의 주석 참고). 되돌리지 말 것.
                 const raw =
                   f.key === "payment_due_value"
                     ? paymentDueToForm(company)
+                    : f.key === "outstanding_amount"
+                    ? outstanding
                     : company[f.key];
                 const shown = companyFieldDisplay(f, raw, company);
                 return <Field key={f.key} label={f.label} value={shown} />;

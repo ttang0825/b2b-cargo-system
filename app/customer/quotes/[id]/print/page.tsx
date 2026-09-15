@@ -7,6 +7,12 @@ import { COMPANY_INFO, COMPANY_BANK_ACCOUNT, hasBankAccount } from "@/lib/compan
 import { calcVatAmount, calcInclusiveAmount } from "@/lib/vat";
 import { getQuoteSettlementLine, CUSTOMER_COLLECTION_AXIS_LABEL } from "@/lib/settlementLabels";
 import CompanyNameMark from "@/components/CompanyNameMark";
+import {
+  calcQuoteAdjustment,
+  shouldShowAdjustment,
+  formatAdjustment,
+  QUOTE_ADJUSTMENT_LABEL,
+} from "@/lib/quoteAdjustment";
 
 type QuoteItem = { id: string; item_name: string | null; amount: number | null };
 
@@ -53,6 +59,10 @@ export default function CustomerQuotePrintPage() {
 
   const [quote, setQuote] = useState<QuoteDetail | null>(null);
   const [items, setItems] = useState<QuoteItem[]>([]);
+
+  // 🔴 items 조회가 끝난 뒤에 계산한다 — 빈 배열이면 가산액이 통째로 「조정」으로 보인다.
+  //    첫 렌더에서는 0이라 줄이 안 그려지고, 조회가 끝나면 다시 계산된다.
+  const quoteAdjustment = calcQuoteAdjustment(quote || {}, items);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -262,6 +272,16 @@ export default function CustomerQuotePrintPage() {
                   <td>할인</td>
                   <td className="num" style={{ textAlign: "right" }}>
                     -{won(quote.discount_amount)}
+                  </td>
+                </tr>
+              )}
+              {/* 🔴 「조정」 — 최종금액을 직접 고쳤을 때 항목 합과의 차이(36차 E장).
+                  0이면 그리지 않으므로 조정 없는 견적서는 종전과 한 글자도 같다. */}
+              {shouldShowAdjustment(quoteAdjustment) && (
+                <tr>
+                  <td>{QUOTE_ADJUSTMENT_LABEL}</td>
+                  <td className="num" style={{ textAlign: "right" }}>
+                    {formatAdjustment(quoteAdjustment, (n) => won(n) || "")}
                   </td>
                 </tr>
               )}

@@ -19,6 +19,14 @@ const BILLING_CYCLE_FIELD = COMPANY_FIELDS.find((f) => f.key === "billing_cycle_
 import AdminMobileList from "@/components/AdminMobileList";
 import ListPagination from "@/components/ListPagination";
 import { useListPagination } from "@/lib/useListPagination";
+// 🔴 미수금은 **저장값을 읽지 않고 매번 다시 센다**(36차 PR 2 리뷰 1라운드) —
+//    `companies.outstanding_amount` 는 정산 저장 시점 스냅샷이라 이미 틀리게 적힌
+//    화주는 영영 그 값을 보여준다. 선착불 화주는 입금완료를 누를 일이 없어서
+//    갱신 경로가 아예 안 돌았다. 정의처는 `lib/receivableCalc.ts` 하나다.
+import {
+  CUSTOMER_RECEIVABLE_SELECT_BY_COMPANY,
+  customerOutstandingByCompany,
+} from "@/lib/receivableCalc";
 
 type Customer = {
   id: string;
@@ -37,6 +45,7 @@ type Customer = {
   /** 36차 리뷰 2라운드 — 목록의 「결제조건」 칸이 이 값을 보여준다 */
   billing_cycle_default: string | null;
   total_orders_count: number | null;
+  /** 🔴 조회는 하되 **화면에 그리지 않는다** — 표시값은 `outstandingByCompany` 가 센다 */
   outstanding_amount: number | null;
   // 🔴 정기계약 두 컬럼 — 33차 B장과 같은 근거다. 빼면 배지가 조용히 사라진다
   //    (`RecurringContractBadge` 는 값이 없으면 아무것도 안 그린다).
@@ -83,6 +92,8 @@ export default function CustomersPage() {
   const router = useRouter();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [portalCompanyIds, setPortalCompanyIds] = useState<Set<string>>(new Set());
+  /** 화주 id → 미수금 (표시 시점 계산) */
+  const [outstandingByCompany, setOutstandingByCompany] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -132,6 +143,14 @@ export default function CustomersPage() {
       .select("company_id")
       .eq("is_active", true);
     setPortalCompanyIds(new Set((portalAccounts || []).map((a: any) => a.company_id)));
+
+    // 🔴 미수금을 **여기서 다시 센다.** `companies.outstanding_amount` 를 그대로 그리면
+    //    36차 C장이 고친 식이 화면에 반영되지 않는다(그 값은 정산을 저장할 때만 바뀐다).
+    //    🔴 **선착불 건은 0으로 잡힌다** — 운임은 위캐리를 안 거치고 수수료는 차주가 낸다.
+    const { data: invoiceRows } = await supabase
+      .from("invoices")
+      .select(CUSTOMER_RECEIVABLE_SELECT_BY_COMPANY);
+    setOutstandingByCompany(customerOutstandingByCompany((invoiceRows || []) as any));
 
     setCustomers(
       list.map((c) => ({ ...c, latestDispatchStatus: latestByCompany[c.id] || null }))
@@ -399,7 +418,9 @@ export default function CustomersPage() {
                     {companyFieldDisplay(BILLING_CYCLE_FIELD, c.billing_cycle_default) || "-"}
                   </td>
                   <td className="cell-nowrap">{c.total_orders_count || 0}건</td>
-                  <td className="cell-nowrap">{won(c.outstanding_amount)}</td>
+                  {/* 🔴 `c.outstanding_amount`(저장값)로 되돌리지 말 것 — 선착불 운임이 다시
+                      미수금으로 보인다(36차 PR 2 리뷰 1라운드에 실제로 신고된 자리다). */}
+                  <td className="cell-nowrap">{won(outstandingByCompany[c.id] || 0)}</td>
                   <td className="cell-nowrap">
                     {c.grade ? (
                       <span className="badge">{c.grade}</span>

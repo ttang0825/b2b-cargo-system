@@ -27,6 +27,11 @@ import MixableBadge from "@/components/MixableBadge";
 import LockedBadge from "@/components/LockedBadge";
 import AmendmentReasonModal from "@/components/AmendmentReasonModal";
 import { getDispatchExtraChargeCategoryLabel } from "@/lib/dispatchExtraCharges";
+import {
+  customerOutstandingOf,
+  customerReceivableOf,
+  CUSTOMER_RECEIVABLE_SELECT,
+} from "@/lib/receivableCalc";
 
 function won(n: number | null) {
   if (n === null || n === undefined) return "-";
@@ -318,20 +323,24 @@ export default function InvoiceDetailPage() {
     // 입금 확인 상태가 바뀌면, 연결된 화주의 미수금을 전체 재계산합니다
     // (증분 방식 대신, 그 화주의 모든 미입금 정산건을 다시 합산 - 삭제된
     // 기록이 있어도 항상 정확합니다).
-    // 🔴 집계 기준을 `customer_charge_total` 에서 `receivable_amount` 로 바꿨다(35차 A-1).
-    //    선착불 건의 「받을 돈」은 화주 청구액이 아니라 **주선수수료**다 — 청구액으로 세면
-    //    위캐리를 거치지도 않는 운임 전액이 화주 미수금으로 잡힌다.
-    //    ⚠️ `receivable_amount` 가 없는 옛 건은 종전대로 청구액으로 폴백한다.
-    if (settlementValue.collection_method === "broker" && invoice.companies?.id && wasReceived !== nowReceived) {
+    // 🔴 계산은 `lib/receivableCalc.ts` 하나가 한다 — 화주 기준 미수금은 **선착불이면 0**이다
+    //    (운임은 위캐리를 안 거치고 주선수수료는 차주가 낸다).
+    //
+    // 🔴 **`collection_method === "broker"` 게이트를 되살리지 말 것**(36차 C장).
+    //    식은 맞았는데 그 게이트 때문에 **선착불 건에서는 이 블록이 아예 안 돌았고**,
+    //    그래서 목록 쪽(`app/admin/invoices/page.tsx`)이 청구액으로 써 넣은 값을
+    //    **영영 고칠 수 없었다.** 「선착불은 화주에게 받을 게 없으니 갱신도 필요 없다」는
+    //    생각이 틀린 이유가 이것이다 — 받을 것이 **주선수수료로 있고**, 무엇보다
+    //    **잘못 적힌 값을 되돌릴 유일한 경로**가 여기다.
+    if (invoice.companies?.id && wasReceived !== nowReceived) {
       const { data: allInvoices } = await supabase
         .from("invoices")
-        .select("id,customer_charge_total,receivable_amount,payment_received")
+        .select(`id,${CUSTOMER_RECEIVABLE_SELECT}`)
         .eq("company_id", invoice.companies.id);
-      const outstanding = (allInvoices || [])
-        .filter((i) => i.id !== id) // 이 건은 아래서 최신 nowReceived 기준으로 따로 반영
-        .filter((i) => !i.payment_received)
-        .reduce((sum, i) => sum + (i.receivable_amount ?? i.customer_charge_total ?? 0), 0);
-      const thisAmount = nowReceived ? 0 : invoice.receivable_amount ?? invoice.customer_charge_total ?? 0;
+      const outstanding = customerOutstandingOf(
+        (allInvoices || []).filter((i) => i.id !== id) as any // 이 건은 아래서 최신 nowReceived 기준으로 따로 반영
+      );
+      const thisAmount = nowReceived ? 0 : customerReceivableOf(invoice as any);
       await supabase
         .from("companies")
         .update({ outstanding_amount: outstanding + thisAmount })

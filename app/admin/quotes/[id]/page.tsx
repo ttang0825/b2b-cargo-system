@@ -36,6 +36,20 @@ import { getSettlementDisplayLabel, getPaymentConditionLabel, mapToLegacySettlem
 //    모르는 옵션은 버리지 않고 맨 뒤에 붙인다(`lib/vehicleBodyTypes.ts` 참고).
 import { orderBodyTypes } from "@/lib/vehicleBodyTypes";
 import { CUSTOMER_APPROVED_LABEL, formatCustomerApprovedAt } from "@/lib/quoteApproval";
+import {
+  calcQuoteAdjustment,
+  shouldShowAdjustment,
+  formatAdjustment,
+  QUOTE_ADJUSTMENT_LABEL,
+} from "@/lib/quoteAdjustment";
+import {
+  minDropoffDateTime as minDropoffDateTimeOf,
+  isDropoffGapOk,
+  DROPOFF_MIN_GAP_LABEL,
+} from "@/lib/dropoffGap";
+// 🔴 등록 폼과 **같은 칩**을 쓴다(36차 PR 2 리뷰 2라운드) — 한쪽에만 있으면 담당자가
+//    수정 화면에서 당착을 고를 길이 없어 특이사항을 손으로 적게 된다.
+import { buildNotesWithArrival, arrivalTypeLabel, ARRIVAL_TIME_FREE_NOTE } from "@/lib/arrivalType";
 
 const STATUS_OPTIONS = ["상담중", "견적제출", "수주", "보류", "실패"];
 
@@ -126,11 +140,6 @@ function wonVatIncluded(n: number | null | undefined) {
   return calcInclusiveAmount(n).toLocaleString("ko-KR") + "원";
 }
 
-// 견적 관리는 거리기반 최소 간격(100km당 1h, 2~5h 범위) 규칙을 씀 (원칙 6번)
-function calcMinGapHours(distanceKm: number) {
-  return Math.min(5, Math.max(2, 2 + Math.floor(distanceKm / 100)));
-}
-
 export default function QuoteDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -156,6 +165,13 @@ export default function QuoteDetailPage() {
   const [quoteSmsError, setQuoteSmsError] = useState<string | null>(null);
   const [smsPreview, setSmsPreview] = useState<SmsPreview | null>(null);
 
+  /**
+   * 🔴 수정 화면의 「지금」·「당착/내착」 — 등록 폼과 같다. `quotes` 에 도착구분 컬럼이
+   *    없으므로(28차 결정 1) **불러올 때는 항상 꺼진 상태로 시작한다.**
+   *    이미 특이사항에 줄이 있으면 저장할 때 다시 붙지 않는다(`buildNotesWithArrival`).
+   */
+  const [pickupNow, setPickupNow] = useState(false);
+  const [dropoffArrivalType, setDropoffArrivalType] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
     collection_method: "broker" as CollectionMethodValue["collection_method"],
     billing_cycle: "per_order" as CollectionMethodValue["billing_cycle"],
@@ -200,18 +216,18 @@ export default function QuoteDetailPage() {
     [mixedDiscountTiers, editForm.distance_km]
   );
 
-  // 거리 기준 최소 하차일시 (희망 상차일시가 있어야 계산됨)
-  const minDropoffDateTime = useMemo(() => {
-    if (!editForm.requested_pickup_at) return undefined;
-    const gapHours = calcMinGapHours(Number(editForm.distance_km) || 0);
-    const pickup = new Date(editForm.requested_pickup_at);
-    pickup.setHours(pickup.getHours() + gapHours);
-    return toLocalDateTimeInput(pickup.toISOString());
-  }, [editForm.requested_pickup_at, editForm.distance_km]);
+  // 최소 하차일시 — 🔴 **거리와 무관하게 상차 +30분**이다(36차 D장). 정의처는
+  // `lib/dropoffGap.ts` 하나이고 등록 폼·화주포털 발주요청도 같은 값을 쓴다.
+  const minDropoffDateTime = useMemo(
+    () => minDropoffDateTimeOf(editForm.requested_pickup_at),
+    [editForm.requested_pickup_at]
+  );
 
-  const minDropoffLabel = editForm.requested_pickup_at
-    ? `거리 기준 상차 후 최소 ${calcMinGapHours(Number(editForm.distance_km) || 0)}시간 이후로 선택해주세요`
-    : undefined;
+  const minDropoffLabel = editForm.requested_pickup_at ? DROPOFF_MIN_GAP_LABEL : undefined;
+
+  // 🔴 items 조회가 끝난 뒤에 계산해야 한다 — 빈 배열로 계산하면 가산액만큼이
+  //    통째로 「조정」으로 보인다(`lib/quoteAdjustment.ts` 주석 참고).
+  const quoteAdjustment = calcQuoteAdjustment(quote || {}, items);
 
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
@@ -386,15 +402,14 @@ export default function QuoteDetailPage() {
       if (!proceed) return;
     }
 
-    if (editForm.requested_pickup_at && editForm.requested_dropoff_at) {
-      const gapHours = calcMinGapHours(Number(editForm.distance_km) || 0);
-      const diffMs =
-        new Date(editForm.requested_dropoff_at).getTime() -
-        new Date(editForm.requested_pickup_at).getTime();
-      if (diffMs < gapHours * 60 * 60 * 1000) {
-        setSaveError(`희망 하차일시는 상차일시 기준 최소 ${gapHours}시간 이후로 설정해주세요.`);
-        return;
-      }
+    // 🔴 입력창 하한과 **같은 규칙을 제출 직전에 한 번 더** 본다(등록 폼과 동일).
+    // 🔴 당착·내착은 예외다(27차) — 시각이 무관한 선택지라 밤 상차 건이 막힌다
+    if (
+      !dropoffArrivalType &&
+      !isDropoffGapOk(editForm.requested_pickup_at, editForm.requested_dropoff_at)
+    ) {
+      setSaveError(`희망 하차일시는 ${DROPOFF_MIN_GAP_LABEL}.`);
+      return;
     }
 
 
@@ -421,9 +436,12 @@ export default function QuoteDetailPage() {
       distance_km: Number(editForm.distance_km) || null,
       vehicle_type: editForm.vehicle_type,
       item: editForm.item || null,
-      requested_pickup_at: localInputToISOString(editForm.requested_pickup_at),
+      requested_pickup_at: pickupNow
+        ? new Date().toISOString()
+        : localInputToISOString(editForm.requested_pickup_at),
       requested_dropoff_at: localInputToISOString(editForm.requested_dropoff_at),
-      notes: editForm.notes || null,
+      // 🔴 도착구분 한 줄을 특이사항으로 잇는다 — 이미 있으면 다시 붙이지 않는다
+      notes: buildNotesWithArrival(editForm.notes, dropoffArrivalType) || null,
       final_amount: Number(editForm.final_amount) || null,
       loading_type: editForm.loading_type,
       mixed_shipper_consent: editForm.loading_type === "mixable" ? editForm.mixed_shipper_consent : false,
@@ -858,7 +876,15 @@ export default function QuoteDetailPage() {
                 label="희망 상차 일시"
                 value={editForm.requested_pickup_at}
                 onChange={(v) => setEditForm({ ...editForm, requested_pickup_at: v })}
+                nowChip
+                nowSelected={pickupNow}
+                onNowChange={setPickupNow}
               />
+              {pickupNow && (
+                <div style={{ marginTop: 6, fontSize: 11.5, color: "var(--text-muted)" }}>
+                  저장하는 순간의 시각으로 기록됩니다
+                </div>
+              )}
             </div>
             <div style={{ gridColumn: "1 / -1" }}>
               <DateTimePicker
@@ -866,9 +892,25 @@ export default function QuoteDetailPage() {
                 label="희망 하차 일시"
                 value={editForm.requested_dropoff_at}
                 onChange={(v) => setEditForm({ ...editForm, requested_dropoff_at: v })}
-                minDateTime={minDropoffDateTime}
-                minDateTimeLabel={minDropoffLabel}
+                minDateTime={dropoffArrivalType ? undefined : minDropoffDateTime}
+                minDateTimeLabel={dropoffArrivalType ? undefined : minDropoffLabel}
+                arrivalChips
+                arrivalValue={dropoffArrivalType as any}
+                onArrivalChange={(v) => setDropoffArrivalType(v)}
+                pickupDate={
+                  (editForm.requested_pickup_at || "").split("T")[0] || undefined
+                }
               />
+              {arrivalTypeLabel(dropoffArrivalType) && (
+                <div style={{ marginTop: 6 }}>
+                  <span className="badge">
+                    {arrivalTypeLabel(dropoffArrivalType)} · {ARRIVAL_TIME_FREE_NOTE}
+                  </span>
+                  <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 4 }}>
+                    특이사항에 한 줄로 기록됩니다
+                  </div>
+                </div>
+              )}
             </div>
             <div className="field">
               <label>운송시간</label>
@@ -1238,6 +1280,23 @@ export default function QuoteDetailPage() {
             <span className="num">{won(it.amount != null ? Math.abs(it.amount) : it.amount)}</span>
           </div>
         ))}
+        {/* 🔴 「조정」 — 담당자가 최종금액을 직접 고쳤을 때 항목 합과의 차이를 그린다(36차 E장).
+            0이면 그리지 않으므로 조정 없는 견적은 종전과 한 글자도 같다.
+            🔴 값은 `lib/quoteAdjustment.ts` 하나가 정한다 — 네 산출물이 같아야 한다. */}
+        {shouldShowAdjustment(quoteAdjustment) && (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              marginBottom: 6,
+              fontSize: 12.5,
+              color: "var(--text-muted)",
+            }}
+          >
+            <span>{QUOTE_ADJUSTMENT_LABEL}</span>
+            <span className="num">{formatAdjustment(quoteAdjustment, (n) => won(n) || "")}</span>
+          </div>
+        )}
         <div
           style={{
             borderTop: "1px solid var(--border)",
