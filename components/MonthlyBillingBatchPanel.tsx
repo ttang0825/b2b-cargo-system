@@ -234,7 +234,9 @@ export default function MonthlyBillingBatchPanel({
   //    목록이 이제 기본 화면이라 가장 흔한 상태의 금액이 안 보이면 쓸모가 없다.
   //    담긴 항목의 스냅샷 합계를 따로 세서 보여준다.
   //    🔴 확정된 묶음에는 쓰지 말 것 — 그쪽은 확정 시점에 **얼려진** 값이 정본이다.
-  const [draftTotalByBatchId, setDraftTotalByBatchId] = useState<Record<string, number>>({});
+  const [aggByBatchId, setAggByBatchId] = useState<
+    Record<string, { count: number; supply: number; total: number }>
+  >({});
   // 「새 묶음 만들기」에서 고른 화주·정산월의 상태. 🔴 펼친 묶음(`batch`)과 **다른
   //    상태다** — 섞으면 목록에서 펼친 묶음이 검색창 값에 따라 바뀐다.
   // 🔴 「불러오는 중」과 「불러오지 못했다」를 구분한다 — 그전에는 둘 다 `null` 이라
@@ -333,25 +335,32 @@ export default function MonthlyBillingBatchPanel({
     const list = (data as any[]) || [];
     setRecentBatches(list as any);
 
-    const draftIds = list.filter((b) => b.batch_status === "draft").map((b) => b.id);
-    if (draftIds.length === 0) {
-      setDraftTotalByBatchId({});
+    // 🔴 **목록의 모든 묶음**을 집계한다(작성 중만이 아니다) — 펼치기 전에도 건수를
+    //    보여줘야 하기 때문이다(사용자 지시 2026-09-15 *"몇건인지?"*).
+    //    🔴 확정된 묶음의 **금액**은 얼려진 `supply_amount`/`total_amount` 가 정본이고,
+    //       여기서 세는 것은 **건수뿐**이다. 항목 합계로 확정 금액을 덮어쓰지 말 것.
+    const ids = list.map((b) => b.id);
+    if (ids.length === 0) {
+      setAggByBatchId({});
       return;
     }
     const { data: items, error: itemError } = await supabase
       .from("customer_billing_batch_items")
-      .select("batch_id,total_amount_snapshot")
-      .in("batch_id", draftIds)
+      .select("batch_id,supply_amount_snapshot,total_amount_snapshot")
+      .in("batch_id", ids)
       .is("released_at", null);
     if (itemError) {
       fail("top", `묶음 금액을 불러오지 못했습니다: ${itemError.message}`);
       return;
     }
-    const sums: Record<string, number> = {};
+    const agg: Record<string, { count: number; supply: number; total: number }> = {};
     ((items as any[]) || []).forEach((it) => {
-      sums[it.batch_id] = (sums[it.batch_id] || 0) + (it.total_amount_snapshot || 0);
+      const a = (agg[it.batch_id] ||= { count: 0, supply: 0, total: 0 });
+      a.count += 1;
+      a.supply += it.supply_amount_snapshot || 0;
+      a.total += it.total_amount_snapshot || 0;
     });
-    setDraftTotalByBatchId(sums);
+    setAggByBatchId(agg);
   }
 
   // 화주를 하나씩 찾아서 확인하지 않아도 조건에 맞는 후보(주선사정산·월정산·
@@ -1591,20 +1600,61 @@ export default function MonthlyBillingBatchPanel({
                           : "세금계산서 미발행"}
                       </span>
                     )}
-                    <span
-                      style={{
-                        marginLeft: "auto",
-                        fontSize: 13.5,
-                        fontWeight: 600,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {b.batch_status === "draft"
-                        ? draftTotalByBatchId[b.id]
-                          ? won(draftTotalByBatchId[b.id])
-                          : "담긴 건 없음"
-                        : won(b.total_amount ?? null)}
-                    </span>
+                    {/* 🔴 **펼치기 전에도 읽히도록** 건수·공급가액·부가세 포함가·납부기한을
+                        오른쪽에 두 줄로 모았다(사용자 지시 2026-09-15). 굵은 줄은 **청구할
+                        금액(부가세 포함)**이고, 아래 회색 줄이 내역이다.
+                        🔴 **줄을 더 늘리지 말 것** — 목록이 복잡해지면 여기 둔 의미가 없다.
+                        🔴 확정된 묶음의 금액은 **얼려진 값**(`supply_amount`/`total_amount`)이고
+                        작성 중은 담긴 항목의 합이다. 섞지 말 것. */}
+                    {(() => {
+                      const a = aggByBatchId[b.id];
+                      const cancelled = b.batch_status === "cancelled";
+                      const draft = b.batch_status === "draft";
+                      const supply = draft ? a?.supply ?? 0 : b.supply_amount ?? null;
+                      const total = draft ? a?.total ?? 0 : b.total_amount ?? null;
+                      const count = a?.count ?? 0;
+                      const empty = cancelled || (draft && count === 0);
+                      return (
+                        <span
+                          style={{
+                            marginLeft: "auto",
+                            textAlign: "right",
+                            whiteSpace: "nowrap",
+                            lineHeight: 1.45,
+                          }}
+                        >
+                          <span style={{ display: "block", fontSize: 13.5, fontWeight: 600 }}>
+                            {empty ? (
+                              <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>
+                                {cancelled ? "해제됨" : "담긴 건 없음"}
+                              </span>
+                            ) : (
+                              <>
+                                {won(total)}
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: 400,
+                                    color: "var(--text-muted)",
+                                  }}
+                                >
+                                  {" "}
+                                  부가세 포함
+                                </span>
+                              </>
+                            )}
+                          </span>
+                          {!empty && (
+                            <span
+                              style={{ display: "block", fontSize: 11.5, color: "var(--text-muted)" }}
+                            >
+                              {count}건 · 공급가 {won(supply)}
+                              {b.payment_due_date ? ` · 기한 ${b.payment_due_date}` : ""}
+                            </span>
+                          )}
+                        </span>
+                      );
+                    })()}
                   </button>
 
                   {open && (

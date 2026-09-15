@@ -10,7 +10,11 @@ import { useListSearchSort } from "@/lib/useListSearchSort";
 // 🔴 `DateRangeFilter` 컴포넌트는 관리자 화면 여러 곳이 같이 쓴다 — 모양을 시안에
 //    맞추려고 그 컴포넌트를 고치면 관리자가 같이 바뀐다. 계산 함수만 가져다 쓰고
 //    칩은 이 화면에서 시안 모양으로 그린다.
-import { DatePreset, getDateRange } from "@/components/DateRangeFilter";
+import Pv2PeriodFilter, {
+  PortalPeriod,
+  PORTAL_PERIOD_ALL,
+  isInPortalPeriod,
+} from "@/components/pv2/Pv2PeriodFilter";
 import { calcVatAmount } from "@/lib/vat";
 import { downloadQuoteExcel } from "@/lib/quoteExcel";
 import {
@@ -49,13 +53,6 @@ function dateTimeLabel(v: string | null) {
   });
 }
 
-const PERIOD_CHIPS: { value: DatePreset; label: string }[] = [
-  { value: "today", label: "오늘" },
-  { value: "week", label: "이번주" },
-  { value: "month", label: "이번달" },
-  { value: "all", label: "전체" },
-];
-
 /**
  * 🔴 견적 전 「발주 요청」도 이 목록에 섞는다(27차, 사용자 확정 2026-08-28).
  *
@@ -93,7 +90,7 @@ export default function CustomerQuotesPage() {
   const [quotes, setQuotes] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState<DatePreset>("all");
+  const [period, setPeriod] = useState<PortalPeriod>(PORTAL_PERIOD_ALL);
   // 🔴 한 번에 하나만 펼친다 — 여러 장이 동시에 열리면 카드가 화면을 넘어가
   //    화주가 목록을 훑을 수 없다(시안도 하나만 열린 모양이다).
   const [openKey, setOpenKey] = useState<string | null>(null);
@@ -197,11 +194,12 @@ export default function CustomerQuotesPage() {
     [quotes, requests]
   );
 
-  const periodFiltered = useMemo(() => {
-    const { from } = getDateRange(period);
-    if (!from) return allRows;
-    return allRows.filter((r) => r.created_at && r.created_at >= from);
-  }, [allRows, period]);
+  // 🔴 기간 판정은 `isInPortalPeriod()` 하나가 한다(`Pv2PeriodFilter`) —
+  //    세 화면이 같은 규칙이어야 「견적은 되는데 정산은 안 되는」 상태가 안 생긴다.
+  const periodFiltered = useMemo(
+    () => allRows.filter((r) => isInPortalPeriod(period, r.created_at)),
+    [allRows, period]
+  );
 
   const {
     search,
@@ -289,18 +287,7 @@ export default function CustomerQuotesPage() {
       </div>
 
       <div className="pv2-filter-row">
-        <div className="pv2-chipgroup">
-          {PERIOD_CHIPS.map((c) => (
-            <button
-              key={c.value}
-              type="button"
-              className={`pv2-fchip${period === c.value ? " pv2-fchip-on" : ""}`}
-              onClick={() => setPeriod(c.value)}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
+        <Pv2PeriodFilter value={period} onChange={setPeriod} />
         <input
           className="pv2-search"
           type="text"
@@ -607,9 +594,27 @@ export default function CustomerQuotesPage() {
                               {priceless ? "-" : won(calcVatAmount(supply as number))}
                             </div>
                           </div>
+                          {/* 🔴 「합계 (부가세 별도)」에 **부가세를 더하지 말 것** — 부가세는
+                              바로 옆 칸에 따로 있다(27차 확정). 대신 **총액을 한 줄 더** 둔다.
+                              🔴 견적서 상세(`/customer/quotes/[id]`)와 **줄 구성이 같아야 한다**
+                              (사용자 지시 2026-09-15 *"견적서 상세보기 처럼"*) — 한쪽만 고치면
+                              같은 견적이 화면마다 다른 금액 구성으로 보인다(31차 「쌍으로
+                              움직인다」와 같은 결). */}
                           <div className="pv2-qfare-i pv2-qfare-total">
                             <div className="pv2-qfare-k">합계 (부가세 별도)</div>
-                            <div className="pv2-qfare-v">{priceless ? "협의 중" : won(supply)}</div>
+                            <div className="pv2-qfare-v pv2-qfare-supply">
+                              {priceless ? "협의 중" : won(supply)}
+                            </div>
+                            {!priceless && (
+                              <>
+                                <div className="pv2-qfare-k" style={{ marginTop: 6 }}>
+                                  총 견적금액 (부가세 포함)
+                                </div>
+                                <div className="pv2-qfare-v">
+                                  {won((supply as number) + calcVatAmount(supply as number))}
+                                </div>
+                              </>
+                            )}
                           </div>
                         </div>
                       </section>

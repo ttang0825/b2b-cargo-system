@@ -130,22 +130,44 @@ export default function CompanyDetailPage() {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
   }, []);
 
+  // 🔴 **화주포털 「배송지·화물 관리」와 같은 구조다**(사용자 지시 2026-09-15 —
+  //    *"현재 화주 상세 항목이 이와 상이한 구조로 되어 있는 부분은 맞추자"*).
+  //    그전에는 이 화면이 `location_name`·`address_detail`·`contact_*`·`notes` 를
+  //    **읽지도 쓰지도 않았고**, 상세주소를 주소에 합쳐 넣어(`fullAddress`) 포털이
+  //    나눠 저장한 것과 모양이 갈렸다. 🔴 **칸을 도로 줄이지 말 것** — 줄이면
+  //    화주가 포털에서 적은 담당자·특이사항이 담당자 화면에서 다시 사라진다.
   type Location = {
     id: string;
+    company_name: string | null;
     location_name: string | null;
     address: string | null;
+    address_detail: string | null;
     location_type: string | null;
+    contact_name: string | null;
+    contact_phone: string | null;
+    notes: string | null;
     sido: string | null;
     sigungu: string | null;
   };
+  const EMPTY_LOC = {
+    type: "상차지",
+    companyName: "",
+    name: "",
+    address: "",
+    detail: "",
+    sido: "",
+    sigungu: "",
+    contactName: "",
+    contactPhone: "",
+    notes: "",
+  };
   const [locations, setLocations] = useState<Location[]>([]);
-  const [newLocType, setNewLocType] = useState("상차지");
-  const [newLocAddress, setNewLocAddress] = useState("");
-  const [newLocDetail, setNewLocDetail] = useState("");
-  const [newLocSido, setNewLocSido] = useState("");
-  const [newLocSigungu, setNewLocSigungu] = useState("");
+  const [nl, setNl] = useState(EMPTY_LOC);
   const [editingLocId, setEditingLocId] = useState<string | null>(null);
-  const [editingLocValue, setEditingLocValue] = useState("");
+  const [savingLoc, setSavingLoc] = useState(false);
+  // 🔴 액션 실패는 **폼 바로 아래**에 띄운다(원칙 33번) — 페이지 맨 위 `error` 를
+  //    재사용하면 이미 불러온 상세 화면이 통째로 오류 문구로 덮인다.
+  const [locFormError, setLocFormError] = useState<string | null>(null);
 
   // 🔴 빈 값 묶음도 정의 파일이 만든다 — 여기에 키 목록을 다시 적으면 갈린다.
   const [editForm, setEditForm] = useState<Record<string, any>>(emptyCompanyForm);
@@ -378,44 +400,78 @@ export default function CompanyDetailPage() {
   }
 
   async function loadLocations() {
-    const { data } = await supabase
+    // 🔴 **`error` 를 삼키지 말 것**(원칙 55번) — 조회가 실패하면 `data` 가 null 이라
+    //    조용히 「저장된 주소가 없습니다」가 되고, 화주포털에는 있는 배송지가 담당자
+    //    화면에서만 사라진 것처럼 보인다.
+    const { data, error: loadError } = await supabase
       .from("customer_locations")
-      .select("id,location_name,address,location_type,sido,sigungu")
+      .select(
+        "id,company_name,location_name,address,address_detail,location_type,contact_name,contact_phone,notes,sido,sigungu"
+      )
       .eq("company_id", id);
-    setLocations(data || []);
-  }
-
-  async function handleAddLocation() {
-    if (!newLocAddress.trim()) return;
-    const fullAddress = [newLocAddress, newLocDetail].filter((v) => v.trim()).join(" ");
-    const { error } = await supabase.from("customer_locations").insert({
-      company_id: id,
-      address: fullAddress,
-      location_type: newLocType,
-      sido: newLocSido || null,
-      sigungu: newLocSigungu || null,
-    });
-    if (error) {
-      setError(error.message);
+    if (loadError) {
+      setLocFormError(`저장된 주소를 불러오지 못했습니다: ${loadError.message}`);
       return;
     }
-    setNewLocAddress("");
-    setNewLocDetail("");
-    setNewLocSido("");
-    setNewLocSigungu("");
-    loadLocations();
+    setLocations((data || []) as Location[]);
   }
 
-  async function handleUpdateLocation(locId: string) {
-    const { error } = await supabase
-      .from("customer_locations")
-      .update({ address: editingLocValue })
-      .eq("id", locId);
-    if (error) {
-      setError(error.message);
+  function startEditLocation(l: Location) {
+    setLocFormError(null);
+    setEditingLocId(l.id);
+    setNl({
+      type: l.location_type || "상차지",
+      companyName: l.company_name || "",
+      name: l.location_name || "",
+      address: l.address || "",
+      detail: l.address_detail || "",
+      sido: l.sido || "",
+      sigungu: l.sigungu || "",
+      contactName: l.contact_name || "",
+      contactPhone: l.contact_phone || "",
+      notes: l.notes || "",
+    });
+  }
+
+  function cancelEditLocation() {
+    setEditingLocId(null);
+    setLocFormError(null);
+    setNl(EMPTY_LOC);
+  }
+
+  async function handleSubmitLocation() {
+    if (!nl.address.trim()) {
+      setLocFormError("주소를 입력해주세요. 주소만 있으면 저장할 수 있습니다.");
+      return;
+    }
+    setSavingLoc(true);
+    setLocFormError(null);
+    // 🔴 **상세주소를 주소에 합쳐 넣지 않는다** — 화주포털이 `address_detail` 로 나눠
+    //    저장하므로 여기서 합치면 같은 표에 두 가지 모양이 섞이고, 포털에서 불러올 때
+    //    상세주소만 따로 채울 수 없다. (원칙 37번의 `fullOrigin` 관례는 `quotes`·
+    //    `orders` 처럼 상세주소 칸이 **없는** 표에 적용되는 것이다.)
+    const payload = {
+      company_name: nl.companyName.trim() || null,
+      location_name: nl.name.trim() || nl.address.trim(),
+      location_type: nl.type,
+      address: nl.address.trim(),
+      address_detail: nl.detail.trim() || null,
+      contact_name: nl.contactName.trim() || null,
+      contact_phone: nl.contactPhone.trim() || null,
+      notes: nl.notes.trim() || null,
+      sido: nl.sido || null,
+      sigungu: nl.sigungu || null,
+    };
+    const { error: saveError } = editingLocId
+      ? await supabase.from("customer_locations").update(payload).eq("id", editingLocId)
+      : await supabase.from("customer_locations").insert({ company_id: id, ...payload });
+    setSavingLoc(false);
+    if (saveError) {
+      setLocFormError(saveError.message);
       return;
     }
     setEditingLocId(null);
+    setNl({ ...EMPTY_LOC, type: nl.type });
     loadLocations();
   }
 
@@ -429,7 +485,7 @@ export default function CompanyDetailPage() {
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      setError(data.error || "삭제에 실패했습니다.");
+      setLocFormError(data.error || "삭제에 실패했습니다.");
       return;
     }
     loadLocations();
@@ -836,89 +892,80 @@ export default function CompanyDetailPage() {
       })}
 
       
-      {/* 저장된 주소 (상차지/하차지) */}
+      {/* 저장된 주소 (상차지/하차지) — 🔴 화주포털 「배송지·화물 관리」와 같은 구조다 */}
       <div className="card" style={{ padding: 20, marginBottom: 20 }}>
-        <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
-          저장된 주소
-        </h3>
+        <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 4 }}>저장된 배송지</h3>
+        <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginTop: 0, marginBottom: 14 }}>
+          화주포털 「배송지·화물 관리」와 같은 목록입니다. 여기서 등록하면 화주 화면에도
+          바로 나타나고, 견적 등록에서 「저장된 주소」로 불러올 수 있습니다.
+        </p>
 
         {["상차지", "하차지"].map((type) => {
-          const list = locations.filter((l) => l.location_type === type);
+          const list = locations.filter((l) =>
+            type === "상차지" ? l.location_type !== "하차지" : l.location_type === "하차지"
+          );
           return (
             <div key={type} style={{ marginBottom: 14 }}>
-              <div
-                style={{
-                  fontSize: 12,
-                  color: "var(--text-muted)",
-                  marginBottom: 6,
-                }}
-              >
-                {type}
+              <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 6 }}>
+                {type} {list.length > 0 && `(${list.length})`}
               </div>
               {list.length === 0 ? (
-                <p style={{ fontSize: 12.5, color: "var(--text-muted)" }}>
+                <p style={{ fontSize: 12.5, color: "var(--text-muted)", margin: 0 }}>
                   저장된 {type}가 없습니다.
                 </p>
               ) : (
-                list.map((loc, i) => (
+                list.map((loc) => (
                   <div
                     key={loc.id}
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      padding: "6px 0",
+                      padding: "8px 0",
                       borderBottom: "1px solid var(--border)",
                       fontSize: 13,
                     }}
                   >
-                    <span
-                      style={{
-                        color: "var(--text-muted)",
-                        fontSize: 11.5,
-                        flexShrink: 0,
-                      }}
-                    >
-                      주소{i + 1}
-                    </span>
-                    {editingLocId === loc.id ? (
-                      <input
-                        autoFocus
-                        value={editingLocValue}
-                        onChange={(e) => setEditingLocValue(e.target.value)}
-                        onBlur={() => handleUpdateLocation(loc.id)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter")
-                            (e.target as HTMLInputElement).blur();
-                        }}
-                        style={{ flex: 1, fontSize: 13, padding: "3px 6px" }}
-                      />
-                    ) : (
-                      <span
-                        style={{ flex: 1, cursor: "pointer" }}
-                        onClick={() => {
-                          setEditingLocId(loc.id);
-                          setEditingLocValue(loc.address || "");
-                        }}
-                        title="클릭해서 수정"
-                      >
-                        {loc.address}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ flex: 1, fontWeight: 600 }}>
+                        {loc.location_name || loc.company_name || loc.address || "이름 없음"}
                       </span>
-                    )}
-                    {isAdmin && (
                       <button
-                        className="btn-danger"
-                        style={{
-                          padding: "2px 8px",
-                          borderRadius: 6,
-                          fontSize: 11,
-                          cursor: "pointer",
-                          flexShrink: 0,
-                        }}
-                        onClick={() => handleDeleteLocation(loc.id)}
+                        className="btn-ghost"
+                        type="button"
+                        style={{ padding: "2px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}
+                        onClick={() => startEditLocation(loc)}
                       >
-                        삭제
+                        수정
                       </button>
+                      {isAdmin && (
+                        <button
+                          className="btn-danger"
+                          type="button"
+                          style={{ padding: "2px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}
+                          onClick={() => handleDeleteLocation(loc.id)}
+                        >
+                          삭제
+                        </button>
+                      )}
+                    </div>
+                    {/* 🔴 제목이 이미 상호면 같은 글을 두 번 그리지 않는다 */}
+                    {loc.company_name && loc.company_name !== (loc.location_name || loc.company_name) && (
+                      <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
+                        상호 {loc.company_name}
+                      </div>
+                    )}
+                    <div style={{ fontSize: 12.5, marginTop: 2 }}>
+                      {[loc.address, loc.address_detail].filter(Boolean).join(" ") || "-"}
+                    </div>
+                    {(loc.contact_name || loc.contact_phone) && (
+                      <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
+                        {loc.contact_name && <span>담당자 {loc.contact_name}</span>}
+                        {loc.contact_name && loc.contact_phone && <span> · </span>}
+                        {loc.contact_phone && <span>{loc.contact_phone}</span>}
+                      </div>
+                    )}
+                    {loc.notes && (
+                      <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
+                        특이사항 · {loc.notes}
+                      </div>
                     )}
                   </div>
                 ))
@@ -927,37 +974,108 @@ export default function CompanyDetailPage() {
           );
         })}
 
-        <div style={{ marginTop: 12, maxWidth: 380 }}>
-          <select
-            value={newLocType}
-            onChange={(e) => setNewLocType(e.target.value)}
-            style={{ width: 100, fontSize: 12.5, marginBottom: 6 }}
+        <div style={{ marginTop: 16, maxWidth: 560, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 8 }}>
+            {editingLocId ? "배송지 수정" : "새 배송지 추가"}
+          </div>
+          {/* 🔴 `.form-grid` 를 쓰지 말 것 — 그 클래스는 `padding: 22px` 를 가진 **카드
+              본문용**이라 아래 주소검색·특이사항 칸과 좌우가 어긋난다. `.field` 만 쓴다.
+              배치는 화주포털 「새 배송지 추가」와 같은 순서다(상호 → 구분·이름 →
+              주소 → 담당자 → 특이사항). */}
+          <div className="field">
+            <label>상호</label>
+            <input
+              value={nl.companyName}
+              onChange={(e) => setNl({ ...nl, companyName: e.target.value })}
+              placeholder="예: (주)위캐리물류 가산공장"
+            />
+          </div>
+          <div
+            style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 10, marginTop: 10 }}
           >
-            <option value="상차지">상차지</option>
-            <option value="하차지">하차지</option>
-          </select>
+            <div className="field">
+              <label>구분</label>
+              <select value={nl.type} onChange={(e) => setNl({ ...nl, type: e.target.value })}>
+                <option value="상차지">상차지</option>
+                <option value="하차지">하차지</option>
+              </select>
+            </div>
+            <div className="field">
+              <label>배송지 이름</label>
+              <input
+                value={nl.name}
+                onChange={(e) => setNl({ ...nl, name: e.target.value })}
+                placeholder="예: 가산 본사 창고"
+              />
+            </div>
+          </div>
+          <div style={{ marginTop: 10 }} />
           <AddressSearch
-            label="새 주소"
+            label="주소"
             className=""
-            value={newLocAddress}
-            detailValue={newLocDetail}
+            value={nl.address}
+            detailValue={nl.detail}
             placeholder="주소검색 또는 직접 입력"
-            detailPlaceholder="상세주소 (선택)"
-            onChange={(addr, sido, sigungu) => {
-              setNewLocAddress(addr);
-              setNewLocSido(sido);
-              setNewLocSigungu(sigungu);
-            }}
-            onDetailChange={setNewLocDetail}
+            detailPlaceholder="상세주소 (동/층/호수, 창고 위치 등)"
+            onChange={(addr, sido, sigungu) =>
+              setNl((prev) => ({ ...prev, address: addr, sido, sigungu, detail: sido ? "" : prev.detail }))
+            }
+            onDetailChange={(v) => setNl((prev) => ({ ...prev, detail: v }))}
           />
-          <button
-            className="btn"
-            type="button"
-            style={{ padding: "5px 12px", fontSize: 12.5, marginTop: 6 }}
-            onClick={handleAddLocation}
+          <div
+            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}
           >
-            추가
-          </button>
+            <div className="field">
+              <label>담당자명</label>
+              <input
+                value={nl.contactName}
+                onChange={(e) => setNl({ ...nl, contactName: e.target.value })}
+              />
+            </div>
+            <div className="field">
+              {/* 🔴 전화번호 입력은 예외 없이 `formatPhoneNumber` 를 문다(원칙 35번) */}
+              <label>담당자 연락처</label>
+              <input
+                value={nl.contactPhone}
+                onChange={(e) => setNl({ ...nl, contactPhone: formatPhoneNumber(e.target.value) })}
+              />
+            </div>
+          </div>
+          <div className="field" style={{ marginTop: 10 }}>
+            <label>특이사항</label>
+            <textarea
+              rows={2}
+              value={nl.notes}
+              onChange={(e) => setNl({ ...nl, notes: e.target.value })}
+              placeholder="예: 지게차 상차 가능, 야간 하차 불가"
+            />
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+            <button
+              className="btn"
+              type="button"
+              style={{ padding: "5px 12px", fontSize: 12.5 }}
+              onClick={handleSubmitLocation}
+              disabled={savingLoc}
+            >
+              {savingLoc ? "저장 중..." : editingLocId ? "수정 저장" : "추가"}
+            </button>
+            {editingLocId && (
+              <button
+                className="btn-ghost"
+                type="button"
+                style={{ padding: "5px 12px", fontSize: 12.5 }}
+                onClick={cancelEditLocation}
+              >
+                수정 취소
+              </button>
+            )}
+          </div>
+          {/* 🔴 원칙 33번 — 액션 실패는 버튼 바로 아래에. 위쪽 `error` 를 재사용하면
+              이미 불러온 화면 전체가 오류 문구로 덮인다. */}
+          {locFormError && (
+            <div style={{ color: "var(--danger)", fontSize: 12.5, marginTop: 8 }}>{locFormError}</div>
+          )}
         </div>
       </div>
 

@@ -11,7 +11,11 @@ import {
   CUSTOMER_BILLING_AXIS_LABEL,
 } from "@/lib/settlementLabels";
 import { useListSearchSort } from "@/lib/useListSearchSort";
-import { DatePreset, getDateRange } from "@/components/DateRangeFilter";
+import Pv2PeriodFilter, {
+  PortalPeriod,
+  PORTAL_PERIOD_ALL,
+  isInPortalPeriod,
+} from "@/components/pv2/Pv2PeriodFilter";
 import Pv2Select from "@/components/pv2/Pv2Select";
 import {
   getDispatchStage,
@@ -19,13 +23,6 @@ import {
   DISPATCH_STAGE_LABELS,
   DISPATCH_ISSUE_STYLE,
 } from "@/lib/dispatchStage";
-
-const PERIOD_CHIPS: { value: DatePreset; label: string }[] = [
-  { value: "today", label: "오늘" },
-  { value: "week", label: "이번주" },
-  { value: "month", label: "이번달" },
-  { value: "all", label: "전체" },
-];
 
 const SORT_OPTIONS = [
   { value: "created_at:desc", label: "최신 등록순" },
@@ -77,13 +74,14 @@ export default function CustomerDispatchesPage() {
   const [dispatches, setDispatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
-  const [period, setPeriod] = useState<DatePreset>("all");
+  const [period, setPeriod] = useState<PortalPeriod>(PORTAL_PERIOD_ALL);
 
-  const periodFiltered = useMemo(() => {
-    const { from } = getDateRange(period);
-    if (!from) return dispatches;
-    return dispatches.filter((d) => d.created_at && d.created_at >= from);
-  }, [dispatches, period]);
+  // 🔴 기간 판정은 `isInPortalPeriod()` 하나가 한다(`Pv2PeriodFilter`) —
+  //    세 화면이 같은 규칙이어야 「견적은 되는데 정산은 안 되는」 상태가 안 생긴다.
+  const periodFiltered = useMemo(
+    () => dispatches.filter((d) => isInPortalPeriod(period, d.created_at)),
+    [dispatches, period]
+  );
 
   const {
     search,
@@ -155,18 +153,7 @@ export default function CustomerDispatchesPage() {
       </div>
 
       <div className="pv2-filter-row">
-        <div className="pv2-chipgroup">
-          {PERIOD_CHIPS.map((c) => (
-            <button
-              key={c.value}
-              type="button"
-              className={`pv2-fchip${period === c.value ? " pv2-fchip-on" : ""}`}
-              onClick={() => setPeriod(c.value)}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
+        <Pv2PeriodFilter value={period} onChange={setPeriod} />
         <input
           className="pv2-search"
           type="text"

@@ -24,6 +24,10 @@ import {
 //   생긴다. 마이그레이션 파일 안에 그 두 이름이 있으면 멈추는 단언이 들어 있다.
 type Location = {
   id: string;
+  /** 🔴 배송지의 **상호**(2026-09-15 신설). `location_name`(별칭)과 다른 칸이다 —
+   *   그전에는 발주 폼이 상호를 `location_name` 에 밀어 넣어서 둘이 한 칸을 다퉜고,
+   *   관리자 화주 상세에서는 상호가 어디에도 안 보였다. */
+  company_name: string | null;
   address: string | null;
   address_detail: string | null;
   location_name: string | null;
@@ -38,6 +42,13 @@ type Surcharge = { category: string; option_name: string };
 type PendingDelete = { kind: "location" | "cargo" | "note"; id: string; name: string };
 
 const LOCATION_TYPES = ["상차지", "하차지"];
+
+/** 카드 제목에 쓸 이름 — 별칭 → 상호 → 주소 순으로 고른다.
+ *  🔴 **상호를 맨 앞에 두지 말 것** — 별칭(「본사 창고」)을 일부러 적은 화주는 그것으로
+ *     구분한다. 상호는 그 아래 줄에 따로 보여준다. */
+function locLabel(l: { location_name?: string | null; company_name?: string | null; address?: string | null }) {
+  return l.location_name || l.company_name || l.address || "이름 없음";
+}
 
 export default function PortalLocationsPage() {
   const [companyId, setCompanyId] = useState<string | null>(null);
@@ -55,6 +66,7 @@ export default function PortalLocationsPage() {
   // 새 배송지 — 🔴 7칸이 20차 컬럼 5개 + address + location_type 에 대응한다
   const [nl, setNl] = useState({
     type: "상차지",
+    companyName: "",
     name: "",
     address: "",
     detail: "",
@@ -110,7 +122,7 @@ export default function PortalLocationsPage() {
     const { data, error: loadError } = await supabase
       .from("customer_locations")
       .select(
-        "id,address,address_detail,location_name,location_type,contact_name,contact_phone,notes,sido,sigungu"
+        "id,company_name,address,address_detail,location_name,location_type,contact_name,contact_phone,notes,sido,sigungu"
       )
       .eq("company_id", cid);
     if (loadError) {
@@ -121,7 +133,7 @@ export default function PortalLocationsPage() {
     const rows = ((data || []) as Location[]).slice().sort((a, b) => {
       const t = (l: Location) => (l.location_type === "하차지" ? 1 : 0);
       if (t(a) !== t(b)) return t(a) - t(b);
-      return (a.location_name || a.address || "").localeCompare(b.location_name || b.address || "");
+      return locLabel(a).localeCompare(locLabel(b));
     });
     setLocations(rows);
   }
@@ -203,6 +215,7 @@ export default function PortalLocationsPage() {
 
   const EMPTY_LOC = {
     type: "상차지",
+    companyName: "",
     name: "",
     address: "",
     detail: "",
@@ -218,6 +231,7 @@ export default function PortalLocationsPage() {
     setEditingLocId(l.id);
     setNl({
       type: l.location_type || "상차지",
+      companyName: l.company_name || "",
       name: l.location_name || "",
       address: l.address || "",
       detail: l.address_detail || "",
@@ -252,6 +266,7 @@ export default function PortalLocationsPage() {
     // ⚠️ 이름을 안 적으면 주소를 이름으로 쓴다 — 목록 카드도 같은 폴백을 쓰고 있어
     //   비어 보이지 않는다(20차 이전 12행이 이미 그 상태다).
     const payload = {
+      company_name: nl.companyName.trim() || null,
       location_name: nl.name.trim() || nl.address.trim(),
       location_type: nl.type,
       address: nl.address.trim(),
@@ -441,6 +456,16 @@ export default function PortalLocationsPage() {
             {editingLocId ? "배송지 수정" : "새 배송지 추가"}
           </div>
           <div className="pv2-manage-fields">
+            {/* 🔴 상호는 별칭과 다른 칸이다(2026-09-15) — 「(주)○○물류 가산공장」처럼
+                실제 업체명이 들어가고, 견적·오더의 `origin_company_name` 과 같은 뜻이다.
+                담당자가 내부 시스템 화주 상세에서 그대로 본다. */}
+            <input
+              className="pv2-input pv2-input-sm"
+              value={nl.companyName}
+              onChange={(e) => setNl({ ...nl, companyName: e.target.value })}
+              placeholder="상호 (예: (주)위캐리물류 가산공장)"
+              aria-label="배송지 상호"
+            />
             <div className="pv2-manage-type-row">
               <Pv2Select
                 value={nl.type}
@@ -452,7 +477,7 @@ export default function PortalLocationsPage() {
                 className="pv2-input pv2-input-sm"
                 value={nl.name}
                 onChange={(e) => setNl({ ...nl, name: e.target.value })}
-                placeholder="배송지 이름 (예: 가산 본사 창고) *"
+                placeholder="배송지 이름 (예: 가산 본사 창고)"
                 aria-label="배송지 이름"
               />
             </div>
@@ -542,8 +567,8 @@ export default function PortalLocationsPage() {
                       {l.location_type || "상차지"}
                     </span>
                     {/* 🔴 20차 이전에 저장된 12행은 location_name 이 비어 있다 —
-                        이름이 없으면 주소를 대신 보여준다(카드가 비어 보이지 않게). */}
-                    <span className="pv2-saved-name">{l.location_name || l.address || "이름 없음"}</span>
+                        이름이 없으면 상호를, 그것도 없으면 주소를 보여준다. */}
+                    <span className="pv2-saved-name">{locLabel(l)}</span>
                     <button
                       type="button"
                       className="pv2-btn-edit"
@@ -558,13 +583,19 @@ export default function PortalLocationsPage() {
                         setPendingDelete({
                           kind: "location",
                           id: l.id,
-                          name: l.location_name || l.address || "이 배송지",
+                          name: locLabel(l),
                         })
                       }
                     >
                       삭제
                     </button>
                   </div>
+                  {/* 🔴 제목이 이미 상호일 때는 같은 글을 두 번 그리지 않는다 */}
+                  {l.company_name && l.company_name !== locLabel(l) && (
+                    <div className="pv2-saved-meta">
+                      <span>상호 {l.company_name}</span>
+                    </div>
+                  )}
                   <div className="pv2-saved-addr">
                     {[l.address, l.address_detail].filter(Boolean).join(" ") || "-"}
                   </div>
