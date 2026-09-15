@@ -11,15 +11,41 @@ export type CollectionMethodValue = {
   direct_collection_point: "pickup" | "dropoff" | "undecided" | null;
 };
 
+/**
+ * 🔴 36차 A·B장 — 화주 계약의 청구주기(`companies.billing_cycle_default`)와 **다르면**
+ *    담당자에게 알린다.
+ *
+ *    안 알리면 담당자가 모르고 지나가고, **화주는 요청했다고 생각하는데 정산은
+ *    계약대로 나간다**(B장이 막으려는 것이 정확히 이 자리다).
+ *
+ * 🔴 **막지 않는다 — 알리기만 한다.** 화주 값은 「기본값(제안)」이고 이 건의 값이
+ *    진실이다. 막으면 계약과 다르게 합의한 건을 아예 못 넣는다.
+ * 🔴 **되돌려 채우지 말 것**(원칙 45번) — 이 건의 값을 화주 계약으로 동기화하면
+ *    어느 쪽이 진짜인지 알 수 없어진다.
+ * ⚠️ 계약이 「미정」(null)이면 비교 대상이 없으므로 아무것도 그리지 않는다 —
+ *    「안 정했다」를 「건별로 정했다」로 바꿔 읽으면 안 된다.
+ */
+const CONTRACT_MISMATCH_LABEL = "계약과 다름";
+
 export default function CollectionMethodInput({
   value,
   onChange,
   namePrefix,
+  contractBillingCycle,
 }: {
   value: CollectionMethodValue;
   onChange: (next: CollectionMethodValue) => void;
   namePrefix: string;
+  /** 이 화주의 계약 청구주기. 없으면(개인·신규 고객, 미정) 비교하지 않는다 */
+  contractBillingCycle?: string | null;
 }) {
+  const contractLabel =
+    contractBillingCycle === "monthly"
+      ? "월정산"
+      : contractBillingCycle === "per_order"
+      ? "건별"
+      : null;
+  const mismatch = contractLabel !== null && contractBillingCycle !== value.billing_cycle;
   return (
     <div className="field" style={{ gridColumn: "1 / -1" }}>
       <label>정산방식</label>
@@ -75,6 +101,26 @@ export default function CollectionMethodInput({
           />
           월정산(수수료 월단위 청구)
         </label>
+        {mismatch && (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              padding: "2px 8px",
+              borderRadius: 4,
+              background: "#FEF3C7",
+              color: "#92400E",
+              fontSize: 12,
+              fontWeight: 700,
+              whiteSpace: "nowrap",
+            }}
+            title={`이 화주의 계약 청구주기는 「${contractLabel}」입니다`}
+          >
+            {CONTRACT_MISMATCH_LABEL}
+            <span style={{ fontWeight: 400 }}>(계약: {contractLabel})</span>
+          </span>
+        )}
       </div>
 
       {value.collection_method === "driver_direct" && (

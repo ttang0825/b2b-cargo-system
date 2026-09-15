@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
@@ -19,7 +19,11 @@ import {
   COMPANY_FIELDS,
   COMPANY_SECTIONS,
   buildCompanyPayload,
+  validateCompanyForm,
   companyFieldsOf,
+  companyFieldDisplay,
+  applyCompanyFieldChange,
+  paymentDueToForm,
   emptyCompanyForm,
   isRecurringContractActive,
   parseRecommendedVehicle,
@@ -176,8 +180,11 @@ export default function CompanyDetailPage() {
   );
 
   // 🔴 `useCallback` 을 벗기지 말 것(등록 폼과 같은 이유 — memo 가 무력해진다).
+  // 🔴 딸림 효과(결제일 기준을 바꾸면 결제일 값을 비운다)는 정의처 함수가 정한다 —
+  //    화면에 적으면 등록 폼과 수정 폼이 다르게 동작한다(36차 리뷰 1라운드).
+
   const set = useCallback((key: string, value: any) => {
-    setEditForm((prev) => ({ ...prev, [key]: value }));
+    setEditForm((prev) => applyCompanyFieldChange(prev, key, value));
   }, []);
 
   async function loadCompany() {
@@ -200,6 +207,10 @@ export default function CompanyDetailPage() {
       for (const f of COMPANY_FIELDS) {
         initial[f.key] = data[f.key] ?? (f.type === "checkbox" ? false : "");
       }
+      // 🔴 결제일만 예외다 — 화면 값 하나가 DB 두 칸(`payment_due_basis` +
+      //    `payment_due_value`)에 대응한다. 위 반복문은 「협의」를 되살리지 못한다
+      //    (그 행은 값 칸이 null 이라 「미정」으로 보인다). 🔴 이 한 줄을 지우지 말 것.
+      initial.payment_due_value = paymentDueToForm(data);
       // 주소검색이 채우는 파생 컬럼 — 정의에는 없지만 저장할 때 같이 쓴다.
       for (const k of [
         "main_pickup_sido",
@@ -408,6 +419,20 @@ export default function CompanyDetailPage() {
   }
 
   async function handleSave(force = false) {
+    // 🔴 범위 검사는 세 입구 공통 함수를 쓴다(36차 A장).
+    const invalid = validateCompanyForm(editForm);
+    if (invalid) {
+      setError(invalid);
+      return;
+    }
+
+    // ⚠️ **정산 마감일 변경 확인 창은 없앴다**(36차 리뷰 3라운드) — 화면에 입력칸이
+    //    없어져서 절대 뜰 수 없는 죽은 코드가 됐다. 남겨 두면 「아직 고칠 수 있다」로
+    //    읽힌다. 🔴 **원칙 46번의 방어는 두 겹으로 남아 있다**:
+    //      ① `buildCompanyPayload` 가 `billing_cutoff_day` 를 payload 에서 지운다
+    //      ② 마이그레이션 `2026-09-14_billing_cutoff_month_end.sql` 이 값을 전부 비웠다
+    //    🔴 나중에 다시 화주별 마감일을 두기로 한다면 **이 확인 창부터 되살릴 것.**
+
     setSaving(true);
     setError(null);
     setConflict(false);
@@ -772,18 +797,16 @@ export default function CompanyDetailPage() {
                     />
                   );
                 }
-                const raw = company[f.key];
-                let shown: any =
-                  f.type === "checkbox" ? (raw === true ? "예" : null) : raw;
-                if (
-                  (shown === null || shown === undefined || shown === "") &&
-                  f.emptyLabel
-                ) {
-                  // 🔴 「비어 있음」이 곧 규칙인 항목(정산 마감일)은 그 뜻을 그린다.
-                  shown = f.emptyLabel;
-                } else if (shown !== null && shown !== undefined && shown !== "" && f.displaySuffix) {
-                  shown = `${shown}${f.displaySuffix}`;
-                }
+                // 🔴 표시 규칙(코드값→라벨 · 「비어 있음」의 뜻 · 단위 · 천단위)은
+                //    정의처 함수 하나가 정한다 — 여기에 다시 적으면 `codedOptions` 를
+                //    늘렸을 때 이 화면만 조용히 코드값을 그대로 보여준다.
+                // 🔴 결제일만 예외 — DB 두 칸을 화면 값 하나로 되돌린 뒤 라벨을 찾는다
+                //    (「협의」가 값 칸이 아니라 기준 칸에 들어 있다).
+                const raw =
+                  f.key === "payment_due_value"
+                    ? paymentDueToForm(company)
+                    : company[f.key];
+                const shown = companyFieldDisplay(f, raw, company);
                 return <Field key={f.key} label={f.label} value={shown} />;
               })}
             </div>

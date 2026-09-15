@@ -30,6 +30,12 @@ type Props = {
    *    「펼치고 닫을 때 버벅거림」이 그것이었다(CPU 6배에서 218~238ms).
    */
   value: any;
+  /**
+   * `type: "static"` 전용 — 안내 문장이 실제로 보는 값들만 담는다.
+   * 🔴 **폼 state 전체를 넘기지 말 것**(위 주석) — 통째로 넘기면 한 칸만 고쳐도
+   *    참조가 바뀌어 `React.memo` 가 무력해지고 입력칸 51개가 전부 다시 그려진다.
+   */
+  deps?: Record<string, any>;
   /** `address` 전용 — 상세주소 칸 */
   detailValue?: string;
   /** `vehicle` 전용 — 톤수·형태 두 칸 */
@@ -52,6 +58,7 @@ function formatBizRegNo(v: string) {
 function CompanyFieldInput({
   field,
   value,
+  deps,
   detailValue,
   tonnage,
   bodytype,
@@ -60,6 +67,29 @@ function CompanyFieldInput({
   disabled,
 }: Props) {
   const f = field;
+
+  // ── 읽기 전용 안내 줄 ─────────────────────────────────────────────────────
+  // 🔴 입력칸이 아니다 — 다른 칸의 값에서 파생되는 사실을 알려 준다(36차 리뷰 3라운드).
+  //    `staticText` 가 `null` 을 돌려주면 줄 자체를 그리지 않는다(아직 안 정한 상태).
+  if (f.type === "static") {
+    const text = f.staticText?.(deps || {}) ?? null;
+    if (!text) return null;
+    return (
+      <div className="field">
+        <label>{f.label}</label>
+        <div
+          style={{
+            padding: "8px 0",
+            fontSize: 13,
+            color: "var(--text-muted)",
+            lineHeight: 1.5,
+          }}
+        >
+          {text}
+        </div>
+      </div>
+    );
+  }
 
   // ── 주소 ─────────────────────────────────────────────────────────────────
   // 🔴 원칙 37번 — 주소는 예외 없이 AddressSearch 를 재사용한다. 상세주소는 별도
@@ -151,7 +181,14 @@ function CompanyFieldInput({
   }
 
   // ── 드롭다운 ──────────────────────────────────────────────────────────────
-  if (f.type === "select") {
+  // 🔴 `codedOptions` 는 **저장되는 값과 보이는 글이 다르다**(36차 A장) — 거래조건
+  //    칸들은 DB CHECK 제약이 걸린 코드값이라 한글을 그대로 넣으면 저장이 거부된다.
+  const codedList = f.codedOptions || null;
+
+  // 🔴 `type` 이 `select` 가 아니어도 목록이 있으면 드롭다운으로 그린다 — 결제일이
+  //    그렇다(저장은 숫자 컬럼, 화면은 「익월 N일」 목록). 🔴 `type` 을 바꿔
+  //    해결하지 말 것: `buildCompanyPayload` 가 그 값으로 숫자 변환을 정한다.
+  if (f.type === "select" || codedList) {
     return (
       <div className="field">
         <label>
@@ -159,16 +196,22 @@ function CompanyFieldInput({
           {f.required && " *"}
         </label>
         <select
-          value={value || ""}
+          value={value === null || value === undefined ? "" : String(value)}
           onChange={(e) => onChange(f.key, e.target.value)}
           disabled={disabled}
         >
           <option value="">선택</option>
-          {(f.options || []).map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
+          {codedList
+            ? codedList.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))
+            : (f.options || []).map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
         </select>
         {f.note && <FieldNote text={f.note} />}
       </div>

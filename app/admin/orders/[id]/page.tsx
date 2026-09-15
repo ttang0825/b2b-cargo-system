@@ -171,7 +171,7 @@ export default function OrderDetailPage() {
     setLoading(true);
     const { data, error } = await supabase
       .from("orders")
-      .select("*, companies(id,name,phone)")
+      .select("*, companies(id,name,phone,billing_cycle_default)")
       .eq("id", id)
       .single();
     if (error) {
@@ -584,6 +584,8 @@ export default function OrderDetailPage() {
               <div style={{ maxWidth: 420 }}>
                 <CollectionMethodInput
                   namePrefix="order_settlement"
+                  /* 🔴 36차 — 계약과 다르면 알린다(막지 않는다). */
+                  contractBillingCycle={(order as any)?.companies?.billing_cycle_default}
                   value={{
                     collection_method: (order.collection_method as any) || "broker",
                     billing_cycle: (order.billing_cycle as any) || "per_order",

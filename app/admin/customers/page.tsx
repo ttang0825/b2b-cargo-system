@@ -7,7 +7,15 @@ import { supabase } from "@/lib/supabaseClient";
 import { STATUS_OPTIONS, getStatusColor } from "@/lib/statusColors";
 import { getDispatchStatusColor } from "@/lib/dispatchStatusColors";
 import RecurringContractBadge from "@/components/RecurringContractBadge";
-import { isRecurringContractActive } from "@/lib/companyFields";
+// 🔴 라벨(건별/월정산)을 여기 적지 말 것 — 화주 항목의 정의처는 `lib/companyFields.ts`
+//    하나이고, 거기서 값이 늘면 이 목록도 같이 따라가야 한다(36차 A장).
+import {
+  isRecurringContractActive,
+  COMPANY_FIELDS,
+  companyFieldDisplay,
+} from "@/lib/companyFields";
+
+const BILLING_CYCLE_FIELD = COMPANY_FIELDS.find((f) => f.key === "billing_cycle_default")!;
 import AdminMobileList from "@/components/AdminMobileList";
 import ListPagination from "@/components/ListPagination";
 import { useListPagination } from "@/lib/useListPagination";
@@ -26,6 +34,8 @@ type Customer = {
   contact_name: string | null;
   contact_mobile: string | null;
   payment_terms: string | null;
+  /** 36차 리뷰 2라운드 — 목록의 「결제조건」 칸이 이 값을 보여준다 */
+  billing_cycle_default: string | null;
   total_orders_count: number | null;
   outstanding_amount: number | null;
   // 🔴 정기계약 두 컬럼 — 33차 B장과 같은 근거다. 빼면 배지가 조용히 사라진다
@@ -89,7 +99,7 @@ export default function CustomersPage() {
     const { data, error } = await supabase
       .from("companies")
       .select(
-        "id,name,industry,sub_industry,metro_region,district,phone,status,grade,next_followup_date,contact_name,contact_mobile,payment_terms,total_orders_count,outstanding_amount,is_recurring_contract,recurring_contract_ended_on"
+        "id,name,industry,sub_industry,metro_region,district,phone,status,grade,next_followup_date,contact_name,contact_mobile,payment_terms,billing_cycle_default,total_orders_count,outstanding_amount,is_recurring_contract,recurring_contract_ended_on"
       )
       .in("status", ACTIVE_CUSTOMER_STATUSES)
       .order("grade", { ascending: true });
@@ -345,7 +355,7 @@ export default function CustomersPage() {
                 <th>지역</th>
                 <th>담당자</th>
                 <th>연락처</th>
-                <th>결제조건</th>
+                <th>청구주기</th>
                 <th>누적오더</th>
                 <th>미수금</th>
                 <th>등급</th>
@@ -381,7 +391,13 @@ export default function CustomersPage() {
                   </td>
                   <td className="cell-nowrap">{c.contact_name || "-"}</td>
                   <td className="cell-nowrap">{c.contact_mobile || c.phone || "-"}</td>
-                  <td className="cell-nowrap">{c.payment_terms || "-"}</td>
+                  {/* 🔴 36차 리뷰 2라운드 — 사용자 지시 *"활성화주 목록에서 결제조건은
+                      청구주기 값이 들어가자"*. 자유 텍스트 `payment_terms`(지금은
+                      「특이사항」)를 그리던 칸이다. 🔴 목록에 자유 텍스트를 되돌리지
+                      말 것 — 길이가 제각각이라 옆 칸을 밀어낸다(§7 의 되풀이된 함정). */}
+                  <td className="cell-nowrap">
+                    {companyFieldDisplay(BILLING_CYCLE_FIELD, c.billing_cycle_default) || "-"}
+                  </td>
                   <td className="cell-nowrap">{c.total_orders_count || 0}건</td>
                   <td className="cell-nowrap">{won(c.outstanding_amount)}</td>
                   <td className="cell-nowrap">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { STATUS_OPTIONS, getStatusColor } from "@/lib/statusColors";
@@ -17,6 +17,8 @@ import {
   COMPANY_SECTIONS,
   COMPANY_REQUIRED_FIELDS,
   buildCompanyPayload,
+  validateCompanyForm,
+  applyCompanyFieldChange,
   companyFormFieldsOf,
   emptyCompanyForm,
   isRecurringContractActive,
@@ -108,8 +110,19 @@ export default function CompaniesPage() {
 
   // 🔴 `useCallback` 을 벗기지 말 것 — 참조가 매 렌더 바뀌면 `CompanyFieldInput` 의
   //    `React.memo` 가 무력해져 입력칸 51개가 전부 다시 그려진다(리뷰 1라운드 「버벅거림」).
+  // 🔴 딸림 효과(결제일 기준을 바꾸면 결제일 값을 비운다)는 정의처 함수가 정한다 —
+  //    화면에 적으면 등록 폼과 수정 폼이 다르게 동작한다(36차 리뷰 1라운드).
+
+  // 🔴 `staticDeps` 를 인라인 객체로 넘기지 말 것 — 매 렌더 새 참조가 되어
+  //    `CompanyFieldInput` 의 `React.memo` 가 통째로 무력해진다(33차 리뷰 1라운드의
+  //    「버벅거림」이 그것이었다). 안내 문장이 실제로 보는 값이 바뀔 때만 참조가 바뀐다.
+  const staticDeps = useMemo(
+    () => ({ billing_cycle_default: form.billing_cycle_default }),
+    [form.billing_cycle_default]
+  );
+
   const setField = useCallback((key: string, value: any) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
+    setForm((prev) => applyCompanyFieldChange(prev, key, value));
   }, []);
 
   // 주소검색이 돌려주는 sido/sigungu 를 대응 컬럼에 같이 담는다(원칙 37번).
@@ -171,6 +184,16 @@ export default function CompaniesPage() {
       );
       return;
     }
+
+    // 🔴 범위 검사는 세 입구 공통 함수를 쓴다 — 안 막으면 DB CHECK 위반 원문이
+    //    그대로 올라와 담당자는 어느 칸이 틀렸는지 알 수 없다(36차 A장).
+    const invalid = validateCompanyForm(form);
+    if (invalid) {
+      setError(invalid);
+      setOpenSections((prev) => Array.from(new Set([...prev, "거래 조건" as const])));
+      return;
+    }
+
     setSaving(true);
     setError(null);
 
@@ -376,6 +399,7 @@ export default function CompaniesPage() {
                     {fields.map((f) => (
                       <CompanyFieldInput
                         key={f.key}
+                        deps={staticDeps}
                         field={f}
                         value={form[f.key]}
                         detailValue={form[`${f.key}Detail`]}

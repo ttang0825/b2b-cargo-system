@@ -633,3 +633,103 @@ select table_name as 표,
 from information_schema.columns
 where table_schema = 'public' and table_name in ('orders','dispatches','invoices')
 group by table_name order by table_name;
+
+\echo ''
+\echo '════════ ⑰ 36차 착수 전 확인 (읽기 전용) ════════'
+\echo '🔴 이 저장소는 public 이다 — 화주 이름·사업자등록번호를 뽑지 않는다. 건수와 플래그만.'
+
+\echo ''
+\echo '--- ⑰-a 🔴 확인 1: companies 의 거래조건 관련 컬럼이 이미 있는가 ---'
+select column_name as 컬럼, data_type as 타입,
+       coalesce(column_default,'(없음)') as 기본값, is_nullable as null허용
+from information_schema.columns
+where table_schema = 'public' and table_name = 'companies'
+  and column_name in ('billing_cutoff_day','payment_terms','billing_cycle',
+                      'payment_due_basis','payment_due_value','credit_limit',
+                      'tax_invoice_method','outstanding_amount')
+order by column_name;
+
+\echo ''
+\echo '--- ⑰-b 🔴 확인 1·5: 화주 행 수와 거래조건 채움 현황 ---'
+select
+  count(*)                                                     as 화주_전체,
+  count(*) filter (where status <> '거래중단')                 as 거래중단_아님,
+  count(*) filter (where billing_cutoff_day is not null)       as 마감일_채워짐,
+  count(*) filter (where coalesce(payment_terms,'') <> '')     as 결제조건_채워짐,
+  count(*) filter (where coalesce(outstanding_amount,0) <> 0)  as 미수금_0아님
+from companies;
+
+\echo ''
+\echo '--- ⑰-c 확인 5: 활성 화주(정산 실적이 있는 화주) 수 ---'
+select count(distinct company_id) as 정산실적_있는_화주 from invoices where company_id is not null;
+
+\echo ''
+\echo '--- ⑰-d 🔴 확인 10: 선착불 정산 건의 실제 값 (이름 없이 플래그·금액만) ---'
+select
+  coalesce(i.collection_method,'(빈칸)')        as 수금방식,
+  i.payment_received                            as 화주입금완료,
+  coalesce(i.customer_charge_total,0)           as 화주청구액,
+  coalesce(i.receivable_amount,-1)              as 받을돈,   -- -1 = null(옛 건)
+  coalesce(i.brokerage_fee,0)                   as 주선수수료,
+  coalesce(i.brokerage_fee_paid,false)          as 수수료입금완료,
+  i.created_at::date                            as 생성일
+from invoices i
+order by i.collection_method nulls first, i.created_at;
+
+\echo ''
+\echo '--- ⑰-e 🔴 확인 9: 화주별 미수금 — 저장값 vs 두 공식 ---'
+-- A = 지금 「신규 정산 등록」이 쓰는 식(customer_charge_total, 폴백 없음)
+-- B = 35차가 고친 「입금완료 체크」가 쓰는 식(receivable_amount ?? customer_charge_total)
+-- C = 선착불을 화주 미수금에서 뺀 식(= 36차 C장이 맞다고 보는 값)
+select
+  c.id::text = c.id::text                       as _,   -- 이름을 안 뽑기 위한 자리
+  coalesce(c.outstanding_amount,0)              as 저장된_미수금,
+  coalesce(sum(case when not i.payment_received then coalesce(i.customer_charge_total,0) end),0) as 식A_청구액,
+  coalesce(sum(case when not i.payment_received then coalesce(i.receivable_amount, i.customer_charge_total,0) end),0) as 식B_받을돈,
+  coalesce(sum(case when not i.payment_received and coalesce(i.collection_method,'broker') <> 'driver_direct'
+                    then coalesce(i.receivable_amount, i.customer_charge_total,0) end),0) as 식C_선착불제외
+from companies c
+join invoices i on i.company_id = c.id
+group by c.id, c.outstanding_amount
+having coalesce(c.outstanding_amount,0) <> 0
+    or coalesce(sum(case when not i.payment_received then coalesce(i.customer_charge_total,0) end),0) <> 0
+order by 2 desc;
+
+\echo ''
+\echo '--- ⑰-f 🔴 확인 15: quotes 의 금액 구성요소가 각각 저장돼 있는가 ---'
+select
+  count(*)                                                        as 견적_전체,
+  count(*) filter (where base_fare is not null)                   as 기본운임_있음,
+  count(*) filter (where surcharge_amount is not null)            as 가산합계_있음,
+  count(*) filter (where coalesce(discount_amount,0) <> 0)        as 할인컬럼_0아님,
+  count(*) filter (where final_amount is not null)                as 최종금액_있음,
+  count(*) filter (where exists (select 1 from quote_items qi where qi.quote_id = q.id)) as 항목행_있음
+from quotes q;
+
+\echo ''
+\echo '--- ⑰-g 🔴 확인 15·16: 「직접 입력」으로 줄 합이 안 맞는 견적이 몇 건인가 ---'
+-- 조정 = final_amount − (base_fare + Σ quote_items.amount)
+select
+  count(*)                                   as 견적_전체,
+  count(*) filter (where 조정 = 0)           as 조정_0,
+  count(*) filter (where 조정 < 0)           as 조정_감액,
+  count(*) filter (where 조정 > 0)           as 조정_증액,
+  coalesce(min(조정),0)                      as 최소조정,
+  coalesce(max(조정),0)                      as 최대조정
+from (
+  select q.id,
+         coalesce(q.final_amount,0)
+           - (coalesce(q.base_fare,0)
+              + coalesce((select sum(qi.amount) from quote_items qi where qi.quote_id = q.id),0)) as 조정
+  from quotes q
+) t;
+
+\echo ''
+\echo '--- ⑰-h 확인 6: portal_order_requests 컬럼 수와 정산 3컬럼 ---'
+select count(*) as 컬럼수 from information_schema.columns
+where table_schema='public' and table_name='portal_order_requests';
+select column_name as 컬럼, coalesce(column_default,'(없음)') as 기본값, is_nullable as null허용
+from information_schema.columns
+where table_schema='public' and table_name='portal_order_requests'
+  and column_name in ('collection_method','direct_collection_point','dropoff_arrival_type','billing_cycle','requested_billing_cycle')
+order by column_name;
