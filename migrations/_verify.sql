@@ -835,3 +835,43 @@ select table_name, column_name, data_type
  where table_schema = 'public'
    and table_name in ('customer_billing_batches', 'customer_billing_batch_items')
  order by table_name, ordinal_position;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- ⑲ 묶음 DB 함수의 실제 본문 (2026-09-15 · 월정산 묶음 개편 착수 전)
+--
+-- 🔴 **묶음 로직 12개가 저장소에 없다**(14차 산출물 · 마이그레이션 자동화 47차보다
+--    먼저 만들어졌다). 그래서 앱에서 그 함수를 조합해 쓰려면 **상태 가드가 무엇인지**
+--    를 짐작하지 않고 실제로 읽어야 한다.
+--
+-- 🔴 이 절을 만든 직접적인 이유 — 연체 자동 판정이 `payment_status` 를
+--    `'unpaid'` → `'overdue'` 로 바꾸는데, 입금완료 함수가 `'unpaid'` 만 받도록
+--    적혀 있으면 **연체가 붙는 순간 입금완료 버튼이 막힌다.** 붙이기 전에 재야 한다.
+--
+-- 🟢 본문에는 고객 정보가 없다(로직뿐) — 공개 저장소에 찍어도 되는 것은 앱 소스와 같다.
+-- ─────────────────────────────────────────────────────────────────────────────
+\echo ''
+\echo '--- ⑲-a payment_status / batch_status CHECK 제약 (허용값) ---'
+select conname as 제약명, pg_get_constraintdef(oid) as 정의
+  from pg_constraint
+ where conrelid = 'customer_billing_batches'::regclass
+   and contype = 'c'
+ order by conname;
+
+\echo ''
+\echo '--- ⑲-b 상태를 만지는 함수 4개의 본문 ---'
+select p.proname as 함수명, pg_get_functiondef(p.oid) as 본문
+  from pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
+ where n.nspname = 'public'
+   and p.proname in ('mark_billing_batch_payment_received',
+                     'set_billing_batch_payment_due_date',
+                     'release_billing_batch',
+                     'add_item_to_billing_batch')
+ order by p.proname;
+
+\echo ''
+\echo '--- ⑲-c create_billing_batch 본문 (같은 기간에 두 번 만들면 어떻게 되는가) ---'
+select pg_get_functiondef(p.oid) as 본문
+  from pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
+ where n.nspname = 'public' and p.proname = 'create_billing_batch';
