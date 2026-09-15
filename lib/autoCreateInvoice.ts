@@ -9,6 +9,9 @@
 // 🔴 24시콜 가져오기 차수(ⓒ 정산 엑셀로 운송완료)가 이 함수를 그대로 부른다.
 //    이름과 위치를 바꾸려면 그 설계서도 같이 고칠 것.
 //
+// 🔴 **월정산 건이면 묶음도 여기서 자동으로 붙는다**(2026-09-15, 맨 아래 참고) —
+//    `/api/admin/billing-batches/auto-attach` 를 fire-and-forget 으로 부른다.
+//
 // 🔴 **수금방식에 따라 「받을 돈·줄 돈」이 다르다**(35차 A-1 · 사용자 확정 2026-09-11).
 //
 //      broker(주선사정산)    화주 ──청구액──▶ 위캐리 ──지급액──▶ 차주
@@ -144,7 +147,7 @@ export async function autoCreateInvoice(
   //       그것이 선착불 정산 건의 유일한 미수금이다.
   const directDone = isDirect ? { received_at: completedOn } : null;
 
-  const { error: invoiceError } = await supabase.from("invoices").insert({
+  const { data: inserted, error: invoiceError } = await supabase.from("invoices").insert({
     order_id: input.orderId,
     company_id: order?.company_id || null,
     individual_customer_id: order?.individual_customer_id || null,
@@ -171,9 +174,37 @@ export async function autoCreateInvoice(
     driver_paid_date: directDone?.received_at ?? null,
     status: "정산대기",
     created_by: await getCurrentStaffId(),
-  });
+  }).select("id").single();
   if (invoiceError) {
     return { kind: "error", message: invoiceError.message };
   }
+
+  // 🔴 월정산 묶음 자동 생성(2026-09-15) — 사용자 신고 *"월정산건은 운송 완료시
+  //    자동으로 월정산 묶음이 만들어지고…"*. 그전에는 정산 건만 자동으로 생기고
+  //    묶음은 담당자가 화주·정산월을 골라 손으로 만들어야 했다(실측: 월정산 2건 중
+  //    묶음에 담긴 것 0건).
+  //
+  // 🔴 **fire-and-forget 이다**(원칙 53번). 묶음은 정산 건에 얹히는 부가 작업이라,
+  //    여기서 실패해도 운송완료와 정산 건 생성은 그대로여야 한다. `await` 를 걸면
+  //    묶음 API 가 느리거나 죽었을 때 **배차 상태 변경 자체가 멈춘다.**
+  //
+  // 🔴 **호출을 화면 파일로 옮기지 말 것** — `autoCreateInvoice` 를 부르는 곳이
+  //    배차 상세·배차 목록 **두 곳**이고(24시콜 ⓒ 가 세 번째가 된다), 화면에 두면
+  //    한쪽만 고쳐져 「목록에서 완료하면 묶음이 안 생긴다」가 된다. 정산 건이
+  //    만들어지는 자리가 여기 하나이므로 묶음도 여기서 붙는다.
+  //
+  // 🔴 **조건을 여기서 판정하지 않는다** — 수금방식·청구주기·상태를 서버 API 가
+  //    다시 읽는다(원칙 44번과 같은 결). 여기서 걸러면 판정이 두 곳이 된다.
+  const newInvoiceId = (inserted as any)?.id;
+  if (newInvoiceId) {
+    void fetch("/api/admin/billing-batches/auto-attach", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ invoice_id: newInvoiceId }),
+    }).catch(() => {
+      /* 묶음은 부가 작업이다 — 실패해도 정산 건 생성은 성공이다 */
+    });
+  }
+
   return { kind: "created" };
 }

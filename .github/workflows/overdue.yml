@@ -1,0 +1,73 @@
+# 월정산 묶음 연체 판정 — 매일 자동으로 돕니다
+#
+# 🔴 `migrate.yml` 과 달리 **사람이 안 눌러도 돕니다.** 납부기한이 지났다는 것은
+#    날짜가 지나면 저절로 참이 되는 사실이라, 누가 화면을 열어야만 반영되면
+#    아무도 안 연 달의 연체는 영영 안 잡힙니다.
+#
+# 🔴 무엇을 바꾸는지는 `scripts/mark-overdue.sql` 안에 있고, 거기 달린 주석을 먼저
+#    읽으십시오 — 특히 **연체가 붙으면 「묶음 해제」가 막힌다**는 것(의도된 동작).
+#
+# 🟢 **화면은 이 작업을 기다리지 않습니다.** 묶음 화면이 납부기한을 표시 시점에
+#    다시 세기 때문에(`components/MonthlyBillingBatchPanel.tsx` 의 `batchOverdue`)
+#    기한이 지난 그 순간부터 「연체」로 보입니다. 이 작업은 그 사실을 **DB 에도
+#    남기는 것**이고, 그래서 아래 ⚠️ 처럼 예약이 꺼져도 화면은 맞습니다.
+#
+# 손으로 돌릴 때 (Actions 탭 → "월정산 묶음 연체 판정" → Run workflow)
+#   dry-run  대상만 세고 아무것도 바꾸지 않음  ← 확인은 항상 이것으로
+#   apply    실제로 연체 표시
+#
+# ⚠️ GitHub 은 저장소가 60일간 아무 활동이 없으면 예약 실행을 자동으로 끕니다.
+#    오래 손대지 않는 시기가 오면 Actions 탭에서 다시 켜졌는지 확인하십시오.
+
+name: 월정산 묶음 연체 판정
+
+on:
+  schedule:
+    # 매일 18:20 UTC = 한국시간 03:20. 🔴 파기(03:10)와 10분 띄운 것은 같은 시각에
+    # 두 작업이 같은 DB 에 붙지 않게 하려는 것입니다.
+    - cron: "20 18 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "무엇을 할지"
+        required: true
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - apply
+
+concurrency:
+  group: db-billing-overdue
+  cancel-in-progress: false
+
+jobs:
+  overdue:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: psql 준비
+        run: |
+          if ! command -v psql >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq postgresql-client
+          fi
+          psql --version
+
+      - name: 연체 판정
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+          # 예약 실행(schedule)에는 inputs 가 없습니다 — 그때는 실제 반영이 목적이라
+          # apply 로 떨어집니다. 손으로 누를 때만 dry-run 이 기본입니다.
+          MODE: ${{ inputs.mode || 'apply' }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::Secret 'SUPABASE_DB_URL' 이 등록되지 않았습니다."
+            exit 1
+          fi
+          if [ "$MODE" = "apply" ]; then DRY=false; else DRY=true; fi
+          echo "mode=$MODE (dry_run=$DRY)"
+          # 🔴 --single-transaction — 상한 가드에 걸리면 아무것도 바뀌지 않습니다.
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 --no-psqlrc --single-transaction \
+               -v dry_run=$DRY -f scripts/mark-overdue.sql
