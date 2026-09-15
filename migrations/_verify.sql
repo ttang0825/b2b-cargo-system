@@ -1003,3 +1003,83 @@ begin
       raise notice '🔴 DB 함수가 예외로 죽었다: % (%)', sqlerrm, sqlstate;
   end;
 end $$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- ㉒ 🔴 운임기준표 v12 착수 전 확인 (2026-09-15 · 지시서 2-0)
+--
+-- 🔴 **읽기 전용입니다.** 지시서가 요구한 13항목 중 DB 로만 알 수 있는 것을 찍습니다.
+--    ① 195행 전수 · ② rate_surcharges 전수 · ⑧ 대기료·경유지비 · ⑫ 저장 건수 기준선.
+--
+-- ⚠️ 이 절은 **한 차례 착수 전 확인용**이지만 지우지 않습니다 — 같은 종류의 운임 차수가
+--    또 오면 여기부터 보면 됩니다(⑥ 이 22차에 그렇게 남은 것과 같은 취급).
+-- 🔴 운임 값은 개인정보가 아니라 Actions 로그에 찍어도 됩니다(HANDOFF §2 는 실명·이메일·
+--    연락처·로그인 아이디·사업자등록번호를 금지합니다). 🔴 **여기에 사람 정보를 더하지 말 것.**
+-- ─────────────────────────────────────────────────────────────────────────────
+
+\echo ''
+\echo '=== ㉒-a 운임 195행 전수 (지시서 2-0 1번) ================'
+-- 🔴 눈으로 세지 말 것 — 이 출력을 첨부 엑셀과 **프로그램으로** 대조한다(지시서 4-1).
+select vehicle_type, distance_label, distance_from_km, distance_to_km, base_fare
+from rate_distance_tiers
+order by vehicle_type, coalesce(distance_to_km, 2147483647);
+
+\echo ''
+\echo '=== ㉒-b 운임 구조 요약 =================================='
+select
+  (select count(*) from rate_distance_tiers)                                          as 총행수,
+  (select count(distinct vehicle_type) from rate_distance_tiers)                      as 차급수,
+  (select count(distinct distance_label) from rate_distance_tiers)                    as 구간수,
+  (select count(*) from rate_distance_tiers where base_fare is null)                  as base_fare_null,
+  (select count(*) from rate_distance_tiers where distance_to_km is null)             as 상한없는행,
+  (select count(*) from rate_distance_tiers
+     where vehicle_type not in ('다마스','라보') and base_fare % 10000 <> 0)          as 만원배수아님_1톤이상,
+  (select count(*) from rate_distance_tiers
+     where vehicle_type in ('다마스','라보') and base_fare % 5000 <> 0)               as 오천배수아님_다마스라보;
+
+\echo ''
+\echo '=== ㉒-c 🔴 rate_surcharges 전수 (지시서 2-0 2·3·4·5·6번) ='
+-- 🔴 **B장 범위가 여기서 갈린다 — 보고 후 대기.**
+--    `물품특성`·`상하차방식` 은 이번 범위 밖이지만 값을 모르므로 반드시 찍는다(부록 B).
+select category, option_name, rate_pct, flat_amount
+from rate_surcharges
+order by category, option_name;
+
+\echo ''
+\echo '=== ㉒-d 가산 카테고리별 행 수 =========================='
+select category, count(*) as 행수,
+       count(*) filter (where coalesce(rate_pct, 0) <> 0)    as 요율있음,
+       count(*) filter (where coalesce(flat_amount, 0) <> 0) as 정액있음
+from rate_surcharges group by category order by category;
+
+\echo ''
+\echo '=== ㉒-e 대기료·경유지비 13행 (지시서 2-0 8번) ==========='
+-- 🔴 만원 단위가 아니면 소계를 반올림해도 최종금액이 만원에서 벗어난다.
+select vehicle_type, free_waiting_minutes, waiting_fee_per_unit, waypoint_fee,
+       coalesce(waiting_fee_per_unit, 0) % 10000 as 대기료_만원나머지,
+       coalesce(waypoint_fee, 0)        % 10000 as 경유지_만원나머지
+from rate_vehicle_extra_fees order by vehicle_type;
+
+\echo ''
+\echo '=== ㉒-f 혼적 할인율 3행 (범위 밖 · 변경 0 기준선) ======='
+-- 🔴 컬럼을 짐작하지 않는다(원칙 55번 · PR #152 가 같은 실수를 밟았다) — `select *` 다.
+select * from mixed_loading_discount_settings;
+
+\echo ''
+\echo '=== ㉒-g 저장 건수 기준선 (지시서 2-0 12번) =============='
+-- 🔴 소급 재계산 0건의 근거다 — A·B·C 전후로 이 숫자가 같아야 한다.
+select
+  (select count(*) from quotes)        as 견적,
+  (select count(*) from quote_items)   as 견적항목,
+  (select count(*) from orders)        as 오더,
+  (select count(*) from invoices)      as 정산,
+  (select count(*) from _migrations)   as 마이그레이션_행수;
+
+\echo ''
+\echo '=== ㉒-h 저장된 견적 금액 합 (소급 재계산 0건 대조용) ====='
+select
+  count(*)                                        as 견적건수,
+  coalesce(sum(base_fare), 0)                     as 기본운임합,
+  coalesce(sum(surcharge_amount), 0)              as 가산합,
+  coalesce(sum(final_amount), 0)                  as 최종금액합,
+  coalesce((select sum(amount) from quote_items), 0) as 항목합
+from quotes;
