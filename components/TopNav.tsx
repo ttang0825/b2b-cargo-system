@@ -179,6 +179,9 @@ function TopNavInner() {
     pathname?.startsWith("/quote") ||
     pathname?.startsWith("/apply") ||
     pathname?.startsWith("/guide") ||
+    // 🔴 견적서 공유 링크(2026-09-15) — 원칙 11번. 빼면 화주가 문자로 받아 연
+    //    견적서 위에 **관리자 메뉴가 얹힌다.**
+    pathname?.startsWith("/q/") ||
     pathname?.startsWith("/terms") ||
     pathname?.startsWith("/privacy") ||
     pathname?.startsWith("/email-policy");

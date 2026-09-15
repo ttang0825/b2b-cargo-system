@@ -16,7 +16,10 @@ export default function robots(): MetadataRoute.Robots {
       //    (사용자 확정 — "나중에 필요하면 새로 다시 만들면 된다").
       //    되살릴 때는 이 목록에 다시 넣을 것.
       allow: ["/", "/quote", "/apply", "/guide", "/terms", "/privacy", "/email-policy"],
-      disallow: ["/admin", "/customer"],
+      // 🔴 `/q` 는 **견적서 공유 링크**다(2026-09-15) — 특정 화주의 상호·구간·금액이
+      //    담기므로 절대 색인되면 안 된다. 핵심 방어선은 `app/q/layout.tsx` 의
+      //    `robots: { index: false }` 이고 여기는 보조다(**둘 다 유지할 것**).
+      disallow: ["/admin", "/customer", "/q"],
     },
     sitemap: `${SITE_URL}/sitemap.xml`,
   };
