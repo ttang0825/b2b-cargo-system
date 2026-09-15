@@ -37,6 +37,12 @@ import { getSettlementDisplayLabel, getPaymentConditionLabel, mapToLegacySettlem
 import { orderBodyTypes } from "@/lib/vehicleBodyTypes";
 import { CUSTOMER_APPROVED_LABEL, formatCustomerApprovedAt } from "@/lib/quoteApproval";
 import {
+  calcQuoteAdjustment,
+  shouldShowAdjustment,
+  formatAdjustment,
+  QUOTE_ADJUSTMENT_LABEL,
+} from "@/lib/quoteAdjustment";
+import {
   minDropoffDateTime as minDropoffDateTimeOf,
   isDropoffGapOk,
   DROPOFF_MIN_GAP_LABEL,
@@ -208,6 +214,10 @@ export default function QuoteDetailPage() {
   );
 
   const minDropoffLabel = editForm.requested_pickup_at ? DROPOFF_MIN_GAP_LABEL : undefined;
+
+  // 🔴 items 조회가 끝난 뒤에 계산해야 한다 — 빈 배열로 계산하면 가산액만큼이
+  //    통째로 「조정」으로 보인다(`lib/quoteAdjustment.ts` 주석 참고).
+  const quoteAdjustment = calcQuoteAdjustment(quote || {}, items);
 
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
@@ -1229,6 +1239,23 @@ export default function QuoteDetailPage() {
             <span className="num">{won(it.amount != null ? Math.abs(it.amount) : it.amount)}</span>
           </div>
         ))}
+        {/* 🔴 「조정」 — 담당자가 최종금액을 직접 고쳤을 때 항목 합과의 차이를 그린다(36차 E장).
+            0이면 그리지 않으므로 조정 없는 견적은 종전과 한 글자도 같다.
+            🔴 값은 `lib/quoteAdjustment.ts` 하나가 정한다 — 네 산출물이 같아야 한다. */}
+        {shouldShowAdjustment(quoteAdjustment) && (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              marginBottom: 6,
+              fontSize: 12.5,
+              color: "var(--text-muted)",
+            }}
+          >
+            <span>{QUOTE_ADJUSTMENT_LABEL}</span>
+            <span className="num">{formatAdjustment(quoteAdjustment, (n) => won(n) || "")}</span>
+          </div>
+        )}
         <div
           style={{
             borderTop: "1px solid var(--border)",

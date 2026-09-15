@@ -2,6 +2,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { exportDocumentToExcel, sanitizeFilename, type DocRow } from "@/lib/exportExcel";
 import { calcVatAmount, calcInclusiveAmount } from "@/lib/vat";
 import { getQuoteSettlementLine, CUSTOMER_COLLECTION_AXIS_LABEL } from "@/lib/settlementLabels";
+import {
+  calcQuoteAdjustment,
+  shouldShowAdjustment,
+  QUOTE_ADJUSTMENT_LABEL,
+} from "./quoteAdjustment";
 
 // 견적서 엑셀 출력. 관리자 화면과 운송관리(화주포털) 화면이 **같은 함수를 공유**하므로
 // 두 곳에서 받은 파일의 내용이 갈리지 않는다.
@@ -137,6 +142,14 @@ export function buildQuoteDocRows({ quote, items }: QuoteExcelData): DocRow[] {
   if (quote.discount_amount) {
     // 할인은 음수로 넣어야 받는 쪽에서 그대로 더해 합계를 검산할 수 있다
     rows.push({ kind: "money", label: "할인", value: -Math.abs(quote.discount_amount) });
+  }
+  // 🔴 「조정」 — 최종금액을 직접 고쳤을 때 항목 합과의 차이(36차 E장).
+  //    🔴 엑셀은 **부호를 문자로 적지 않고 값 자체를 음수/양수로 넣는다** — 금액이 숫자
+  //    타입이라야 받는 쪽에서 SUM 으로 합계를 검산할 수 있다(원칙 8번·31차 「숫자 타입」).
+  //    그래서 여기서는 `formatAdjustment()` 를 쓰지 않는다.
+  const quoteAdjustment = calcQuoteAdjustment(quote, items);
+  if (shouldShowAdjustment(quoteAdjustment)) {
+    rows.push({ kind: "money", label: QUOTE_ADJUSTMENT_LABEL, value: quoteAdjustment });
   }
 
   const supply = quote.final_amount || 0;
