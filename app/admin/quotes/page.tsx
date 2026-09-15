@@ -37,6 +37,11 @@ import AdminMobileList from "@/components/AdminMobileList";
 import DraggablePanel from "@/components/DraggablePanel";
 import RequiredMark from "@/components/RequiredMark";
 import {
+  minDropoffDateTime as minDropoffDateTimeOf,
+  isDropoffGapOk,
+  DROPOFF_MIN_GAP_LABEL,
+} from "@/lib/dropoffGap";
+import {
   arrivalTypeLabel,
   arrivalTypeHint,
   ARRIVAL_TIME_FREE_NOTE,
@@ -138,11 +143,6 @@ function won(n: number) {
 function wonVatIncluded(n: number | null | undefined) {
   if (!n) return null;
   return calcInclusiveAmount(n).toLocaleString("ko-KR") + "원";
-}
-
-// 거리 기준 최소 상차→하차 간격 (2~5시간, 100km당 1시간씩 증가)
-function calcMinGapHours(distanceKm: number) {
-  return Math.min(5, Math.max(2, 2 + Math.floor(distanceKm / 100)));
 }
 
 function QuotesPageInner() {
@@ -697,21 +697,14 @@ function QuotesPageInner() {
     [mixedDiscountTiers, form.distance_km]
   );
 
-  // 거리 기준 최소 하차일시 (희망 상차일시가 있어야 계산됨)
-  const minDropoffDateTime = useMemo(() => {
-    if (!form.requested_pickup_at) return undefined;
-    const gapHours = calcMinGapHours(Number(form.distance_km) || 0);
-    const pickup = new Date(form.requested_pickup_at);
-    pickup.setHours(pickup.getHours() + gapHours);
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${pickup.getFullYear()}-${pad(pickup.getMonth() + 1)}-${pad(pickup.getDate())}T${pad(
-      pickup.getHours()
-    )}:${pad(pickup.getMinutes())}`;
-  }, [form.requested_pickup_at, form.distance_km]);
+  // 최소 하차일시 — 🔴 **거리와 무관하게 상차 +30분**이다(36차 D장). 정의처는
+  // `lib/dropoffGap.ts` 하나이고 화주포털 발주요청도 같은 값을 쓴다.
+  const minDropoffDateTime = useMemo(
+    () => minDropoffDateTimeOf(form.requested_pickup_at),
+    [form.requested_pickup_at]
+  );
 
-  const minDropoffLabel = form.requested_pickup_at
-    ? `거리 기준 상차 후 최소 ${calcMinGapHours(Number(form.distance_km) || 0)}시간 이후로 선택해주세요`
-    : undefined;
+  const minDropoffLabel = form.requested_pickup_at ? DROPOFF_MIN_GAP_LABEL : undefined;
 
   // 희망 상차일시를 정하면, 요일/시간대를 보고 운송시간을 자동으로 맞춰줌 (직접 변경 가능)
   useEffect(() => {
@@ -794,14 +787,11 @@ function QuotesPageInner() {
       );
       return;
     }
-    if (form.requested_pickup_at && form.requested_dropoff_at) {
-      const gapHours = calcMinGapHours(Number(form.distance_km) || 0);
-      const diffMs =
-        new Date(form.requested_dropoff_at).getTime() - new Date(form.requested_pickup_at).getTime();
-      if (diffMs < gapHours * 60 * 60 * 1000) {
-        setError(`거리 기준 상차 후 최소 ${gapHours}시간 이후로 하차일시를 설정해주세요.`);
-        return;
-      }
+    // 🔴 입력창 하한과 **같은 규칙을 제출 직전에 한 번 더** 본다 — 하한을 정하기 전에
+    //    하차를 먼저 골라 두면 입력창만으로는 막히지 않는다.
+    if (!isDropoffGapOk(form.requested_pickup_at, form.requested_dropoff_at)) {
+      setError(`희망 하차일시는 ${DROPOFF_MIN_GAP_LABEL}.`);
+      return;
     }
     if (!calc) {
       setError("해당 거리에 맞는 운임기준을 찾지 못했습니다. 거리를 확인해주세요.");

@@ -36,6 +36,11 @@ import { getSettlementDisplayLabel, getPaymentConditionLabel, mapToLegacySettlem
 //    모르는 옵션은 버리지 않고 맨 뒤에 붙인다(`lib/vehicleBodyTypes.ts` 참고).
 import { orderBodyTypes } from "@/lib/vehicleBodyTypes";
 import { CUSTOMER_APPROVED_LABEL, formatCustomerApprovedAt } from "@/lib/quoteApproval";
+import {
+  minDropoffDateTime as minDropoffDateTimeOf,
+  isDropoffGapOk,
+  DROPOFF_MIN_GAP_LABEL,
+} from "@/lib/dropoffGap";
 
 const STATUS_OPTIONS = ["상담중", "견적제출", "수주", "보류", "실패"];
 
@@ -126,11 +131,6 @@ function wonVatIncluded(n: number | null | undefined) {
   return calcInclusiveAmount(n).toLocaleString("ko-KR") + "원";
 }
 
-// 견적 관리는 거리기반 최소 간격(100km당 1h, 2~5h 범위) 규칙을 씀 (원칙 6번)
-function calcMinGapHours(distanceKm: number) {
-  return Math.min(5, Math.max(2, 2 + Math.floor(distanceKm / 100)));
-}
-
 export default function QuoteDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -200,18 +200,14 @@ export default function QuoteDetailPage() {
     [mixedDiscountTiers, editForm.distance_km]
   );
 
-  // 거리 기준 최소 하차일시 (희망 상차일시가 있어야 계산됨)
-  const minDropoffDateTime = useMemo(() => {
-    if (!editForm.requested_pickup_at) return undefined;
-    const gapHours = calcMinGapHours(Number(editForm.distance_km) || 0);
-    const pickup = new Date(editForm.requested_pickup_at);
-    pickup.setHours(pickup.getHours() + gapHours);
-    return toLocalDateTimeInput(pickup.toISOString());
-  }, [editForm.requested_pickup_at, editForm.distance_km]);
+  // 최소 하차일시 — 🔴 **거리와 무관하게 상차 +30분**이다(36차 D장). 정의처는
+  // `lib/dropoffGap.ts` 하나이고 등록 폼·화주포털 발주요청도 같은 값을 쓴다.
+  const minDropoffDateTime = useMemo(
+    () => minDropoffDateTimeOf(editForm.requested_pickup_at),
+    [editForm.requested_pickup_at]
+  );
 
-  const minDropoffLabel = editForm.requested_pickup_at
-    ? `거리 기준 상차 후 최소 ${calcMinGapHours(Number(editForm.distance_km) || 0)}시간 이후로 선택해주세요`
-    : undefined;
+  const minDropoffLabel = editForm.requested_pickup_at ? DROPOFF_MIN_GAP_LABEL : undefined;
 
   useEffect(() => {
     getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
@@ -386,15 +382,10 @@ export default function QuoteDetailPage() {
       if (!proceed) return;
     }
 
-    if (editForm.requested_pickup_at && editForm.requested_dropoff_at) {
-      const gapHours = calcMinGapHours(Number(editForm.distance_km) || 0);
-      const diffMs =
-        new Date(editForm.requested_dropoff_at).getTime() -
-        new Date(editForm.requested_pickup_at).getTime();
-      if (diffMs < gapHours * 60 * 60 * 1000) {
-        setSaveError(`희망 하차일시는 상차일시 기준 최소 ${gapHours}시간 이후로 설정해주세요.`);
-        return;
-      }
+    // 🔴 입력창 하한과 **같은 규칙을 제출 직전에 한 번 더** 본다(등록 폼과 동일).
+    if (!isDropoffGapOk(editForm.requested_pickup_at, editForm.requested_dropoff_at)) {
+      setSaveError(`희망 하차일시는 ${DROPOFF_MIN_GAP_LABEL}.`);
+      return;
     }
 
 

@@ -23,6 +23,10 @@ import { localInputToISOString } from "@/lib/localDateTime";
 import { PORTAL_ORDER_THIRD_PARTY_CONSENT } from "@/lib/legalInfo";
 import Pv2Select from "@/components/pv2/Pv2Select";
 import {
+  minDropoffDateTime as minDropoffDateTimeOf,
+  DROPOFF_MIN_GAP_MIN,
+} from "@/lib/dropoffGap";
+import {
   CUSTOMER_COLLECTION_AXIS_LABEL,
   CUSTOMER_BILLING_AXIS_LABEL,
   getCustomerBillingCycleLabel,
@@ -267,19 +271,11 @@ export default function PortalRequestPage() {
     });
   }
 
-  // 거리 정보가 없는 화면이라, 상차 후 고정 30분 이후로만 하차일시를 선택하게 함
-  // 🔴 25차에는 2시간이었다 — PR #103 리뷰 8번에서 30분으로 확정. 시내 단거리는
-  //    2시간을 강제하면 실제 도착 시각보다 한참 뒤로만 적을 수 있었다.
-  const DROPOFF_MIN_GAP_MIN = 30;
-  const minDropoffDateTime = (() => {
-    if (!form.requested_pickup_at) return undefined;
-    const d = new Date(form.requested_pickup_at);
-    d.setMinutes(d.getMinutes() + DROPOFF_MIN_GAP_MIN);
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
-      d.getMinutes()
-    )}`;
-  })();
+  // 상차 후 고정 30분 이후로만 하차일시를 선택하게 함.
+  // 🔴 값과 계산은 `lib/dropoffGap.ts` 한 곳이다(36차 D장) — 견적 등록·수정 화면이 같은
+  //    것을 쓴다. 여기에 숫자를 다시 적으면 화면마다 답이 갈린다.
+  //    ⚠️ 동작은 그대로다(30분 · 같은 형식) — 정의처만 옮긴 것이다.
+  const minDropoffDateTime = minDropoffDateTimeOf(form.requested_pickup_at);
 
   function optionsOf(category: string) {
     return surcharges.filter((s) => s.category === category).map((s) => s.option_name);
