@@ -29,6 +29,7 @@ import {
   formatAdjustment,
   QUOTE_ADJUSTMENT_LABEL,
 } from "@/lib/quoteAdjustment";
+import { buildQuoteFareLines, QUOTE_SURCHARGE_LINE_LABEL } from "@/lib/quoteFareLines";
 
 type QuoteItem = { id: string; item_name: string | null; amount: number | null };
 
@@ -172,7 +173,10 @@ export default function CustomerQuoteDetailPage() {
   const priceless = !supply;
 
   // 🔴 items 조회가 끝난 뒤에 계산한다 — 빈 배열이면 가산액이 통째로 「조정」으로 보인다.
-  const quoteAdjustment = calcQuoteAdjustment(quote, items);
+  // 🔴 **가산은 한 줄로 합쳐 그린다**(v12 C장 (가)안 · `lib/quoteFareLines.ts`).
+  //    할인(음수) 줄과 조정 줄은 그대로 남는다 — 사유는 그 파일 머리말.
+  const fare = buildQuoteFareLines(quote, items);
+  const quoteAdjustment = fare.adjustment;
 
   return (
     <>
@@ -297,9 +301,15 @@ export default function CustomerQuoteDetailPage() {
               {quote.base_fare ? money(quote.base_fare) : priceless ? "협의 중" : "-"}
             </span>
           </div>
-          {items.map((it) => (
-            <div key={it.id} className="pv2-qd-row">
-              <span className="pv2-qd-k">{it.item_name || "가산"}</span>
+          {fare.surcharge !== 0 && (
+            <div className="pv2-qd-row">
+              <span className="pv2-qd-k">{QUOTE_SURCHARGE_LINE_LABEL}</span>
+              <span className="pv2-qd-v-right">{money(fare.surcharge)}</span>
+            </div>
+          )}
+          {fare.discountLines.map((it, i) => (
+            <div key={`d${i}`} className="pv2-qd-row">
+              <span className="pv2-qd-k">{it.item_name}</span>
               <span className="pv2-qd-v-right">{money(it.amount)}</span>
             </div>
           ))}
