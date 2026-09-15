@@ -42,6 +42,8 @@ import {
   DROPOFF_MIN_GAP_LABEL,
 } from "@/lib/dropoffGap";
 import {
+  arrivalNoteLine,
+  buildNotesWithArrival,
   arrivalTypeLabel,
   arrivalTypeHint,
   ARRIVAL_TIME_FREE_NOTE,
@@ -189,6 +191,12 @@ function QuotesPageInner() {
    *    값 자체는 특이사항 한 줄로 이어져 오더·배차까지 살아 있다.
    */
   const [dropoffArrivalType, setDropoffArrivalType] = useState<string | null>(null);
+  /**
+   * 🔴 「지금」 칩 (36차 PR 2 리뷰 2라운드 — 포털 발주요청과 같은 칩).
+   *    저장 컬럼이 아니라 **제출 직전에 상차 시각을 다시 지금으로 맞추기 위한 표시**다.
+   *    누른 시각 그대로 두면 담당자가 폼을 채우는 동안 시각이 과거가 된다.
+   */
+  const [pickupNow, setPickupNow] = useState(false);
   const [useManualFinalAmount, setUseManualFinalAmount] = useState(false);
   const [finalAmountOverride, setFinalAmountOverride] = useState("");
   const [ratesLoading, setRatesLoading] = useState(true);
@@ -413,11 +421,9 @@ function QuotesPageInner() {
         notes:
           [
             reqData.notes,
-            (reqData as any).dropoff_arrival_type === "same_day"
-              ? "※ 화주 요청: 당착 (상차 당일 도착 · 시각 무관)"
-              : (reqData as any).dropoff_arrival_type === "next_day"
-              ? "※ 화주 요청: 내착 (상차 다음 날 도착 · 시각 무관)"
-              : null,
+            // 🔴 문구는 `lib/arrivalType.ts` 하나다 — 여기 다시 적으면 제출 직전의
+            //    중복 판정이 어긋나 같은 줄이 두 번 들어간다.
+            arrivalNoteLine((reqData as any).dropoff_arrival_type),
           ]
             .filter(Boolean)
             .join("\n") || prev.notes,
@@ -789,7 +795,13 @@ function QuotesPageInner() {
     }
     // 🔴 입력창 하한과 **같은 규칙을 제출 직전에 한 번 더** 본다 — 하한을 정하기 전에
     //    하차를 먼저 골라 두면 입력창만으로는 막히지 않는다.
-    if (!isDropoffGapOk(form.requested_pickup_at, form.requested_dropoff_at)) {
+    // 🔴 **당착·내착은 이 규칙의 예외다**(27차) — 시각이 무관한 선택지라, 상차가
+    //    23:40 인 당착 건이 「상차 후 30분」에 걸려 접수가 막힌다. 포털이 같은 자리에서
+    //    같은 예외를 둔다. 🔴 예외를 지우면 밤 시간대 당착 건을 아예 못 넣는다.
+    if (
+      !dropoffArrivalType &&
+      !isDropoffGapOk(form.requested_pickup_at, form.requested_dropoff_at)
+    ) {
       setError(`희망 하차일시는 ${DROPOFF_MIN_GAP_LABEL}.`);
       return;
     }
@@ -861,9 +873,16 @@ function QuotesPageInner() {
         final_amount:
           useManualFinalAmount && finalAmountOverride ? Number(finalAmountOverride) : calc.final,
         status: "상담중",
-        requested_pickup_at: localInputToISOString(form.requested_pickup_at),
+        // 🔴 「지금」이면 **제출하는 그 순간**으로 다시 맞춘다 — 칩을 누른 시각을 그대로
+        //    쓰면 폼을 채우는 동안 흐른 시간만큼 과거가 된다(포털과 같은 처리).
+        requested_pickup_at: pickupNow
+          ? new Date().toISOString()
+          : localInputToISOString(form.requested_pickup_at),
         requested_dropoff_at: localInputToISOString(form.requested_dropoff_at),
-        notes: form.notes || null,
+        // 🔴 **당착·내착을 특이사항 한 줄로 남긴다** — `quotes` 에 도착구분 컬럼이
+        //    없어서(28차 결정 1) 이 줄이 유일한 전달 경로다. 이미 들어 있으면(포털
+        //    요청에서 넘어온 건) **다시 붙이지 않는다.**
+        notes: buildNotesWithArrival(form.notes, dropoffArrivalType) || null,
         selected_options: {
           톤수: form.vehicle_type,
           차량형태: form.차량형태,
@@ -986,7 +1005,7 @@ function QuotesPageInner() {
       item: "",
       waitingMinutes: "",
       waypointCount: "",
-        requested_pickup_at: "",
+      requested_pickup_at: "",
       requested_dropoff_at: "",
       notes: "",
     });
@@ -994,6 +1013,11 @@ function QuotesPageInner() {
     setAllowManualDistance(false);
     setUseManualFinalAmount(false);
     setFinalAmountOverride("");
+    // 🔴 「지금」·「당착/내착」도 **건별이다** — 안 비우면 다음 견적의 상차 시각이 조용히
+    //    접수 시각이 되고, 하차일시를 비운 건에 옛 도착구분 줄이 따라 붙는다
+    //    (포털 발주 폼이 같은 이유로 같게 비운다).
+    setPickupNow(false);
+    setDropoffArrivalType(null);
     loadQuotes(period);
   }
 
@@ -1485,13 +1509,37 @@ function QuotesPageInner() {
                   「상차 다음이 하차」라는 짝이 한눈에 안 보이고 폼만 세로로 길어졌다.
                   🔴 `gridColumn` 을 다시 붙이지 말 것. */}
               <div>
+                {/* 🔴 **안내 문구를 고쳤다** — 「현재 시각 이후로만 선택 가능합니다」라고
+                    적고 있었지만 **하한이 걸려 있지 않았다.** 35차가 *"지나간 날짜도 고를
+                    수 있어야 한다"*로 확정했기 때문이다(끝난 운송을 뒤늦게 입력하는 일이
+                    있다). 문구만 동작과 어긋나 있던 자리이고, 바로 옆에 「지금」 칩이
+                    생기면서 더 헷갈리게 돼 같이 고쳤다.
+                    🔴 **하한을 새로 걸지 말 것** — 문구를 근거로 `minDateTime` 을 붙이면
+                       그 확정이 뒤집힌다. */}
                 <DateTimePicker
                   defaultTimeMode="now"
                   label="희망 상차 일시"
                   value={form.requested_pickup_at}
                   onChange={(v) => setForm({ ...form, requested_pickup_at: v })}
-                  minDateTimeLabel="현재 시각 이후로만 선택 가능합니다"
+                  minDateTimeLabel="지난 날짜도 고를 수 있습니다 (완료된 운송 입력)"
+                  nowChip
+                  nowSelected={pickupNow}
+                  onNowChange={setPickupNow}
                 />
+                {/* 🔴 「지금」이면 시각 칸이 **비어 보인다** — 시간 드롭다운이 30분 단위라
+                    현재 시각(예: 11:17)이 선택지에 없기 때문이다. 하차의 당착 배지와
+                    같은 이유·같은 자리에 이유를 적는다. **칸을 비운 채로 두는 것이 맞고**,
+                    실제로 저장되는 값은 **제출하는 순간의 시각**이다.
+                    🔴 이 안내를 지우면 담당자가 빈 시각을 임의로 채운다(28차가 하차에서
+                       겪은 것과 같은 사고다). */}
+                {pickupNow && (
+                  <div style={{ marginTop: 6 }}>
+                    <span className="badge">지금 상차 · 접수 시각</span>
+                    <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 4 }}>
+                      견적을 등록하는 순간의 시각으로 저장됩니다
+                    </div>
+                  </div>
+                )}
               </div>
               <div>
                 <DateTimePicker
@@ -1499,8 +1547,14 @@ function QuotesPageInner() {
                   label="희망 하차 일시"
                   value={form.requested_dropoff_at}
                   onChange={(v) => setForm({ ...form, requested_dropoff_at: v })}
-                  minDateTime={minDropoffDateTime}
-                  minDateTimeLabel={minDropoffLabel}
+                  /* 🔴 당착·내착이면 +30분 하한을 걸지 않는다 — 시각이 무관한 선택지라
+                     23:40 상차 건의 당착이 하한에 걸려 접수가 막힌다(27차 예외). */
+                  minDateTime={dropoffArrivalType ? undefined : minDropoffDateTime}
+                  minDateTimeLabel={dropoffArrivalType ? undefined : minDropoffLabel}
+                  arrivalChips
+                  arrivalValue={dropoffArrivalType as any}
+                  onArrivalChange={(v) => setDropoffArrivalType(v)}
+                  pickupDate={(form.requested_pickup_at || "").split("T")[0] || undefined}
                 />
                 {/* 🔴 화주가 「당착/내착」을 고른 건은 **시각이 무관하다.** 저장된 23:59 는
                     자리 채움인데 시간 드롭다운이 30분 단위라 선택지에 없어서, 프리필에서
@@ -1860,7 +1914,18 @@ function QuotesPageInner() {
                children 을 그대로 돌려준다. 감싸개를 끼우면 아래 `position: sticky` 의
                기준이 바뀌어 **따라다니기가 조용히 멈춘다.** */}
         <DraggablePanel title="자동 계산 결과">
-        <div className="card" style={{ padding: 20, position: "sticky", top: 20, alignSelf: "start" }}>
+        {/* 🔴 `top` 에 **상단바 높이를 더한다** — PR #150 이 상단바를 `sticky` 로 만든 뒤로
+            `top: 20` 이면 데스크탑에서 **59px 이 헤더 뒤로 들어간다**(리뷰 2라운드 신고).
+            🔴 숫자를 여기 적지 말 것 — 정의처는 `--admin-topnav-h`(globals.css)다. */}
+        <div
+          className="card"
+          style={{
+            padding: 20,
+            position: "sticky",
+            top: "calc(var(--admin-topnav-h, 79px) + 20px)",
+            alignSelf: "start",
+          }}
+        >
           <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
             자동 계산 결과
           </h3>

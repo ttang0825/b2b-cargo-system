@@ -38,7 +38,8 @@ export type ArrivalType = "same_day" | "next_day" | null;
  *    표현하는 하루의 끝일 뿐이다. 🔴 **00:00 으로 바꾸지 말 것** — 상차 +30분 하한을
  *    밑돌아 검증에 걸리고, 그 날이 아니라 그 날 시작으로 읽힌다.
  */
-const ARRIVAL_FILLER_TIME = "23:59";
+// 🔴 값은 `lib/arrivalType.ts` 하나다 — 여기 다시 적지 말 것(36차 PR 2)
+import { ARRIVAL_FILLER_TIME } from "@/lib/arrivalType";
 
 // 06:00 ~ 22:00, 30분 단위 — 원본 DateTimePicker 와 같은 목록
 const TIME_OPTIONS: string[] = [];

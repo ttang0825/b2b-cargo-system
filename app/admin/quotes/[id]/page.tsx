@@ -47,6 +47,9 @@ import {
   isDropoffGapOk,
   DROPOFF_MIN_GAP_LABEL,
 } from "@/lib/dropoffGap";
+// 🔴 등록 폼과 **같은 칩**을 쓴다(36차 PR 2 리뷰 2라운드) — 한쪽에만 있으면 담당자가
+//    수정 화면에서 당착을 고를 길이 없어 특이사항을 손으로 적게 된다.
+import { buildNotesWithArrival, arrivalTypeLabel, ARRIVAL_TIME_FREE_NOTE } from "@/lib/arrivalType";
 
 const STATUS_OPTIONS = ["상담중", "견적제출", "수주", "보류", "실패"];
 
@@ -162,6 +165,13 @@ export default function QuoteDetailPage() {
   const [quoteSmsError, setQuoteSmsError] = useState<string | null>(null);
   const [smsPreview, setSmsPreview] = useState<SmsPreview | null>(null);
 
+  /**
+   * 🔴 수정 화면의 「지금」·「당착/내착」 — 등록 폼과 같다. `quotes` 에 도착구분 컬럼이
+   *    없으므로(28차 결정 1) **불러올 때는 항상 꺼진 상태로 시작한다.**
+   *    이미 특이사항에 줄이 있으면 저장할 때 다시 붙지 않는다(`buildNotesWithArrival`).
+   */
+  const [pickupNow, setPickupNow] = useState(false);
+  const [dropoffArrivalType, setDropoffArrivalType] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
     collection_method: "broker" as CollectionMethodValue["collection_method"],
     billing_cycle: "per_order" as CollectionMethodValue["billing_cycle"],
@@ -393,7 +403,11 @@ export default function QuoteDetailPage() {
     }
 
     // 🔴 입력창 하한과 **같은 규칙을 제출 직전에 한 번 더** 본다(등록 폼과 동일).
-    if (!isDropoffGapOk(editForm.requested_pickup_at, editForm.requested_dropoff_at)) {
+    // 🔴 당착·내착은 예외다(27차) — 시각이 무관한 선택지라 밤 상차 건이 막힌다
+    if (
+      !dropoffArrivalType &&
+      !isDropoffGapOk(editForm.requested_pickup_at, editForm.requested_dropoff_at)
+    ) {
       setSaveError(`희망 하차일시는 ${DROPOFF_MIN_GAP_LABEL}.`);
       return;
     }
@@ -422,9 +436,12 @@ export default function QuoteDetailPage() {
       distance_km: Number(editForm.distance_km) || null,
       vehicle_type: editForm.vehicle_type,
       item: editForm.item || null,
-      requested_pickup_at: localInputToISOString(editForm.requested_pickup_at),
+      requested_pickup_at: pickupNow
+        ? new Date().toISOString()
+        : localInputToISOString(editForm.requested_pickup_at),
       requested_dropoff_at: localInputToISOString(editForm.requested_dropoff_at),
-      notes: editForm.notes || null,
+      // 🔴 도착구분 한 줄을 특이사항으로 잇는다 — 이미 있으면 다시 붙이지 않는다
+      notes: buildNotesWithArrival(editForm.notes, dropoffArrivalType) || null,
       final_amount: Number(editForm.final_amount) || null,
       loading_type: editForm.loading_type,
       mixed_shipper_consent: editForm.loading_type === "mixable" ? editForm.mixed_shipper_consent : false,
@@ -859,7 +876,15 @@ export default function QuoteDetailPage() {
                 label="희망 상차 일시"
                 value={editForm.requested_pickup_at}
                 onChange={(v) => setEditForm({ ...editForm, requested_pickup_at: v })}
+                nowChip
+                nowSelected={pickupNow}
+                onNowChange={setPickupNow}
               />
+              {pickupNow && (
+                <div style={{ marginTop: 6, fontSize: 11.5, color: "var(--text-muted)" }}>
+                  저장하는 순간의 시각으로 기록됩니다
+                </div>
+              )}
             </div>
             <div style={{ gridColumn: "1 / -1" }}>
               <DateTimePicker
@@ -867,9 +892,25 @@ export default function QuoteDetailPage() {
                 label="희망 하차 일시"
                 value={editForm.requested_dropoff_at}
                 onChange={(v) => setEditForm({ ...editForm, requested_dropoff_at: v })}
-                minDateTime={minDropoffDateTime}
-                minDateTimeLabel={minDropoffLabel}
+                minDateTime={dropoffArrivalType ? undefined : minDropoffDateTime}
+                minDateTimeLabel={dropoffArrivalType ? undefined : minDropoffLabel}
+                arrivalChips
+                arrivalValue={dropoffArrivalType as any}
+                onArrivalChange={(v) => setDropoffArrivalType(v)}
+                pickupDate={
+                  (editForm.requested_pickup_at || "").split("T")[0] || undefined
+                }
               />
+              {arrivalTypeLabel(dropoffArrivalType) && (
+                <div style={{ marginTop: 6 }}>
+                  <span className="badge">
+                    {arrivalTypeLabel(dropoffArrivalType)} · {ARRIVAL_TIME_FREE_NOTE}
+                  </span>
+                  <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 4 }}>
+                    특이사항에 한 줄로 기록됩니다
+                  </div>
+                </div>
+              )}
             </div>
             <div className="field">
               <label>운송시간</label>

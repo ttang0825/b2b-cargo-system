@@ -114,7 +114,8 @@ const PAYMENT_DUE_REQUEST_CHOICES = [
  *    `components/pv2/Pv2DateTimeField.tsx` 의 같은 값과 반드시 일치해야 한다 —
  *    상차일을 바꿀 때 이 화면이 하차 날짜를 다시 계산하기 때문이다.
  */
-const ARRIVAL_FILLER_TIME = "23:59";
+// 🔴 값은 `lib/arrivalType.ts` 하나다 — 여기 다시 적지 말 것(36차 PR 2)
+import { ARRIVAL_FILLER_TIME } from "@/lib/arrivalType";
 
 /** 🔴 선착불일 때만 묻는다(C안) — 주선사 정산에는 지급조건이라는 개념이 없다 */
 const DIRECT_POINT_CHOICES = [
