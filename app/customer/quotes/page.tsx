@@ -594,14 +594,19 @@ export default function CustomerQuotesPage() {
                               {priceless ? "-" : won(calcVatAmount(supply as number))}
                             </div>
                           </div>
-                          {/* 🔴 「합계 (부가세 별도)」에 **부가세를 더하지 말 것** — 부가세는
+                          {/* 🔴 「공급가액 (부가세 별도)」에 **부가세를 더하지 말 것** — 부가세는
                               바로 옆 칸에 따로 있다(27차 확정). 대신 **총액을 한 줄 더** 둔다.
                               🔴 견적서 상세(`/customer/quotes/[id]`)와 **줄 구성이 같아야 한다**
                               (사용자 지시 2026-09-15 *"견적서 상세보기 처럼"*) — 한쪽만 고치면
                               같은 견적이 화면마다 다른 금액 구성으로 보인다(31차 「쌍으로
                               움직인다」와 같은 결). */}
                           <div className="pv2-qfare-i pv2-qfare-total">
-                            <div className="pv2-qfare-k">합계 (부가세 별도)</div>
+                            {/* 🔴 라벨이 「합계」가 아니라 **「공급가액」**이다(사용자 지시
+                                2026-09-15) — 바로 아래에 「총 견적금액」이 오므로 「합계」라고
+                                적으면 **어느 쪽이 합계인지 헷갈린다.** 견적서 상세
+                                (`/customer/quotes/[id]`)·엑셀(`lib/quoteExcel.ts`)도 같은
+                                말을 쓰고 있어 이것으로 세 곳이 맞는다. */}
+                            <div className="pv2-qfare-k">공급가액 (부가세 별도)</div>
                             <div className="pv2-qfare-v pv2-qfare-supply">
                               {priceless ? "협의 중" : won(supply)}
                             </div>
