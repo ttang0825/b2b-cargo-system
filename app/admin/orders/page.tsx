@@ -35,6 +35,20 @@ import RecurringContractBadge from "@/components/RecurringContractBadge";
 import { shortAddress } from "@/lib/shortAddress";
 import CollectionMethodInput, { CollectionMethodValue } from "@/components/CollectionMethodInput";
 import { getSettlementDisplayLabel, mapToLegacySettlementType } from "@/lib/settlementLabels";
+// 🔴 하차 최소 간격은 **`lib/dropoffGap.ts` 하나**가 정한다(36차 D장) — 화면에 숫자를
+//    다시 적지 말 것. 운송오더는 한동안 혼자 **2시간**이었고 그것이 「화면마다 답이 다르다」
+//    였다(사용자 지시 2026-09-15: *"통일되게 30분으로 조정하자"*).
+import {
+  minDropoffDateTime,
+  DROPOFF_MIN_GAP_LABEL,
+  isDropoffGapOk,
+} from "@/lib/dropoffGap";
+import {
+  arrivalTypeLabel,
+  arrivalTypeHint,
+  ARRIVAL_TIME_FREE_NOTE,
+  buildNotesWithArrival,
+} from "@/lib/arrivalType";
 
 type CompanyLite = {
   id: string;
@@ -83,6 +97,16 @@ function OrdersPageInner() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * 등록 폼 전용 오류 — **등록 버튼 바로 위**에 그린다(사용자 지시 2026-09-15:
+   * *"오더등록 오류 알림이 오더등록 버튼 아래에 표시되거나 작은 팝업으로 표시되어서
+   * 바로 뭐가 문제인지 알수 있게"*).
+   *
+   * 🔴 **목록 조회 실패용 `error` 와 반드시 갈라 둘 것**(원칙 33번) — 한 칸을 같이 쓰면
+   *    ① 조회 실패가 등록 버튼 옆에 뜨고 ② 등록 오류가 화면 맨 위(폼에서 **370줄 위**)에
+   *    떠서 **누른 사람 눈에 안 보인다.** 그것이 「눌러도 아무 일이 없다」의 정체였다.
+   */
+  const [formError, setFormError] = useState<string | null>(null);
   // 🔴 들어오면 **목록이 보인다** — 폼은 접혀 있고 「+ 신규 오더 등록」으로 편다
   //    (35차 리뷰 3라운드, 사용자 지시).
   //    ⚠️ 35차 본작업(B-2 · 사용자 1번)은 반대였다 — *"운송오더 관리에 들어가면 바로
@@ -155,16 +179,21 @@ function OrdersPageInner() {
     quote_id: "",
   });
 
-  // 거리 정보가 없는 화면이라, 상차 후 고정 2시간 이후로만 하차일시를 선택하게 함
-  const minDeliveryDateTime = (() => {
-    if (!form.requested_pickup_at) return undefined;
-    const d = new Date(form.requested_pickup_at);
-    d.setHours(d.getHours() + 2);
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
-      d.getMinutes()
-    )}`;
-  })();
+  /**
+   * 「지금 상차」 칩 — 제출하는 순간의 시각으로 저장한다(견적 폼과 같은 처리).
+   * 🔴 칩을 누른 시각을 그대로 쓰면 폼을 채우는 동안 흐른 시간만큼 과거가 된다.
+   */
+  const [pickupNow, setPickupNow] = useState(false);
+  /**
+   * 하차 도착구분(당착/내착).
+   * 🔴 **`orders` 에 도착구분 컬럼을 만들지 말 것** — 견적과 같이 `special_notes` 한 줄로
+   *    잇는다(28차 결정). 견적에서 넘어온 건은 그 줄이 이미 들어 있고
+   *    `buildNotesWithArrival()` 이 **다시 붙이지 않는다.**
+   */
+  const [dropoffArrivalType, setDropoffArrivalType] = useState<string | null>(null);
+
+  // 🔴 하한은 `lib/dropoffGap.ts` 가 정한다 — 이 화면에 숫자를 적지 말 것.
+  const minDeliveryDateTime = minDropoffDateTime(form.requested_pickup_at);
 
   async function loadOrders(preset: DatePreset = period) {
     setLoading(true);
@@ -286,7 +315,7 @@ function OrdersPageInner() {
       const { data: q } = await supabase
         .from("quotes")
         .select(
-          "id,company_id,guest_name,guest_phone,origin,origin_sido,origin_sigungu,destination,destination_sido,destination_sigungu,origin_company_name,origin_contact_name,origin_contact_phone,destination_company_name,destination_contact_name,destination_contact_phone,vehicle_type,settlement_type,collection_method,billing_cycle,direct_collection_point,loading_type,mixed_shipper_consent,mixed_discount_type,mixed_discount_amount,mixed_discount_percent,mixed_note,item,selected_options,notes,requested_pickup_at,requested_dropoff_at,companies(id,name,phone,billing_cycle_default)"
+          "id,company_id,guest_name,guest_phone,origin,origin_sido,origin_sigungu,destination,destination_sido,destination_sigungu,origin_company_name,origin_contact_name,origin_contact_phone,destination_company_name,destination_contact_name,destination_contact_phone,vehicle_type,final_amount,settlement_type,collection_method,billing_cycle,direct_collection_point,loading_type,mixed_shipper_consent,mixed_discount_type,mixed_discount_amount,mixed_discount_percent,mixed_note,item,selected_options,notes,requested_pickup_at,requested_dropoff_at,companies(id,name,phone,billing_cycle_default)"
         )
         .eq("id", fromQuoteId)
         .single();
@@ -309,7 +338,26 @@ function OrdersPageInner() {
         destination_company_name: q.destination_company_name || "",
         destination_contact_name: q.destination_contact_name || "",
         destination_contact_phone: q.destination_contact_phone || "",
-        vehicle_type: q.vehicle_type || "",
+        /* 🔴 **`quotes.vehicle_type` 은 톤수뿐이고 차량형태는 `selected_options.차량형태`
+              에 따로 있다** — `orders.vehicle_type` 은 「톤수 차량형태」 한 문자열이라
+              (35차 B-1) 톤수만 넣으면 차량형태가 **조용히 기본값(카고)으로 떨어진다.**
+              「5톤 윙바디」 견적이 「5톤 카고」 오더가 되던 자리다. */
+        vehicle_type: [q.vehicle_type || DEFAULT_VEHICLE_TYPE, options.차량형태 || BODY_TYPES[0]]
+          .join(" ")
+          .trim(),
+        /* 🔴 **견적 금액을 그대로 옮긴다**(사용자 지시 2026-09-15 — *"화주청구금액이
+              자동으로 기입되지 않는다. 견적서의 정보가 자동 기입되어야한다"*).
+              35차가 `orders.customer_charge` 를 만들 때 **이 프리필을 같이 고치지
+              않아서** 견적에서 넘어와도 금액 칸이 비어 있었다.
+           🔴 **`final_amount` 는 공급가액(부가세 별도)이다** — 견적 상세·견적서가 그
+              아래에 「부가세 별도」라고 적고 부가세를 따로 더한다. 그래서 부가세 구분은
+              **`false`(별도)** 로 맞춘다. `true` 로 두면 같은 숫자가 포함가로 읽혀
+              **공급가액이 10% 줄어든 채로** 배차·정산까지 승계된다.
+           ⚠️ **「직전 오더에서 채우기」와 혼동하지 말 것** — 그쪽은 금액을 일부러 안
+              채운다(지난 운임이 새 오더에 조용히 들어가면 잘못된 청구가 된다).
+              견적은 **그 건의 확정 금액**이라 옮기는 것이 맞다. */
+        customer_charge: q.final_amount != null ? String(Math.round(q.final_amount)) : "",
+        customer_charge_vat_included: false,
         collection_method: (q.collection_method as CollectionMethodValue["collection_method"]) || "broker",
         billing_cycle: (q.billing_cycle as CollectionMethodValue["billing_cycle"]) || "per_order",
         direct_collection_point:
@@ -387,27 +435,30 @@ function OrdersPageInner() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
+    setFormError(null);
 
     if (customerMode === "company" && !selectedCompany) {
-      setError("화주 업체를 검색해서 선택해주세요.");
+      setFormError("화주 업체를 검색해서 선택해주세요.");
       return;
     }
     if (customerMode === "guest" && !form.guest_name.trim()) {
-      setError("개인/신규 고객명을 입력해주세요.");
+      setFormError("개인/신규 고객명을 입력해주세요.");
       return;
     }
     if (!form.origin.trim() || !form.destination.trim()) {
-      setError("출발지와 도착지를 입력해주세요.");
+      setFormError("출발지와 도착지를 입력해주세요.");
       return;
     }
-    if (form.requested_pickup_at && form.requested_delivery_at) {
-      const diffMs =
-        new Date(form.requested_delivery_at).getTime() - new Date(form.requested_pickup_at).getTime();
-      if (diffMs < 2 * 60 * 60 * 1000) {
-        setError("하차 예정일시는 상차 후 최소 2시간 이후로 설정해주세요.");
-        return;
-      }
+    // 🔴 입력창 하한과 **같은 규칙을 제출 직전에 한 번 더** 본다 — 하한을 정하기 전에
+    //    하차를 먼저 골라 두면 입력창만으로는 막히지 않는다(견적 폼과 같은 자리).
+    // 🔴 **당착·내착은 예외다**(27차) — 시각이 무관한 선택지라 상차 23:40 인 당착 건이
+    //    「상차 후 30분」에 걸려 접수가 막힌다. 예외를 지우면 밤 시간대 건을 못 넣는다.
+    if (
+      !dropoffArrivalType &&
+      !isDropoffGapOk(form.requested_pickup_at, form.requested_delivery_at)
+    ) {
+      setFormError(`하차 예정일시는 ${DROPOFF_MIN_GAP_LABEL}.`);
+      return;
     }
 
     setSaving(true);
@@ -475,17 +526,24 @@ function OrdersPageInner() {
       mixed_discount_percent: form.mixed_discount_percent || 0,
       mixed_note: form.loading_type === "mixable" ? form.mixed_note || null : null,
       item: form.item || null,
-      requested_pickup_at: localInputToISOString(form.requested_pickup_at),
+      // 🔴 「지금」이면 **제출하는 그 순간**으로 다시 맞춘다(견적 폼·포털과 같은 처리) —
+      //    칩을 누른 시각을 쓰면 폼을 채우는 동안 흐른 시간만큼 과거가 된다.
+      requested_pickup_at: pickupNow
+        ? new Date().toISOString()
+        : localInputToISOString(form.requested_pickup_at),
       requested_delivery_at: localInputToISOString(form.requested_delivery_at),
       load_condition: form.load_condition || null,
       unload_condition: form.unload_condition || null,
-      special_notes: form.special_notes || null,
+      // 🔴 **당착·내착을 특이사항 한 줄로 남긴다** — `orders` 에 도착구분 컬럼이 없어
+      //    (견적과 같은 판단) 이 줄이 유일한 전달 경로이고, 배차 상세까지 그대로 이어진다
+      //    (59차 P0-2). 견적에서 넘어와 이미 들어 있으면 **다시 붙이지 않는다.**
+      special_notes: buildNotesWithArrival(form.special_notes, dropoffArrivalType) || null,
       status: "접수",
     });
 
     setSaving(false);
     if (error) {
-      setError(error.message);
+      setFormError(error.message);
       return;
     }
 
@@ -525,6 +583,11 @@ function OrdersPageInner() {
       special_notes: "",
       quote_id: "",
     });
+    // 🔴 칩 상태도 같이 비운다 — 안 비우면 다음 오더의 하차 하한이 조용히 풀린 채로
+    //    시작하고(당착 선택이 남아 있으면 +30분 검사를 건너뛴다) 특이사항에도 붙는다.
+    setPickupNow(false);
+    setDropoffArrivalType(null);
+    setFormError(null);
     router.replace("/admin/orders");
     loadOrders(period);
     // 🔴 방금 만든 오더가 견적을 물고 있으면 그 건이 목록에서 빠져야 한다 —
@@ -830,6 +893,8 @@ function OrdersPageInner() {
                 onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
               />
               <FormBlockHead n={2} title="일정" />
+              {/* 🔴 **상차 하한은 걸지 않는다** — 35차가 *"지나간 날짜도 고를 수 있어야
+                  한다"*로 확정했다(끝난 운송을 뒤늦게 입력하는 일이 있다). 견적 폼과 같다. */}
               <div style={{ gridColumn: "1 / -1" }}>
                 <DateTimePicker
                   label="상차 예정일시"
@@ -837,7 +902,23 @@ function OrdersPageInner() {
                   onChange={(v) =>
                     setForm({ ...form, requested_pickup_at: v })
                   }
+                  minDateTimeLabel="지난 날짜도 고를 수 있습니다 (완료된 운송 입력)"
+                  nowChip
+                  nowSelected={pickupNow}
+                  onNowChange={setPickupNow}
                 />
+                {/* 🔴 「지금」이면 시각 칸이 **비어 보인다** — 시간 드롭다운이 30분 단위라
+                    현재 시각(예: 11:17)이 선택지에 없기 때문이다. **칸을 비운 채로 두는
+                    것이 맞고** 저장되는 값은 **제출하는 순간의 시각**이다.
+                    🔴 이 안내를 지우면 담당자가 빈 시각을 임의로 채운다. */}
+                {pickupNow && (
+                  <div style={{ marginTop: 6 }}>
+                    <span className="badge">지금 상차 · 등록 시각</span>
+                    <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 4 }}>
+                      오더를 등록하는 순간의 시각으로 저장됩니다
+                    </div>
+                  </div>
+                )}
               </div>
               <div style={{ gridColumn: "1 / -1" }}>
                 <DateTimePicker
@@ -846,9 +927,29 @@ function OrdersPageInner() {
                   onChange={(v) =>
                     setForm({ ...form, requested_delivery_at: v })
                   }
-                  minDateTime={minDeliveryDateTime}
-                  minDateTimeLabel="상차 후 최소 2시간 이후로 선택해주세요"
+                  /* 🔴 당착·내착이면 하한을 걸지 않는다 — 시각이 무관한 선택지라
+                     23:40 상차 건의 당착이 하한에 걸려 등록이 막힌다(27차 예외). */
+                  minDateTime={dropoffArrivalType ? undefined : minDeliveryDateTime}
+                  minDateTimeLabel={dropoffArrivalType ? undefined : DROPOFF_MIN_GAP_LABEL}
+                  arrivalChips
+                  arrivalValue={dropoffArrivalType as any}
+                  onArrivalChange={(v) => setDropoffArrivalType(v)}
+                  pickupDate={(form.requested_pickup_at || "").split("T")[0] || undefined}
                 />
+                {/* 🔴 당착/내착은 **시각이 무관하다.** 자리 채움 시각(23:59)이 시간
+                    드롭다운(30분 단위)에 없어서 시각 칸이 빈 값으로 떨어지는데, 그 빈칸을
+                    담당자가 임의로 채우면 배차가 틀어진다 — 그래서 이유를 여기 적는다.
+                    🔴 표기는 견적 폼·화주요청 목록과 같은 말을 쓴다(`lib/arrivalType.ts`). */}
+                {arrivalTypeLabel(dropoffArrivalType) && (
+                  <div style={{ marginTop: 6 }}>
+                    <span className="badge">
+                      {arrivalTypeLabel(dropoffArrivalType)} · {ARRIVAL_TIME_FREE_NOTE}
+                    </span>
+                    <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 4 }}>
+                      {arrivalTypeHint(dropoffArrivalType)}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <FormBlockHead n={3} title="화물 · 차량" />
@@ -985,6 +1086,17 @@ function OrdersPageInner() {
               />
             </div>
 
+            {/* 🔴 **등록 오류는 버튼 바로 위에 그린다**(사용자 지시 2026-09-15).
+                그전에는 화면 맨 위의 `error` 한 칸을 같이 썼는데, 그 자리가 폼에서
+                **370줄 위**라 등록을 누른 사람 눈에 안 들어왔다 — 「눌러도 아무 일이
+                없다」로 읽히던 자리다.
+                🔴 **목록 조회 실패용 `error` 와 갈라 둔 것을 되돌리지 말 것**(원칙 33번) —
+                   합치면 조회 실패가 등록 버튼 옆에 뜨고 등록 오류가 다시 맨 위로 간다. */}
+            {formError && (
+              <div className="error-box" style={{ marginBottom: 12 }} role="alert">
+                {formError}
+              </div>
+            )}
             <div className="form-actions">
               <button className="btn" type="submit" disabled={saving}>
                 {saving ? "저장 중..." : "오더 등록"}

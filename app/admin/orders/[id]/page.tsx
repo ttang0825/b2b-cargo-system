@@ -23,6 +23,19 @@ import {
   type UnlinkedWonQuote,
 } from "@/lib/unlinkedWonQuotes";
 import { notifyBadgeRefresh } from "@/lib/notifyBadgeRefresh";
+// 🔴 하차 최소 간격의 정의처는 `lib/dropoffGap.ts` 하나다 — 이 화면에는 하한이 **아예
+//    없었고**, 등록 화면만 2시간이라 같은 오더인데 등록과 수정의 규칙이 달랐다.
+import {
+  minDropoffDateTime,
+  DROPOFF_MIN_GAP_LABEL,
+  isDropoffGapOk,
+} from "@/lib/dropoffGap";
+import {
+  arrivalTypeLabel,
+  arrivalTypeHint,
+  ARRIVAL_TIME_FREE_NOTE,
+  buildNotesWithArrival,
+} from "@/lib/arrivalType";
 import { logSettlementFieldChange } from "@/lib/settlementFieldChangeLog";
 import { getSettlementDisplayLabel, getPaymentConditionLabel, mapToLegacySettlementType } from "@/lib/settlementLabels";
 import MoneyInput from "@/components/MoneyInput";
@@ -108,6 +121,23 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * 액션(저장·삭제·정산방식 변경) 실패용 — 🔴 **로딩 실패용 `error` 와 반드시 갈라 둔다**
+   * (원칙 33번). 같이 쓰면 아래 `if (error || !order)` 가드에 걸려 **이미 불러온 화면
+   * 전체가 「오더 정보를 불러오지 못했습니다」로 덮인다** — 저장을 눌렀을 뿐인데 채우던
+   * 폼이 통째로 사라진다. 원칙 33번이 화주 상세·개인고객 상세에서 고친 것과 같은 버그가
+   * 이 파일에는 남아 있었다(2026-09-15에 발견해 같이 고침).
+   */
+  const [actionError, setActionError] = useState<string | null>(null);
+  /** 「지금 상차」 칩 — 저장하는 순간의 시각으로 맞춘다(등록 화면·견적 폼과 같은 처리) */
+  const [pickupNow, setPickupNow] = useState(false);
+  /**
+   * 하차 도착구분(당착/내착).
+   * 🔴 **값을 `special_notes` 에서 되읽지 않는다** — 견적 수정 화면과 같다. 이 칩은
+   *    「이번에 고른 것」이고, `buildNotesWithArrival()` 이 이미 들어 있는 줄을
+   *    **다시 붙이지 않는다.**
+   */
+  const [dropoffArrivalType, setDropoffArrivalType] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -271,7 +301,17 @@ export default function OrderDetailPage() {
   }, [id]);
 
   async function handleSave(force = false) {
-    setError(null);
+    setActionError(null);
+    // 🔴 입력창 하한과 **같은 규칙을 저장 직전에 한 번 더** 본다 — 하한이 정해지기 전에
+    //    하차를 먼저 골라 두면 입력창만으로는 막히지 않는다(등록 화면과 같은 자리).
+    // 🔴 **당착·내착은 예외다**(27차) — 상차 23:40 인 당착 건이 「+30분」에 걸려 막힌다.
+    if (
+      !dropoffArrivalType &&
+      !isDropoffGapOk(editForm.requested_pickup_at, editForm.requested_delivery_at)
+    ) {
+      setActionError(`하차 예정일시는 ${DROPOFF_MIN_GAP_LABEL}.`);
+      return;
+    }
     setSaving(true);
     setConflict(false);
     const fullOrigin = [editForm.origin, editForm.originDetail].filter((v) => v.trim()).join(" ");
@@ -300,11 +340,16 @@ export default function OrderDetailPage() {
       mixed_discount_percent: Number(editForm.mixed_discount_percent) || 0,
       mixed_note: editForm.loading_type === "mixable" ? editForm.mixed_note || null : null,
       item: editForm.item || null,
-      requested_pickup_at: localInputToISOString(editForm.requested_pickup_at),
+      // 🔴 「지금」이면 **저장하는 그 순간**으로 다시 맞춘다(등록 화면과 같은 처리)
+      requested_pickup_at: pickupNow
+        ? new Date().toISOString()
+        : localInputToISOString(editForm.requested_pickup_at),
       requested_delivery_at: localInputToISOString(editForm.requested_delivery_at),
       load_condition: editForm.load_condition || null,
       unload_condition: editForm.unload_condition || null,
-      special_notes: editForm.special_notes || null,
+      // 🔴 **당착·내착을 특이사항 한 줄로 남긴다** — `orders` 에 도착구분 컬럼이 없어
+      //    이 줄이 유일한 전달 경로다. 이미 들어 있으면 다시 붙이지 않는다.
+      special_notes: buildNotesWithArrival(editForm.special_notes, dropoffArrivalType) || null,
       updated_by: await getCurrentStaffId(),
     };
 
@@ -312,7 +357,7 @@ export default function OrderDetailPage() {
       const { error } = await supabase.from("orders").update(payload).eq("id", id);
       setSaving(false);
       if (error) {
-        setError(error.message);
+        setActionError(error.message);
         return;
       }
       setEditing(false);
@@ -328,7 +373,7 @@ export default function OrderDetailPage() {
     );
     setSaving(false);
     if (error) {
-      setError(error);
+      setActionError(error);
       return;
     }
     if (hasConflict) {
@@ -345,7 +390,7 @@ export default function OrderDetailPage() {
   async function handleSettlementFieldsChange(next: CollectionMethodValue, reason: string | null) {
     if (!order) return;
     setSettlementSaving(true);
-    setError(null);
+    setActionError(null);
     const staffId = await getCurrentStaffId();
     const before: CollectionMethodValue = {
       collection_method: (order.collection_method as any) || "broker",
@@ -369,7 +414,7 @@ export default function OrderDetailPage() {
       .eq("id", id);
     if (error) {
       setSettlementSaving(false);
-      setError(error.message);
+      setActionError(error.message);
       return;
     }
     if (reason) {
@@ -398,7 +443,7 @@ export default function OrderDetailPage() {
   async function handleDelete() {
     if (!order) return;
     setDeleting(true);
-    setError(null);
+    setActionError(null);
 
     const [dispatchRes, invoiceRes] = await Promise.all([
       supabase
@@ -434,7 +479,7 @@ export default function OrderDetailPage() {
     setDeleting(false);
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      setError(data.error || "삭제에 실패했습니다.");
+      setActionError(data.error || "삭제에 실패했습니다.");
       return;
     }
     router.push("/admin/orders");
@@ -513,7 +558,13 @@ export default function OrderDetailPage() {
                   배차관리로 이동
                 </Link>
               )}
-              <button className="btn" onClick={() => setEditing(true)}>
+              <button
+                className="btn"
+                onClick={() => {
+                  setActionError(null);
+                  setEditing(true);
+                }}
+              >
                 정보 수정
               </button>
               {isAdmin && (
@@ -543,6 +594,11 @@ export default function OrderDetailPage() {
                 onClick={() => {
                   setEditing(false);
                   setConflict(false);
+                  // 🔴 칩·오류도 같이 비운다 — 안 비우면 다음 수정에서 당착 선택이 남아
+                  //    하한 검사가 조용히 풀리고, 지난 오류 문구가 그대로 남는다.
+                  setPickupNow(false);
+                  setDropoffArrivalType(null);
+                  setActionError(null);
                   load();
                 }}
               >
@@ -551,6 +607,14 @@ export default function OrderDetailPage() {
             </>
           )}
         </div>
+        {/* 🔴 **액션 실패는 여기 인라인으로만** 보여준다(원칙 33번) — 위쪽 로딩 실패용
+            `error` 를 같이 쓰면 `if (error || !order)` 가드에 걸려 **채우던 폼이 통째로
+            사라진다.** 자리가 버튼 바로 아래라 누른 사람 눈에 바로 들어온다. */}
+        {actionError && (
+          <div className="error-box" style={{ marginTop: 12 }} role="alert">
+            {actionError}
+          </div>
+        )}
       </div>
 
       {conflict && (
@@ -709,6 +773,8 @@ export default function OrderDetailPage() {
                 />
               </div>
             </div>
+            {/* 🔴 **상차 하한은 걸지 않는다** — 35차 확정(지나간 날짜로 완료된 운송을
+                뒤늦게 입력한다). 여기는 특히 이미 끝난 건을 고치는 화면이다. */}
             <div style={{ gridColumn: "1 / -1" }}>
               <DateTimePicker
                 label="상차 예정일시"
@@ -716,7 +782,19 @@ export default function OrderDetailPage() {
                 onChange={(v) =>
                   setEditForm({ ...editForm, requested_pickup_at: v })
                 }
+                minDateTimeLabel="지난 날짜도 고를 수 있습니다 (완료된 운송 입력)"
+                nowChip
+                nowSelected={pickupNow}
+                onNowChange={setPickupNow}
               />
+              {pickupNow && (
+                <div style={{ marginTop: 6 }}>
+                  <span className="badge">지금 상차 · 저장 시각</span>
+                  <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 4 }}>
+                    저장하는 순간의 시각으로 기록됩니다
+                  </div>
+                </div>
+              )}
             </div>
             <div style={{ gridColumn: "1 / -1" }}>
               <DateTimePicker
@@ -725,7 +803,28 @@ export default function OrderDetailPage() {
                 onChange={(v) =>
                   setEditForm({ ...editForm, requested_delivery_at: v })
                 }
+                /* 🔴 당착·내착이면 하한을 걸지 않는다(27차 예외) */
+                minDateTime={
+                  dropoffArrivalType
+                    ? undefined
+                    : minDropoffDateTime(editForm.requested_pickup_at)
+                }
+                minDateTimeLabel={dropoffArrivalType ? undefined : DROPOFF_MIN_GAP_LABEL}
+                arrivalChips
+                arrivalValue={dropoffArrivalType as any}
+                onArrivalChange={(v) => setDropoffArrivalType(v)}
+                pickupDate={(editForm.requested_pickup_at || "").split("T")[0] || undefined}
               />
+              {arrivalTypeLabel(dropoffArrivalType) && (
+                <div style={{ marginTop: 6 }}>
+                  <span className="badge">
+                    {arrivalTypeLabel(dropoffArrivalType)} · {ARRIVAL_TIME_FREE_NOTE}
+                  </span>
+                  <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 4 }}>
+                    {arrivalTypeHint(dropoffArrivalType)}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="field">
               <label>상차 조건</label>
