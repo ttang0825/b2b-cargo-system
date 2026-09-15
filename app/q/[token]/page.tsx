@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import PublicPageHeader from "@/components/PublicPageHeader";
 import CompanyNameMark from "@/components/CompanyNameMark";
 import { COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
@@ -19,18 +19,21 @@ import { QUOTE_VALID_DAYS } from "@/lib/quoteValidity";
 
 // 로그인 없이 여는 견적서 (2026-09-15 · 사용자 지시).
 //
-// 사용자 확정 3건: ① 연락처 뒤 4자리를 한 번 더 묻는다 ② 유효기간이 지나면 막는다
-//                  ③ 기존 견적안내 문자를 이 링크 문자로 대체한다
+// ⚠️ **연락처 뒤 4자리 확인은 같은 날 사용자 지시로 없앴다**
+//    (*"뒤4자리 확인을 빼고 바로 링크를 확인할수 있으면 좋겠다"*).
+//    🔴 그래서 지금은 **링크를 열면 바로 견적서가 뜬다** — 링크를 아는 사람이 곧
+//    열람 권한자이고, 토큰의 추측 불가능성이 **유일한 방어선**이다.
+//    🔴 **입력칸을 말없이 되살리지 말 것** — 되살리려면 사용자에게 먼저 물어야 한다.
 //
-// 🔴 **주소만으로는 아무것도 안 보인다.** 이 화면은 처음에 입력칸 하나만 그리고,
-//    서버가 뒤 4자리를 확인해 준 뒤에야 견적 내용을 **처음 받아온다**(미리 받아서
-//    숨기는 것이 아니다 — 숨긴 값은 페이지 소스에 그대로 남는다. `ObfuscatedEmail`
-//    에서 겪은 것과 같은 함정이다).
-// 🔴 **서버 컴포넌트로 바꾸지 말 것** — 토큰이 주소에 있으므로 서버에서 바로 읽어
-//    렌더링하면 뒤 4자리 확인이 통째로 무의미해진다.
+// 🟢 남은 확정 둘: ① **유효기간이 지나면 막는다** ② 기존 견적안내 문자를 이 링크로 대체.
 //
-// 🔴 **판단(유효기간·뒤 4자리)을 여기서 하지 말 것** — 전부 서버(`app/api/public/
-//    quote-share`)가 하고 화면은 결과만 그린다. 화면에서 판단하면 개발자도구로 넘긴다.
+// 🔴 **서버 컴포넌트로 바꾸지 말 것.** 4자리 확인이 없어진 뒤에도 그대로인 이유가 있다 —
+//    지금은 **주소를 여는 것만으로는 HTML 에 견적 내용이 실리지 않는다.** 화면이 뜬 뒤
+//    브라우저가 따로 받아오기 때문이고, 그래서 **링크 미리보기 봇·크롤러가 받아 가지
+//    못한다.** 서버에서 바로 렌더링하면 그 성질이 통째로 사라진다.
+//
+// 🔴 **판단(유효기간)을 여기서 하지 말 것** — 서버(`app/api/public/quote-share`)가
+//    하고 화면은 결과만 그린다. 화면에서 판단하면 개발자도구로 넘긴다.
 //
 // 🔴 **금액 계산을 여기에 다시 적지 말 것** — 부가세·정산문구·「조정」 줄을 견적서
 //    네 산출물과 **같은 함수**로 만든다. 따로 적으면 화주가 받은 PDF 와 이 화면의
@@ -60,85 +63,74 @@ function formatDateTime(v: string | null | undefined) {
 }
 
 export default function QuoteSharePage({ params }: { params: { token: string } }) {
-  const [last4, setLast4] = useState("");
   const [quote, setQuote] = useState<ShareQuote | null>(null);
   const [items, setItems] = useState<ShareItem[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  async function handleVerify(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    try {
-      // 🔴 **POST 다** — GET 이면 토큰과 뒤 4자리가 주소창·서버 로그·리퍼러에 남는다.
-      const res = await fetch("/api/public/quote-share", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: params.token, last4 }),
-        cache: "no-store",
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(data.error || "견적서를 불러오지 못했습니다.");
-        return;
+  // 🔴 **화면이 뜨면 바로 받아온다** — 확인 단계가 없어졌으므로 화주가 누를 것이 없다.
+  //    🔴 서버 컴포넌트로 옮기지 말 것(위 주석 — HTML 에 내용이 안 실리는 성질을 잃는다).
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        // 🔴 **POST 다** — 토큰이 서버 로그·리퍼러에 덜 남는다.
+        const res = await fetch("/api/public/quote-share", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: params.token }),
+          cache: "no-store",
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!alive) return;
+        if (!res.ok) {
+          setError(data.error || "견적서를 불러오지 못했습니다.");
+          return;
+        }
+        setQuote(data.quote);
+        setItems(data.items || []);
+      } catch {
+        if (alive) setError("견적서를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
+      } finally {
+        if (alive) setLoading(false);
       }
-      setQuote(data.quote);
-      setItems(data.items || []);
-    } catch {
-      setError("견적서를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
-    } finally {
-      setLoading(false);
-    }
-  }
+    })();
+    // 🔴 화면을 떠난 뒤 setState 하지 않도록 잠근다(경고가 콘솔에 남는다)
+    return () => {
+      alive = false;
+    };
+  }, [params.token]);
 
-  // ── 확인 전 화면 ───────────────────────────────────────────────────────────
-  if (!quote) {
+  // ── 불러오는 중 · 실패 ─────────────────────────────────────────────────────
+  if (loading || !quote) {
     return (
       <div className="portal-theme">
         <PublicPageHeader />
-        <main className="container" style={{ maxWidth: 420, padding: "48px 20px 64px" }}>
-          <h1 style={{ fontSize: 21, marginBottom: 8 }}>견적서 확인</h1>
-          <p style={{ fontSize: 13.5, color: "var(--text-muted)", marginBottom: 24, lineHeight: 1.6 }}>
-            본인 확인을 위해 <strong>견적서를 받으신 연락처 뒤 4자리</strong>를
-            입력해주세요.
-          </p>
-          <form onSubmit={handleVerify}>
-            <div className="field">
-              <label htmlFor="last4">연락처 뒤 4자리</label>
-              <input
-                id="last4"
-                /* 🔴 `type="number"` 를 쓰지 말 것 — 앞자리 0 이 사라지고 화살표가 붙는다.
-                   `inputMode="numeric"` 이 모바일 숫자 자판을 띄운다. */
-                type="text"
-                inputMode="numeric"
-                autoComplete="off"
-                maxLength={4}
-                value={last4}
-                onChange={(e) => setLast4(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                placeholder="0000"
-                style={{ fontSize: 16, letterSpacing: 4, textAlign: "center" }}
-              />
-            </div>
-            {error && (
-              <div className="error-box" style={{ marginTop: 14 }}>
-                {error}
-              </div>
-            )}
-            <button
-              type="submit"
-              className="btn"
-              disabled={last4.length !== 4 || loading}
-              style={{ width: "100%", marginTop: 16, padding: "12px 0", fontSize: 15 }}
-            >
-              {loading ? "확인 중…" : "견적서 보기"}
-            </button>
-          </form>
-          <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 20, lineHeight: 1.6 }}>
-            견적 유효기간은 발행일로부터 {QUOTE_VALID_DAYS}일입니다.
-            <br />
-            문의 <a href={`tel:${COMPANY_SUPPORT_PHONE}`}>{COMPANY_SUPPORT_PHONE}</a>
-          </p>
+        <main className="container" style={{ maxWidth: 420, padding: "56px 20px 64px" }}>
+          {loading ? (
+            <p style={{ fontSize: 14, color: "var(--text-muted)", textAlign: "center" }}>
+              견적서를 불러오는 중입니다…
+            </p>
+          ) : (
+            <>
+              <h1 style={{ fontSize: 19, marginBottom: 10 }}>견적서를 열 수 없습니다</h1>
+              {/* 🔴 사유를 가르지 않는다 — 없는 토큰인지 기간이 지난 것인지는
+                  서버가 정한 문구 그대로만 보여준다. */}
+              <div className="error-box">{error}</div>
+              <p
+                style={{
+                  fontSize: 12.5,
+                  color: "var(--text-muted)",
+                  marginTop: 18,
+                  lineHeight: 1.7,
+                }}
+              >
+                견적 유효기간은 발행일로부터 {QUOTE_VALID_DAYS}일입니다.
+                <br />
+                문의 <a href={`tel:${COMPANY_SUPPORT_PHONE}`}>{COMPANY_SUPPORT_PHONE}</a>
+              </p>
+            </>
+          )}
         </main>
       </div>
     );
@@ -209,7 +201,10 @@ export default function QuoteSharePage({ params }: { params: { token: string } }
           {!!quote.distance_km && <Row label="거리" value={`${quote.distance_km}km`} />}
           <Row label="상차 일시" value={formatDateTime(quote.requested_pickup_at)} />
           <Row label="하차 일시" value={formatDateTime(quote.requested_dropoff_at)} />
-          <Row label="차량" value={[quote.vehicle_type, quote.body_type].filter(Boolean).join(" · ") || "-"} />
+          {/* 🔴 `quotes` 에 `body_type` 컬럼은 없다 — 차량형태는 `selected_options` 안의
+              한글 키이고 아래 옵션 줄에 이미 나온다. 견적서 print 2종도 이 자리에는
+              `vehicle_type` 하나만 찍는다(같은 문서라 모양이 갈리면 안 된다). */}
+          <Row label="차량" value={quote.vehicle_type || "-"} />
           {quote.item && <Row label="품목" value={quote.item} />}
 
           {optionEntries.length > 0 && (
