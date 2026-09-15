@@ -720,6 +720,96 @@ export default function MonthlyBillingBatchPanel({
     await refreshOverview();
   }
 
+  /**
+   * 자동으로 담기지 못한 정산 건 **한 건을 그 자리에서 담는다.**
+   *
+   * 🔴 사용자 질문에서 나왔다(실사용 리뷰 2라운드 — *"기존에 있던 오더는 다시
+   *    담을수 없나?"*). 자동 담기는 **정산 건이 새로 만들어질 때**만 도는 것이라,
+   *    이 기능이 생기기 전에 이미 있던 건은 영영 담기지 않는다. 그런데 화면은
+   *    「어디로 가서 무엇을 누르라」고 글로만 안내하고 있었고, 그나마 그 안내가
+   *    가리키는 버튼 이름이 실제와 달랐다(「담기지 않은 건 담기」 vs 「모두 담기」).
+   *    🔴 **안내만 하고 길을 안 주면 그 줄은 경고가 아니라 잔소리다.**
+   *
+   * 🔴 없앤 「선택」 버튼을 되살린 것이 아니다 — 그것은 검색창 두 개를 바꿔줄 뿐
+   *    (그래서 *"기능도 애매하다"*) 담는 일은 담당자가 따로 해야 했다. 이것은
+   *    **누르면 담긴다.**
+   *
+   * 묶음이 없으면 만들고, 이미 확정·해제된 달이면 **보충 묶음**을 만들지 물어본다
+   * (자동 담기가 그 경우를 건너뛰는 것과 같은 이유 — 확정된 금액을 담당자 모르게
+   * 건드리지 않는다. 다만 **담당자가 직접 누른 것**이면 이야기가 다르다).
+   */
+  async function handleAttachOrphan(orphan: AllCandidateRow) {
+    setActionError(null);
+    const res = await fetch("/api/admin/billing-batches/auto-attach", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ invoice_id: orphan.invoice_id }),
+    });
+    const result = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      setActionError(result?.error || "묶음에 담지 못했습니다.");
+      return;
+    }
+
+    let batchId: string | null = result?.batch_id || null;
+
+    if (!result?.attached) {
+      if (result?.reason === "batch_not_draft") {
+        // 🔴 그 달 묶음이 이미 확정·해제됐다 — 보충 묶음이 필요하다.
+        if (
+          !confirm(
+            `${orphan.cycle_month} 묶음은 이미 확정되었거나 해제된 상태입니다.\n` +
+              "확정된 묶음의 금액은 그대로 두고, 이 건을 담을 보충 묶음을 새로 만들까요?"
+          )
+        )
+          return;
+        const terms = await loadCompanyTerms(orphan.company_id);
+        if (!terms) return;
+        const period = monthToPeriod(orphan.cycle_month, terms.billing_cutoff_day ?? null);
+        const created = await callBatchApi("create", {
+          company_id: orphan.company_id,
+          period_start: period.period_start,
+          period_end: period.period_end,
+        });
+        if (!created.success) {
+          setActionError(created.error || getBillingBatchReasonLabel(created.reason));
+          return;
+        }
+        batchId = created.batch_id;
+        const added = await callBatchApi("add-item", {
+          batch_id: batchId,
+          invoice_id: orphan.invoice_id,
+        });
+        if (!added.success) {
+          setActionError(added.error || getBillingBatchReasonLabel(added.reason));
+          return;
+        }
+      } else {
+        setActionError(
+          result?.reason
+            ? `묶음에 담지 못했습니다: ${getBillingBatchReasonLabel(result.reason)}`
+            : "묶음에 담지 못했습니다."
+        );
+        return;
+      }
+    }
+
+    await refreshOverview();
+    // 🔴 담은 묶음을 **바로 펼친다** — 어디에 담겼는지 보여줘야 담당자가 확인한다.
+    if (batchId) {
+      const { data: row } = await supabase
+        .from("customer_billing_batches")
+        .select(BATCH_SELECT)
+        .eq("id", batchId)
+        .maybeSingle();
+      if (row) {
+        setBatch(null);
+        await openBatch(row as any);
+      }
+    }
+  }
+
   async function handleRemoveItem(itemId: string) {
     if (!batch) return;
     setActionError(null);
@@ -1265,16 +1355,45 @@ export default function MonthlyBillingBatchPanel({
           않는다. 정상 운영에서는 보이지 않는 줄이다(위 `orphans` 주석 참고). */}
       {orphans.length > 0 && (
         <div className="error-box" style={{ marginBottom: 16, fontSize: 13, lineHeight: 1.8 }}>
-          <b>자동으로 묶음에 담기지 못한 정산 건이 {orphans.length}건 있습니다.</b> 그 달 묶음이 이미
-          확정·해제되었거나 자동 처리가 닿지 못한 건입니다 — 아래에서 해당 화주·정산월의 묶음을
-          펼쳐 「담기지 않은 건 담기」를 누르거나, 묶음이 없으면 새로 만들어주세요.
-          <div style={{ marginTop: 8, fontSize: 12.5, color: "var(--text-muted)" }}>
+          <b>아직 묶음에 담기지 않은 정산 건이 {orphans.length}건 있습니다.</b> 자동 담기가 생기기
+          전에 등록된 건이거나, 그 달 묶음이 이미 확정·해제된 건입니다. <b>「담기」</b>를 누르면 그
+          화주·정산월의 묶음을 찾아(없으면 만들어) 담습니다.
+          {/* 🔴 **행마다 버튼을 둔다** — 글로만 「어디로 가서 무엇을 누르라」고 안내하면
+              그 줄은 경고가 아니라 잔소리가 된다(실사용 리뷰 2라운드에서 실제로
+              *"기존에 있던 오더는 다시 담을수 없나?"* 라는 질문이 나왔다).
+              🔴 없앤 「선택」 버튼과 다르다 — 그것은 검색창 값만 바꿨고, 이것은 담는다. */}
+          <div style={{ marginTop: 10 }}>
             {orphans.slice(0, 8).map((c) => (
-              <div key={c.invoice_id}>
-                · {c.company_name} · {c.cycle_month} · {c.order_no} · {won(c.customer_charge_total)}
+              <div
+                key={c.invoice_id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  flexWrap: "wrap",
+                  padding: "5px 0",
+                  fontSize: 12.5,
+                  color: "var(--text)",
+                }}
+              >
+                <span>
+                  {c.company_name} · {c.cycle_month} 정산 · {c.order_no} ·{" "}
+                  {won(c.customer_charge_total)}
+                </span>
+                <button
+                  className="btn"
+                  style={{ fontSize: 12, padding: "4px 12px", whiteSpace: "nowrap" }}
+                  onClick={() => handleAttachOrphan(c)}
+                >
+                  담기
+                </button>
               </div>
             ))}
-            {orphans.length > 8 && <div>· 외 {orphans.length - 8}건</div>}
+            {orphans.length > 8 && (
+              <div style={{ fontSize: 12.5, color: "var(--text-muted)", marginTop: 4 }}>
+                · 외 {orphans.length - 8}건 (담으면 나머지가 이어서 표시됩니다)
+              </div>
+            )}
           </div>
         </div>
       )}

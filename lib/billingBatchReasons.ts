@@ -26,13 +26,26 @@ export const BILLING_BATCH_REASON_LABELS: Record<string, string> = {
   batch_not_confirmed: "확정된 묶음에서만 가능합니다.",
   reason_required: "사유를 입력해주세요.",
   tax_invoice_already_issued: "세금계산서가 이미 발행된 묶음은 해제할 수 없습니다.",
-  payment_already_processed_or_overdue: "입금 처리가 진행된 묶음은 해제할 수 없습니다.",
+  // 🔴 연체가 실제로 붙기 시작하면서(2026-09-15 · 매일 도는 연체 판정) 이 사유가
+  //    「연체」로도 걸린다 — DB 함수가 `payment_status in ('paid','overdue')` 를
+  //    거절한다. 문구가 입금만 말하면 담당자가 이유를 못 찾는다.
+  payment_already_processed_or_overdue:
+    "입금 처리가 진행됐거나 연체로 표시된 묶음은 해제할 수 없습니다. (관리자 완전삭제만 가능)",
   already_issued: "이미 발행 처리된 묶음입니다.",
   already_paid: "이미 입금완료 처리된 묶음입니다.",
   batch_cancelled: "취소된 묶음입니다.",
   batch_confirmed_cannot_delete: "확정된 묶음은 삭제할 수 없습니다. 먼저 해제해주세요.",
   admin_required_for_cancelled: "해제(취소)된 묶음 삭제는 관리자만 할 수 있습니다.",
   admin_required: "관리자만 할 수 있습니다.",
+
+  // 묶음 자동 담기(`app/api/admin/billing-batches/auto-attach`)가 건너뛴 이유.
+  // 🔴 DB 함수가 아니라 그 라우트가 돌려주는 값이다 — 위 목록과 섞이지만
+  //    담당자에게는 같은 자리에 같은 모양으로 보여야 한다.
+  not_monthly: "월정산(monthly) 건이 아닙니다.",
+  not_broker: "주선사 정산(broker) 건이 아닙니다.",
+  no_company: "화주가 지정되지 않은 건이라 월정산 묶음에 담을 수 없습니다.",
+  no_reference_date: "정산 기준일이 없어 어느 정산월인지 정할 수 없습니다.",
+  create_failed: "묶음을 만들지 못했습니다.",
 };
 
 export function getBillingBatchReasonLabel(reason: string | null | undefined): string {
