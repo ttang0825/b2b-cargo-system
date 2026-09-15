@@ -996,5 +996,10 @@ begin
   exception
     when sqlstate '22000' then
       raise notice '되돌렸다 — 아무것도 저장하지 않았다';
+    -- 🔴 함수가 **예외로 죽는 경우**도 여기서 받는다 — 이 절 때문에 점검 전체가
+    --    멈추면 안 된다(2026-09-15 에 실제로 멈췄고, 그 예외가 바로 원인이었다:
+    --    `cannot cast type record to invoices`).
+    when others then
+      raise notice '🔴 DB 함수가 예외로 죽었다: % (%)', sqlerrm, sqlstate;
   end;
 end $$;
