@@ -13,17 +13,14 @@ import {
 import { PORTAL_INVOICE_FIELDS, PORTAL_DISPATCH_EXTRA_CHARGE_FIELDS } from "@/lib/portalInvoiceFields";
 import { getDispatchExtraChargeCategoryLabel } from "@/lib/dispatchExtraCharges";
 import { useListSearchSort, sortIndicator } from "@/lib/useListSearchSort";
-import { DatePreset, getDateRange } from "@/components/DateRangeFilter";
+import Pv2PeriodFilter, {
+  PortalPeriod,
+  PORTAL_PERIOD_ALL,
+  isInPortalPeriod,
+} from "@/components/pv2/Pv2PeriodFilter";
 import { calcInclusiveAmount } from "@/lib/vat";
 import { COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
 import Pv2Select from "@/components/pv2/Pv2Select";
-
-const PERIOD_CHIPS: { value: DatePreset; label: string }[] = [
-  { value: "today", label: "오늘" },
-  { value: "week", label: "이번주" },
-  { value: "month", label: "이번달" },
-  { value: "all", label: "전체" },
-];
 
 const SORT_OPTIONS = [
   { value: "created_at:desc", label: "최신 등록순" },
@@ -84,7 +81,7 @@ export default function CustomerInvoicesPage() {
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
-  const [period, setPeriod] = useState<DatePreset>("all");
+  const [period, setPeriod] = useState<PortalPeriod>(PORTAL_PERIOD_ALL);
   // 로드맵③ addendum(2-5 변경) — 현장 추가비 항목별 내역(화주 청구액만,
   // driver_payout_amount는 DB 권한 자체가 없어 애초에 안 내려옴).
   // admin 목록과 동일하게, 한 오더에 invoice가 2개(정정청구 포함) 이상일
@@ -93,11 +90,12 @@ export default function CustomerInvoicesPage() {
   const [correctionInvoiceIds, setCorrectionInvoiceIds] = useState<Set<string>>(new Set());
   const [expandedInvoiceIds, setExpandedInvoiceIds] = useState<Set<string>>(new Set());
 
-  const periodFiltered = useMemo(() => {
-    const { from } = getDateRange(period);
-    if (!from) return invoices;
-    return invoices.filter((i) => i.created_at && i.created_at >= from);
-  }, [invoices, period]);
+  // 🔴 기간 판정은 `isInPortalPeriod()` 하나가 한다(`Pv2PeriodFilter`) —
+  //    세 화면이 같은 규칙이어야 「견적은 되는데 정산은 안 되는」 상태가 안 생긴다.
+  const periodFiltered = useMemo(
+    () => invoices.filter((i) => isInPortalPeriod(period, i.created_at)),
+    [invoices, period]
+  );
 
   const {
     search,
@@ -305,18 +303,7 @@ export default function CustomerInvoicesPage() {
       </div>
 
       <div className="pv2-filter-row">
-        <div className="pv2-chipgroup">
-          {PERIOD_CHIPS.map((c) => (
-            <button
-              key={c.value}
-              type="button"
-              className={`pv2-fchip${period === c.value ? " pv2-fchip-on" : ""}`}
-              onClick={() => setPeriod(c.value)}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
+        <Pv2PeriodFilter value={period} onChange={setPeriod} />
         <input
           className="pv2-search"
           type="text"

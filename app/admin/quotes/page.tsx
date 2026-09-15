@@ -208,16 +208,23 @@ function QuotesPageInner() {
     getMixedLoadingDiscountTiers().then(({ rows }) => setMixedDiscountTiers(rows));
   }, []);
 
-  const [savedLocations, setSavedLocations] = useState<
-    {
-      id: string;
-      location_name: string | null;
-      address: string | null;
-      location_type: string | null;
-      sido: string | null;
-      sigungu: string | null;
-    }[]
-  >([]);
+  // 🔴 **화주포털 배송지와 같은 칸을 읽는다**(2026-09-15) — 그전에는 주소·시도·시군구
+  //    셋만 읽어서, 화주가 포털에서 적어 둔 **상호·담당자·상세주소가 견적 폼으로
+  //    이어지지 않았다.** 담당자는 같은 정보를 손으로 다시 적고 있었다.
+  //    🔴 칸을 줄이지 말 것 — 줄이면 그 상태로 되돌아간다.
+  type SavedLocation = {
+    id: string;
+    company_name: string | null;
+    location_name: string | null;
+    address: string | null;
+    address_detail: string | null;
+    location_type: string | null;
+    contact_name: string | null;
+    contact_phone: string | null;
+    sido: string | null;
+    sigungu: string | null;
+  };
+  const [savedLocations, setSavedLocations] = useState<SavedLocation[]>([]);
   const [saveOrigin, setSaveOrigin] = useState(false);
   const [saveDestination, setSaveDestination] = useState(false);
 
@@ -514,14 +521,58 @@ function QuotesPageInner() {
         setSavedLocations([]);
         return;
       }
-      const { data } = await supabase
+      const { data, error: locError } = await supabase
         .from("customer_locations")
-        .select("id,location_name,address,location_type,sido,sigungu")
+        .select(
+          "id,company_name,location_name,address,address_detail,location_type,contact_name,contact_phone,sido,sigungu"
+        )
         .eq("company_id", selectedCompany.id);
-      setSavedLocations(data || []);
+      // 🔴 `error` 를 삼키지 말 것(원칙 55번) — 조용히 빈 목록이 되면 「저장된 주소가
+      //    분명히 있는데 칩이 안 뜬다」가 되고 원인을 짚을 단서가 없다.
+      if (locError) {
+        setError(`저장된 주소를 불러오지 못했습니다: ${locError.message}`);
+        setSavedLocations([]);
+        return;
+      }
+      setSavedLocations((data || []) as SavedLocation[]);
     }
     loadLocations();
   }, [selectedCompany, customerMode]);
+
+  /** 저장된 배송지 칩을 눌렀을 때 — 주소뿐 아니라 상호·담당자·상세주소까지 채운다.
+   *  🔴 **화주포털 발주 폼의 `applyLocation()` 과 같은 규칙이다** — 비어 있는 칸만
+   *     채우지 않고 **현장 정보는 그 배송지 값이 이긴다**(주소를 바꿨는데 옛 담당자가
+   *     남아 있으면 그게 더 위험하다). 값이 없으면 지금 적힌 것을 그대로 둔다. */
+  function applySavedLocation(side: "origin" | "destination", l: SavedLocation) {
+    setForm((prev) =>
+      side === "origin"
+        ? {
+            ...prev,
+            origin: l.address || "",
+            originDetail: l.address_detail || "",
+            originSido: l.sido || "",
+            originSigungu: l.sigungu || "",
+            origin_company_name: l.company_name || prev.origin_company_name,
+            origin_contact_name: l.contact_name || prev.origin_contact_name,
+            origin_contact_phone: l.contact_phone || prev.origin_contact_phone,
+          }
+        : {
+            ...prev,
+            destination: l.address || "",
+            destinationDetail: l.address_detail || "",
+            destinationSido: l.sido || "",
+            destinationSigungu: l.sigungu || "",
+            destination_company_name: l.company_name || prev.destination_company_name,
+            destination_contact_name: l.contact_name || prev.destination_contact_name,
+            destination_contact_phone: l.contact_phone || prev.destination_contact_phone,
+          }
+    );
+  }
+
+  /** 칩에 찍을 이름 — 별칭 → 상호 → 주소. 포털 카드와 같은 순서다. */
+  function savedLocLabel(l: SavedLocation) {
+    return l.location_name || l.company_name || l.address || "이름 없음";
+  }
 
   // 카카오 API로 출발지/도착지 실제 도로거리를 자동 계산
   async function handleAutoDistance() {
@@ -787,6 +838,11 @@ function QuotesPageInner() {
       setError("거리(km)를 입력해주세요.");
       return;
     }
+    // 🔴 품목 필수(사용자 지시 2026-09-15) — 화면 표시(`field-required`)와 **한 벌이다.**
+    if (!form.item.trim()) {
+      setError("품목을 입력해주세요.");
+      return;
+    }
     if (!distanceAutoCalculated && !allowManualDistance) {
       setError(
         "거리 자동계산을 먼저 실행해주세요. 직접 입력한 값을 쓰시려면 거리 입력창 아래 체크박스를 선택해주세요."
@@ -930,19 +986,34 @@ function QuotesPageInner() {
     // 체크했다면 이번 출발지/도착지를 이 화주의 자주 쓰는 주소로 저장
     if (customerMode === "company" && selectedCompany) {
       const toSave = [];
-      if (saveOrigin && fullOrigin)
+      // 🔴 **화주포털이 저장하는 모양과 같아야 한다**(2026-09-15) — 그전에는 상세주소를
+      //    주소에 합쳐 넣고(`fullOrigin`) 상호·담당자를 아예 안 남겨서, 견적에서 저장한
+      //    배송지는 포털에서 불러와도 담당자 칸이 비어 있었다.
+      //    🔴 `fullOrigin` 을 여기에 되돌리지 말 것 — 그 변수는 `quotes` 처럼 상세주소
+      //    칸이 **없는** 표에 넣을 때 쓰는 것이다.
+      if (saveOrigin && form.origin.trim())
         toSave.push({
           company_id: selectedCompany.id,
-          address: fullOrigin,
+          company_name: form.origin_company_name.trim() || null,
+          location_name: form.origin.trim(),
+          address: form.origin.trim(),
+          address_detail: form.originDetail.trim() || null,
           location_type: "상차지",
+          contact_name: form.origin_contact_name.trim() || null,
+          contact_phone: form.origin_contact_phone.trim() || null,
           sido: form.originSido || null,
           sigungu: form.originSigungu || null,
         });
-      if (saveDestination && fullDestination)
+      if (saveDestination && form.destination.trim())
         toSave.push({
           company_id: selectedCompany.id,
-          address: fullDestination,
+          company_name: form.destination_company_name.trim() || null,
+          location_name: form.destination.trim(),
+          address: form.destination.trim(),
+          address_detail: form.destinationDetail.trim() || null,
           location_type: "하차지",
+          contact_name: form.destination_contact_name.trim() || null,
+          contact_phone: form.destination_contact_phone.trim() || null,
           sido: form.destinationSido || null,
           sigungu: form.destinationSigungu || null,
         });
@@ -1284,7 +1355,7 @@ function QuotesPageInner() {
                 }
                 onDetailChange={(v) => setForm((prev) => ({ ...prev, originDetail: v }))}
               >
-                {savedLocations.filter((l) => l.location_type === "상차지")
+                {savedLocations.filter((l) => l.location_type !== "하차지")
                   .length > 0 && (
                   <div
                     style={{
@@ -1295,23 +1366,16 @@ function QuotesPageInner() {
                     }}
                   >
                     {savedLocations
-                      .filter((l) => l.location_type === "상차지")
+                      .filter((l) => l.location_type !== "하차지")
                       .map((l) => (
                         <span
                           key={l.id}
                           className="badge"
                           style={{ cursor: "pointer" }}
-                          onClick={() =>
-                            setForm((prev) => ({
-                              ...prev,
-                              origin: l.address || "",
-                              originDetail: "",
-                              originSido: l.sido || "",
-                              originSigungu: l.sigungu || "",
-                            }))
-                          }
+                          onClick={() => applySavedLocation("origin", l)}
+                          title={[l.address, l.address_detail].filter(Boolean).join(" ")}
                         >
-                          {l.address}
+                          {savedLocLabel(l)}
                         </span>
                       ))}
                   </div>
@@ -1397,17 +1461,10 @@ function QuotesPageInner() {
                           key={l.id}
                           className="badge"
                           style={{ cursor: "pointer" }}
-                          onClick={() =>
-                            setForm((prev) => ({
-                              ...prev,
-                              destination: l.address || "",
-                              destinationDetail: "",
-                              destinationSido: l.sido || "",
-                              destinationSigungu: l.sigungu || "",
-                            }))
-                          }
+                          onClick={() => applySavedLocation("destination", l)}
+                          title={[l.address, l.address_detail].filter(Boolean).join(" ")}
                         >
-                          {l.address}
+                          {savedLocLabel(l)}
                         </span>
                       ))}
                   </div>
@@ -1871,8 +1928,12 @@ function QuotesPageInner() {
                 )}
               </div>
 
-              <div className="field" style={{ gridColumn: "1 / -1" }}>
-                <label>품목</label>
+              {/* 🔴 품목은 **필수다**(사용자 지시 2026-09-15). 무엇을 싣는지 모르면
+                  차량·상하차 방법을 정할 수 없고, 견적서에도 빈칸으로 나간다.
+                  🔴 `field-required` 와 `RequiredMark` 와 제출 직전 검사는 **한 벌이다** —
+                  표시만 하고 검사를 안 걸면 그냥 통과한다(34차 필수 강조와 같은 규칙). */}
+              <div className="field field-required" style={{ gridColumn: "1 / -1" }}>
+                <label>품목 <RequiredMark /></label>
                 <input
                   value={form.item}
                   onChange={(e) => setForm({ ...form, item: e.target.value })}

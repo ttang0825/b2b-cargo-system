@@ -4856,6 +4856,13 @@ tbody tr:hover {
   font-weight: 800;
   letter-spacing: -0.01em;
 }
+/* 🔴 「합계 (부가세 별도)」는 **총액보다 작다** — 화주가 실제로 낼 돈은 부가세 포함가라
+   그쪽이 커야 한다(견적서 상세와 같은 위계). 둘을 같은 크기로 만들지 말 것. */
+.pv2-qfare-total .pv2-qfare-v.pv2-qfare-supply {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--pv2-text-2);
+}
 .pv2-qfoot {
   border-top: 1px solid var(--pv2-border);
   padding: 18px 26px;
@@ -8127,5 +8134,48 @@ tbody tr:hover {
   .pv2-guide-dl-row {
     grid-template-columns: minmax(0, 1fr);
     gap: 3px;
+  }
+}
+
+/* 🔴 화주포털 조회기간 「직접 지정」(`Pv2PeriodFilter`) — 칩 줄 **아래**에 한 줄로 놓인다.
+   🔴 `.pv2-filter-row` 가 `flex` 라 이 블록에 `flex-basis: 100%` 가 없으면 검색창 옆에
+   끼어들어 칩·검색창이 찌그러진다(그래서 `width: 100%` 다). */
+.pv2-period-custom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  width: 100%;
+  margin-top: 2px;
+}
+/* 🔴 `.pv2-selectwrap` 이 `width: 100%` 라 **두 클래스**로 특성도를 올려야 한다
+   (원칙 58번). 안 올리면 데스크탑에서 날짜 칸 둘이 한 줄씩 차지해 **세로로 쌓인다**
+   — 실측으로 잡았다(1360px 에서 각 1160px). */
+.pv2-period-custom .pv2-period-date {
+  flex: 0 0 170px;
+  width: 170px;
+  min-width: 0;
+}
+.pv2-period-tilde {
+  color: var(--pv2-text-3);
+  font-size: 13.5px;
+}
+.pv2-period-clear {
+  border: 1px solid var(--pv2-border);
+  background: #fff;
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  color: var(--pv2-text-2);
+  cursor: pointer;
+}
+.pv2-period-clear:hover {
+  background: var(--pv2-bg-2);
+}
+@media (max-width: 700px) {
+  /* 🔴 두 클래스 규칙이라야 위 `min-width` 를 이긴다(원칙 58번) */
+  .pv2-period-custom .pv2-period-date {
+    flex: 1 1 42%;
+    min-width: 0;
   }
 }

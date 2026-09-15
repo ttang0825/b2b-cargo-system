@@ -126,6 +126,8 @@ const DIRECT_POINT_CHOICES = [
 
 type SavedLocation = {
   id: string;
+  /** 🔴 배송지 상호(2026-09-15 신설) — `location_name`(별칭)과 다른 칸이다 */
+  company_name: string | null;
   address: string | null;
   address_detail: string | null;
   location_name: string | null;
@@ -288,7 +290,7 @@ export default function PortalRequestPage() {
     const { data } = await supabase
       .from("customer_locations")
       .select(
-        "id,address,address_detail,location_name,location_type,contact_name,contact_phone,sido,sigungu"
+        "id,company_name,address,address_detail,location_name,location_type,contact_name,contact_phone,sido,sigungu"
       )
       .eq("company_id", cid);
     setSavedLocations((data || []) as SavedLocation[]);
@@ -433,6 +435,7 @@ export default function PortalRequestPage() {
             originDetail: loc.address_detail || "",
             originSido: loc.sido || "",
             originSigungu: loc.sigungu || "",
+            origin_company_name: loc.company_name || prev.origin_company_name,
             origin_contact_name: loc.contact_name || prev.origin_contact_name,
             origin_contact_phone: loc.contact_phone || prev.origin_contact_phone,
           }
@@ -442,6 +445,7 @@ export default function PortalRequestPage() {
             destinationDetail: loc.address_detail || "",
             destinationSido: loc.sido || "",
             destinationSigungu: loc.sigungu || "",
+            destination_company_name: loc.company_name || prev.destination_company_name,
             destination_contact_name: loc.contact_name || prev.destination_contact_name,
             destination_contact_phone: loc.contact_phone || prev.destination_contact_phone,
           }
@@ -641,7 +645,12 @@ export default function PortalRequestPage() {
     if (saveOrigin && form.origin.trim())
       toSave.push({
         company_id: companyId,
-        location_name: form.origin_company_name.trim() || form.origin.trim(),
+        // 🔴 상호는 제 칸에 넣는다(2026-09-15) — 그전에는 `location_name` 에 밀어
+        //    넣어서 **별칭과 한 칸을 다퉜고**, 관리자 화주 상세에서 상호가 안 보였다.
+        //    이 폼에는 별칭 칸이 없으므로 `location_name` 은 주소를 그대로 둔다
+        //    (「배송지·화물 관리」에서 별칭을 따로 붙일 수 있다).
+        company_name: form.origin_company_name.trim() || null,
+        location_name: form.origin.trim(),
         address: form.origin.trim(),
         address_detail: form.originDetail.trim() || null,
         location_type: "상차지",
@@ -653,7 +662,8 @@ export default function PortalRequestPage() {
     if (saveDestination && form.destination.trim())
       toSave.push({
         company_id: companyId,
-        location_name: form.destination_company_name.trim() || form.destination.trim(),
+        company_name: form.destination_company_name.trim() || null,
+        location_name: form.destination.trim(),
         address: form.destination.trim(),
         address_detail: form.destinationDetail.trim() || null,
         location_type: "하차지",
@@ -701,7 +711,7 @@ export default function PortalRequestPage() {
   const dropoffLocations = savedLocations.filter((l) => l.location_type === "하차지");
 
   function locLabel(l: SavedLocation) {
-    return l.location_name || l.address || "이름 없는 배송지";
+    return l.location_name || l.company_name || l.address || "이름 없는 배송지";
   }
 
   /** ① 한 쪽(출발지/도착지) 열 — 시안 좌우 대칭이라 한 함수로 그린다 */
