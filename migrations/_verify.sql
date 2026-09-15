@@ -835,3 +835,166 @@ select table_name, column_name, data_type
  where table_schema = 'public'
    and table_name in ('customer_billing_batches', 'customer_billing_batch_items')
  order by table_name, ordinal_position;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- ⑲ 묶음 DB 함수의 실제 본문 (2026-09-15 · 월정산 묶음 개편 착수 전)
+--
+-- 🔴 **묶음 로직 12개가 저장소에 없다**(14차 산출물 · 마이그레이션 자동화 47차보다
+--    먼저 만들어졌다). 그래서 앱에서 그 함수를 조합해 쓰려면 **상태 가드가 무엇인지**
+--    를 짐작하지 않고 실제로 읽어야 한다.
+--
+-- 🔴 이 절을 만든 직접적인 이유 — 연체 자동 판정이 `payment_status` 를
+--    `'unpaid'` → `'overdue'` 로 바꾸는데, 입금완료 함수가 `'unpaid'` 만 받도록
+--    적혀 있으면 **연체가 붙는 순간 입금완료 버튼이 막힌다.** 붙이기 전에 재야 한다.
+--
+-- 🟢 본문에는 고객 정보가 없다(로직뿐) — 공개 저장소에 찍어도 되는 것은 앱 소스와 같다.
+-- ─────────────────────────────────────────────────────────────────────────────
+\echo ''
+\echo '--- ⑲-a payment_status / batch_status CHECK 제약 (허용값) ---'
+select conname as 제약명, pg_get_constraintdef(oid) as 정의
+  from pg_constraint
+ where conrelid = 'customer_billing_batches'::regclass
+   and contype = 'c'
+ order by conname;
+
+\echo ''
+\echo '--- ⑲-b 상태를 만지는 함수 4개의 본문 ---'
+select p.proname as 함수명, pg_get_functiondef(p.oid) as 본문
+  from pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
+ where n.nspname = 'public'
+   and p.proname in ('mark_billing_batch_payment_received',
+                     'set_billing_batch_payment_due_date',
+                     'release_billing_batch',
+                     'add_item_to_billing_batch')
+ order by p.proname;
+
+\echo ''
+\echo '--- ⑲-c create_billing_batch 본문 (같은 기간에 두 번 만들면 어떻게 되는가) ---'
+select pg_get_functiondef(p.oid) as 본문
+  from pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
+ where n.nspname = 'public' and p.proname = 'create_billing_batch';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- ⑳ 🔴 「담기가 안 된다」 실측 (2026-09-15 · 실사용 리뷰 5라운드)
+--
+-- 🔴 **왜 이 절이 필요한가** — 「담기를 눌러도 담기지 않는다」를 세 번 받는 동안
+--    나는 화면 쪽 원인만 고쳤다(오류 위치 · 빈 렌더 · 오래된 클로저). 전부 실재하는
+--    결함이었지만 **운영 DB 의 그 행이 실제로 어느 관문에 걸리는지는 한 번도 재지
+--    않았다.** 목(mock)으로는 통과하는데 운영에서 막히면 목이 헐거운 것이다(원칙 56번).
+--
+-- 🔴 `add_item_to_billing_batch` 의 관문을 **행마다 그대로 다시 계산해서** 어디서
+--    걸리는지 이름으로 찍는다. 짐작하지 않기 위한 절이다.
+--
+-- 🟢 공개 저장소다 — **화주명·오더번호를 찍지 않는다.** id 는 앞 8자만.
+-- ─────────────────────────────────────────────────────────────────────────────
+\echo ''
+\echo '--- ⑳-a is_billing_batch_candidate() 본문 (무엇을 후보로 보는가) ---'
+select pg_get_functiondef(p.oid) as 본문
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+ where n.nspname = 'public' and p.proname = 'is_billing_batch_candidate';
+
+\echo ''
+\echo '--- ⑳-b 아직 묶음에 안 담긴 월정산 정산 건의 관문별 판정 ---'
+select left(i.id::text, 8)                                   as 정산건,
+       i.billing_period                                      as 저장된_정산월,
+       i.settlement_reference_date                           as 정산기준일,
+       i.status                                              as 상태,
+       i.customer_charge_total                               as 청구금액,
+       coalesce(i.locked, false)                             as 잠김,
+       coalesce(i.customer_side_locked, false)               as 화주측잠김,
+       public.is_billing_batch_candidate(i.*)                as 후보인가,
+       -- 🔴 이 셋 중 하나라도 false/true 로 걸리면 add_item 이 거절한다
+       case
+         when coalesce(i.customer_side_locked, false) then 'already_customer_side_locked'
+         when coalesce(i.locked, false)               then 'invoice_locked'
+         when i.customer_charge_total is null
+           or i.customer_charge_total <= 0            then 'amount_not_finalized'
+         when not public.is_billing_batch_candidate(i.*) then 'invoice_no_longer_eligible'
+         else '(통과 — 담길 수 있어야 한다)'
+       end                                                   as 예상_거절사유
+  from invoices i
+ where i.billing_cycle = 'monthly'
+   and i.collection_method = 'broker'
+   and not exists (
+     select 1 from customer_billing_batch_items bi
+      where bi.invoice_id = i.id and bi.released_at is null
+   )
+ order by i.settlement_reference_date nulls last;
+
+\echo ''
+\echo '--- ⑳-c 후보 뷰에 실제로 보이는 행 (화면이 「담기」를 그리는 근거) ---'
+select left(invoice_id::text, 8) as 정산건,
+       billing_period            as 저장된_정산월,
+       settlement_reference_date as 정산기준일,
+       customer_charge_total     as 청구금액
+  from customer_billing_batch_candidates
+ order by settlement_reference_date nulls last;
+
+\echo ''
+\echo '--- ⑳-d 그 화주들의 같은 달 묶음 상태 (auto-attach 가 건너뛰는 조건) ---'
+select left(b.id::text, 8)  as 묶음,
+       b.period_start, b.period_end,
+       b.batch_status       as 상태,
+       b.payment_status     as 입금,
+       (select count(*) from customer_billing_batch_items x
+         where x.batch_id = b.id and x.released_at is null) as 담긴건수
+  from customer_billing_batches b
+ order by b.period_end desc, b.created_at desc;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- ㉑ 🔴 add_item_to_billing_batch 를 **실제로 불러보고 되돌린다** (2026-09-15)
+--
+-- 🔴 ⑳ 에서 「관문은 전부 통과한다」가 나왔는데도 담긴 건수가 0이다. 그렇다면
+--    막히는 곳은 **DB 가 아니라 그 앞(HTTP·인증·서버 키)**일 수 있다. 둘을 가르려면
+--    DB 함수를 **직접 불러보는 수밖에 없다.**
+--
+-- 🔴 **아무것도 저장하지 않는다** — 안쪽 블록에서 일부러 예외를 던져 되돌린다
+--    (plpgsql 의 `begin/exception` 이 savepoint 라 그 안의 insert 가 취소된다).
+--    🔴 이 되돌리기를 빼지 말 것. 빼면 운영 데이터에 실제로 항목이 들어간다.
+-- ─────────────────────────────────────────────────────────────────────────────
+\echo ''
+\echo '--- ㉑ add_item 시뮬레이션 (저장하지 않음) ---'
+do $$
+declare
+  v_batch   uuid;
+  v_company uuid;
+  v_inv     uuid;
+  v_result  jsonb;
+begin
+  select id, company_id into v_batch, v_company
+    from customer_billing_batches
+   where batch_status = 'draft'
+   order by created_at desc
+   limit 1;
+
+  if v_batch is null then
+    raise notice '작성 중 묶음이 없다 — 시뮬레이션 건너뜀';
+    return;
+  end if;
+
+  select i.id into v_inv
+    from invoices i
+   where i.company_id = v_company
+     and i.billing_cycle = 'monthly'
+     and i.collection_method = 'broker'
+     and not exists (select 1 from customer_billing_batch_items bi
+                      where bi.invoice_id = i.id and bi.released_at is null)
+   limit 1;
+
+  if v_inv is null then
+    raise notice '🔴 그 묶음의 화주(%)에는 담을 후보가 없다 — 후보 2건은 **다른 화주**의 것이다',
+      left(v_company::text, 8);
+    return;
+  end if;
+
+  begin
+    v_result := public.add_item_to_billing_batch(v_batch, v_inv);
+    raise notice '🔴 DB 판정: %', v_result;
+    raise exception using errcode = '22000', message = 'intentional-rollback';
+  exception
+    when sqlstate '22000' then
+      raise notice '되돌렸다 — 아무것도 저장하지 않았다';
+  end;
+end $$;
