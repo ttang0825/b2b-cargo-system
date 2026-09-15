@@ -942,3 +942,59 @@ select left(b.id::text, 8)  as 묶음,
          where x.batch_id = b.id and x.released_at is null) as 담긴건수
   from customer_billing_batches b
  order by b.period_end desc, b.created_at desc;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- ㉑ 🔴 add_item_to_billing_batch 를 **실제로 불러보고 되돌린다** (2026-09-15)
+--
+-- 🔴 ⑳ 에서 「관문은 전부 통과한다」가 나왔는데도 담긴 건수가 0이다. 그렇다면
+--    막히는 곳은 **DB 가 아니라 그 앞(HTTP·인증·서버 키)**일 수 있다. 둘을 가르려면
+--    DB 함수를 **직접 불러보는 수밖에 없다.**
+--
+-- 🔴 **아무것도 저장하지 않는다** — 안쪽 블록에서 일부러 예외를 던져 되돌린다
+--    (plpgsql 의 `begin/exception` 이 savepoint 라 그 안의 insert 가 취소된다).
+--    🔴 이 되돌리기를 빼지 말 것. 빼면 운영 데이터에 실제로 항목이 들어간다.
+-- ─────────────────────────────────────────────────────────────────────────────
+\echo ''
+\echo '--- ㉑ add_item 시뮬레이션 (저장하지 않음) ---'
+do $$
+declare
+  v_batch   uuid;
+  v_company uuid;
+  v_inv     uuid;
+  v_result  jsonb;
+begin
+  select id, company_id into v_batch, v_company
+    from customer_billing_batches
+   where batch_status = 'draft'
+   order by created_at desc
+   limit 1;
+
+  if v_batch is null then
+    raise notice '작성 중 묶음이 없다 — 시뮬레이션 건너뜀';
+    return;
+  end if;
+
+  select i.id into v_inv
+    from invoices i
+   where i.company_id = v_company
+     and i.billing_cycle = 'monthly'
+     and i.collection_method = 'broker'
+     and not exists (select 1 from customer_billing_batch_items bi
+                      where bi.invoice_id = i.id and bi.released_at is null)
+   limit 1;
+
+  if v_inv is null then
+    raise notice '🔴 그 묶음의 화주(%)에는 담을 후보가 없다 — 후보 2건은 **다른 화주**의 것이다',
+      left(v_company::text, 8);
+    return;
+  end if;
+
+  begin
+    v_result := public.add_item_to_billing_batch(v_batch, v_inv);
+    raise notice '🔴 DB 판정: %', v_result;
+    raise exception using errcode = '22000', message = 'intentional-rollback';
+  exception
+    when sqlstate '22000' then
+      raise notice '되돌렸다 — 아무것도 저장하지 않았다';
+  end;
+end $$;
