@@ -1001,4 +1001,5 @@ begin
     --    `cannot cast type record to invoices`).
     when others then
       raise notice '🔴 DB 함수가 예외로 죽었다: % (%)', sqlerrm, sqlstate;
+  end;
 end $$;
