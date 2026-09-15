@@ -18,6 +18,7 @@ import AdminMobileList from "@/components/AdminMobileList";
 import LockedBadge from "@/components/LockedBadge";
 import { getSettlementDisplayLabel, mapToLegacySettlementType } from "@/lib/settlementLabels";
 import { calcMargin } from "@/lib/marginCalc";
+import { customerOutstandingOf } from "@/lib/receivableCalc";
 import { vatBasisLabel } from "@/components/VatBasisSelect";
 import MonthlyBillingBatchPanel from "@/components/MonthlyBillingBatchPanel";
 
@@ -486,7 +487,10 @@ function InvoicesPageInner() {
         // 🔴 마진은 저장된 `commission_total` 이 아니라 `calcMargin()` 으로 센다 —
         //    옛 행의 저장값은 부가세 구분을 무시한 옛 공식이라 섞이면 합계가 틀어진다.
         .select(
-          "customer_charge_total,customer_charge_vat_included,driver_payout_total,driver_vat_included,collection_method,brokerage_fee,payment_received"
+          // 🔴 `collection_method`·`receivable_amount` 를 빼지 말 것 — 빠지면
+          //    `customerReceivableOf()` 가 선착불을 구분하지 못해 **운임이 다시 화주
+          //    미수금으로 잡힌다**(36차 C장의 원인).
+          "customer_charge_total,customer_charge_vat_included,driver_payout_total,driver_vat_included,collection_method,brokerage_fee,payment_received,receivable_amount"
         )
         .eq("company_id", order.company_id);
 
@@ -497,9 +501,12 @@ function InvoicesPageInner() {
         0
       );
       const totalMargin = list.reduce((sum, i) => sum + marginOf(i as any), 0);
-      const outstandingAmount = list
-        .filter((i) => !i.payment_received)
-        .reduce((sum, i) => sum + (i.customer_charge_total || 0), 0);
+      // 🔴 **`customer_charge_total` 을 직접 더하지 말 것**(36차 C장) — 선착불은 운임이
+      //    위캐리를 거치지 않고 주선수수료도 **차주가 낸다.** 화주 기준 미수금은 **0**이다.
+      //    청구액으로 세면 위캐리를 거치지도 않는 운임이 화주 미수금이 된다
+      //    (실측 한 화주 180,000원이 전부 그것이었다).
+      //    정의처는 `lib/receivableCalc.ts` 하나다.
+      const outstandingAmount = customerOutstandingOf(list as any);
 
       if (company) {
         // 실제 정산 건수에 따라 첫거래완료 → 재거래발생 → 반복화주 순으로
