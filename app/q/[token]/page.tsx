@@ -13,7 +13,9 @@ import {
   formatAdjustment,
   QUOTE_ADJUSTMENT_LABEL,
 } from "@/lib/quoteAdjustment";
-import { QUOTE_VALID_DAYS } from "@/lib/quoteShare";
+// 🔴 **`lib/quoteShare.ts` 에서 가져오지 말 것** — 그 파일은 `crypto` 를 쓰고
+//    이 화면은 클라이언트 컴포넌트다(번들러가 노드 모듈을 끌어온다).
+import { QUOTE_VALID_DAYS } from "@/lib/quoteValidity";
 
 // 로그인 없이 여는 견적서 (2026-09-15 · 사용자 지시).
 //

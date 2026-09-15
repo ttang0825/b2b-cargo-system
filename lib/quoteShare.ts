@@ -21,6 +21,10 @@
 
 import { randomBytes } from "crypto";
 import { SITE_URL } from "@/lib/siteUrl";
+// 🔴 유효기간 상수는 **의존성 없는 파일**에 따로 산다 — 공유 견적서 화면이
+//    클라이언트 컴포넌트라, 그 숫자 때문에 `crypto` 가 클라이언트 번들로 딸려가면
+//    안 된다. 그래서 여기서 재수출하지 않는다(그러면 같은 일이 벌어진다).
+import { QUOTE_VALID_DAYS } from "@/lib/quoteValidity";
 
 /**
  * 🔴 **길이를 줄이지 말 것.** 22자 base62 는 약 131비트다 — 무작위로 맞히는 것이
@@ -30,8 +34,6 @@ import { SITE_URL } from "@/lib/siteUrl";
  */
 export const SHARE_TOKEN_LENGTH = 22;
 
-/** 🔴 견적서가 스스로 인쇄하는 유효기간과 **같은 값**이다(발행일 + 7일). */
-export const QUOTE_VALID_DAYS = 7;
 
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
