@@ -27,6 +27,7 @@ import {
 import MixedDiscountStandardHint from "@/components/MixedDiscountStandardHint";
 import { localInputToISOString, toLocalDateTimeInput } from "@/lib/localDateTime";
 import { applyMixedDiscount } from "@/lib/settlementCalc";
+import { roundToUnit } from "@/lib/roundToUnit";
 // 🔴 차량형태 선택지는 DB(`rate_surcharges`)가 정본이고 **표시 순서만** 코드가 정한다.
 //    모르는 옵션은 버리지 않고 맨 뒤에 붙인다(`lib/vehicleBodyTypes.ts` 참고).
 import { orderBodyTypes } from "@/lib/vehicleBodyTypes";
@@ -711,8 +712,19 @@ function QuotesPageInner() {
       });
     }
 
+    // 🔴 **가산 소계를 격자에 올린다**(운임기준표 v12 C장 · `lib/roundToUnit.ts`).
+    //    A장이 기본운임을, B장이 가산 정액을 격자에 올렸는데도 **왕복 요율 ·
+    //    대기료 · 경유지비**가 만원을 깨뜨린다(대기료·경유지비는 13행 중 각 4행이
+    //    5,000 단위다 — 2026-09-15 실측).
+    // 🔴 **개별 가산 줄이 아니라 소계에 건다** — 줄마다 반올림하면 작은 요율 줄이
+    //    통째로 올라가 과다 청구가 된다.
+    // 🔴 **대기료·경유지비를 이 소계 밖으로 빼지 말 것** — 빼면 최종금액이 만원에서
+    //    벗어난다.
     const pctAmount = base * ratePctTotal;
-    const surchargeTotal = pctAmount + flatTotal + waitingExtra + waypointExtra;
+    const surchargeTotal = roundToUnit(
+      pctAmount + flatTotal + waitingExtra + waypointExtra,
+      form.vehicle_type
+    );
     const rawFinal = Math.max(base + surchargeTotal, 0);
 
     // 혼적가능 + 화주동의 + 할인조건이 설정된 견적은, 실제 정보망/화주에게
@@ -732,7 +744,11 @@ function QuotesPageInner() {
         Number(form.mixed_discount_amount) || 0,
         Number(form.mixed_discount_percent) || 0
       );
-      const discountAmount = rawFinal - discounted;
+      // 🔴 **할인액도 격자에 올린다** — 율(%) 방식이 임의의 끝자리를 만들기 때문이다.
+      //    `rawFinal` 이 이미 만원 배수라 여기서 반올림하면 `final` 도 만원 배수가 된다.
+      // 🔴 **`applyMixedDiscount()` 의 결과를 그대로 `final` 로 쓰지 말 것** —
+      //    그러면 할인이 걸린 견적만 만원에서 벗어난다.
+      const discountAmount = roundToUnit(rawFinal - discounted, form.vehicle_type);
       if (discountAmount > 0) {
         breakdown.push({
           label:
@@ -741,7 +757,8 @@ function QuotesPageInner() {
               : "혼적 할인",
           amount: -discountAmount,
         });
-        final = discounted;
+        // 🔴 `discounted` 가 아니라 **반올림한 할인액을 뺀 값**이다(위 참고).
+        final = Math.max(rawFinal - discountAmount, 0);
       }
     }
 

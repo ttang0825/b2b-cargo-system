@@ -17,6 +17,7 @@ import Pv2PeriodFilter, {
 } from "@/components/pv2/Pv2PeriodFilter";
 import { calcVatAmount } from "@/lib/vat";
 import { downloadQuoteExcel } from "@/lib/quoteExcel";
+import { buildQuoteFareLines } from "@/lib/quoteFareLines";
 import {
   quoteStatusStyle,
   isQuoteConfirmed,
@@ -580,12 +581,29 @@ export default function CustomerQuotesPage() {
                               {q.base_fare ? won(q.base_fare) : priceless ? "협의 중" : "-"}
                             </div>
                           </div>
-                          {items.map((it) => (
-                            <div key={it.id} className="pv2-qfare-i">
-                              <div className="pv2-qfare-k">{it.item_name || "가산"}</div>
-                              <div className="pv2-qfare-v">{won(it.amount)}</div>
-                            </div>
-                          ))}
+                          {/* 🔴 **가산은 한 줄로 합쳐 그린다**(v12 C장 (가)안 ·
+                              `lib/quoteFareLines.ts`). 할인(음수) 줄은 그대로 남는다 —
+                              혼적 할인처럼 화주가 동의해서 받은 것이라 감추면 안 된다.
+                              🔴 견적서 상세와 **줄 구성이 같아야 한다**(바로 아래 참고). */}
+                          {(() => {
+                            const fare = buildQuoteFareLines(q, items);
+                            return (
+                              <>
+                                {fare.surcharge !== 0 && (
+                                  <div className="pv2-qfare-i">
+                                    <div className="pv2-qfare-k">{fare.surchargeLabel}</div>
+                                    <div className="pv2-qfare-v">{won(fare.surcharge)}</div>
+                                  </div>
+                                )}
+                                {fare.discountLines.map((it, di) => (
+                                  <div key={`d${di}`} className="pv2-qfare-i">
+                                    <div className="pv2-qfare-k">{it.item_name}</div>
+                                    <div className="pv2-qfare-v">{won(it.amount)}</div>
+                                  </div>
+                                ))}
+                              </>
+                            );
+                          })()}
                           <div className="pv2-qfare-i">
                             <div className="pv2-qfare-k">부가세</div>
                             {/* 🔴 금액이 없으면 부가세도 계산하지 않는다 — 0원으로 찍으면

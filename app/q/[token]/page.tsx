@@ -13,6 +13,7 @@ import {
   formatAdjustment,
   QUOTE_ADJUSTMENT_LABEL,
 } from "@/lib/quoteAdjustment";
+import { buildQuoteFareLines } from "@/lib/quoteFareLines";
 // 🔴 **`lib/quoteShare.ts` 에서 가져오지 말 것** — 그 파일은 `crypto` 를 쓰고
 //    이 화면은 클라이언트 컴포넌트다(번들러가 노드 모듈을 끌어온다).
 import { QUOTE_VALID_DAYS } from "@/lib/quoteValidity";
@@ -150,7 +151,10 @@ export default function QuoteSharePage({ params }: { params: { token: string } }
   );
 
   // 🔴 items 를 받은 **뒤에** 계산한다 — 빈 배열이면 가산액이 통째로 「조정」으로 보인다.
-  const quoteAdjustment = calcQuoteAdjustment(quote, items);
+  // 🔴 **가산은 한 줄로 합쳐 그린다**(v12 C장 (가)안 · `lib/quoteFareLines.ts`).
+  //    할인(음수) 줄과 조정 줄은 그대로 남는다 — 사유는 그 파일 머리말.
+  const fare = buildQuoteFareLines(quote, items);
+  const quoteAdjustment = fare.adjustment;
 
   const optionEntries = quote.selected_options
     ? Object.entries(quote.selected_options).filter(
@@ -229,8 +233,14 @@ export default function QuoteSharePage({ params }: { params: { token: string } }
                 <td>기본운임</td>
                 <td style={{ textAlign: "right" }}>{won(quote.base_fare)}</td>
               </tr>
-              {items.map((it) => (
-                <tr key={it.id}>
+              {fare.surcharge !== 0 && (
+                <tr>
+                  <td>{fare.surchargeLabel}</td>
+                  <td style={{ textAlign: "right" }}>{won(fare.surcharge)}</td>
+                </tr>
+              )}
+              {fare.discountLines.map((it, di) => (
+                <tr key={`d${di}`}>
                   <td>{it.item_name}</td>
                   <td style={{ textAlign: "right" }}>{won(it.amount)}</td>
                 </tr>

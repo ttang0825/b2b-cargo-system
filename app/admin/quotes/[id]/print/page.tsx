@@ -13,6 +13,7 @@ import {
   formatAdjustment,
   QUOTE_ADJUSTMENT_LABEL,
 } from "@/lib/quoteAdjustment";
+import { buildQuoteFareLines } from "@/lib/quoteFareLines";
 
 type QuoteItem = { id: string; item_name: string | null; amount: number | null };
 
@@ -78,7 +79,10 @@ export default function QuotePrintPage() {
 
   // 🔴 items 조회가 끝난 뒤에 계산한다 — 빈 배열이면 가산액이 통째로 「조정」으로 보인다.
   //    첫 렌더에서는 0이라 줄이 안 그려지고, 조회가 끝나면 다시 계산된다.
-  const quoteAdjustment = calcQuoteAdjustment(quote || {}, items);
+  // 🔴 **가산은 한 줄로 합쳐 그린다**(v12 C장 (가)안 · `lib/quoteFareLines.ts`).
+  //    할인(음수) 줄과 조정 줄은 그대로 남는다 — 사유는 그 파일 머리말.
+  const fare = buildQuoteFareLines(quote || {}, items);
+  const quoteAdjustment = fare.adjustment;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -289,8 +293,16 @@ export default function QuotePrintPage() {
                 {won(quote.base_fare)}
               </td>
             </tr>
-            {items.map((it) => (
-              <tr key={it.id}>
+            {fare.surcharge !== 0 && (
+              <tr>
+                <td>{fare.surchargeLabel}</td>
+                <td className="num" style={{ textAlign: "right" }}>
+                  {won(fare.surcharge)}
+                </td>
+              </tr>
+            )}
+            {fare.discountLines.map((it, di) => (
+              <tr key={`d${di}`}>
                 <td>{it.item_name}</td>
                 <td className="num" style={{ textAlign: "right" }}>
                   {won(it.amount)}

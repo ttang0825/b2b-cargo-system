@@ -7,6 +7,7 @@ import {
   shouldShowAdjustment,
   QUOTE_ADJUSTMENT_LABEL,
 } from "./quoteAdjustment";
+import { buildQuoteFareLines } from "./quoteFareLines";
 
 // 견적서 엑셀 출력. 관리자 화면과 운송관리(화주포털) 화면이 **같은 함수를 공유**하므로
 // 두 곳에서 받은 파일의 내용이 갈리지 않는다.
@@ -136,8 +137,15 @@ export function buildQuoteDocRows({ quote, items }: QuoteExcelData): DocRow[] {
   rows.push({ kind: "blank" });
   rows.push({ kind: "section", text: "금액" });
   rows.push({ kind: "money", label: "기본운임", value: quote.base_fare || 0 });
-  items.forEach((it) => {
-    rows.push({ kind: "money", label: it.item_name || "추가 항목", value: it.amount || 0 });
+  // 🔴 **가산은 한 줄로 합쳐 넣는다**(v12 C장 (가)안 · `lib/quoteFareLines.ts`) —
+  //    화면·PDF 와 **줄 단위로 같아야 한다**(31차 「쌍으로 움직인다」).
+  //    할인(음수) 줄은 그대로 남긴다.
+  const fare = buildQuoteFareLines(quote, items);
+  if (fare.surcharge !== 0) {
+    rows.push({ kind: "money", label: fare.surchargeLabel, value: fare.surcharge });
+  }
+  fare.discountLines.forEach((it) => {
+    rows.push({ kind: "money", label: it.item_name, value: it.amount });
   });
   if (quote.discount_amount) {
     // 할인은 음수로 넣어야 받는 쪽에서 그대로 더해 합계를 검산할 수 있다
@@ -147,7 +155,7 @@ export function buildQuoteDocRows({ quote, items }: QuoteExcelData): DocRow[] {
   //    🔴 엑셀은 **부호를 문자로 적지 않고 값 자체를 음수/양수로 넣는다** — 금액이 숫자
   //    타입이라야 받는 쪽에서 SUM 으로 합계를 검산할 수 있다(원칙 8번·31차 「숫자 타입」).
   //    그래서 여기서는 `formatAdjustment()` 를 쓰지 않는다.
-  const quoteAdjustment = calcQuoteAdjustment(quote, items);
+  const quoteAdjustment = fare.adjustment;
   if (shouldShowAdjustment(quoteAdjustment)) {
     rows.push({ kind: "money", label: QUOTE_ADJUSTMENT_LABEL, value: quoteAdjustment });
   }
