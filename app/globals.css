@@ -8306,3 +8306,35 @@ tbody tr:hover {
     max-width: none;
   }
 }
+
+/* 「이 기기로 알림 받기」 — 웹 푸시 구독 (38차 B장) */
+.aintake-push-btn {
+  border: 1px solid var(--border);
+  background: none;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.aintake-push-btn:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+.aintake-push-btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+/* 켜진 상태 — 옐로 테두리로 「이 기기는 등록됐다」를 알린다 */
+.aintake-push-on {
+  border-color: var(--brand-yellow);
+  color: var(--text);
+}
+/* 아이폰 설치 필요 · 차단됨 안내 — 누를 수 없으므로 단추 모양을 쓰지 않는다 */
+.aintake-push-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  cursor: help;
+}

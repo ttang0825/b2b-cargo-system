@@ -11,6 +11,7 @@ import { onBadgeRefresh } from "@/lib/notifyBadgeRefresh";
 import { getCurrentStaffInfo, onCurrentStaffChange, clearCurrentStaffCache } from "@/lib/currentStaff";
 import NavCountBadge from "@/components/NavCountBadge";
 import AdminIntakeToast, { type IntakeToastItem } from "@/components/AdminIntakeToast";
+import AdminPushSubscribeButton from "@/components/AdminPushSubscribeButton";
 import {
   applyUnseenTitle,
   collectIntakeRises,
@@ -464,6 +465,9 @@ function TopNavInner() {
           >
             {soundOn ? "🔔" : "🔕"}
           </button>
+          {/* 🔴 종 모양 **옆**이다(38차 3-2) — 수신 설정 화면을 새로 만들지 말 것.
+              브라우저가 푸시를 못 하거나 VAPID 가 아직 없으면 스스로 안 그린다. */}
+          <AdminPushSubscribeButton />
           <Link href="/admin/guide" className="guide-link">
             이용가이드
           </Link>
@@ -582,6 +586,12 @@ function TopNavInner() {
             >
               {soundOn ? "🔔 새 접수 알림음 켜짐" : "🔕 새 접수 알림음 꺼짐"}
             </button>
+            {/* 🔴 휴대폰에서 누르는 것이 오히려 더 중요하다 — 「외부에서도 확인」이
+                이 차수의 시작이었다. 데스크탑 단추는 `.nav-desktop-group` 안이라
+                모바일에서 통째로 숨겨진다. */}
+            <div style={{ padding: "4px 4px 8px" }}>
+              <AdminPushSubscribeButton />
+            </div>
             <Link
               href="/admin/guide"
               style={{ display: "block", padding: "8px 4px", fontSize: 13.5, color: "var(--text-muted)", textDecoration: "none" }}
