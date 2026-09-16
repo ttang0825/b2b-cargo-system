@@ -8179,3 +8179,130 @@ tbody tr:hover {
     min-width: 0;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   새 접수 알림 — 배너 · 종 토글 (38차 A장)
+
+   🔴 **전용 접두사 `.aintake-` 다.** `.container`·`.card`·`.field` 를 쓰지 않는다 —
+      관리자 31화면이 같이 쓰는 것이라 여기서 건드리면 그 화면들이 통째로 딸려온다
+      (34차 `.admin-wide` · 43차 `.quote-form` 과 같은 결).
+   🔴 **`z-index: 40` 은 의도한 값이다** — 본문(`.top-nav` 30)보다는 위, 관리자
+      모달(전부 50 이상)보다는 아래. 올리면 모달 위로 배너가 튀어나온다.
+   ───────────────────────────────────────────────────────────────────────── */
+.aintake-wrap {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* 🔴 감싸개는 클릭을 먹지 않는다 — 배너가 없는 빈 자리가 화면을 가로막으면
+     그 아래 버튼이 안 눌린다. 안쪽 배너만 다시 켠다. */
+  pointer-events: none;
+}
+.aintake-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: stretch;
+  min-width: 248px;
+  max-width: 320px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--brand-yellow);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  overflow: hidden;
+  animation: aintake-in 220ms ease-out;
+}
+@keyframes aintake-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+/* 움직임을 줄이도록 설정한 사람에게는 등장 전환을 끈다 */
+@media (prefers-reduced-motion: reduce) {
+  .aintake-toast {
+    animation: none;
+  }
+}
+.aintake-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 6px 12px 14px;
+  text-decoration: none;
+  color: var(--text);
+}
+.aintake-body:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+.aintake-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--danger);
+}
+.aintake-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.aintake-title {
+  font-size: 14px;
+  font-weight: 700;
+  /* 한글이 어절 중간에서 끊기지 않게 */
+  word-break: keep-all;
+}
+.aintake-sub {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.aintake-close {
+  flex: 0 0 auto;
+  width: 34px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1;
+}
+.aintake-close:hover {
+  color: var(--text);
+}
+
+/* 상단바 종 모양 — `.guide-link` 옆에 붙는다 */
+.aintake-bell {
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 15px;
+  line-height: 1;
+  /* 🔴 끈 상태를 색으로도 알린다 — 이모지만으로는 🔔 과 🔕 가 작은 크기에서 거의 같다 */
+  opacity: 1;
+}
+.aintake-bell[aria-pressed="false"] {
+  opacity: 0.45;
+}
+
+@media (max-width: 700px) {
+  .aintake-wrap {
+    right: 12px;
+    left: 12px;
+    bottom: 12px;
+  }
+  .aintake-toast {
+    min-width: 0;
+    max-width: none;
+  }
+}
