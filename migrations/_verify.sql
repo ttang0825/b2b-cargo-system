@@ -1083,3 +1083,49 @@ select
   coalesce(sum(final_amount), 0)                  as 최종금액합,
   coalesce((select sum(amount) from quote_items), 0) as 항목합
 from quotes;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- ㉓ 🔴 웹 푸시 구독 — 직원용·화주용 두 표 (2026-09-16 · 38차 B장 + 화주포털 B장)
+--
+-- 「알림이 안 온다」는 신고를 받으면 **여기부터** 본다. 원인은 거의 언제나 셋 중 하나다:
+--   ① 구독이 0건이다(아무도 「이 기기로 알림 받기」를 안 눌렀다 · 아이폰은 홈 화면
+--      추가가 먼저다) ② `failed_at` 이 찍혀 있다 ③ VAPID 환경변수가 없다(여기선 못 본다).
+--
+-- 🔴 **정책은 두 표 다 0개여야 한다** — 화주포털 계정과 직원 계정이 둘 다
+--    `authenticated` 롤이라(19차) 정책을 하나라도 만들면 **화주가 직원 기기 구독을 읽는다.**
+-- 🔴 **아래 출력에 `endpoint`·`p256dh`·`auth` 를 넣지 마십시오** — Actions 로그는 누구나
+--    봅니다. 그 셋을 알면 **그 기기로 알림을 보낼 수 있습니다.** 개수와 상태만 봅니다.
+-- ─────────────────────────────────────────────────────────────────────────────
+\echo '㉓-a 구독 개수 · 상태'
+select
+  '직원(push_subscriptions)'                                       as 표,
+  (select count(*) from push_subscriptions)                        as 전체,
+  (select count(*) from push_subscriptions where failed_at is not null)      as 실패표시,
+  (select count(*) from push_subscriptions where last_success_at is not null) as 성공이력,
+  (select count(distinct staff_id) from push_subscriptions)        as 사람수
+union all
+select
+  '화주(customer_push_subscriptions)',
+  (select count(*) from customer_push_subscriptions),
+  (select count(*) from customer_push_subscriptions where failed_at is not null),
+  (select count(*) from customer_push_subscriptions where last_success_at is not null),
+  (select count(distinct customer_account_id) from customer_push_subscriptions);
+
+\echo '㉓-b 🔴 RLS on + 정책 0개인가 (둘 다 0 이어야 정상)'
+select
+  c.relname                                                        as 표,
+  c.relrowsecurity                                                 as rls_켜짐,
+  (select count(*) from pg_policies p
+    where p.schemaname = 'public' and p.tablename = c.relname)     as 정책수
+from pg_class c
+join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public'
+  and c.relname in ('push_subscriptions', 'customer_push_subscriptions')
+order by c.relname;
+
+\echo '㉓-c 회사별 화주 구독 수 (상호는 찍지 않는다 — 공개 로그다)'
+select
+  count(*)                                                         as 구독,
+  count(distinct ca.company_id)                                    as 회사수
+from customer_push_subscriptions s
+join customer_accounts ca on ca.id = s.customer_account_id;

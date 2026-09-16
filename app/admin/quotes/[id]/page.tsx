@@ -12,6 +12,7 @@ import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import { calcInclusiveAmount } from "@/lib/vat";
 import { downloadQuoteExcel } from "@/lib/quoteExcel";
 import { optimisticUpdate } from "@/lib/optimisticUpdate";
+import { notifyPortalPush } from "@/lib/notifyPortalPush";
 import {
   getMixedLoadingDiscountTiers,
   pickMixedDiscountTier,
@@ -316,6 +317,7 @@ export default function QuoteDetailPage() {
 
   async function handleStatusChange(status: string) {
     const staffId = await getCurrentStaffId();
+    const prevStatus = quote?.status;
     const { error } = await supabase
       .from("quotes")
       .update({ status, updated_by: staffId })
@@ -325,6 +327,14 @@ export default function QuoteDetailPage() {
       return;
     }
     setQuote((q) => (q ? { ...q, status } : q));
+
+    // 🔴 화주포털 푸시 — **「견적제출」로 새로 바뀜 때뿐이다.**
+    //    같은 값을 다시 고르는 일이 흔한데 그때마다 화주 폰이 울리면 알림을 꺼 버린다.
+    //    🔴 **`await` 하지 않는다**(원칙 53번) · 🔴 **회사는 서버가 다시 찾는다**(원칙 30번).
+    //    ⚠️ 게스트 견적(`company_id` 없음)은 서버가 조용히 건너뛴다 — 보낼 곳이 없다.
+    if (status === "견적제출" && prevStatus !== "견적제출") {
+      notifyPortalPush("quote", id, "quote_submitted");
+    }
 
     // 견적을 실제로 화주에게 "발송"한 시점 = 화주 영업상태도 "견적발송"으로 승격 (뒤로는 안 돌아감)
     if (status === "견적제출" && quote?.company_id) {

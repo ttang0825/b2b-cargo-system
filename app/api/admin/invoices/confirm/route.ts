@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
+import { notifyPortalPush } from "@/lib/portalPushNotify";
 
 // 정산확정(잠금) — 관리자 전용. 확정 후에는 정산 건이 locked=true가 되어
 // (원칙 25번 화면단+서버단 이중체크) 일반 직원은 더 이상 수정할 수 없고,
@@ -39,7 +40,9 @@ export async function POST(req: Request) {
 
   const { data: existing, error: fetchError } = await admin
     .from("invoices")
-    .select("id,locked")
+    // 🔴 `company_id` 를 같이 읽는다 — 확정 뒤 화주에게 푸시를 보내야 하고,
+    //    🔴 **회사는 반드시 서버가 DB 에서 읽은 값**이어야 한다(원칙 30번).
+    .select("id,locked,company_id")
     .eq("id", id)
     .maybeSingle();
   if (fetchError) return NextResponse.json({ error: fetchError.message }, { status: 400 });
@@ -59,6 +62,13 @@ export async function POST(req: Request) {
     })
     .eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+  // 🔴 화주포털 푸시 — **여기서는 `await` 한다.**
+  //    서버리스 함수는 응답을 돌려준 뒤 **얼어붙어서** 떠 있는 약속이 끝나지 않는다 —
+  //    fire-and-forget 으로 두면 **푸시가 아예 안 나간다**(38차 B장이 실제로 겪었다).
+  //    🔴 그 함수는 **절대 던지지 않고** 3초 상한이 걸려 있어 확정 응답을 막지 않는다.
+  //    ⚠️ 게스트 오더는 `company_id` 가 `null` 이라 그대로 넘어간다.
+  await notifyPortalPush(existing.company_id as string | null, "invoice_confirmed");
 
   return NextResponse.json({ ok: true });
 }

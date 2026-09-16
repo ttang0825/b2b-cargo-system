@@ -108,3 +108,71 @@ self.addEventListener("fetch", (event) => {
 
   // 🔴 그 밖의 모든 것 — API · 데이터 · manifest — 은 손대지 않는다(network-only).
 });
+
+// ──────────────────────────────────────────────────────────────────────────────
+// 웹 푸시 — 견적·배차·정산 알림 (화주포털 B장)
+//
+// 🔴 **위의 캐시 규칙은 한 글자도 건드리지 않았다.** 여기는 이벤트 둘을 더한 것뿐이다.
+//
+// 🔴 **38차 B장이 「화주에게는 보내지 않는다」고 적어 둔 것을 뒤집은 것이다**
+//    (사용자 확정 2026-09-16 — *「견적과 배차,운송 정산만」*).
+//    🔴 **그 줄을 근거로 지우지 말 것** — `public/admin/sw.js` 쪽 주석도 같이 고쳤다.
+//    ⚠️ 동의·처리방침은 **바뀔 것이 없다** — 구독 표에는 이름·연락처가 없고,
+//    알리는 내용이 **광고가 아니라 자기 거래의 진행 상황**이라 기존 SMS(23차)와 같은 성격이다.
+//
+// 🔴 **본문에 구간·금액·품목·차주를 넣지 말 것** — 잠금화면에 그대로 뜨고
+//    화주 본인 폰이라도 잠금화면은 남이 본다. 담기는 것은 `lib/portalPushNotify.ts` 가 정한다.
+// ──────────────────────────────────────────────────────────────────────────────
+
+self.addEventListener("push", (event) => {
+  // 🔴 **iOS 는 푸시를 받고 알림을 안 띄우면 구독을 끊는다.** 그래서 내용이 없거나
+  //    깨져도 **반드시 무언가를 띄운다.**
+  let data = {
+    title: "운송관리 알림",
+    body: "눌러서 확인해 주세요",
+    url: "/customer",
+    tag: "portal",
+  };
+  try {
+    if (event.data) data = Object.assign(data, event.data.json());
+  } catch (e) {
+    // 내용을 못 읽어도 위 기본값으로 띄운다
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      // 🔴 **본문에 거래 내용이 실려 오지 않는다** — 서버가 「무슨 일이 있었는가」만
+      //    담는다(`lib/portalPushNotify.ts`). 잠금화면에 그대로 뜨는 자리다.
+      icon: "/icons/portal-192.png",
+      badge: "/icons/portal-192.png",
+      // 같은 종류가 쌓이지 않게 겹친다
+      tag: data.tag,
+      renotify: true,
+      data: { url: data.url },
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || "/customer";
+
+  event.waitUntil(
+    (async () => {
+      // 🔴 **이미 열린 운송관리 탭이 있으면 그 탭을 쓴다** — 없으면 누를 때마다
+      //    새 탭이 쌓인다.
+      const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const client of all) {
+        const url = new URL(client.url);
+        if (url.origin !== self.location.origin) continue;
+        if (!url.pathname.startsWith("/customer")) continue;
+        await client.focus();
+        // 🔴 `navigate()` 가 막힌 브라우저가 있어 실패해도 넘어간다 — 적어도 창은 떴다.
+        if (client.navigate) await client.navigate(target).catch(() => undefined);
+        return;
+      }
+      await self.clients.openWindow(target);
+    })()
+  );
+});
