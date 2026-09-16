@@ -31,6 +31,8 @@ import { calcSettlement } from "@/lib/settlementCalc";
 import { calcVatAmount, calcInclusiveAmount, toSupplyAmount } from "@/lib/vat";
 import MoneyInput from "@/components/MoneyInput";
 import MixableBadge from "@/components/MixableBadge";
+import Wecarry24PasteBox from "@/components/Wecarry24PasteBox";
+import type { W24Driver } from "@/lib/wecarry24Paste";
 import {
   getLatestInsuranceRateSettings,
   DEFAULT_INSURANCE_RATE_SETTINGS,
@@ -542,6 +544,41 @@ export default function DispatchDetailPage() {
       setSelectedDriverInfo(null);
       setDriverSearch("");
     }
+  }
+
+  // ── 24시콜 가져오기 ⓐ (37차) ────────────────────────────────────────────
+  //
+  // 🔴 **차주 세 칸만 채운다**(사용자 확정 2026-09-16 — *"배차된 차주의 차주명,
+  //    전화번호, 차량번호만 복사해서 붙여넣으면 이 정보만 자동으로 입력되게 하자"*).
+  //    🔴 금액·화물번호로 넓히지 말 것 — 저장 경로가 다르고(`handleSave` / 계산기
+  //       저장) 수수료는 수금방식이 선착불이어야 칸이 그려진다.
+  //
+  // 🔴 **빈 값으로 덮어쓰지 않는다** — 붙여넣은 글에 차량번호가 없는데 담당자가 이미
+  //    손으로 적어 뒀다면 그것을 지우면 안 된다. 그래서 값이 있을 때만 넣고, 무엇을
+  //    건너뛰었는지 화면에 알린다(원칙 55번 — 조용히 버리지 않는다).
+  //
+  // 🔴 **연락처는 `formatPhoneNumber()` 를 거친다**(원칙 35번) — 파서는 의존성 0을
+  //    지키느라 포맷을 안 입히므로 여기서 입힌다.
+  function handleW24DriverApply(driver: W24Driver): string[] {
+    const applied: string[] = [];
+
+    if (driver.name) {
+      setExternalDriverName(driver.name);
+      applied.push(`배정된 차주 이름 — ${driver.name}`);
+    }
+    if (driver.phone) {
+      const formatted = formatPhoneNumber(driver.phone);
+      setExternalDriverPhone(formatted);
+      applied.push(`배정된 차주 연락처 — ${formatted}`);
+    }
+    if (driver.vehiclePlate) {
+      setExternalVehiclePlate(driver.vehiclePlate);
+      applied.push(`차량번호 — ${driver.vehiclePlate}`);
+    } else {
+      applied.push("차량번호 — 24시콜 쪽이 비어 있어 그대로 두었습니다");
+    }
+
+    return applied;
   }
 
   async function handleConfirm() {
@@ -1366,6 +1403,17 @@ export default function DispatchDetailPage() {
                   </button>
                 </div>
               ) : (
+                <>
+                  {/* ── 24시콜 가져오기 ⓐ (37차) ─────────────────────────────────
+                      🔴 **여기에 두는 이유** — 차주 이름·연락처·차량번호 입력칸은
+                         `dispatch_status === "접수중"` 의 **외부 배정 분기 안에만**
+                         있다. 배차확정 이후에는 읽기 전용이라 채울 자리가 없다.
+                      🔴 **채우기만 하고 저장하지 않는다** — 바로 아래 「배차확정」이
+                         저장한다(그 버튼의 검사를 우회하지 않기 위해서다).
+                      🔴 **범위는 차주 셋뿐이다**(사용자 확정 2026-09-16) — 이름·
+                         차량번호·연락처. 금액·화물번호로 넓히지 말 것(저장 경로와
+                         전제가 다르다). */}
+                  <Wecarry24PasteBox onApply={handleW24DriverApply} />
                 <div className="form-grid" style={{ padding: 0 }}>
                   <div className="field">
                     <label>실제로 확정된 정보망</label>
@@ -1399,6 +1447,7 @@ export default function DispatchDetailPage() {
                     </button>
                   </div>
                 </div>
+                </>
               )}
             </div>
           </>
