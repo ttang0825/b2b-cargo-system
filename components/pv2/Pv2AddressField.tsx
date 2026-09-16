@@ -35,29 +35,35 @@ export default function Pv2AddressField({
   detailPlaceholder?: string;
   inputClassName?: string;
 }) {
-  const { ready, open } = useDaumPostcode();
+  const { ready, open, enterToSearch } = useDaumPostcode();
 
-  function handleSearch() {
+  // 🔴 `q` 를 주면 팝업이 **그 검색 결과를 이미 보여준 상태로** 열린다(39차 D장).
+  //    규칙과 엔터 처리는 `lib/useDaumPostcode.ts` 하나이고 공개·관리자 부품
+  //    (`components/AddressSearch.tsx`)도 같은 훅을 쓴다 — 여기에 다시 적지 말 것.
+  function handleSearch(q?: string) {
     open((data) => {
       // 원본 AddressSearch 와 같은 우선순위 — 도로명 먼저, 없으면 지번
       const addr = data.roadAddress || data.jibunAddress || "";
       onDetailChange("");
       onChange(addr, data.sido || "", data.sigungu || "");
-    });
+    }, q);
   }
 
   return (
     <>
       <div style={{ display: "flex", gap: 8 }}>
+        {/* 🔴 엔터로 바로 검색한다(39차 D장) — 규칙은 `lib/useDaumPostcode.ts` 하나다.
+            `enterToSearch` 가 **폼 제출을 먼저 막는다**(`/customer/request` 가 `<form>` 안). */}
         <input
           className={inputClassName}
           value={value}
           onChange={(e) => onChange(e.target.value, "", "")}
+          onKeyDown={enterToSearch(value, handleSearch)}
           placeholder={placeholder}
           autoComplete="off"
           style={{ flex: 1 }}
         />
-        <button type="button" className="pv2-addr-btn" onClick={handleSearch} disabled={!ready}>
+        <button type="button" className="pv2-addr-btn" onClick={() => handleSearch()} disabled={!ready}>
           주소검색
         </button>
       </div>
