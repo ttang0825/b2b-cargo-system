@@ -17,6 +17,7 @@ import VatBasisSelect from "@/components/VatBasisSelect";
 import MixableBadge from "@/components/MixableBadge";
 import { shortAddress } from "@/lib/shortAddress";
 import { fetchDispatchSmsPreview } from "@/lib/notifyDispatchSms";
+import { notifyPortalPushForDispatchStatus } from "@/lib/notifyPortalPush";
 import SmsConfirmModal, { SmsPreview } from "@/components/SmsConfirmModal";
 import RecurringContractBadge from "@/components/RecurringContractBadge";
 import AdminMobileList from "@/components/AdminMobileList";
@@ -416,6 +417,10 @@ function DispatchesPageInner() {
       const smsPreviewResult = await fetchDispatchSmsPreview(dispatchId, status);
       if (smsPreviewResult) setSmsPreview(smsPreviewResult);
     }
+
+    // 🔴 화주포털 푸시 — 상세와 **같은 함수**를 부른다(원칙 53번).
+    //    한쪽에만 넣으면 「목록에서 바꿔도 알림이 안 온다」가 된다.
+    notifyPortalPushForDispatchStatus(dispatchId, status, prevStatus);
   }
 
   async function adjustDriverTripCount(driverId: string, delta: number) {

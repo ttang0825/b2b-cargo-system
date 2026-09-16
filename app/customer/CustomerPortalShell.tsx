@@ -15,6 +15,7 @@ import {
 import { COMPANY_SUPPORT_PHONE, COMPANY_SUPPORT_HOURS } from "@/lib/contactInfo";
 import AlertToast, { type AlertToastItem } from "@/components/AlertToast";
 import AlertSoundMenu from "@/components/AlertSoundMenu";
+import PortalPushSubscribeButton from "@/components/PortalPushSubscribeButton";
 import { applyUnseenTitle, isAlertSoundOn, playAlertChime } from "@/lib/alertCore";
 import { PORTAL_ALERTS, collectPortalRises, type PortalAlertCounts } from "@/lib/portalAlert";
 
@@ -412,6 +413,10 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
           같이 쓴다. 따로 그리면 한쪽만 고쳐진다.
           🔴 **`placement="up-left"` 다** — 사이드바 발치라 아래로 열면 화면 밖으로 나간다. */}
       <AlertSoundMenu placement="up-left" />
+      {/* 🔴 **종 모양 옆이다** — 종은 「화면을 열어 둔 동안」이고 이 단추는
+          **브라우저를 닫은 뒤**다. 둘은 같은 일의 두 겹이라 붙여 둔다.
+          🔴 VAPID 가 없거나 브라우저가 못 받으면 **스스로 아무것도 안 그린다**. */}
+      <PortalPushSubscribeButton />
     </div>
   );
 

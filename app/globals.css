@@ -8490,3 +8490,50 @@ tbody tr:hover {
 .pv2-foot-account .aintake-sound {
   margin-left: 2px;
 }
+
+/* ── 화주포털 「이 기기로 알림 받기」 (화주포털 B장) ───────────────────────────
+   🔴 **계정 칩 줄에 나란히 못 넣는다.** 사이드바가 248px 이고 좌우 여백 24px 씩을
+      빼면 **속폭이 200px** 인데, 그 줄에 이미 `flex: 1` 짜리 칩 둘(비밀번호 변경 ·
+      로그아웃)과 종 모양이 있다. `white-space: nowrap` 인 단추가 하나 더 들어오면
+      그대로 넘친다 — 그래서 줄을 감싸 **아래 줄 전체 폭**으로 내린다.
+   🔴 **`.aintake-push-btn` 자체를 고치지 말 것** — 관리자 상단바에서는 지금 모양이
+      맞다(거기는 가로로 길다). 두 클래스(0,0,2,0)로 특성도를 올려서 여기서만 바꾼다
+      (원칙 58번 — 선언 순서로 이기려 하면 다음에 누가 정렬할 때 조용히 되돌아간다).
+   🔴 색은 `--pv2-*` 다 — 옆 칩과 같은 어휘로 읽혀야 한다. */
+.pv2-foot-account {
+  flex-wrap: wrap;
+}
+.pv2-foot-account .aintake-push-btn,
+.pv2-foot-account .aintake-push-note {
+  flex: 1 0 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  border-radius: var(--pv2-r-sm);
+  font-size: 12.5px;
+  font-weight: 600;
+  /* 🔴 좁은 줄이라 감싸도 된다 — `nowrap` 을 남기면 200px 에서 다시 넘친다. */
+  white-space: normal;
+  text-align: center;
+}
+.pv2-foot-account .aintake-push-btn {
+  border-color: var(--pv2-border);
+  background: var(--pv2-surface);
+  color: var(--pv2-text-2);
+}
+.pv2-foot-account .aintake-push-btn:hover:not(:disabled) {
+  background: var(--pv2-hover-grey);
+  color: var(--pv2-text);
+  /* 🔴 여기서 `border-color` 를 주지 말 것 — 이 선택자가 (0,0,4,0) 이라 아래
+     「켜짐」 규칙(0,0,3,0)을 이겨서, **등록된 기기에 손을 올리면 옐로 테두리가
+     사라진다**(「꺼진 건가?」로 읽힌다). */
+}
+/* 켜진 상태 — 옐로 테두리로 「이 기기는 등록됐다」를 알린다(관리자와 같은 뜻). */
+.pv2-foot-account .aintake-push-btn.aintake-push-on {
+  border-color: var(--pv2-yellow);
+  color: var(--pv2-text);
+}
+.pv2-foot-account .aintake-push-note {
+  color: var(--pv2-text-3);
+}

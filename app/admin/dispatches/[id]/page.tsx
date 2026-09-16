@@ -61,6 +61,7 @@ import {
 } from "@/lib/claims";
 import { localInputToISOString } from "@/lib/localDateTime";
 import { fetchDispatchSmsPreview } from "@/lib/notifyDispatchSms";
+import { notifyPortalPushForDispatchStatus } from "@/lib/notifyPortalPush";
 import SmsLogPanel from "@/components/SmsLogPanel";
 import SmsConfirmModal, { SmsPreview } from "@/components/SmsConfirmModal";
 import PickupDropoffContactFields, {
@@ -638,6 +639,9 @@ export default function DispatchDetailPage() {
     }
     const smsPreviewResult = await fetchDispatchSmsPreview(id, "배차확정");
     if (smsPreviewResult) setSmsPreview(smsPreviewResult);
+    // 🔴 화주포털 푸시 — **`await` 하지 않는다**(원칙 53번). 이 문자 미리보기와
+    //    별개다 — 그쪽은 **차주**에게 가는 문자다.
+    notifyPortalPushForDispatchStatus(id, "배차확정");
     setConfirming(false);
     load();
   }
@@ -686,6 +690,11 @@ export default function DispatchDetailPage() {
       const smsPreviewResult = await fetchDispatchSmsPreview(id, status);
       if (smsPreviewResult) setSmsPreview(smsPreviewResult);
     }
+
+    // 🔴 화주포털 푸시 — 문자와 달리 **상차·하차완료도** 보낸다.
+    //    문자는 팝업이 번거롭다는 피드백(PR #73)으로 수동 버튼만 남았지만,
+    //    푸시는 누를 것이 없어 담당자에게 번거로움이 없다.
+    notifyPortalPushForDispatchStatus(id, status, prevStatus);
 
     // updated_at을 DB 기준으로 다시 받아와야 함 — 부분 병합만 하고 넘어가면
     // 로컬 updated_at이 옛날 값 그대로 남아서, 바로 이어서 "변경사항 저장"을
@@ -952,6 +961,10 @@ export default function DispatchDetailPage() {
     // 체크박스로 바뀌는 상태는 항상 상차완료/하차완료뿐이라(배차확정은 별도
     // 확정 절차로만 가능) 여기서는 자동 팝업을 띄우지 않음 — "문자 발송" 섹션의
     // 수동 버튼으로만 보냄(PR #73 리뷰 반영)
+    //
+    // 🔴 **푸시는 여기서 보낸다** — 문자와 달리 담당자가 확인창을 누를 일이
+    //    없고, 화주가 「상차됐나」를 가장 궁금해하는 자리다.
+    notifyPortalPushForDispatchStatus(id, nextStatus, prevStatus);
 
     // updated_at을 DB 기준으로 다시 받아와야 함 — 부분 병합만 하고 넘어가면
     // 로컬 updated_at이 옛날 값 그대로 남아서, 바로 이어서 "변경사항 저장"을
