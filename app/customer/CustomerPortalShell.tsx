@@ -17,7 +17,14 @@ import AlertToast, { type AlertToastItem } from "@/components/AlertToast";
 import AlertSoundMenu from "@/components/AlertSoundMenu";
 import PortalPushSubscribeButton from "@/components/PortalPushSubscribeButton";
 import { applyUnseenTitle, dropToastsForPath, isAlertSoundOn, playAlertChime } from "@/lib/alertCore";
-import { PORTAL_ALERTS, collectPortalRises, type PortalAlertCounts } from "@/lib/portalAlert";
+import {
+  PORTAL_ALERTS,
+  PORTAL_ALERT_DISPATCH_STATUSES,
+  PORTAL_ALERT_QUOTE_STATUSES,
+  collectPortalRises,
+  type PortalAlertCounts,
+  type PortalAlertSignals,
+} from "@/lib/portalAlert";
 
 const PUBLIC_PATHS = ["/customer/login", "/customer/support-verify"];
 
@@ -161,8 +168,15 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
   //    자리가 있어서, 주석에 그 낱말을 쓰면 **내 주석이 그 검사를 오염시킨다**.
   const [toasts, setToasts] = useState<AlertToastItem[]>([]);
   const [unseen, setUnseen] = useState(0);
+  // 🔴 **배지(`counts`)가 아니라 이 값으로 배너를 띄운다**(2026-09-16 저녁).
+  //    배지는 「무엇이든 바뀌었다」를 세고 이쪽은 **「울릴 일인가」**만 센다 —
+  //    목록은 `lib/portalAlert.ts` 한 곳이다. 🔴 다시 합치지 말 것(사유는 그 파일에).
+  const [alertSignals, setAlertSignals] = useState<PortalAlertSignals>({
+    quotes: 0,
+    dispatches: 0,
+  });
   // 🔴 키가 **없는 것**과 **0인 것**을 갈라야 한다(첫 조회에는 울리지 않는다).
-  const prevCountsRef = useRef<Partial<PortalAlertCounts>>({});
+  const prevCountsRef = useRef<Partial<PortalAlertSignals>>({});
   const toastSeqRef = useRef(0);
 
   // 항목별 배지 개수를 다시 계산 — dispatches/invoices/announcements는
@@ -177,15 +191,25 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
   //       방금 등록한 대기중 건까지 안읽음으로 잡힌다 — 그래서 id 집합을 쓴다.
   async function loadCounts(company: string | null) {
     const epoch = "1970-01-01T00:00:00.000Z";
-    const [quotesRes, dispatchesRes, invoicesRes, announcementsRes, requestRes] = await Promise.all([
+    const quotesSince = getLastSeen("quotes") || epoch;
+    const dispatchesSince = getLastSeen("dispatches") || epoch;
+    const [
+      quotesRes,
+      dispatchesRes,
+      invoicesRes,
+      announcementsRes,
+      requestRes,
+      quoteSignalRes,
+      dispatchSignalRes,
+    ] = await Promise.all([
       supabase
         .from("quotes")
         .select("id", { count: "exact", head: true })
-        .gt("updated_at", getLastSeen("quotes") || epoch),
+        .gt("updated_at", quotesSince),
       supabase
         .from("dispatches")
         .select("id", { count: "exact", head: true })
-        .gt("updated_at", getLastSeen("dispatches") || epoch),
+        .gt("updated_at", dispatchesSince),
       supabase
         .from("invoices")
         .select("id", { count: "exact", head: true })
@@ -197,6 +221,20 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
       company
         ? supabase.from("portal_order_requests").select("id").eq("company_id", company).neq("status", "대기중")
         : Promise.resolve({ data: [] as { id: string }[] }),
+      // ── 배너용(좁은) 신호 두 개 ─────────────────────────────────────────────
+      // 🔴 **배지와 같은 `마지막으로 본 시각`을 쓴다** — 따로 두면 화면에 들어가도
+      //    배너 기준만 안 밀려서 같은 소식으로 계속 울린다.
+      // 🔴 `in(...)` 의 목록을 여기에 적지 말 것 — 정의처는 `lib/portalAlert.ts` 다.
+      supabase
+        .from("quotes")
+        .select("id", { count: "exact", head: true })
+        .gt("updated_at", quotesSince)
+        .in("status", PORTAL_ALERT_QUOTE_STATUSES as unknown as string[]),
+      supabase
+        .from("dispatches")
+        .select("id", { count: "exact", head: true })
+        .gt("updated_at", dispatchesSince)
+        .in("dispatch_status", PORTAL_ALERT_DISPATCH_STATUSES as unknown as string[]),
     ]);
 
     const acknowledged = new Set(getAcknowledgedRequestIds());
@@ -209,6 +247,15 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
       dispatches: dispatchesRes.count || 0,
       invoices: invoicesRes.count || 0,
       announcements: announcementsRes.count || 0,
+    });
+
+    // 🔴 **`requestUnread` 를 여기에 더하지 말 것.** 배지에는 들어가야 맞지만
+    //    (승인·반려 결과를 「견적 확인」에서 보게 해야 한다) 배너는 다르다 —
+    //    승인된 요청은 `상담중` 견적이 되어 아직 화주가 할 일이 없고, 반려 건은
+    //    목록에서 빨간 「접수 반려」 배지로 이미 눈에 띈다.
+    setAlertSignals({
+      quotes: quoteSignalRes.count || 0,
+      dispatches: dispatchSignalRes.count || 0,
     });
   }
 
@@ -286,17 +333,23 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
     };
   }, [sheetOpen]);
 
-  // 🔴 **`counts` 가 늘어난 순간**만 잡는다 — 규칙 셋(첫 조회 · 감소 · 키별 판정)은
+  // 🔴 **`alertSignals` 가 늘어난 순간**만 잡는다 — 규칙 셋(첫 조회 · 감소 · 키별 판정)은
   //    `lib/alertCore.ts` 의 `collectRises()` 한 곳에 있다(관리자와 같은 함수다).
   //    🔴 **여기에 다시 적지 말 것.**
   //
-  // 🔴 **`displayCounts` 가 아니라 `counts` 를 본다.** `displayCounts` 는 지금 보고
-  //    있는 화면의 배지를 0으로 눌러 둔 값이라, 그것으로 재면 **견적 화면을 열어둔
-  //    사이에 도착한 견적을 영영 못 알린다.** 배지는 눌러 두는 게 맞고(보고 있으니까)
-  //    배너는 떠야 한다 — 목록이 스스로 다시 그려지지는 않기 때문이다.
+  // 🔴 **`counts`(배지)로 재지 말 것**(2026-09-16 저녁). 그 수는 `updated_at` 만 보고
+  //    세기 때문에 담당자가 메모 한 줄만 고쳐도 늘고, 화주 **본인이 누른 견적 승인**과
+  //    **상차완료** 같은 중간 보고까지 전부 배너가 됐다(사용자 지시 세 건).
+  //    ⚠️ 그래서 **배지는 늘었는데 배너는 안 뜨는 경우가 정상으로 생긴다** — 고장이
+  //    아니다. 무엇이 바뀌었는지는 목록 안의 「업데이트」 표시가 알려준다.
+  //
+  // 🔴 **`displayCounts` 계열로 재지 말 것.** 그 값은 지금 보고 있는 화면의 배지를
+  //    0으로 눌러 둔 것이라, 그것으로 재면 **견적 화면을 열어둔 사이에 도착한 견적을
+  //    영영 못 알린다.** 배지는 눌러 두는 게 맞고(보고 있으니까) 배너는 떠야 한다 —
+  //    목록이 스스로 다시 그려지지는 않기 때문이다.
   useEffect(() => {
     if (PUBLIC_PATHS.includes(pathname || "")) return;
-    const rises = collectPortalRises(prevCountsRef.current, counts);
+    const rises = collectPortalRises(prevCountsRef.current, alertSignals);
     if (rises.length === 0) return;
     // 🔴 **말은 여기서 만들어 넘긴다** — 배너는 라벨을 모른다(관리자가 같은 배너를
     //    쓰는데 그쪽 말은 「새 발주요청」이다). 정의처는 `PORTAL_ALERTS` 다.
@@ -312,7 +365,7 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
     // 🔴 소리는 꺼져 있을 수 있고 자동재생 정책에 막힐 수도 있다 — 어느 쪽이든
     //    배너와 탭 제목은 위에서 이미 떴다.
     if (isAlertSoundOn()) void playAlertChime();
-  }, [counts, pathname]);
+  }, [alertSignals, pathname]);
 
   // ── 알림을 눌러 들어오면 창 안의 배너를 치운다 (2026-09-16 사용자 요청) ──────
   //

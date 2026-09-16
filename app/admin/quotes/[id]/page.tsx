@@ -51,6 +51,9 @@ import {
 // 🔴 등록 폼과 **같은 칩**을 쓴다(36차 PR 2 리뷰 2라운드) — 한쪽에만 있으면 담당자가
 //    수정 화면에서 당착을 고를 길이 없어 특이사항을 손으로 적게 된다.
 import { buildNotesWithArrival, arrivalTypeLabel, ARRIVAL_TIME_FREE_NOTE } from "@/lib/arrivalType";
+// 🔴 **`<option value>` 는 DB 값 그대로 두고 보이는 글자만 바꾼다** —
+//    값까지 바꾸면 `quotes_status_check` 위반으로 상태 변경이 실패한다.
+import { quoteStatusAdminLabel } from "@/lib/quoteStatusLabels";
 
 const STATUS_OPTIONS = ["상담중", "견적제출", "수주", "보류", "실패"];
 
@@ -642,7 +645,7 @@ export default function QuoteDetailPage() {
           >
             {STATUS_OPTIONS.map((s) => (
               <option key={s} value={s}>
-                {s}
+                {quoteStatusAdminLabel(s)}
               </option>
             ))}
           </select>

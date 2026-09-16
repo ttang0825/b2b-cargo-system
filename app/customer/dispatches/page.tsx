@@ -17,6 +17,10 @@ import Pv2PeriodFilter, {
   isInPortalPeriod,
 } from "@/components/pv2/Pv2PeriodFilter";
 import Pv2Select from "@/components/pv2/Pv2Select";
+// 🔴 **배너와 별개인 목록 안 표시**(2026-09-16 사용자 지시) — 판정은
+//    `lib/usePortalSeenAt.ts` 한 곳이고 화면에서 다시 적지 말 것.
+import Pv2UpdatedMark from "@/components/pv2/Pv2UpdatedMark";
+import { isUpdatedSince, usePortalSeenAt } from "@/lib/usePortalSeenAt";
 import {
   getDispatchStage,
   hasDispatchIssue,
@@ -75,6 +79,8 @@ export default function CustomerDispatchesPage() {
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
   const [period, setPeriod] = useState<PortalPeriod>(PORTAL_PERIOD_ALL);
+  // 🔴 **셸이 「마지막으로 본 시각」을 밀기 전에 붙잡은 값**이다 — 훅 안에 사유가 있다.
+  const seenAt = usePortalSeenAt("dispatches");
 
   // 🔴 기간 판정은 `isInPortalPeriod()` 하나가 한다(`Pv2PeriodFilter`) —
   //    세 화면이 같은 규칙이어야 「견적은 되는데 정산은 안 되는」 상태가 안 생긴다.
@@ -121,7 +127,7 @@ export default function CustomerDispatchesPage() {
       const { data, error } = await supabase
         .from("dispatches")
         .select(
-          "id,dispatch_status,pickup_confirmed,delivery_confirmed,issue_occurred,created_at,orders(order_no,origin,destination,requested_pickup_at,item,vehicle_type,loading_type,collection_method,billing_cycle,direct_collection_point)"
+          "id,dispatch_status,pickup_confirmed,delivery_confirmed,issue_occurred,created_at,updated_at,orders(order_no,origin,destination,requested_pickup_at,item,vehicle_type,loading_type,collection_method,billing_cycle,direct_collection_point)"
         )
         .order("created_at", { ascending: false })
         .limit(100);
@@ -228,6 +234,11 @@ export default function CustomerDispatchesPage() {
                 <div className="pv2-dhead">
                   <div className="pv2-dno-line">
                     <span className="pv2-dno num">{o.order_no || "-"}</span>
+                    {/* 🔴 **배너와 별개다**(2026-09-16 사용자 지시) — 배너는 배차확정·
+                        운송완료에만 뜨고, 이 표시는 상차완료처럼 **중간에 바뀐 것**도
+                        알려준다. 그래서 「상차완료 알림은 빼되 화면에서는 보이게」가
+                        둘 다 성립한다. 판정은 `lib/usePortalSeenAt.ts` 한 곳이다. */}
+                    {isUpdatedSince(d.updated_at, seenAt) && <Pv2UpdatedMark />}
                     <span className="pv2-dpickup">상차 {shortDateTime(o.requested_pickup_at)}</span>
                   </div>
                   <div className="pv2-droute">

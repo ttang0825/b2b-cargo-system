@@ -32,6 +32,9 @@ import { roundToUnit } from "@/lib/roundToUnit";
 //    모르는 옵션은 버리지 않고 맨 뒤에 붙인다(`lib/vehicleBodyTypes.ts` 참고).
 import { orderBodyTypes } from "@/lib/vehicleBodyTypes";
 import { CUSTOMER_APPROVED_LABEL, formatCustomerApprovedAt } from "@/lib/quoteApproval";
+// 🔴 관리자 화면도 `상담중` 을 「확인중」으로 그린다(사용자 지시 2026-09-16).
+//    DB 값은 그대로이고 **보이는 글자만** 바꾼다 — 정의처는 이 파일 하나다.
+import { quoteStatusAdminLabel } from "@/lib/quoteStatusLabels";
 import RecurringContractBadge from "@/components/RecurringContractBadge";
 import { fetchUnlinkedWonQuoteIds } from "@/lib/unlinkedWonQuotes";
 import AdminMobileList from "@/components/AdminMobileList";
@@ -2246,7 +2249,7 @@ function QuotesPageInner() {
                     )}
                   </td>
                   <td className="cell-nowrap">
-                    <div>{q.status}</div>
+                    <div>{quoteStatusAdminLabel(q.status)}</div>
                     {/* 🔴 **`TopNav` 「견적 관리」 배지가 세는 바로 그 건이다**(34차 리뷰
                         1라운드). 배지는 숫자만 말하고 어느 건인지 볼 화면이 없어서
                         「알림이 계속 남아 있다」가 됐다 — 규칙은
@@ -2422,7 +2425,7 @@ function QuotesPageInner() {
                         "-"
                       ),
                     },
-                    { label: "상태", value: q.status },
+                    { label: "상태", value: quoteStatusAdminLabel(q.status) },
                     {
                       label: "일시",
                       value: new Date(q.created_at).toLocaleDateString("ko-KR"),

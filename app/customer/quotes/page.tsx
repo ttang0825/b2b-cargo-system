@@ -4,6 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import MixableBadge from "@/components/MixableBadge";
+// 🔴 **배너와 별개인 목록 안 표시**(2026-09-16 사용자 지시) — 판정은
+//    `lib/usePortalSeenAt.ts` 한 곳이고 화면에서 다시 적지 말 것.
+import Pv2UpdatedMark from "@/components/pv2/Pv2UpdatedMark";
+import { isUpdatedSince, usePortalSeenAt } from "@/lib/usePortalSeenAt";
 import Pv2Select from "@/components/pv2/Pv2Select";
 import Pv2PrintModal from "@/components/pv2/Pv2PrintModal";
 import { useListSearchSort } from "@/lib/useListSearchSort";
@@ -92,6 +96,9 @@ export default function CustomerQuotesPage() {
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<PortalPeriod>(PORTAL_PERIOD_ALL);
+  // 🔴 **셸이 「마지막으로 본 시각」을 밀기 전에 붙잡은 값**이다 — 훅 안에 사유가 있다.
+  //    여기서 `getLastSeen("quotes")` 를 직접 읽지 말 것(언제나 「바뀐 것 없음」이 된다).
+  const seenAt = usePortalSeenAt("quotes");
   // 🔴 한 번에 하나만 펼친다 — 여러 장이 동시에 열리면 카드가 화면을 넘어가
   //    화주가 목록을 훑을 수 없다(시안도 하나만 열린 모양이다).
   const [openKey, setOpenKey] = useState<string | null>(null);
@@ -234,7 +241,7 @@ export default function CustomerQuotesPage() {
     const { data, error } = await supabase
       .from("quotes")
       .select(
-        "id,quote_no,origin,destination,vehicle_type,item,base_fare,final_amount,status,selected_options,loading_type,collection_method,billing_cycle,direct_collection_point,notes,requested_pickup_at,requested_dropoff_at,created_at"
+        "id,quote_no,origin,destination,vehicle_type,item,base_fare,final_amount,status,selected_options,loading_type,collection_method,billing_cycle,direct_collection_point,notes,requested_pickup_at,requested_dropoff_at,created_at,updated_at"
       )
       .order("created_at", { ascending: false })
       .limit(100);
@@ -415,6 +422,10 @@ export default function CustomerQuotesPage() {
                   <div className="pv2-qbody">
                     <div className="pv2-qtop">
                       <span className="pv2-qno">{isRequest ? "발주 요청" : q.quote_no}</span>
+                      {/* 🔴 **발주 요청 행에는 붙이지 않는다** — 그 행은 `대기중`
+                          아니면 `반려` 뿐이고, 반려는 빨간 「접수 반려」 알약으로
+                          이미 눈에 띈다. 같은 뜻의 표시가 두 개가 된다. */}
+                      {!isRequest && isUpdatedSince(q.updated_at, seenAt) && <Pv2UpdatedMark />}
                       <span className="pv2-qdate pv2-qdate-d">{dateLabel(row.created_at)}</span>
                       {!isRequest && q.loading_type === "mixable" && <MixableBadge />}
                     </div>

@@ -8537,3 +8537,36 @@ tbody tr:hover {
 .pv2-foot-account .aintake-push-note {
   color: var(--pv2-text-3);
 }
+
+/* ── 화주포털 「업데이트」 표시 (2026-09-16 · 사용자 지시) ─────────────────────
+   🔴 **배너와 별개다** — 목록 안에서 「마지막으로 본 뒤 바뀐 건」을 가리킨다.
+   🔴 `.portal-v2` 스코프 안이다 — 관리자 31화면이 쓰는 `.badge` 를 건드리지 않는다.
+   🔴 **`flex-shrink: 0` 을 빼지 말 것** — 견적번호·오더번호 줄이 좁아지면 글자가
+      「업데이…」로 잘린다(그 줄은 `flex` 이고 옆에 날짜·혼적 배지가 같이 온다). */
+.portal-v2 .pv2-updated {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #e8effc;
+  color: #1d57c6;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  white-space: nowrap;
+}
+/* 🔴 배차 카드의 오더번호 줄은 `.pv2-qtop`(flex + gap)과 달리 **평범한 인라인 흐름**
+   이라 여백이 저절로 생기지 않는다 — 두 클래스로 특성도를 올려 준다(원칙 58번).
+   `vertical-align` 을 빼면 14px 글자 옆에서 알약이 위로 떠 보인다(실측 보정값). */
+.portal-v2 .pv2-dno-line .pv2-updated {
+  margin-left: 8px;
+  vertical-align: 2px;
+}
+/* 🔴 `.pv2-qtop` 은 `align-items: baseline` 이라 20.5px 견적번호 옆에서 알약이
+   아래로 처진다 — 이 알약만 가운데로 맞춘다(다른 항목의 baseline 정렬은 그대로 둔다). */
+.portal-v2 .pv2-qtop .pv2-updated {
+  align-self: center;
+}
