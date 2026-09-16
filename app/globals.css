@@ -8461,3 +8461,32 @@ tbody tr:hover {
 .aintake-sound-mobile .aintake-sound-note {
   padding: 0 4px 2px;
 }
+
+/* ── 화주포털에도 알림 (2026-09-16 · 사용자 요청) ────────────────────────────
+   🔴 **`.aintake-*` 를 그대로 쓴다** — 배너·종 모양은 관리자와 같은 부품이다.
+      `.pv2-*` 사본을 만들지 말 것(두 벌이 되면 한쪽만 고쳐진다).
+   🔴 `globals.css` 는 여전히 **순수 추가**다(삭제 0). */
+
+/* 포털 사이드바 발치에서 창이 아래로 열리면 화면 밖으로 나간다 — 위로 연다.
+   🔴 `right: auto` 를 빼지 말 것 — 기본 규칙의 `right: 0` 이 남아 있으면
+   `left: 0` 과 같이 걸려 창이 사이드바 폭(240px)으로 짜부라진다. */
+.aintake-sound-panel-up {
+  top: auto;
+  bottom: calc(100% + 8px);
+  right: auto;
+  left: 0;
+}
+
+/* 🔴 모바일 포털은 화면 바닥에 탭바가 있다 — 그 위로 띄우지 않으면 배너가 가려진다.
+   ⚠️ 값은 탭바 높이(64px)가 아니라 **실측 여유**를 더한 것이다. 탭바 높이를 바꾸면
+   여기도 같이 볼 것. */
+@media (max-width: 700px) {
+  .portal-v2 .aintake-wrap {
+    bottom: 78px;
+  }
+}
+
+/* 계정 칩 줄 안에서 종 모양이 링크들과 같은 높이로 앉게 한다 */
+.pv2-foot-account .aintake-sound {
+  margin-left: 2px;
+}

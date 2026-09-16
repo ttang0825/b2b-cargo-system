@@ -10,16 +10,11 @@ import { supabaseAdminAuth } from "@/lib/supabaseAdminAuthClient";
 import { onBadgeRefresh } from "@/lib/notifyBadgeRefresh";
 import { getCurrentStaffInfo, onCurrentStaffChange, clearCurrentStaffCache } from "@/lib/currentStaff";
 import NavCountBadge from "@/components/NavCountBadge";
-import AdminIntakeToast, { type IntakeToastItem } from "@/components/AdminIntakeToast";
+import AlertToast, { type AlertToastItem } from "@/components/AlertToast";
 import AdminPushSubscribeButton from "@/components/AdminPushSubscribeButton";
-import AdminIntakeSoundMenu from "@/components/AdminIntakeSoundMenu";
-import {
-  applyUnseenTitle,
-  collectIntakeRises,
-  isIntakeSoundOn,
-  playIntakeChime,
-  type IntakeCounts,
-} from "@/lib/adminIntakeAlert";
+import AlertSoundMenu from "@/components/AlertSoundMenu";
+import { applyUnseenTitle, isAlertSoundOn, playAlertChime } from "@/lib/alertCore";
+import { INTAKE_ALERTS, collectIntakeRises, type IntakeCounts } from "@/lib/adminIntakeAlert";
 
 type NavItem = {
   href: string;
@@ -184,7 +179,7 @@ function TopNavInner() {
   //       급한 발주요청을 못 잡는다** — `portal_order_requests` 는 anon-locked 가
   //       아니라서 **폴링이 아니라 Realtime 구독**이다(실측 2026-09-16).
   //       🔴 폴링 쪽에 얹으라는 그 문장을 근거로 되돌리지 말 것.
-  const [toasts, setToasts] = useState<IntakeToastItem[]>([]);
+  const [toasts, setToasts] = useState<AlertToastItem[]>([]);
   const [unseen, setUnseen] = useState(0);
   // 🔴 **직전 건수는 `useRef` 에 둔다**(지시서 2-1) — `useState` 로 두면 값이 바뀔
   //    때마다 화면을 다시 그린다. 키가 **없는 것**과 **0인 것**을 갈라야 하므로
@@ -328,13 +323,20 @@ function TopNavInner() {
     if (isPublicPath) return;
     const rises = collectIntakeRises(prevCountsRef.current, counts);
     if (rises.length === 0) return;
-    const fired: IntakeToastItem[] = rises.map((r) => ({ id: ++toastSeqRef.current, ...r }));
+    // 🔴 **말은 여기서 만들어 넘긴다** — 배너는 라벨을 모른다(화주포털이 같은 배너를
+    //    쓰는데 그쪽 말은 「견적 업데이트」라 다르다). 정의처는 `INTAKE_ALERTS` 다.
+    const fired: AlertToastItem[] = rises.map((r) => ({
+      id: ++toastSeqRef.current,
+      title: `새 ${INTAKE_ALERTS[r.kind].label}`,
+      href: INTAKE_ALERTS[r.kind].href,
+      count: r.count,
+    }));
     // 🔴 배너는 최근 셋까지만 쌓는다 — 더 쌓이면 화면 오른쪽이 통째로 덮인다.
     setToasts((t) => [...t, ...fired].slice(-3));
     setUnseen((n) => n + fired.reduce((sum, f) => sum + f.count, 0));
     // 🔴 소리는 꺼져 있을 수 있고 자동재생 정책에 막힐 수도 있다 — 어느 쪽이든
     //    배너와 탭 제목은 위에서 이미 떴다(완료조건 6번).
-    if (isIntakeSoundOn()) void playIntakeChime();
+    if (isAlertSoundOn()) void playAlertChime();
   }, [counts, isPublicPath]);
 
   // 🔴 **다른 탭을 보고 있을 때 유일하게 보이는 신호**가 탭 제목이다.
@@ -435,7 +437,7 @@ function TopNavInner() {
               수신 설정 **화면**을 새로 만들지 말 것(사용자 확정: 직원 전원 같은 알림 ·
               역할별 분기 없음). 여기서 고르는 것은 「누가 받을지」가 아니라
               **이 자리에서 얼마나 크게 들릴지**다. */}
-          <AdminIntakeSoundMenu />
+          <AlertSoundMenu />
           {/* 🔴 종 모양 **옆**이다(38차 3-2) — 수신 설정 화면을 새로 만들지 말 것.
               브라우저가 푸시를 못 하거나 VAPID 가 아직 없으면 스스로 안 그린다. */}
           <AdminPushSubscribeButton />
@@ -541,7 +543,7 @@ function TopNavInner() {
                 숨겨진다 — 여기에도 둬야 휴대폰에서 끄고 볼륨을 고를 수 있다.
                 🔴 **`variant="mobile"` 이다** — 이미 펼쳐진 메뉴 안이라 펼침 창을
                 또 띄우면 창이 창 위에 겹친다. */}
-            <AdminIntakeSoundMenu variant="mobile" />
+            <AlertSoundMenu variant="mobile" />
             {/* 🔴 휴대폰에서 누르는 것이 오히려 더 중요하다 — 「외부에서도 확인」이
                 이 차수의 시작이었다. 데스크탑 단추는 `.nav-desktop-group` 안이라
                 모바일에서 통째로 숨겨진다. */}
@@ -592,7 +594,7 @@ function TopNavInner() {
         맥락에 갇혀, 관리자 모달(전부 50 이상)보다 **위로 올라갈 수 없는 것이 아니라
         오히려 헤더와 함께 통째로 눌린다.** 밖에 두고 40 을 줘서 본문보다는 위,
         모달보다는 아래에 놓는다 — 담당자가 모달로 작업 중일 때 배너가 위로 튀면 안 된다. */}
-    <AdminIntakeToast
+    <AlertToast
       items={toasts}
       onDismiss={(id) => setToasts((t) => t.filter((x) => x.id !== id))}
     />
