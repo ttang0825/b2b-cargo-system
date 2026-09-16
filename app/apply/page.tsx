@@ -17,6 +17,7 @@ import {
   fieldStyle,
   fieldOnTintStyle,
   optionChipStyle,
+  requiredMark,
   useOpenKey,
 } from "@/components/landing/form/Fields";
 import { APPLY_CONSENT_TEXT, APPLY_SITE_CONTACT_CONSENT, TERMS_CONSENT } from "@/lib/legalInfo";
@@ -76,7 +77,8 @@ const ROUTE_SIDES = [
   },
 ] as const;
 
-const requiredMark = <span style={{ marginLeft: 4, fontSize: 12.5, fontWeight: 500, color: "#A8A79F" }}>필수</span>;
+// 🔴 「필수」 표시는 `Fields.tsx` 가 정의처다(39차 A장에 옮겼다) — `/quote` 가 같은 표시를
+//    쓰기 때문이다. 여기에 다시 적지 말 것.
 const optionalMark = <span style={{ marginLeft: 4, fontSize: 12.5, fontWeight: 500, color: "#A8A79F" }}>선택</span>;
 
 export default function ApplyPage() {

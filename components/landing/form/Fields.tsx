@@ -67,6 +67,27 @@ const menuItem = (active: boolean, selected: boolean): CSSProperties => ({
 /** 폼 라벨. 시안 값 그대로다. */
 export const fieldLabel: CSSProperties = { display: "block", fontSize: 14, fontWeight: 600, color: "#6B6759" };
 
+/** 필수 항목 표시. 라벨 뒤에 `{" "}` 와 함께 놓는다 — `<label>회사명 {requiredMark}</label>`
+ *
+ *  🔴 **빨간 `*` 다**(39차 A장 리뷰 — 사용자 지시 *"필수항목은 🔴 빨간 * 으로 표시하자"*).
+ *     ⚠️ **31차 리뷰가 확정했던 회색 「필수」 글자를 뒤집은 것이다** — 그 옛 결정을
+ *     근거로 글자로 되돌리지 말 것.
+ *  🔴 **색은 `REQUIRED_MARK_COLOR` 하나다** — 화주포털(`.pv2-req`)이 같은 값을 쓴다.
+ *     공개 폼과 포털에서 같은 뜻이 다른 색으로 보이면 안 된다.
+ *  🔴 **`/apply` 지역 상수였던 것을 39차 A장에 여기로 옮겼다** — 공개 폼 3화면이 같은
+ *     표시를 써야 한다(원칙 12·37·43 과 같은 결). 화면에 다시 적지 말 것.
+ *  ⚠️ 이 표시는 **눈에 보이는 안내일 뿐 제출을 막지 않는다** — 막는 것은 각 화면의
+ *     제출 직전 검사다(네이티브 `required` 는 React 핸들러보다 먼저 걸려 우리 오류
+ *     문구가 안 뜬다 · PR #121 이 같은 자리에서 겪었다). **둘이 어긋나지 않게 할 것.**
+ */
+export const REQUIRED_MARK_COLOR = "#B4423A";
+
+export const requiredMark = (
+  <span aria-hidden style={{ marginLeft: 3, fontSize: 15, fontWeight: 700, color: REQUIRED_MARK_COLOR }}>
+    *
+  </span>
+);
+
 /** 입력창. 시안 값 그대로다. */
 // 🔴 **입력창 글자는 16px 이다 — 시안의 15px 을 그대로 쓰지 말 것.**
 // iOS Safari 는 16px 미만 입력창에 포커스하면 화면을 자동으로 확대하고, 그러면 뷰포트가
@@ -154,6 +175,7 @@ export function Dropdown({
   setOpenKey,
   ddKey,
   pad = "15px 16px",
+  disabled = false,
 }: {
   label?: string;
   value?: string;
@@ -164,8 +186,11 @@ export function Dropdown({
   setOpenKey: (k: string | null) => void;
   ddKey: string;
   pad?: string;
+  /** 🔴 「지금」·「당착」·「내착」 칩이 켜졌을 때 칸을 잠근다(39차 B장) — 그 칩들은
+   *  **시각을 담지 않는 선택지**라 손으로 고친 값이 남아 있으면 무엇이 요청인지 갈린다. */
+  disabled?: boolean;
 }) {
-  const open = openKey === ddKey;
+  const open = openKey === ddKey && !disabled;
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLDivElement | null>(null);
 
@@ -212,12 +237,17 @@ export function Dropdown({
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
+        disabled={disabled}
         onKeyDown={onKeyDown}
         onClick={(e) => {
           e.stopPropagation();
           setOpenKey(open ? null : ddKey);
         }}
-        style={{ ...trigger(!!value, pad), marginTop: label ? 8 : 0 }}
+        style={{
+          ...trigger(!!value, pad),
+          marginTop: label ? 8 : 0,
+          ...(disabled ? { opacity: 0.55, cursor: "default" } : null),
+        }}
       >
         <span>{value || placeholder}</span>
         <span aria-hidden style={{ fontSize: 11, lineHeight: 1, color: "#8B8A85" }}>▼</span>
@@ -273,7 +303,7 @@ export function DatePicker({
   openKey,
   setOpenKey,
   ddKey,
-  quick,
+  disabled = false,
 }: {
   value?: string;
   onPick: (v: string) => void;
@@ -281,10 +311,12 @@ export function DatePicker({
   openKey: string | null;
   setOpenKey: (k: string | null) => void;
   ddKey: string;
-  quick?: ReactNode;
+  /** 🔴 칩이 켜졌을 때 달력을 잠근다(39차 B장) — `Dropdown` 의 같은 prop 과 한 벌이다.
+   *  🟢 **칩 줄은 이 부품 밖에 있어서 안 잠긴다** — 다시 눌러 끌 수 있어야 한다. */
+  disabled?: boolean;
 }) {
   const [monthOff, setMonthOff] = useState(0);
-  const open = openKey === ddKey;
+  const open = openKey === ddKey && !disabled;
 
   const now = new Date();
   const base = new Date(now.getFullYear(), now.getMonth() + monthOff, 1);
@@ -301,11 +333,12 @@ export function DatePicker({
         type="button"
         aria-haspopup="dialog"
         aria-expanded={open}
+        disabled={disabled}
         onClick={(e) => {
           e.stopPropagation();
           setOpenKey(open ? null : ddKey);
         }}
-        style={trigger(!!value, "14px 15px")}
+        style={{ ...trigger(!!value, "14px 15px"), ...(disabled ? { opacity: 0.55, cursor: "default" } : null) }}
       >
         <span>{value ? dateLabel(value) : "날짜 선택"}</span>
         <span aria-hidden style={{ fontSize: 11, lineHeight: 1, color: "#8B8A85" }}>▼</span>
@@ -399,7 +432,6 @@ export function DatePicker({
           </div>
         </div>
       )}
-      {quick}
     </div>
   );
 }
@@ -420,29 +452,54 @@ export function joinDateTime(dateK?: string, timeLabel?: string) {
   return `${dateK}T${timeLabel || "00:00"}`;
 }
 
-export function quickDateButtons(onPick: (k: string) => void, extra?: string) {
+/** 날짜 빠른 선택 칩의 생김새. 🔴 **켜진 칩은 옐로다** — 랜딩 CTA·달력 선택일과 같은
+ *  색이라야 「눌려 있다」로 읽힌다(`#FFD833`). 39차 B장이 「지금·당착·내착」을 넣으며
+ *  켜짐 상태가 처음 생겼다. */
+export function quickChipStyle(selected = false): CSSProperties {
+  return {
+    border: "none",
+    padding: "5px 12px",
+    borderRadius: 999,
+    background: selected ? "#FFD833" : "#F4F3EF",
+    fontSize: 13,
+    fontWeight: selected ? 800 : 600,
+    color: selected ? "#1A1A1A" : "#4A4945",
+    cursor: "pointer",
+    fontFamily: "inherit",
+    whiteSpace: "nowrap",
+  };
+}
+
+/** 일정 칸 아래 줄의 「오늘」·「내일」 칩.
+ *
+ *  🔴 **`before` 는 「오늘」 앞에 온다** — 화주포털 발주요청이 「지금·당착·내착」을
+ *     「오늘·내일」 **앞**에 두고(36차 PR 2), 두 폼이 같은 순서여야 같은 것으로 읽힌다.
+ *  🔴 **이 줄은 `DatePicker` 밖, 날짜+시간 두 칸 아래에 놓는다**(39차 A장 리뷰 — 사용자
+ *     지시 *"한줄 구성으로 배치하자"*). 달력 부품 **안**에 두면 가용 폭이 날짜 칸
+ *     (실측 154px)뿐이라 **1280px 에서도 두 줄로 감겼다.** 🔴 되돌리지 말 것.
+ *  🟢 **이 부품과 `DatePicker` 는 `/quote` 한 화면만 쓴다**(전수 확인) — 그래서 39차가
+ *     시그니처를 넓히고 `quick` prop 을 없애도 다른 화면은 한 글자도 안 바뀐다.
+ *  ⚠️ `extra` 는 칩 **뒤**에 붙는 회색 안내 한 줄이다(자리를 바꾸지 말 것). */
+export function quickDateButtons(onPick: (k: string) => void, extra?: string, before?: ReactNode) {
   const jump = (n: number) => (e: React.MouseEvent) => {
     e.stopPropagation();
     const d = new Date();
     d.setDate(d.getDate() + n);
     onPick(dateKey(d));
   };
-  const chip: CSSProperties = {
-    border: "none",
-    padding: "5px 12px",
-    borderRadius: 999,
-    background: "#F4F3EF",
-    fontSize: 13,
-    fontWeight: 600,
-    color: "#4A4945",
-    cursor: "pointer",
-    fontFamily: "inherit",
-  };
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
-      <button type="button" onClick={jump(0)} style={chip}>오늘</button>
-      <button type="button" onClick={jump(1)} style={chip}>내일</button>
+    <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+      {before}
+      <button type="button" onClick={jump(0)} style={quickChipStyle()}>오늘</button>
+      <button type="button" onClick={jump(1)} style={quickChipStyle()}>내일</button>
       {extra && <span style={{ fontSize: 13, color: "#9C9B95" }}>{extra}</span>}
     </div>
   );
+}
+
+/** 일정 칸 아래의 회색 안내 한 줄. 🔴 **칩이 왜 시각을 안 담는지**를 여기서 말한다 —
+ *  안 적으면 화주가 「23:59 에 도착해 달라는 뜻인가」로 읽는다(발주요청과 같은 문구). */
+export function scheduleHint(text?: string | null) {
+  if (!text) return null;
+  return <p style={{ margin: "8px 0 0", fontSize: 13, lineHeight: 1.6, color: "#888378" }}>{text}</p>;
 }

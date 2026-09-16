@@ -16,7 +16,10 @@ import {
   fieldStyle,
   joinDateTime,
   optionChipStyle,
+  quickChipStyle,
   quickDateButtons,
+  requiredMark,
+  scheduleHint,
   timeSlots,
   useOpenKey,
 } from "@/components/landing/form/Fields";
@@ -26,6 +29,13 @@ import { LOADING_METHODS } from "@/lib/loadingMethods";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import { QUOTE_CONSENT } from "@/lib/legalInfo";
 import { localInputToISOString } from "@/lib/localDateTime";
+import {
+  ARRIVAL_FILLER_TIME,
+  arrivalNoteLine,
+  type DropoffArrivalType,
+} from "@/lib/arrivalType";
+import { DROPOFF_MIN_GAP_LABEL, DROPOFF_MIN_GAP_MIN, isDropoffGapOk, minDropoffDateTime } from "@/lib/dropoffGap";
+import { autoTransportTime } from "@/lib/transportTimeAuto";
 import "@/app/landing.css";
 
 // 완전공개 견적 문의 — 31차에 시안(디자인팀 Next 변환본)으로 껍데기를 갈아끼웠다.
@@ -39,11 +49,15 @@ import "@/app/landing.css";
 // 🔴 **선택지는 전부 정의처 참조다** — 톤수 `VEHICLE_TYPES_PUBLIC` · 차종
 //    `QUOTE_BODY_TYPES`(22종) · 상하차조건 `LOADING_METHODS`(8종). 시안의 7종·6종을
 //    따르지 말 것(25차가 7 → 21 로 늘렸고 리뷰에서 22종이 됐다).
-// 🔴 **물품특성·운송시간·왕복편도는 `rate_surcharges` 가 정본**이라 서버 API 로 이름만
+// 🔴 **물품특성·운송시간·왕복/편도는 `rate_surcharges` 가 정본**이라 서버 API 로 이름만
 //    받아온다(21차 — 금액은 비공개). 하드코딩하지 말 것.
+// 🔴 **카테고리 이름에 슬래시가 있다 — `"왕복/편도"` 다.** 39차 A장 전까지 이 화면만
+//    `surcharge["왕복편도"]`(슬래시 없음)로 찾고 있어서 **옵션이 0개**였고, 드롭다운을
+//    눌러도 아무것도 안 나왔다(사용자 신고 「왕복,편도 드롭메뉴 안됨」). 다른 화면 넷은
+//    전부 `"왕복/편도"` 였다. **키를 손으로 다시 적지 말고 아래 `SURCHARGE_KEYS` 를 쓸 것.**
 //
 // 🔴 **상세 정보(접이식) 값 중 DB 컬럼이 없는 것은 특이사항(`notes`)에 한 줄씩 붙인다.**
-//    `public_quote_requests` 에는 물품특성·왕복편도·대기시간·경유지수·희망 하차 일시·
+//    `public_quote_requests` 에는 물품특성·왕복/편도·대기시간·경유지수·희망 하차 일시·
 //    운송시간 컬럼이 **없다**(코드 전수 확인). 31차는 DB 변경 0이 조건이라 27차가
 //    「당착/내착」을 특이사항 한 줄로 이은 것과 같은 방식을 썼다 — 그 값들은 공개문의
 //    상세와 **견적 전환 프리필**(`notes` → 견적 특이사항)까지 그대로 따라간다.
@@ -53,6 +67,17 @@ import "@/app/landing.css";
 // 사용자가 "「선택」부분의 글씨가 시안과 선명도가 다르다"고 해서 그쪽 값을 시안 실측값
 // (배경 #F0EFEB · 글자 #6C6B66)으로 올렸다. 여기서 다시 덮어쓰지 말 것.
 const detailChip: CSSProperties = { ...optionChipStyle };
+
+/** 🔴 `rate_surcharges.category` 이름. **DB 값과 한 글자도 다르면 안 된다** — 서버가
+ *  `category` 로 그룹핑해서 내려주므로, 이름이 어긋나면 그 칸만 **빈 배열**이 되어
+ *  선택지가 하나도 없는 드롭다운이 된다(예외도 경고도 없다 · 원칙 55번과 같은 결).
+ *  🔴 화면에서 문자열을 직접 적지 말고 이 상수를 쓸 것 — 39차 A장이 고친 버그가
+ *     정확히 「직접 적다가 슬래시를 빠뜨린 것」이다. */
+const SURCHARGE_KEYS = {
+  trait: "물품특성",
+  trip: "왕복/편도",
+  transport: "운송시간",
+} as const;
 
 type Picks = Record<string, string>;
 
@@ -91,6 +116,20 @@ export default function PublicQuotePage() {
   const pick = (k: string) => (v: string) => setPicks((p) => ({ ...p, [k]: v }));
   const { openKey, setOpenKey } = useOpenKey();
 
+  /* ── 일정 칩 (39차 B장) ────────────────────────────────────────────────────
+   *
+   * 사용자 지시: *"견적문의 「일정」 부분도 발주요청과 유사하게 조정"*
+   *
+   * 🔴 **포털 부품(`components/pv2/Pv2DateTimeField.tsx`)을 끌어오지 않았다** — `.pv2-*`
+   *    스코프가 통째로 딸려온다(원칙 57번). 같은 **동작**을 랜딩 생김새로 옮긴 것이고,
+   *    자리 채움 시각(`ARRIVAL_FILLER_TIME`)과 하차 하한(`lib/dropoffGap.ts`)만
+   *    정의처를 함께 쓴다. 36차 PR 2 가 관리자에 한 것과 같은 방식이다.
+   * 🔴 **칩이 켜지면 날짜·시간 칸을 잠근다** — 「지금」·「당착」은 **시각을 담지 않는
+   *    선택지**라, 손으로 고친 값이 남아 있으면 무엇이 요청인지 갈린다.
+   */
+  const [pickupNow, setPickupNow] = useState(false);
+  const [dropoffArrival, setDropoffArrival] = useState<DropoffArrivalType | null>(null);
+
   // 🔴 물품특성·운송시간·왕복편도는 `rate_surcharges` 가 정본이라 서버에서 이름만 받는다.
   const [surcharge, setSurcharge] = useState<Record<string, string[]>>({});
   const [optionError, setOptionError] = useState(false);
@@ -128,6 +167,85 @@ export default function PublicQuotePage() {
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
   })();
 
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  const nowTime = () => {
+    const d = new Date();
+    return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  };
+  /** "YYYY-MM-DD" 에 하루를 더한다. 🔴 문자열을 자르지 말고 `Date` 로 더할 것 —
+   *  월말(09-30 → 10-01)에서 어긋난다. */
+  const nextDayKey = (k: string) => {
+    const [y, m, d] = k.split("-").map(Number);
+    const dt = new Date(y, m - 1, d + 1);
+    return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
+  };
+
+  /** 「지금」 — 누른 그 시각으로 채우고, 제출 직전에 폼이 다시 지금으로 맞춘다(36차와 같다). */
+  function toggleNow() {
+    setPickupNow((on) => {
+      if (on) return false;
+      setPicks((p) => ({ ...p, calLoad: todayKey, loadTime: nowTime() }));
+      return true;
+    });
+    // 🔴 상차가 지금으로 바뀌면 당착·내착의 기준일이 오늘이 된다 — 켜져 있으면 다시 맞춘다.
+    setDropoffArrival((a) => {
+      if (a) setPicks((p) => ({ ...p, calUnload: a === "same_day" ? todayKey : nextDayKey(todayKey) }));
+      return a;
+    });
+  }
+
+  /** 「당착」·「내착」 — 🔴 **상차 날짜를 먼저 골라야 누를 수 있다**(상차일 기준이다). */
+  function toggleArrival(kind: DropoffArrivalType) {
+    const baseDay = pickupNow ? todayKey : picks.calLoad;
+    if (!baseDay) return;
+    setDropoffArrival((cur) => {
+      if (cur === kind) return null;
+      setPicks((p) => ({
+        ...p,
+        calUnload: kind === "same_day" ? baseDay : nextDayKey(baseDay),
+        unloadTime: ARRIVAL_FILLER_TIME,
+      }));
+      return kind;
+    });
+  }
+
+  /* 🔴 **상차 날짜를 바꾸면 당착·내착이 따라가야 한다** — 안 따라가면 「당착」이라 적혀
+   *    있는데 하차 날짜는 옛 상차일에 묶인 상태가 된다(칸이 잠겨 있어 손으로 못 고친다). */
+  useEffect(() => {
+    if (!dropoffArrival) return;
+    const baseDay = pickupNow ? todayKey : picks.calLoad;
+    if (!baseDay) return;
+    const want = dropoffArrival === "same_day" ? baseDay : nextDayKey(baseDay);
+    setPicks((p) => (p.calUnload === want ? p : { ...p, calUnload: want, unloadTime: ARRIVAL_FILLER_TIME }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [picks.calLoad, pickupNow, dropoffArrival]);
+
+  /* 🔴 **운송시간은 상차일시를 보고 자동으로 맞춘다**(39차 C장) — 규칙은
+   *    `lib/transportTimeAuto.ts` 하나이고 발주요청·관리자 견적 등록이 같은 함수를 쓴다.
+   *    화주가 직접 바꿀 수 있고, **바꾼 뒤에 상차일시를 또 고치면 다시 자동으로 맞춰진다**
+   *    (관리자 화면이 전부터 그렇게 동작했고 두 화면이 같아야 한다).
+   * 🔴 **선택지가 아직 안 내려왔으면 아무것도 안 고른다** — `autoTransportTime` 이
+   *    실제 목록 안에 있을 때만 값을 준다. */
+  const transportOptions = surcharge[SURCHARGE_KEYS.transport];
+  const pickupForAuto = pickupNow ? joinDateTime(todayKey, picks.loadTime) : joinDateTime(picks.calLoad, picks.loadTime);
+  useEffect(() => {
+    if (!pickupForAuto) return;
+    const matched = autoTransportTime(pickupForAuto, transportOptions || []);
+    if (matched) setPicks((p) => (p.transport === matched ? p : { ...p, transport: matched }));
+  }, [pickupForAuto, transportOptions]);
+
+  const pickupLocalNow = joinDateTime(picks.calLoad, picks.loadTime);
+  /** 🔴 하한은 `lib/dropoffGap.ts` 가 정한다 — 이 화면에 숫자를 적지 말 것(36차 D장). */
+  const minDropoff = minDropoffDateTime(picks.calLoad ? pickupLocalNow : "");
+  const minDropoffDay = minDropoff ? minDropoff.slice(0, 10) : picks.calLoad;
+  /** 같은 날이면 상차 +30분보다 이른 시각은 아예 안 보여준다(달력은 날짜만 막는다). */
+  const dropoffTimeOptions = (() => {
+    const all = timeSlots();
+    if (!minDropoff || !picks.calUnload || picks.calUnload !== minDropoff.slice(0, 10)) return all;
+    const floor = minDropoff.slice(11);
+    return all.filter((t) => t >= floor);
+  })();
+
   /** 🔴 DB 컬럼이 없는 상세 값을 특이사항 한 줄씩으로 만든다. 값이 없으면 줄을 안 만든다. */
   function buildNotes() {
     const lines: string[] = [];
@@ -139,24 +257,33 @@ export default function PublicQuotePage() {
     add("운송시간", picks.transport);
     add("대기시간", form.waitingMinutes ? `${form.waitingMinutes}분` : "");
     add("경유지 수", form.waypointCount ? `${form.waypointCount}곳` : "");
+    // 🔴 **당착·내착이면 하차 일시를 적지 않는다**(39차 B장) — 그 값의 시각은
+    //    `ARRIVAL_FILLER_TIME`(자리 채움)이라 「23:59 도착 요청」으로 읽히면 안 된다.
+    //    대신 `lib/arrivalType.ts` 의 한 줄을 그대로 쓴다 — 견적 전환 프리필과 견적 폼
+    //    칩이 **같은 줄**을 써야 중복 판정이 성립한다.
     const dropoff = joinDateTime(picks.calUnload, picks.unloadTime);
-    add("희망 하차 일시", picks.calUnload ? dropoff.replace("T", " ") : "");
+    if (!dropoffArrival) add("희망 하차 일시", picks.calUnload ? dropoff.replace("T", " ") : "");
 
     const base = form.notes.trim();
-    if (lines.length === 0) return base;
-    return [base, "※ 상세 정보", ...lines].filter(Boolean).join("\n");
+    const arrival = arrivalNoteLine(dropoffArrival);
+    if (lines.length === 0) return [base, arrival].filter(Boolean).join("\n");
+    return [base, "※ 상세 정보", ...lines, arrival].filter(Boolean).join("\n");
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
-    if (!form.name.trim() || !form.phone.trim()) {
-      setError("성함(업체명)과 연락처를 입력해주세요.");
-      return;
-    }
+    // 🔴 검사 순서는 **화면에 보이는 순서**와 같아야 한다 — 출발지가 비었는데 「성함을
+    //    입력해주세요」가 뜨면 화면의 「필수」 표시와 안내가 서로 다른 곳을 가리킨다.
+    // 🔴 네이티브 `required` 를 쓰지 않는 것은 의도다(폼에 `noValidate` 가 붙어 있다) —
+    //    브라우저 검사가 React 핸들러보다 먼저 걸려 우리 오류 문구가 안 뜬다(PR #121).
     if (!form.origin.trim() || !form.destination.trim()) {
       setError("출발지와 도착지를 입력해주세요.");
+      return;
+    }
+    if (!form.name.trim() || !form.phone.trim()) {
+      setError("성함(업체명)과 연락처를 입력해주세요.");
       return;
     }
     if (!agreed) {
@@ -165,9 +292,21 @@ export default function PublicQuotePage() {
     }
 
     // 🔴 상차 일시는 현재 시각 이후만 — 달력이 막지만 제출 직전에 한 번 더 본다(원칙 25번).
-    const pickupLocal = joinDateTime(picks.calLoad, picks.loadTime);
-    if (picks.calLoad && picks.calLoad < todayKey) {
+    // 🔴 「지금」이 켜져 있으면 **제출하는 그 시각**으로 다시 맞춘다 — 폼을 열어둔 채
+    //    시간이 흘렀는데 누른 시각이 그대로 나가면 「지금」이 아니다(36차와 같은 처리).
+    const pickupLocal = pickupNow
+      ? joinDateTime(todayKey, nowTime())
+      : joinDateTime(picks.calLoad, picks.loadTime);
+    if (!pickupNow && picks.calLoad && picks.calLoad < todayKey) {
       setError("희망 상차 일시는 현재 시각 이후로 선택해주세요.");
+      return;
+    }
+
+    // 🔴 하차 하한. **당착·내착은 예외다**(27차·36차 D장) — 시각이 무관한 선택지라
+    //    규칙을 걸면 23:40 상차 + 당착 건의 접수가 막힌다.
+    const dropoffLocal = joinDateTime(picks.calUnload, picks.unloadTime);
+    if (!dropoffArrival && picks.calLoad && picks.calUnload && !isDropoffGapOk(pickupLocal, dropoffLocal)) {
+      setError(`희망 하차 일시는 ${DROPOFF_MIN_GAP_LABEL}.`);
       return;
     }
 
@@ -192,7 +331,9 @@ export default function PublicQuotePage() {
           item: form.item.trim() || null,
           pickup_loading_method: picks.load || null,
           dropoff_loading_method: picks.unload || null,
-          requested_pickup_at: picks.calLoad ? localInputToISOString(pickupLocal) : null,
+          // 🔴 저장은 반드시 `localInputToISOString()` 을 거친다(원칙 41번) — 오프셋 없는
+          //    문자열을 그대로 넣으면 `timestamptz` 에서 KST 기준 최대 9시간 밀린다.
+          requested_pickup_at: pickupNow || picks.calLoad ? localInputToISOString(pickupLocal) : null,
           notes: buildNotes() || null,
           // ⚠️ `agreed`는 form과 분리된 별도 state라 명시적으로 함께 보낸다.
           agreed,
@@ -211,7 +352,14 @@ export default function PublicQuotePage() {
     }
   }
 
-  const dd = (key: string, label: string | undefined, options: readonly string[], placeholder: string, pad?: string) => (
+  const dd = (
+    key: string,
+    label: string | undefined,
+    options: readonly string[],
+    placeholder: string,
+    pad?: string,
+    disabled?: boolean
+  ) => (
     <Dropdown
       ddKey={key}
       label={label}
@@ -222,6 +370,7 @@ export default function PublicQuotePage() {
       openKey={openKey}
       setOpenKey={setOpenKey}
       pad={pad}
+      disabled={disabled}
     />
   );
 
@@ -246,7 +395,7 @@ export default function PublicQuotePage() {
               {/* ── 필수 입력 ─────────────────────────── */}
               <div style={cardStyle}>
                 <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 8 }}>
-                  <label style={fieldLabel}>출발지</label>
+                  <label style={fieldLabel}>출발지 {requiredMark}</label>
                   <button
                     type="button"
                     onClick={() =>
@@ -285,7 +434,7 @@ export default function PublicQuotePage() {
                   />
                 </div>
 
-                <label style={{ ...fieldLabel, marginTop: 20 }}>도착지</label>
+                <label style={{ ...fieldLabel, marginTop: 20 }}>도착지 {requiredMark}</label>
                 <div style={{ marginTop: 8 }}>
                   <AddressSearch
                     label=""
@@ -315,7 +464,7 @@ export default function PublicQuotePage() {
                   style={{ ...fieldStyle, marginTop: 8 }}
                 />
 
-                <label style={{ ...fieldLabel, marginTop: 20 }}>성함 / 업체명</label>
+                <label style={{ ...fieldLabel, marginTop: 20 }}>성함 / 업체명 {requiredMark}</label>
                 <input
                   type="text"
                   value={form.name}
@@ -324,7 +473,7 @@ export default function PublicQuotePage() {
                   style={{ ...fieldStyle, marginTop: 8 }}
                 />
 
-                <label style={{ ...fieldLabel, marginTop: 20 }}>연락처</label>
+                <label style={{ ...fieldLabel, marginTop: 20 }}>연락처 {requiredMark}</label>
                 <input
                   type="tel"
                   inputMode="numeric"
@@ -385,8 +534,8 @@ export default function PublicQuotePage() {
                       </p>
                     )}
                     <div className="landing-cargo-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 16 }}>
-                      {dd("trait", "물품특성", surcharge["물품특성"] || [], "선택 안 함", "14px 15px")}
-                      {dd("trip", "왕복/편도", surcharge["왕복편도"] || [], "선택 안 함", "14px 15px")}
+                      {dd("trait", "물품특성", surcharge[SURCHARGE_KEYS.trait] || [], "선택 안 함", "14px 15px")}
+                      {dd("trip", "왕복/편도", surcharge[SURCHARGE_KEYS.trip] || [], "선택 안 함", "14px 15px")}
                       {dd("load", "상차조건", LOADING_METHODS.map((m) => m.label), "기본운송", "14px 15px")}
                       {dd("unload", "하차조건", LOADING_METHODS.map((m) => m.label), "기본운송", "14px 15px")}
                       <div>
@@ -428,22 +577,90 @@ export default function PublicQuotePage() {
                       <span style={detailChip}>선택</span>
                       <div style={cardTitleStyle}>일정</div>
                     </div>
+                    {/* 🔴 칩 순서는 **「지금·당착·내착」이 「오늘·내일」 앞**이다 —
+                        화주포털 발주요청이 그렇고(36차 PR 2), 두 폼이 같은 순서여야
+                        화주가 같은 것으로 읽는다.
+                        🔴 **칩이 켜지면 날짜·시간 칸을 잠근다** — 그 선택지들은 시각을
+                        담지 않으므로 손으로 고친 값이 남으면 무엇이 요청인지 갈린다. */}
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px,1fr))", gap: "20px 24px", marginTop: 20, alignItems: "start" }}>
                       <div>
                         <label style={fieldLabel}>희망 상차 일시</label>
                         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                          <DatePicker ddKey="calLoad" value={picks.calLoad} onPick={pick("calLoad")} openKey={openKey} setOpenKey={setOpenKey} quick={quickDateButtons(pick("calLoad"))} />
-                          <div style={{ flex: 1, minWidth: 0 }}>{dd("loadTime", undefined, timeSlots(), "시간 선택", "14px 15px")}</div>
+                          <DatePicker
+                            ddKey="calLoad"
+                            value={picks.calLoad}
+                            onPick={pick("calLoad")}
+                            openKey={openKey}
+                            setOpenKey={setOpenKey}
+                            disabled={pickupNow}
+                          />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            {dd("loadTime", undefined, timeSlots(), "시간 선택", "14px 15px", pickupNow)}
+                          </div>
                         </div>
+                        {quickDateButtons(
+                          pick("calLoad"),
+                          undefined,
+                          <button type="button" onClick={toggleNow} style={quickChipStyle(pickupNow)} aria-pressed={pickupNow}>
+                            지금
+                          </button>
+                        )}
+                        {scheduleHint(pickupNow ? "지금 바로 상차 — 시간은 접수 시각으로 들어갑니다" : null)}
                       </div>
                       <div>
                         <label style={fieldLabel}>희망 하차 일시</label>
                         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                          <DatePicker ddKey="calUnload" value={picks.calUnload} onPick={pick("calUnload")} minKey={picks.calLoad} openKey={openKey} setOpenKey={setOpenKey} quick={quickDateButtons(pick("calUnload"))} />
-                          <div style={{ flex: 1, minWidth: 0 }}>{dd("unloadTime", undefined, timeSlots(), "시간 선택", "14px 15px")}</div>
+                          <DatePicker
+                            ddKey="calUnload"
+                            value={picks.calUnload}
+                            onPick={pick("calUnload")}
+                            minKey={minDropoffDay}
+                            openKey={openKey}
+                            setOpenKey={setOpenKey}
+                            disabled={dropoffArrival !== null}
+                          />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            {dd("unloadTime", undefined, dropoffTimeOptions, "시간 선택", "14px 15px", dropoffArrival !== null)}
+                          </div>
                         </div>
+                        {quickDateButtons(
+                          pick("calUnload"),
+                          undefined,
+                          <>
+                            {/* 🔴 상차 날짜를 먼저 골라야 누를 수 있다 — 당착·내착은 **상차일 기준**이다. */}
+                            <button
+                              type="button"
+                              onClick={() => toggleArrival("same_day")}
+                              disabled={!pickupNow && !picks.calLoad}
+                              aria-pressed={dropoffArrival === "same_day"}
+                              title={!pickupNow && !picks.calLoad ? "상차 날짜를 먼저 선택해주세요" : undefined}
+                              style={{ ...quickChipStyle(dropoffArrival === "same_day"), ...(!pickupNow && !picks.calLoad ? { opacity: 0.45, cursor: "default" } : null) }}
+                            >
+                              당착
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => toggleArrival("next_day")}
+                              disabled={!pickupNow && !picks.calLoad}
+                              aria-pressed={dropoffArrival === "next_day"}
+                              title={!pickupNow && !picks.calLoad ? "상차 날짜를 먼저 선택해주세요" : undefined}
+                              style={{ ...quickChipStyle(dropoffArrival === "next_day"), ...(!pickupNow && !picks.calLoad ? { opacity: 0.45, cursor: "default" } : null) }}
+                            >
+                              내착
+                            </button>
+                          </>
+                        )}
+                        {scheduleHint(
+                          dropoffArrival === "same_day"
+                            ? "당착 — 상차 당일 도착, 시각은 무관합니다"
+                            : dropoffArrival === "next_day"
+                            ? "내착 — 상차 다음 날 도착, 시각은 무관합니다"
+                            : picks.calLoad
+                            ? `상차 +${DROPOFF_MIN_GAP_MIN}분 이후`
+                            : null
+                        )}
                       </div>
-                      {dd("transport", "운송시간", surcharge["운송시간"] || [], "선택 안 함", "14px 15px")}
+                      {dd("transport", "운송시간", surcharge[SURCHARGE_KEYS.transport] || [], "선택 안 함", "14px 15px")}
                     </div>
                   </div>
 
