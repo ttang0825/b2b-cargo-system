@@ -12,11 +12,11 @@ import { getCurrentStaffInfo, onCurrentStaffChange, clearCurrentStaffCache } fro
 import NavCountBadge from "@/components/NavCountBadge";
 import AdminIntakeToast, { type IntakeToastItem } from "@/components/AdminIntakeToast";
 import AdminPushSubscribeButton from "@/components/AdminPushSubscribeButton";
+import AdminIntakeSoundMenu from "@/components/AdminIntakeSoundMenu";
 import {
   applyUnseenTitle,
   collectIntakeRises,
   isIntakeSoundOn,
-  setIntakeSoundOn,
   playIntakeChime,
   type IntakeCounts,
 } from "@/lib/adminIntakeAlert";
@@ -186,7 +186,6 @@ function TopNavInner() {
   //       🔴 폴링 쪽에 얹으라는 그 문장을 근거로 되돌리지 말 것.
   const [toasts, setToasts] = useState<IntakeToastItem[]>([]);
   const [unseen, setUnseen] = useState(0);
-  const [soundOn, setSoundOn] = useState(true);
   // 🔴 **직전 건수는 `useRef` 에 둔다**(지시서 2-1) — `useState` 로 두면 값이 바뀔
   //    때마다 화면을 다시 그린다. 키가 **없는 것**과 **0인 것**을 갈라야 하므로
   //    (첫 조회에는 울리지 않는다) `Partial` 이다.
@@ -322,12 +321,6 @@ function TopNavInner() {
     setOpenGroup(null);
   }, [pathname]);
 
-  // 소리 켜짐 여부는 브라우저에만 있는 값이라 첫 그림 뒤에 읽는다
-  // (서버가 그린 HTML 과 달라지면 하이드레이션이 깨진다).
-  useEffect(() => {
-    setSoundOn(isIntakeSoundOn());
-  }, []);
-
   // 🔴 **접수 건수가 늘어난 순간**만 잡는다 — 규칙 셋(첫 조회 · 감소 · 키별 판정)은
   //    `lib/adminIntakeAlert.ts` 의 `collectIntakeRises()` 한 곳에 있다.
   //    🔴 **여기에 다시 적지 말 것** — 화면에 묻으면 잴 수가 없어서 뺀 것이다.
@@ -407,23 +400,8 @@ function TopNavInner() {
     else router.push("/admin");
   }
 
-  // 🔴 **끄면 소리만 멈춘다** — 배지도 배너도 그대로다(38차 확정).
-  //    배지는 이 차수보다 먼저 있던 기능이라 이 토글이 건드릴 것이 아니다.
-  function toggleSound() {
-    setSoundOn((on) => {
-      const next = !on;
-      setIntakeSoundOn(next);
-      // 켜는 그 클릭이 곧 사용자 제스처다 — 여기서 한 번 울려 두면 자동재생 정책이
-      // 풀리고, 담당자도 무슨 소리인지 미리 듣는다.
-      if (next) void playIntakeChime();
-      return next;
-    });
-  }
-
   const totalPending = counts.portalRequests + counts.publicQuotes + counts.applications;
   const visibleGroups = isAdmin ? [...NAV_GROUPS, ADMIN_ONLY_GROUP] : NAV_GROUPS;
-
-  const soundToggleLabel = soundOn ? "새 접수 알림음 끄기" : "새 접수 알림음 켜기";
 
   return (
     <>
@@ -453,18 +431,11 @@ function TopNavInner() {
               onToggle={() => setOpenGroup((g) => (g === group.label ? null : group.label))}
             />
           ))}
-          {/* 🔴 종 모양 하나로 끄고 켠다 — 수신 설정 화면을 새로 만들지 말 것
-              (사용자 확정: **직원 전원 같은 알림** · 역할별 분기 없음). */}
-          <button
-            type="button"
-            onClick={toggleSound}
-            className="aintake-bell"
-            aria-label={soundToggleLabel}
-            aria-pressed={soundOn}
-            title={soundToggleLabel}
-          >
-            {soundOn ? "🔔" : "🔕"}
-          </button>
+          {/* 🔴 종 모양 하나로 끄고 켠다 + 옆의 ▾ 로 볼륨·소리를 고른다 —
+              수신 설정 **화면**을 새로 만들지 말 것(사용자 확정: 직원 전원 같은 알림 ·
+              역할별 분기 없음). 여기서 고르는 것은 「누가 받을지」가 아니라
+              **이 자리에서 얼마나 크게 들릴지**다. */}
+          <AdminIntakeSoundMenu />
           {/* 🔴 종 모양 **옆**이다(38차 3-2) — 수신 설정 화면을 새로 만들지 말 것.
               브라우저가 푸시를 못 하거나 VAPID 가 아직 없으면 스스로 안 그린다. */}
           <AdminPushSubscribeButton />
@@ -567,25 +538,10 @@ function TopNavInner() {
           ))}
           <div style={{ borderTop: "1px solid var(--border)", marginTop: 10, paddingTop: 8 }}>
             {/* 🔴 데스크탑 종 모양은 `.nav-desktop-group` 안이라 모바일에서 통째로
-                숨겨진다 — 여기에도 한 줄을 둬야 휴대폰에서 끌 수 있다. */}
-            <button
-              type="button"
-              onClick={toggleSound}
-              style={{
-                display: "block",
-                width: "100%",
-                textAlign: "left",
-                padding: "8px 4px",
-                fontSize: 13.5,
-                color: "var(--text-muted)",
-                border: "none",
-                background: "none",
-                cursor: "pointer",
-              }}
-              aria-pressed={soundOn}
-            >
-              {soundOn ? "🔔 새 접수 알림음 켜짐" : "🔕 새 접수 알림음 꺼짐"}
-            </button>
+                숨겨진다 — 여기에도 둬야 휴대폰에서 끄고 볼륨을 고를 수 있다.
+                🔴 **`variant="mobile"` 이다** — 이미 펼쳐진 메뉴 안이라 펼침 창을
+                또 띄우면 창이 창 위에 겹친다. */}
+            <AdminIntakeSoundMenu variant="mobile" />
             {/* 🔴 휴대폰에서 누르는 것이 오히려 더 중요하다 — 「외부에서도 확인」이
                 이 차수의 시작이었다. 데스크탑 단추는 `.nav-desktop-group` 안이라
                 모바일에서 통째로 숨겨진다. */}

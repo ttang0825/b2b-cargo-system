@@ -65,16 +65,107 @@ export function setIntakeSoundOn(on: boolean): void {
 //    ② 파일을 `public/` 에 두면 코드가 **문자열로만** 가리켜 `grep` 참조가 0건이 되고,
 //       그러면 §9 「지우면 안 되는 파일」 목록에 한 줄을 더해야 한다(함정 18번의 그 자리).
 //    합성음은 그 두 가지가 아예 생기지 않는다.
+//    🔴 **소리 종류가 셋이 된 뒤에도 그대로다** — 「종류를 늘리려면 음원을 받아야 한다」로
+//    가지 말 것. 음 높이와 길이만 바꾸면 되므로 파일이 필요 없다.
 //
 // 🔴 **브라우저 자동재생 정책** — 그 탭에서 사용자가 한 번이라도 클릭·키 입력을 한
 //    뒤에만 소리가 난다. 그전에는 `AudioContext` 가 `suspended` 로 남고 **소리가 조용히
 //    안 난다.** 🔴 **이 함수는 절대 던지지 않는다** — 호출부가 `try` 로 감싸지 않아도
 //    배너·탭 제목은 그대로 떠야 한다(완료조건 6번).
 
+/** 볼륨 3단계. 🔴 값은 **최고 게인**이고 `1` 에 가까울수록 찢어진다 — 0.5 를 넘기지 말 것. */
+export type IntakeVolume = "low" | "mid" | "high";
+/** 소리 3종. 🔴 `chime` 이 기본값이고 **38차 A장이 처음 넣은 그 소리 그대로**다. */
+export type IntakeTone = "chime" | "ding" | "rise";
+
+export const INTAKE_VOLUMES: { value: IntakeVolume; label: string; peak: number }[] = [
+  { value: "low", label: "작게", peak: 0.07 },
+  // 🔴 `mid` 0.18 은 A장이 쓰던 그 값이다 — 기본값을 쓰던 사람에게 소리가 달라지면 안 된다.
+  { value: "mid", label: "보통", peak: 0.18 },
+  { value: "high", label: "크게", peak: 0.38 },
+];
+
+type ToneNote = { freq: number; at: number; dur: number };
+
+export const INTAKE_TONES: { value: IntakeTone; label: string; notes: ToneNote[] }[] = [
+  // 🔴 A장의 그 소리다(880Hz 라 → 1318.5Hz 미). **음 높이·길이를 바꾸지 말 것** —
+  //    바꾸면 아무것도 안 고른 담당자의 소리가 말없이 달라진다.
+  {
+    value: "chime",
+    label: "두 음",
+    notes: [
+      { freq: 880, at: 0, dur: 0.14 },
+      { freq: 1318.5, at: 0.14, dur: 0.14 },
+    ],
+  },
+  // 한 번만 「딩」 — 하루에 여러 건 올 때 가장 덜 거슬린다
+  { value: "ding", label: "단음", notes: [{ freq: 1046.5, at: 0, dur: 0.42 }] },
+  // 세 음이 올라간다 — 시끄러운 사무실에서 가장 잘 들린다
+  {
+    value: "rise",
+    label: "세 음",
+    notes: [
+      { freq: 659.3, at: 0, dur: 0.11 },
+      { freq: 880, at: 0.1, dur: 0.11 },
+      { freq: 1174.7, at: 0.2, dur: 0.22 },
+    ],
+  },
+];
+
+const VOLUME_KEY = "admin-intake-alert-volume";
+const TONE_KEY = "admin-intake-alert-tone";
+
+// 🔴 **기억하는 곳은 브라우저(localStorage)다 — DB 가 아니다.**
+//    사용자 확정이 「직원 전원 같은 알림」이라 **누가 받을지는 갈리지 않고**, 볼륨·소리는
+//    그 사람이 앉은 **자리의 취향**이다(사무실 데스크탑과 휴대폰이 달라야 자연스럽다).
+//    🔴 이것을 `staff_accounts` 컬럼으로 옮기지 말 것 — 수신 설정 화면을 만들지 않기로
+//    한 38차 0-3 확정과 어긋나고, DB 변경 0 이던 A장이 DB 변경을 갖게 된다.
+function readChoice<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const v = window.localStorage.getItem(key);
+    // 🔴 저장된 값이 목록에 없으면 기본값이다 — 옛 값이 남아 있어도 조용히 깨지지 않는다.
+    return allowed.includes(v as T) ? (v as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeChoice(key: string, value: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // 저장이 안 돼도 이번 세션에서는 동작해야 하므로 넘어간다(`setIntakeSoundOn` 과 같다)
+  }
+}
+
+export function getIntakeVolume(): IntakeVolume {
+  return readChoice(VOLUME_KEY, INTAKE_VOLUMES.map((v) => v.value), "mid");
+}
+export function setIntakeVolume(v: IntakeVolume): void {
+  writeChoice(VOLUME_KEY, v);
+}
+export function getIntakeTone(): IntakeTone {
+  return readChoice(TONE_KEY, INTAKE_TONES.map((t) => t.value), "chime");
+}
+export function setIntakeTone(t: IntakeTone): void {
+  writeChoice(TONE_KEY, t);
+}
+
 let audioCtx: AudioContext | null = null;
 
-/** 짧은 두 음(솔 → 도) 차임. 소리가 났으면 true. 🔴 절대 던지지 않는다. */
-export async function playIntakeChime(): Promise<boolean> {
+/**
+ * 알림음을 낸다. 소리가 났으면 true. 🔴 절대 던지지 않는다.
+ *
+ * 🔴 **인자를 안 주면 저장된 값을 읽는다** — 부르는 곳(`TopNav` 의 감지 effect)이
+ *    볼륨·소리를 알 필요가 없다. 인자는 **설정 화면이 「고른 그 소리」를 바로 들려줄 때**만
+ *    쓴다(저장이 끝나기 전에도 정확히 그 소리가 나야 하므로).
+ */
+export async function playIntakeChime(opts?: {
+  volume?: IntakeVolume;
+  tone?: IntakeTone;
+}): Promise<boolean> {
   if (typeof window === "undefined") return false;
   try {
     const Ctor: typeof AudioContext | undefined =
@@ -95,23 +186,26 @@ export async function playIntakeChime(): Promise<boolean> {
     }
     if (audioCtx.state !== "running") return false;
 
+    const volume = opts?.volume ?? getIntakeVolume();
+    const tone = opts?.tone ?? getIntakeTone();
+    // 🔴 목록에 없는 값이 들어와도 소리는 나야 한다 — 기본값으로 떨어뜨린다.
+    const peak = (INTAKE_VOLUMES.find((v) => v.value === volume) || INTAKE_VOLUMES[1]).peak;
+    const notes = (INTAKE_TONES.find((t) => t.value === tone) || INTAKE_TONES[0]).notes;
+
     const now = audioCtx.currentTime;
-    // 880Hz(라) → 1318.5Hz(미) 두 음. 각 130ms.
-    [
-      { freq: 880, at: 0 },
-      { freq: 1318.5, at: 0.14 },
-    ].forEach(({ freq, at }) => {
+    notes.forEach(({ freq, at, dur }) => {
       const osc = audioCtx!.createOscillator();
       const gain = audioCtx!.createGain();
       osc.type = "sine";
       osc.frequency.value = freq;
       // 🔴 게인을 0 에서 올렸다 내린다 — 바로 켜고 끄면 「딱」 하는 잡음이 난다.
+      //    🔴 `exponentialRamp` 는 0 을 못 받는다(0.0001 이 그래서 있다) — 0 으로 바꾸지 말 것.
       gain.gain.setValueAtTime(0.0001, now + at);
-      gain.gain.exponentialRampToValueAtTime(0.18, now + at + 0.012);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + at + 0.13);
+      gain.gain.exponentialRampToValueAtTime(peak, now + at + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + at + dur - 0.01);
       osc.connect(gain).connect(audioCtx!.destination);
       osc.start(now + at);
-      osc.stop(now + at + 0.14);
+      osc.stop(now + at + dur);
     });
     return true;
   } catch {
