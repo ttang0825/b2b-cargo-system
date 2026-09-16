@@ -168,6 +168,7 @@ export function Dropdown({
   setOpenKey,
   ddKey,
   pad = "15px 16px",
+  disabled = false,
 }: {
   label?: string;
   value?: string;
@@ -178,8 +179,11 @@ export function Dropdown({
   setOpenKey: (k: string | null) => void;
   ddKey: string;
   pad?: string;
+  /** 🔴 「지금」·「당착」·「내착」 칩이 켜졌을 때 칸을 잠근다(39차 B장) — 그 칩들은
+   *  **시각을 담지 않는 선택지**라 손으로 고친 값이 남아 있으면 무엇이 요청인지 갈린다. */
+  disabled?: boolean;
 }) {
-  const open = openKey === ddKey;
+  const open = openKey === ddKey && !disabled;
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLDivElement | null>(null);
 
@@ -226,12 +230,17 @@ export function Dropdown({
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
+        disabled={disabled}
         onKeyDown={onKeyDown}
         onClick={(e) => {
           e.stopPropagation();
           setOpenKey(open ? null : ddKey);
         }}
-        style={{ ...trigger(!!value, pad), marginTop: label ? 8 : 0 }}
+        style={{
+          ...trigger(!!value, pad),
+          marginTop: label ? 8 : 0,
+          ...(disabled ? { opacity: 0.55, cursor: "default" } : null),
+        }}
       >
         <span>{value || placeholder}</span>
         <span aria-hidden style={{ fontSize: 11, lineHeight: 1, color: "#8B8A85" }}>▼</span>
@@ -288,6 +297,7 @@ export function DatePicker({
   setOpenKey,
   ddKey,
   quick,
+  disabled = false,
 }: {
   value?: string;
   onPick: (v: string) => void;
@@ -296,9 +306,12 @@ export function DatePicker({
   setOpenKey: (k: string | null) => void;
   ddKey: string;
   quick?: ReactNode;
+  /** 🔴 칩이 켜졌을 때 달력을 잠근다(39차 B장) — `Dropdown` 의 같은 prop 과 한 벌이다.
+   *  🟢 **`quick` 은 잠기지 않는다** — 칩을 다시 눌러 끌 수 있어야 한다. */
+  disabled?: boolean;
 }) {
   const [monthOff, setMonthOff] = useState(0);
-  const open = openKey === ddKey;
+  const open = openKey === ddKey && !disabled;
 
   const now = new Date();
   const base = new Date(now.getFullYear(), now.getMonth() + monthOff, 1);
@@ -315,11 +328,12 @@ export function DatePicker({
         type="button"
         aria-haspopup="dialog"
         aria-expanded={open}
+        disabled={disabled}
         onClick={(e) => {
           e.stopPropagation();
           setOpenKey(open ? null : ddKey);
         }}
-        style={trigger(!!value, "14px 15px")}
+        style={{ ...trigger(!!value, "14px 15px"), ...(disabled ? { opacity: 0.55, cursor: "default" } : null) }}
       >
         <span>{value ? dateLabel(value) : "날짜 선택"}</span>
         <span aria-hidden style={{ fontSize: 11, lineHeight: 1, color: "#8B8A85" }}>▼</span>
@@ -434,29 +448,51 @@ export function joinDateTime(dateK?: string, timeLabel?: string) {
   return `${dateK}T${timeLabel || "00:00"}`;
 }
 
-export function quickDateButtons(onPick: (k: string) => void, extra?: string) {
+/** 날짜 빠른 선택 칩의 생김새. 🔴 **켜진 칩은 옐로다** — 랜딩 CTA·달력 선택일과 같은
+ *  색이라야 「눌려 있다」로 읽힌다(`#FFD833`). 39차 B장이 「지금·당착·내착」을 넣으며
+ *  켜짐 상태가 처음 생겼다. */
+export function quickChipStyle(selected = false): CSSProperties {
+  return {
+    border: "none",
+    padding: "5px 12px",
+    borderRadius: 999,
+    background: selected ? "#FFD833" : "#F4F3EF",
+    fontSize: 13,
+    fontWeight: selected ? 800 : 600,
+    color: selected ? "#1A1A1A" : "#4A4945",
+    cursor: "pointer",
+    fontFamily: "inherit",
+    whiteSpace: "nowrap",
+  };
+}
+
+/** 날짜 아래 줄의 「오늘」·「내일」 칩.
+ *
+ *  🔴 **`before` 는 「오늘」 앞에 온다** — 화주포털 발주요청이 「지금·당착·내착」을
+ *     「오늘·내일」 **앞**에 두고(36차 PR 2), 두 폼이 같은 순서여야 같은 것으로 읽힌다.
+ *  🟢 **이 부품과 `DatePicker` 는 `/quote` 한 화면만 쓴다**(전수 확인) — 그래서 39차
+ *     B장이 시그니처를 넓혀도 다른 화면은 한 글자도 안 바뀐다.
+ *  ⚠️ `extra` 는 칩 **뒤**에 붙는 회색 안내 한 줄이다(자리를 바꾸지 말 것). */
+export function quickDateButtons(onPick: (k: string) => void, extra?: string, before?: ReactNode) {
   const jump = (n: number) => (e: React.MouseEvent) => {
     e.stopPropagation();
     const d = new Date();
     d.setDate(d.getDate() + n);
     onPick(dateKey(d));
   };
-  const chip: CSSProperties = {
-    border: "none",
-    padding: "5px 12px",
-    borderRadius: 999,
-    background: "#F4F3EF",
-    fontSize: 13,
-    fontWeight: 600,
-    color: "#4A4945",
-    cursor: "pointer",
-    fontFamily: "inherit",
-  };
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
-      <button type="button" onClick={jump(0)} style={chip}>오늘</button>
-      <button type="button" onClick={jump(1)} style={chip}>내일</button>
+    <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+      {before}
+      <button type="button" onClick={jump(0)} style={quickChipStyle()}>오늘</button>
+      <button type="button" onClick={jump(1)} style={quickChipStyle()}>내일</button>
       {extra && <span style={{ fontSize: 13, color: "#9C9B95" }}>{extra}</span>}
     </div>
   );
+}
+
+/** 일정 칸 아래의 회색 안내 한 줄. 🔴 **칩이 왜 시각을 안 담는지**를 여기서 말한다 —
+ *  안 적으면 화주가 「23:59 에 도착해 달라는 뜻인가」로 읽는다(발주요청과 같은 문구). */
+export function scheduleHint(text?: string | null) {
+  if (!text) return null;
+  return <p style={{ margin: "8px 0 0", fontSize: 13, lineHeight: 1.6, color: "#888378" }}>{text}</p>;
 }
