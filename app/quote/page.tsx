@@ -593,18 +593,18 @@ export default function PublicQuotePage() {
                             openKey={openKey}
                             setOpenKey={setOpenKey}
                             disabled={pickupNow}
-                            quick={quickDateButtons(
-                              pick("calLoad"),
-                              undefined,
-                              <button type="button" onClick={toggleNow} style={quickChipStyle(pickupNow)} aria-pressed={pickupNow}>
-                                지금
-                              </button>
-                            )}
                           />
                           <div style={{ flex: 1, minWidth: 0 }}>
                             {dd("loadTime", undefined, timeSlots(), "시간 선택", "14px 15px", pickupNow)}
                           </div>
                         </div>
+                        {quickDateButtons(
+                          pick("calLoad"),
+                          undefined,
+                          <button type="button" onClick={toggleNow} style={quickChipStyle(pickupNow)} aria-pressed={pickupNow}>
+                            지금
+                          </button>
+                        )}
                         {scheduleHint(pickupNow ? "지금 바로 상차 — 시간은 접수 시각으로 들어갑니다" : null)}
                       </div>
                       <div>
@@ -618,38 +618,38 @@ export default function PublicQuotePage() {
                             openKey={openKey}
                             setOpenKey={setOpenKey}
                             disabled={dropoffArrival !== null}
-                            quick={quickDateButtons(
-                              pick("calUnload"),
-                              undefined,
-                              <>
-                                {/* 🔴 상차 날짜를 먼저 골라야 누를 수 있다 — 당착·내착은 **상차일 기준**이다. */}
-                                <button
-                                  type="button"
-                                  onClick={() => toggleArrival("same_day")}
-                                  disabled={!pickupNow && !picks.calLoad}
-                                  aria-pressed={dropoffArrival === "same_day"}
-                                  title={!pickupNow && !picks.calLoad ? "상차 날짜를 먼저 선택해주세요" : undefined}
-                                  style={{ ...quickChipStyle(dropoffArrival === "same_day"), ...(!pickupNow && !picks.calLoad ? { opacity: 0.45, cursor: "default" } : null) }}
-                                >
-                                  당착
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => toggleArrival("next_day")}
-                                  disabled={!pickupNow && !picks.calLoad}
-                                  aria-pressed={dropoffArrival === "next_day"}
-                                  title={!pickupNow && !picks.calLoad ? "상차 날짜를 먼저 선택해주세요" : undefined}
-                                  style={{ ...quickChipStyle(dropoffArrival === "next_day"), ...(!pickupNow && !picks.calLoad ? { opacity: 0.45, cursor: "default" } : null) }}
-                                >
-                                  내착
-                                </button>
-                              </>
-                            )}
                           />
                           <div style={{ flex: 1, minWidth: 0 }}>
                             {dd("unloadTime", undefined, dropoffTimeOptions, "시간 선택", "14px 15px", dropoffArrival !== null)}
                           </div>
                         </div>
+                        {quickDateButtons(
+                          pick("calUnload"),
+                          undefined,
+                          <>
+                            {/* 🔴 상차 날짜를 먼저 골라야 누를 수 있다 — 당착·내착은 **상차일 기준**이다. */}
+                            <button
+                              type="button"
+                              onClick={() => toggleArrival("same_day")}
+                              disabled={!pickupNow && !picks.calLoad}
+                              aria-pressed={dropoffArrival === "same_day"}
+                              title={!pickupNow && !picks.calLoad ? "상차 날짜를 먼저 선택해주세요" : undefined}
+                              style={{ ...quickChipStyle(dropoffArrival === "same_day"), ...(!pickupNow && !picks.calLoad ? { opacity: 0.45, cursor: "default" } : null) }}
+                            >
+                              당착
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => toggleArrival("next_day")}
+                              disabled={!pickupNow && !picks.calLoad}
+                              aria-pressed={dropoffArrival === "next_day"}
+                              title={!pickupNow && !picks.calLoad ? "상차 날짜를 먼저 선택해주세요" : undefined}
+                              style={{ ...quickChipStyle(dropoffArrival === "next_day"), ...(!pickupNow && !picks.calLoad ? { opacity: 0.45, cursor: "default" } : null) }}
+                            >
+                              내착
+                            </button>
+                          </>
+                        )}
                         {scheduleHint(
                           dropoffArrival === "same_day"
                             ? "당착 — 상차 당일 도착, 시각은 무관합니다"

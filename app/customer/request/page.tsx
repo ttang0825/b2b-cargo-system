@@ -745,8 +745,14 @@ export default function PortalRequestPage() {
       <div className="pv2-leg">
         <div className="pv2-leg-head">
           <span className={`pv2-leg-dot ${isFrom ? "pv2-leg-dot-from" : "pv2-leg-dot-to"}`} />
-          <span className="pv2-leg-title">{isFrom ? "출발지" : "도착지"}</span>
-          <span className="pv2-leg-sub">{isFrom ? "상차지 정보 *" : "하차지 정보 *"}</span>
+          {/* 🔴 필수 표시는 **제목 옆 빨간 `*`** 다(39차 A장 리뷰) — 그전에는 부제와
+              placeholder 안에 **검정 `*`** 가 문자로 박혀 있었는데, placeholder 는 값을
+              입력하면 사라져서 표시 역할을 못 한다. 🔴 문자 `*` 로 되돌리지 말 것. */}
+          <span className="pv2-leg-title">
+            {isFrom ? "출발지" : "도착지"}
+            <span className="pv2-req" aria-hidden>*</span>
+          </span>
+          <span className="pv2-leg-sub">{isFrom ? "상차지 정보" : "하차지 정보"}</span>
         </div>
         <Pv2Select
           className="pv2-select-load"
@@ -773,7 +779,7 @@ export default function PortalRequestPage() {
             )
           }
           onDetailChange={(v) => setField(isFrom ? "originDetail" : "destinationDetail", v)}
-          placeholder={isFrom ? "출발지 주소 검색 또는 직접 입력 *" : "도착지 주소 검색 또는 직접 입력 *"}
+          placeholder={isFrom ? "출발지 주소 검색 또는 직접 입력" : "도착지 주소 검색 또는 직접 입력"}
           detailPlaceholder={
             isFrom ? "상세주소 (동/층/호수, 창고 위치 등)" : "상세주소 (동/층/호수, 하차장 위치 등)"
           }
@@ -1146,7 +1152,8 @@ export default function PortalRequestPage() {
           </div>
           <div className="pv2-field" style={{ marginTop: 14 }}>
             <label className="pv2-field-label" htmlFor="pv2-f-item">
-              품목 *
+              품목
+              <span className="pv2-req" aria-hidden>*</span>
             </label>
             <input
               id="pv2-f-item"

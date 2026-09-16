@@ -69,16 +69,23 @@ export const fieldLabel: CSSProperties = { display: "block", fontSize: 14, fontW
 
 /** 필수 항목 표시. 라벨 뒤에 `{" "}` 와 함께 놓는다 — `<label>회사명 {requiredMark}</label>`
  *
- *  🔴 **빨간 `*` 가 아니라 회색 「필수」 글자다**(31차 리뷰 — 사용자 확정).
- *     `*` 로 바꾸지 말 것: 공개 폼 3화면이 같은 표시를 써야 하고, 시안이 글자다.
- *  🔴 **`/apply` 지역 상수였던 것을 39차 A장에 여기로 옮겼다** — `/quote` 가 같은 표시를
- *     쓰려면 정의처가 하나여야 한다(원칙 12·37·43 과 같은 결). 화면에 다시 적지 말 것.
+ *  🔴 **빨간 `*` 다**(39차 A장 리뷰 — 사용자 지시 *"필수항목은 🔴 빨간 * 으로 표시하자"*).
+ *     ⚠️ **31차 리뷰가 확정했던 회색 「필수」 글자를 뒤집은 것이다** — 그 옛 결정을
+ *     근거로 글자로 되돌리지 말 것.
+ *  🔴 **색은 `REQUIRED_MARK_COLOR` 하나다** — 화주포털(`.pv2-req`)이 같은 값을 쓴다.
+ *     공개 폼과 포털에서 같은 뜻이 다른 색으로 보이면 안 된다.
+ *  🔴 **`/apply` 지역 상수였던 것을 39차 A장에 여기로 옮겼다** — 공개 폼 3화면이 같은
+ *     표시를 써야 한다(원칙 12·37·43 과 같은 결). 화면에 다시 적지 말 것.
  *  ⚠️ 이 표시는 **눈에 보이는 안내일 뿐 제출을 막지 않는다** — 막는 것은 각 화면의
  *     제출 직전 검사다(네이티브 `required` 는 React 핸들러보다 먼저 걸려 우리 오류
  *     문구가 안 뜬다 · PR #121 이 같은 자리에서 겪었다). **둘이 어긋나지 않게 할 것.**
  */
+export const REQUIRED_MARK_COLOR = "#B4423A";
+
 export const requiredMark = (
-  <span style={{ marginLeft: 4, fontSize: 12.5, fontWeight: 500, color: "#A8A79F" }}>필수</span>
+  <span aria-hidden style={{ marginLeft: 3, fontSize: 15, fontWeight: 700, color: REQUIRED_MARK_COLOR }}>
+    *
+  </span>
 );
 
 /** 입력창. 시안 값 그대로다. */
@@ -296,7 +303,6 @@ export function DatePicker({
   openKey,
   setOpenKey,
   ddKey,
-  quick,
   disabled = false,
 }: {
   value?: string;
@@ -305,9 +311,8 @@ export function DatePicker({
   openKey: string | null;
   setOpenKey: (k: string | null) => void;
   ddKey: string;
-  quick?: ReactNode;
   /** 🔴 칩이 켜졌을 때 달력을 잠근다(39차 B장) — `Dropdown` 의 같은 prop 과 한 벌이다.
-   *  🟢 **`quick` 은 잠기지 않는다** — 칩을 다시 눌러 끌 수 있어야 한다. */
+   *  🟢 **칩 줄은 이 부품 밖에 있어서 안 잠긴다** — 다시 눌러 끌 수 있어야 한다. */
   disabled?: boolean;
 }) {
   const [monthOff, setMonthOff] = useState(0);
@@ -427,7 +432,6 @@ export function DatePicker({
           </div>
         </div>
       )}
-      {quick}
     </div>
   );
 }
@@ -466,12 +470,15 @@ export function quickChipStyle(selected = false): CSSProperties {
   };
 }
 
-/** 날짜 아래 줄의 「오늘」·「내일」 칩.
+/** 일정 칸 아래 줄의 「오늘」·「내일」 칩.
  *
  *  🔴 **`before` 는 「오늘」 앞에 온다** — 화주포털 발주요청이 「지금·당착·내착」을
  *     「오늘·내일」 **앞**에 두고(36차 PR 2), 두 폼이 같은 순서여야 같은 것으로 읽힌다.
- *  🟢 **이 부품과 `DatePicker` 는 `/quote` 한 화면만 쓴다**(전수 확인) — 그래서 39차
- *     B장이 시그니처를 넓혀도 다른 화면은 한 글자도 안 바뀐다.
+ *  🔴 **이 줄은 `DatePicker` 밖, 날짜+시간 두 칸 아래에 놓는다**(39차 A장 리뷰 — 사용자
+ *     지시 *"한줄 구성으로 배치하자"*). 달력 부품 **안**에 두면 가용 폭이 날짜 칸
+ *     (실측 154px)뿐이라 **1280px 에서도 두 줄로 감겼다.** 🔴 되돌리지 말 것.
+ *  🟢 **이 부품과 `DatePicker` 는 `/quote` 한 화면만 쓴다**(전수 확인) — 그래서 39차가
+ *     시그니처를 넓히고 `quick` prop 을 없애도 다른 화면은 한 글자도 안 바뀐다.
  *  ⚠️ `extra` 는 칩 **뒤**에 붙는 회색 안내 한 줄이다(자리를 바꾸지 말 것). */
 export function quickDateButtons(onPick: (k: string) => void, extra?: string, before?: ReactNode) {
   const jump = (n: number) => (e: React.MouseEvent) => {
