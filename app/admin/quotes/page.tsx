@@ -45,6 +45,7 @@ import {
   isDropoffGapOk,
   DROPOFF_MIN_GAP_LABEL,
 } from "@/lib/dropoffGap";
+import { autoTransportTime } from "@/lib/transportTimeAuto";
 import {
   arrivalNoteLine,
   buildNotesWithArrival,
@@ -783,26 +784,21 @@ function QuotesPageInner() {
 
   const minDropoffLabel = form.requested_pickup_at ? DROPOFF_MIN_GAP_LABEL : undefined;
 
-  // 희망 상차일시를 정하면, 요일/시간대를 보고 운송시간을 자동으로 맞춰줌 (직접 변경 가능)
+  // 희망 상차일시를 정하면 운송시간을 자동으로 맞춰준다 (담당자가 직접 바꿀 수 있다).
+  //
+  // 🔴 **규칙은 `lib/transportTimeAuto.ts` 하나다**(39차 C장) — 견적문의·발주요청이 같은
+  //    함수를 쓴다. 여기에 조건을 다시 적으면 세 화면이 다른 답을 내고, 화주가 본 금액과
+  //    담당자가 본 금액이 갈린다.
+  // ⚠️ **그전에는 이 자리에 규칙이 인라인으로 있었고 틀렸다** — `출퇴근/혼잡`·`새벽` 을
+  //    아예 안 썼고(`hour < 8 || hour >= 20` 을 전부 야간으로 봤다), `평일` 부분일치라
+  //    `평일 주간`·`평일 야간` 중 배열 순서대로 먼저 오는 쪽이 잡혔다.
   useEffect(() => {
     if (!form.requested_pickup_at) return;
     const options = surcharges
       .filter((s) => s.category === "운송시간")
       .map((s) => s.option_name);
-    if (options.length === 0) return;
-
-    const dt = new Date(form.requested_pickup_at);
-    const day = dt.getDay();
-    const hour = dt.getHours();
-    const isWeekend = day === 0 || day === 6;
-    const isNight = hour < 8 || hour >= 20;
-
-    let matched: string | undefined;
-    if (isWeekend) matched = options.find((o) => o.includes("주말") || o.includes("휴일"));
-    if (!matched && isNight) matched = options.find((o) => o.includes("야간"));
-    if (!matched) matched = options.find((o) => o.includes("평일") || o.includes("주간"));
-
-    if (matched) setForm((prev) => ({ ...prev, 운송시간: matched! }));
+    const matched = autoTransportTime(form.requested_pickup_at, options);
+    if (matched) setForm((prev) => ({ ...prev, 운송시간: matched }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.requested_pickup_at, surcharges]);
 

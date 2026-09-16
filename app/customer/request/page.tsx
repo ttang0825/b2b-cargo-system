@@ -26,6 +26,7 @@ import {
   minDropoffDateTime as minDropoffDateTimeOf,
   DROPOFF_MIN_GAP_MIN,
 } from "@/lib/dropoffGap";
+import { autoTransportTime } from "@/lib/transportTimeAuto";
 import {
   CUSTOMER_COLLECTION_AXIS_LABEL,
   CUSTOMER_BILLING_AXIS_LABEL,
@@ -283,6 +284,28 @@ export default function PortalRequestPage() {
   function optionsOf(category: string) {
     return surcharges.filter((s) => s.category === category).map((s) => s.option_name);
   }
+
+  /* 🔴 **운송시간은 상차일시를 보고 자동으로 맞춘다**(39차 C장 · 사용자 지시
+   *    *"견적문의와 발주요청의 운송시간은 희망상차일시 기준으로 자동 선택되게"*).
+   *    규칙은 **`lib/transportTimeAuto.ts` 하나**이고 견적문의·관리자 견적 등록이 같은
+   *    함수를 쓴다 — 여기에 조건을 다시 적으면 세 화면이 다른 답을 낸다.
+   * 🔴 **화주가 직접 바꿀 수 있고, 바꾼 뒤 상차일시를 또 고치면 다시 맞춰진다** —
+   *    관리자 화면이 전부터 그렇게 동작했고 두 화면이 같아야 한다.
+   * 🔴 **선택지가 아직 안 내려왔으면 아무것도 안 고른다**(`autoTransportTime` 이
+   *    실제 목록 안에 있을 때만 값을 준다). */
+  const transportOptions = surcharges
+    .filter((s) => s.category === "운송시간")
+    .map((s) => s.option_name)
+    .join("\u0000");
+  useEffect(() => {
+    if (!form.requested_pickup_at) return;
+    const matched = autoTransportTime(
+      form.requested_pickup_at,
+      transportOptions ? transportOptions.split("\u0000") : []
+    );
+    if (matched) setForm((prev) => (prev.운송시간 === matched ? prev : { ...prev, 운송시간: matched }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.requested_pickup_at, transportOptions]);
 
   async function loadSavedLocations(cid: string) {
     // 🔴 20차 컬럼 5개를 함께 읽는다 — 「저장된 상차지 불러오기」가 주소뿐 아니라

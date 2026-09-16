@@ -35,6 +35,7 @@ import {
   type DropoffArrivalType,
 } from "@/lib/arrivalType";
 import { DROPOFF_MIN_GAP_LABEL, DROPOFF_MIN_GAP_MIN, isDropoffGapOk, minDropoffDateTime } from "@/lib/dropoffGap";
+import { autoTransportTime } from "@/lib/transportTimeAuto";
 import "@/app/landing.css";
 
 // 완전공개 견적 문의 — 31차에 시안(디자인팀 Next 변환본)으로 껍데기를 갈아끼웠다.
@@ -218,6 +219,20 @@ export default function PublicQuotePage() {
     setPicks((p) => (p.calUnload === want ? p : { ...p, calUnload: want, unloadTime: ARRIVAL_FILLER_TIME }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [picks.calLoad, pickupNow, dropoffArrival]);
+
+  /* 🔴 **운송시간은 상차일시를 보고 자동으로 맞춘다**(39차 C장) — 규칙은
+   *    `lib/transportTimeAuto.ts` 하나이고 발주요청·관리자 견적 등록이 같은 함수를 쓴다.
+   *    화주가 직접 바꿀 수 있고, **바꾼 뒤에 상차일시를 또 고치면 다시 자동으로 맞춰진다**
+   *    (관리자 화면이 전부터 그렇게 동작했고 두 화면이 같아야 한다).
+   * 🔴 **선택지가 아직 안 내려왔으면 아무것도 안 고른다** — `autoTransportTime` 이
+   *    실제 목록 안에 있을 때만 값을 준다. */
+  const transportOptions = surcharge[SURCHARGE_KEYS.transport];
+  const pickupForAuto = pickupNow ? joinDateTime(todayKey, picks.loadTime) : joinDateTime(picks.calLoad, picks.loadTime);
+  useEffect(() => {
+    if (!pickupForAuto) return;
+    const matched = autoTransportTime(pickupForAuto, transportOptions || []);
+    if (matched) setPicks((p) => (p.transport === matched ? p : { ...p, transport: matched }));
+  }, [pickupForAuto, transportOptions]);
 
   const pickupLocalNow = joinDateTime(picks.calLoad, picks.loadTime);
   /** 🔴 하한은 `lib/dropoffGap.ts` 가 정한다 — 이 화면에 숫자를 적지 말 것(36차 D장). */
