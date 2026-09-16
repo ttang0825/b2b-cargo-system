@@ -37,6 +37,12 @@ export type AdminMobileRow = {
   action?: ReactNode;
   /** 라벨 : 값 줄. 값이 `null` 인 줄은 그리지 않는다(빈 줄이 남지 않게). */
   lines: { label: string; value: ReactNode }[];
+  /**
+   * 「지금 손대야 하는 줄」로 옅은 노랑 바탕을 깐다(2026-09-16 · 소수정 ②).
+   * 🔴 **데스크탑 `<tr>` 의 배경과 같은 토큰을 쓸 것** — 한쪽만 칠하면 같은 목록이
+   *    화면 크기에 따라 다르게 읽힌다(원칙 13번의 이중관리 함정).
+   */
+  highlight?: boolean;
 };
 
 export default function AdminMobileList({
@@ -56,7 +62,10 @@ export default function AdminMobileList({
           key={r.key}
           className="mobile-row-card"
           onClick={r.onClick}
-          style={{ cursor: r.onClick ? "pointer" : undefined }}
+          style={{
+            cursor: r.onClick ? "pointer" : undefined,
+            background: r.highlight ? "var(--admin-row-attention)" : undefined,
+          }}
         >
           <div className="mobile-row-top">
             {/* 🔴 `minWidth: 0` 을 빼지 말 것 — flex 칸의 기본 최소폭이 내용 크기라
