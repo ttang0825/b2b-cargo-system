@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { autoCreateInvoice } from "@/lib/autoCreateInvoice";
@@ -170,16 +170,44 @@ function DispatchesPageInner() {
     setLoading(false);
   }
 
+  /**
+   * 배차 등록 후보 오더 (2026-09-16 · 소수정 ⑦ 로 조건이 바뀌었다).
+   *
+   * 🔴 **이미 배차가 있는 오더는 후보에서 뺀다.** 그전에는 상태만 보고 걸렀는데
+   *    `DISPATCH_TO_ORDER_STATUS["접수중"]` 이 **`배차중`** 이라, 배차를 등록하면
+   *    그 오더가 `배차중` 이 되고 **후보 조건(`접수`·`배차중`)에 그대로 남았다.**
+   *    그래서 같은 오더로 배차를 몇 번이든 더 걸 수 있었다(사용자 신고 ⑦).
+   * 🔴 **상태 조건을 지우지 말 것** — 담당자가 드롭다운으로 손수 `배차중` 으로
+   *    바꿔둔 오더는 배차가 **없어도** 후보여야 한다. 그래서 「상태로 좁히고,
+   *    실제 배차가 있는 것만 뺀다」 두 단계다.
+   * 🔴 **`error` 를 버리지 말 것**(원칙 55번) — 조회가 실패하면 후보가 빈 채로
+   *    조용히 「배차할 오더가 없습니다」가 되어 원인을 짚을 단서가 안 남는다.
+   */
   async function loadAvailableOrders() {
-    // 배차 전(접수/배차중) 상태의 오더만 후보로 보여줌
-    const { data } = await supabase
+    const { data, error: ordErr } = await supabase
       .from("orders")
       .select(
         "id,order_no,origin,destination,origin_company_name,origin_contact_name,origin_contact_phone,destination_company_name,destination_contact_name,destination_contact_phone,vehicle_type,settlement_type,collection_method,billing_cycle,direct_collection_point,quote_id,customer_charge,customer_charge_vat_included,companies(name),guest_name"
       )
       .in("status", ["접수", "배차중"])
       .order("created_at", { ascending: false });
-    setAvailableOrders((data as any as OrderLite[]) || []);
+    if (ordErr) {
+      setError(`배차할 오더 목록을 불러오지 못했습니다: ${ordErr.message}`);
+      setAvailableOrders([]);
+      return;
+    }
+    const { data: taken, error: dispErr } = await supabase
+      .from("dispatches")
+      .select("order_id");
+    if (dispErr) {
+      setError(`기존 배차를 확인하지 못했습니다: ${dispErr.message}`);
+      setAvailableOrders([]);
+      return;
+    }
+    const takenIds = new Set(((taken as any[]) || []).map((d) => d.order_id).filter(Boolean));
+    setAvailableOrders(
+      ((data as any as OrderLite[]) || []).filter((o) => !takenIds.has(o.id))
+    );
   }
 
   async function loadNetworks() {
@@ -197,11 +225,20 @@ function DispatchesPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 운송오더 상세의 "배차관리로 이동" 버튼으로 넘어온 경우, 그 오더를 자동으로
+  // 운송오더 상세·목록의 "배차 등록" 버튼으로 넘어온 경우, 그 오더를 자동으로
   // 선택해서 등록폼을 열어줌 (공개문의 → 견적관리 전환 프리필과 동일한 패턴)
+  //
+  // 🔴 **한 오더에 대해 한 번만 돈다**(소수정 ⑦). 이 effect 는 `availableOrders` 에
+  //    걸려 있어서 `loadAvailableOrders()` 가 끝날 때마다 다시 도는데, 그때마다
+  //    `setShowForm(true)` 를 불러 **닫은 등록폼이 저절로 다시 열렸다.** 저장 뒤에도
+  //    같은 오더가 후보에 남아 있던 것과 겹쳐 「또 같은 배차등록을 할 수 있는」
+  //    상태가 됐다(사용자 신고 ⑦). 🔴 이 ref 가드를 지우지 말 것.
+  const autoSelectedOrderRef = useRef<string | null>(null);
   useEffect(() => {
     if (!fromOrderId) return;
+    if (autoSelectedOrderRef.current === fromOrderId) return;
     if (!availableOrders.some((o) => o.id === fromOrderId)) return;
+    autoSelectedOrderRef.current = fromOrderId;
     setShowForm(true);
     handleSelectOrder(fromOrderId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -311,7 +348,7 @@ function DispatchesPageInner() {
 
     // 배차는 항상 "접수중"으로 시작 — 내부차주든 외부정보망이든 실제로 배차가
     // 잡혔는지는 아직 확정되지 않은 상태. 확정은 상세화면의 전용 절차에서만 가능
-    const { error } = await supabase.from("dispatches").insert({
+    const { data: created, error } = await supabase.from("dispatches").insert({
       order_id: selectedOrderId,
       driver_id: assignmentType === "internal" ? selectedDriver?.id || null : null,
       vehicle_id: vehicleId,
@@ -335,7 +372,10 @@ function DispatchesPageInner() {
       destination_contact_phone: contactFields.destination_contact_phone.trim() || null,
       memo: memo || null,
       created_by: await getCurrentStaffId(),
-    });
+    })
+      // 🔴 새 배차의 id 를 받아야 상세로 이어줄 수 있다(아래 소수정 ⑦)
+      .select("id")
+      .single();
 
     if (error) {
       setSaving(false);
@@ -361,6 +401,18 @@ function DispatchesPageInner() {
     setContactFields(EMPTY_PICKUP_DROPOFF_CONTACT);
     setAssignmentType("internal");
     setSelectedNetworkIds([]);
+
+    // 🔴 **등록을 마치면 그 배차의 상세로 넘긴다**(사용자 지시 ⑦ — *"처음 배차등록을
+    //    누르면 그 창은 닫히고 (…) 접수중인 목록의 상세 페이지가 나와서 바로
+    //    차주정보채우기 쪽으로 이어지면 좋겠다"*). 상세의 「접수중 + 외부 배정」
+    //    분기에 37차가 만든 **차주 정보 붙여넣기 칸**이 있어서, 여기서 이어주면
+    //    담당자가 목록을 다시 찾아 들어갈 필요가 없다.
+    // 🔴 id 를 못 받았으면(이론상 `.single()` 실패) **목록에 남는다** — 없는 주소로
+    //    보내면 「등록은 됐는데 화면이 깨졌다」가 된다.
+    if (created?.id) {
+      router.push(`/admin/dispatches/${created.id}`);
+      return;
+    }
     loadDispatches(period);
     loadAvailableOrders();
   }

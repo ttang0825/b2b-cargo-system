@@ -219,9 +219,54 @@ function OrdersPageInner() {
     setNeedOrderError(error);
   }
 
+  /**
+   * 배차가 **이미 있는** 오더의 id (2026-09-16 · 소수정 ⑤).
+   *
+   * 사용자 지시: *"운송오더에서 오더등록을 하면 오더목록이 나오는데 이때 방금
+   * 등록한 오더에는 배차관리로 바로 이동할수 있는 버튼이 있으면 좋겠다."* —
+   * 대상은 **배차가 없는 오더 전부**로 확정했다(방금 등록한 건만 표시하면, 어제
+   * 등록하고 배차를 못 건 오더는 같은 길이 없어서 담당자가 두 화면을 오간다).
+   *
+   * 🔴 **`status` 로 가르지 않는다** — `배차중` 은 배차를 걸면 자동으로 붙지만
+   *    담당자가 드롭다운에서 손으로 바꿀 수도 있어서, 그것만 보면 배차가 없는데도
+   *    버튼이 사라진다. 실제로 있는지는 `dispatches` 에 물어야 안다.
+   * 🔴 **`error` 를 버리지 말 것**(원칙 55번) — 조회가 실패하면 「전부 배차 있음」이
+   *    되어 버튼이 통째로 사라지고, 화면에는 아무 단서가 남지 않는다. 실패했으면
+   *    **아무 행도 감추지 않는다**(`null` 로 두고 버튼을 그대로 그린다).
+   * 🟢 무겁지 않다 — 운영 `dispatches` 는 실측 6행이다(PR #144 `verify` ⑮).
+   */
+  const [dispatchedOrderIds, setDispatchedOrderIds] = useState<Set<string> | null>(null);
+
+  /**
+   * 이 오더에 「+ 배차 등록」을 그릴 것인가.
+   * 🔴 **`취소` 는 뺀다** — 취소된 건에 배차를 걸 일은 없고, 버튼이 보이면 실수로
+   *    누른다. 나머지(`접수`·`배차중`·`배차완료`·`운송중`·`운송완료`)는 **배차가
+   *    실제로 없는 한 전부 그린다**(사용자 확정: 「배차가 없는 오더 전부」).
+   *    `운송완료` 인데 배차가 없는 것은 데이터가 어긋난 것이라 오히려 보여야 한다.
+   * 🔴 조회에 실패했으면(`null`) **감추지 않는다** — 없는 것을 있다고 하는 쪽이
+   *    「버튼이 통째로 사라졌다」보다 낫다(원칙 55번의 같은 결).
+   */
+  function needsDispatch(orderId: string, status: string) {
+    if (status === "취소") return false;
+    if (!dispatchedOrderIds) return true;
+    return !dispatchedOrderIds.has(orderId);
+  }
+
+  async function loadDispatchedOrders() {
+    const { data, error } = await supabase.from("dispatches").select("order_id");
+    if (error) {
+      setDispatchedOrderIds(null);
+      return;
+    }
+    setDispatchedOrderIds(
+      new Set(((data as any[]) || []).map((d) => d.order_id).filter(Boolean))
+    );
+  }
+
   useEffect(() => {
     loadOrders("all");
     loadNeedOrder();
+    loadDispatchedOrders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1214,6 +1259,8 @@ function OrdersPageInner() {
                 <th style={{ whiteSpace: "nowrap" }}>상차일</th>
                 <th style={{ whiteSpace: "nowrap" }}>배차상태</th>
                 <th style={{ whiteSpace: "nowrap" }}>등록일</th>
+                {/* 소수정 ⑤ — 배차 등록 바로가기 자리(제목 없음, 견적 목록과 같은 모양) */}
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -1291,6 +1338,19 @@ function OrdersPageInner() {
                       {new Date(o.created_at).toLocaleDateString("ko-KR")}
                     </span>
                   </td>
+                  {/* 🔴 `stopPropagation` — 안 걸면 행 클릭이 먼저 먹어 오더 상세로 튄다 */}
+                  <td className="cell-nowrap" onClick={(e) => e.stopPropagation()}>
+                    {needsDispatch(o.id, o.status) && (
+                      <button
+                        type="button"
+                        className="btn"
+                        style={{ padding: "4px 10px", borderRadius: 6, fontSize: 12 }}
+                        onClick={() => router.push(`/admin/dispatches?from_order=${o.id}`)}
+                      >
+                        + 배차 등록
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -1313,26 +1373,40 @@ function OrdersPageInner() {
                     {!o.companies?.name && o.guest_name && <span className="badge">개인</span>}
                   </>
                 ),
+                // 🔴 데스크탑과 **같은 조건**으로 그린다 — 한쪽에만 두면 「모바일에서는
+                //    배차를 못 건다」가 된다(원칙 13번의 이중관리 함정).
                 action: (
-                  <select
-                    value={o.status}
-                    onChange={(e) => handleStatusChange(o.id, e.target.value)}
-                    style={{
-                      fontSize: "12px",
-                      padding: "4px 8px",
-                      borderRadius: 999,
-                      border: "none",
-                      fontWeight: 600,
-                      background: getOrderStatusColor(o.status).bg,
-                      color: getOrderStatusColor(o.status).text,
-                    }}
-                  >
-                    {ORDER_STATUS_OPTIONS.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                    <select
+                      value={o.status}
+                      onChange={(e) => handleStatusChange(o.id, e.target.value)}
+                      style={{
+                        fontSize: "12px",
+                        padding: "4px 8px",
+                        borderRadius: 999,
+                        border: "none",
+                        fontWeight: 600,
+                        background: getOrderStatusColor(o.status).bg,
+                        color: getOrderStatusColor(o.status).text,
+                      }}
+                    >
+                      {ORDER_STATUS_OPTIONS.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                    {needsDispatch(o.id, o.status) && (
+                      <button
+                        type="button"
+                        className="btn"
+                        style={{ padding: "4px 10px", borderRadius: 6, fontSize: 12 }}
+                        onClick={() => router.push(`/admin/dispatches?from_order=${o.id}`)}
+                      >
+                        + 배차 등록
+                      </button>
+                    )}
+                  </div>
                 ),
                 lines: [
                   { label: "고객", value: o.companies?.name || o.guest_name || "-" },
