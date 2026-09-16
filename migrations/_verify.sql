@@ -1190,3 +1190,82 @@ select '㉔-d 제약' as 구분, conrelid::regclass::text as 표, conname as 제
 --       🔴 견적 저장이 실패한 건은 여기 `대기중` 으로 남는다.
 select '㉔-e 발주요청' as 구분, status as 상태, count(*) as 건수
   from portal_order_requests group by 1, 2 order by 2;
+
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- ㉕ 🔴 운송시간 자동선택 근거 (2026-09-16 · 39차 C장 착수 전 실측)
+--
+-- 「희망 상차일시를 보고 운송시간을 자동으로 고른다」를 만들기 전에 **두 가지**를 잰다.
+--
+--   ⓐ `rate_surcharges` 운송시간 6종의 **정확한 `option_name`** — 매칭이 문자열
+--      완전일치라 한 글자만 달라도 가산이 **예외도 경고도 없이** 조용히 빠진다.
+--      🔴 `평일 주간` 과 `평일 야간` 이 **둘 다 「평일」을 포함**한다 — `includes("평일")`
+--      로 찾으면 DB 정렬 순서에 따라 **엉뚱한 쪽이 잡힌다.**
+--   ⓑ **경계 시간대에 실제 상차 건이 몇 건인가.** 자동선택은 그 시간대 견적에
+--      가산을 얹는 것이라, 비율이 크면 **금액 변경**이 된다.
+--      🔴 지금 관리자 견적 등록은 `hour < 8 || hour >= 20` 을 「야간」으로 보므로
+--      **06:00~07:59 가 이미 +10,000 으로 자동 선택되고 있다.**
+--
+-- 🔴 읽기 전용이다. 🔴 출력에 이름·연락처가 한 글자도 없다(건수뿐).
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- ㉕-a  운송시간 6행 전수 — 이름을 **한 글자도 다르지 않게** 옮겨 적을 것.
+select '㉕-a 운송시간' as 구분,
+       option_name as 이름,
+       length(option_name) as 글자수,
+       coalesce(rate_pct, 0) as 요율,
+       coalesce(flat_amount, 0) as 정액,
+       id::text as 행id
+  from rate_surcharges
+ where category = '운송시간'
+ order by option_name;
+
+-- ㉕-b  견적의 희망 상차 시각대 분포 (KST). 🔴 `timestamptz` 라 반드시 변환해서 센다.
+select '㉕-b 견적 상차시각' as 구분,
+       case
+         when extract(dow from requested_pickup_at at time zone 'Asia/Seoul') in (0, 6) then '주말'
+         when extract(hour from requested_pickup_at at time zone 'Asia/Seoul') < 6 then '새벽 00-06'
+         when extract(hour from requested_pickup_at at time zone 'Asia/Seoul') < 8 then '출퇴근 06-08'
+         when extract(hour from requested_pickup_at at time zone 'Asia/Seoul') < 18 then '주간 08-18'
+         when extract(hour from requested_pickup_at at time zone 'Asia/Seoul') < 20 then '퇴근 18-20'
+         else '야간 20-24'
+       end as 시간대,
+       count(*) as 건수,
+       round(100.0 * count(*) / nullif(sum(count(*)) over (), 0), 1) as 비율
+  from quotes
+ where requested_pickup_at is not null
+ group by 2
+ order by 3 desc;
+
+-- ㉕-c  공개 견적문의(`/quote`)의 희망 상차 시각대 분포 — 이 차수가 고치는 화면이다.
+select '㉕-c 공개문의 상차시각' as 구분,
+       case
+         when extract(dow from requested_pickup_at at time zone 'Asia/Seoul') in (0, 6) then '주말'
+         when extract(hour from requested_pickup_at at time zone 'Asia/Seoul') < 6 then '새벽 00-06'
+         when extract(hour from requested_pickup_at at time zone 'Asia/Seoul') < 8 then '출퇴근 06-08'
+         when extract(hour from requested_pickup_at at time zone 'Asia/Seoul') < 18 then '주간 08-18'
+         when extract(hour from requested_pickup_at at time zone 'Asia/Seoul') < 20 then '퇴근 18-20'
+         else '야간 20-24'
+       end as 시간대,
+       count(*) as 건수
+  from public_quote_requests
+ where requested_pickup_at is not null
+ group by 2
+ order by 3 desc;
+
+-- ㉕-d  저장된 견적의 운송시간 값 분포 — 담당자가 실제로 무엇을 고르고 있는가.
+--       🔴 `quotes` 는 `selected_options`(jsonb) 안에 한글 키로 담는다(§7 · PR #152).
+select '㉕-d 저장된 운송시간' as 구분,
+       coalesce(selected_options->>'운송시간', '(없음)') as 값,
+       count(*) as 건수
+  from quotes
+ group by 2
+ order by 3 desc;
+
+-- ㉕-e  발주요청의 운송시간 값 분포 — 이쪽은 **flat 컬럼**(`transport_time`)이다.
+select '㉕-e 발주요청 운송시간' as 구분,
+       coalesce(transport_time, '(없음)') as 값,
+       count(*) as 건수
+  from portal_order_requests
+ group by 2
+ order by 3 desc;
