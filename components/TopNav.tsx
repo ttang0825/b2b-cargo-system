@@ -10,6 +10,11 @@ import { supabaseAdminAuth } from "@/lib/supabaseAdminAuthClient";
 import { onBadgeRefresh } from "@/lib/notifyBadgeRefresh";
 import { getCurrentStaffInfo, onCurrentStaffChange, clearCurrentStaffCache } from "@/lib/currentStaff";
 import NavCountBadge from "@/components/NavCountBadge";
+import AlertToast, { type AlertToastItem } from "@/components/AlertToast";
+import AdminPushSubscribeButton from "@/components/AdminPushSubscribeButton";
+import AlertSoundMenu from "@/components/AlertSoundMenu";
+import { applyUnseenTitle, isAlertSoundOn, playAlertChime } from "@/lib/alertCore";
+import { INTAKE_ALERTS, collectIntakeRises, type IntakeCounts } from "@/lib/adminIntakeAlert";
 
 type NavItem = {
   href: string;
@@ -167,6 +172,21 @@ function TopNavInner() {
   const [staffName, setStaffName] = useState<string | null>(null);
   const navGroupRef = useRef<HTMLDivElement>(null);
 
+  // ── 새 접수 알림 (38차 A장) ──────────────────────────────────────────────
+  // 🔴 **새 폴링을 만들지 않는다.** 아래 `counts` 는 세 경로가 모두 흘러드는 한 곳이라
+  //    (15초 폴링 · Realtime · `notifyBadgeRefresh`) 그 값이 늘어난 순간만 보면 된다.
+  //    ⚠️ 38차 지시서는 *「15초 폴링 결과가 늘어난 순간」* 이라 적었는데 **그러면 가장
+  //       급한 발주요청을 못 잡는다** — `portal_order_requests` 는 anon-locked 가
+  //       아니라서 **폴링이 아니라 Realtime 구독**이다(실측 2026-09-16).
+  //       🔴 폴링 쪽에 얹으라는 그 문장을 근거로 되돌리지 말 것.
+  const [toasts, setToasts] = useState<AlertToastItem[]>([]);
+  const [unseen, setUnseen] = useState(0);
+  // 🔴 **직전 건수는 `useRef` 에 둔다**(지시서 2-1) — `useState` 로 두면 값이 바뀔
+  //    때마다 화면을 다시 그린다. 키가 **없는 것**과 **0인 것**을 갈라야 하므로
+  //    (첫 조회에는 울리지 않는다) `Partial` 이다.
+  const prevCountsRef = useRef<Partial<IntakeCounts>>({});
+  const toastSeqRef = useRef(0);
+
   // ⚠️ **새 공개 경로(admin도 customer도 아닌 최상위 경로)를 추가하면 여기에도 반드시
   // 추가할 것**(원칙 11번). 빠뜨리면 관리자 메뉴가 그 공개 페이지 위에 그대로 얹혀서
   // 나타난다 — 28차에 회사소개·차량안내 화면을 만들면서, 30차에 법적 문서 3종을
@@ -296,6 +316,50 @@ function TopNavInner() {
     setOpenGroup(null);
   }, [pathname]);
 
+  // 🔴 **접수 건수가 늘어난 순간**만 잡는다 — 규칙 셋(첫 조회 · 감소 · 키별 판정)은
+  //    `lib/adminIntakeAlert.ts` 의 `collectIntakeRises()` 한 곳에 있다.
+  //    🔴 **여기에 다시 적지 말 것** — 화면에 묻으면 잴 수가 없어서 뺀 것이다.
+  useEffect(() => {
+    if (isPublicPath) return;
+    const rises = collectIntakeRises(prevCountsRef.current, counts);
+    if (rises.length === 0) return;
+    // 🔴 **말은 여기서 만들어 넘긴다** — 배너는 라벨을 모른다(화주포털이 같은 배너를
+    //    쓰는데 그쪽 말은 「견적 업데이트」라 다르다). 정의처는 `INTAKE_ALERTS` 다.
+    const fired: AlertToastItem[] = rises.map((r) => ({
+      id: ++toastSeqRef.current,
+      title: `새 ${INTAKE_ALERTS[r.kind].label}`,
+      href: INTAKE_ALERTS[r.kind].href,
+      count: r.count,
+    }));
+    // 🔴 배너는 최근 셋까지만 쌓는다 — 더 쌓이면 화면 오른쪽이 통째로 덮인다.
+    setToasts((t) => [...t, ...fired].slice(-3));
+    setUnseen((n) => n + fired.reduce((sum, f) => sum + f.count, 0));
+    // 🔴 소리는 꺼져 있을 수 있고 자동재생 정책에 막힐 수도 있다 — 어느 쪽이든
+    //    배너와 탭 제목은 위에서 이미 떴다(완료조건 6번).
+    if (isAlertSoundOn()) void playAlertChime();
+  }, [counts, isPublicPath]);
+
+  // 🔴 **다른 탭을 보고 있을 때 유일하게 보이는 신호**가 탭 제목이다.
+  //    화면으로 돌아오면 원래대로 되돌린다.
+  useEffect(() => {
+    if (isPublicPath) return;
+    function onVisible() {
+      if (!document.hidden) setUnseen(0);
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [isPublicPath]);
+
+  useEffect(() => {
+    if (isPublicPath) return;
+    applyUnseenTitle(unseen);
+    // ⚠️ `pathname` 을 의존성에 넣은 것은 화면을 옮겨 Next 가 제목을 갈아끼운 뒤에
+    //    다시 붙이기 위해서다. 안 보고 있는 동안 화면을 옮기는 일은 없으므로
+    //    이것으로 충분하다 — 🔴 **주기적으로 다시 붙이는 타이머를 만들지 말 것**
+    //    (새 되풀이 타이머 0개가 이 차수의 완료조건이라, 그 낱말을 주석에도 쓰지
+    //    않는다 — 쓰면 완료조건의 `grep` 세기가 코드가 아니라 주석에 걸린다).
+  }, [unseen, pathname, isPublicPath]);
+
   useEffect(() => {
     if (isPublicPath) return;
     function applyInfo(info: { name: string; role: "admin" | "staff" } | null) {
@@ -342,6 +406,7 @@ function TopNavInner() {
   const visibleGroups = isAdmin ? [...NAV_GROUPS, ADMIN_ONLY_GROUP] : NAV_GROUPS;
 
   return (
+    <>
     <div className="top-nav">
       <div className="top-nav-inner" style={{ flexWrap: "wrap", gap: 16 }}>
         {/* 브랜드 표기를 로고로 교체(PR #77 리뷰). 로고 SVG는 aria-hidden이라 링크가
@@ -368,6 +433,14 @@ function TopNavInner() {
               onToggle={() => setOpenGroup((g) => (g === group.label ? null : group.label))}
             />
           ))}
+          {/* 🔴 종 모양 하나로 끄고 켠다 + 옆의 ▾ 로 볼륨·소리를 고른다 —
+              수신 설정 **화면**을 새로 만들지 말 것(사용자 확정: 직원 전원 같은 알림 ·
+              역할별 분기 없음). 여기서 고르는 것은 「누가 받을지」가 아니라
+              **이 자리에서 얼마나 크게 들릴지**다. */}
+          <AlertSoundMenu />
+          {/* 🔴 종 모양 **옆**이다(38차 3-2) — 수신 설정 화면을 새로 만들지 말 것.
+              브라우저가 푸시를 못 하거나 VAPID 가 아직 없으면 스스로 안 그린다. */}
+          <AdminPushSubscribeButton />
           <Link href="/admin/guide" className="guide-link">
             이용가이드
           </Link>
@@ -466,6 +539,17 @@ function TopNavInner() {
             </div>
           ))}
           <div style={{ borderTop: "1px solid var(--border)", marginTop: 10, paddingTop: 8 }}>
+            {/* 🔴 데스크탑 종 모양은 `.nav-desktop-group` 안이라 모바일에서 통째로
+                숨겨진다 — 여기에도 둬야 휴대폰에서 끄고 볼륨을 고를 수 있다.
+                🔴 **`variant="mobile"` 이다** — 이미 펼쳐진 메뉴 안이라 펼침 창을
+                또 띄우면 창이 창 위에 겹친다. */}
+            <AlertSoundMenu variant="mobile" />
+            {/* 🔴 휴대폰에서 누르는 것이 오히려 더 중요하다 — 「외부에서도 확인」이
+                이 차수의 시작이었다. 데스크탑 단추는 `.nav-desktop-group` 안이라
+                모바일에서 통째로 숨겨진다. */}
+            <div style={{ padding: "4px 4px 8px" }}>
+              <AdminPushSubscribeButton />
+            </div>
             <Link
               href="/admin/guide"
               style={{ display: "block", padding: "8px 4px", fontSize: 13.5, color: "var(--text-muted)", textDecoration: "none" }}
@@ -506,5 +590,14 @@ function TopNavInner() {
         </div>
       )}
     </div>
+    {/* 🔴 **배너는 `.top-nav` 바깥이다.** 안에 두면 `z-index: 30` 인 헤더의 쌓임
+        맥락에 갇혀, 관리자 모달(전부 50 이상)보다 **위로 올라갈 수 없는 것이 아니라
+        오히려 헤더와 함께 통째로 눌린다.** 밖에 두고 40 을 줘서 본문보다는 위,
+        모달보다는 아래에 놓는다 — 담당자가 모달로 작업 중일 때 배너가 위로 튀면 안 된다. */}
+    <AlertToast
+      items={toasts}
+      onDismiss={(id) => setToasts((t) => t.filter((x) => x.id !== id))}
+    />
+    </>
   );
 }

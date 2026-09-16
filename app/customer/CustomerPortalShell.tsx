@@ -13,6 +13,10 @@ import {
   acknowledgeRequestIds,
 } from "@/lib/portalNotifications";
 import { COMPANY_SUPPORT_PHONE, COMPANY_SUPPORT_HOURS } from "@/lib/contactInfo";
+import AlertToast, { type AlertToastItem } from "@/components/AlertToast";
+import AlertSoundMenu from "@/components/AlertSoundMenu";
+import { applyUnseenTitle, isAlertSoundOn, playAlertChime } from "@/lib/alertCore";
+import { PORTAL_ALERTS, collectPortalRises, type PortalAlertCounts } from "@/lib/portalAlert";
 
 const PUBLIC_PATHS = ["/customer/login", "/customer/support-verify"];
 
@@ -135,7 +139,10 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
   const [checking, setChecking] = useState(true);
   const [companyName, setCompanyName] = useState("");
   const [companyId, setCompanyId] = useState<string | null>(null);
-  const [counts, setCounts] = useState<Record<string, number>>({
+  // 🔴 **`Record<string, number>` 가 아니라 `PortalAlertCounts` 다**(2026-09-16) —
+  //    느슨하게 두면 알림 정의처(`lib/portalAlert.ts`)와 키가 어긋나도 `tsc` 가 못 잡는다.
+  //    이 저장소는 `strict: false` 라 이런 자리를 타입으로 묶어 두는 값이 크다.
+  const [counts, setCounts] = useState<PortalAlertCounts>({
     quotes: 0,
     dispatches: 0,
     invoices: 0,
@@ -143,6 +150,19 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
   });
   const [sheetOpen, setSheetOpen] = useState(false);
   const sheetCloseRef = useRef<HTMLButtonElement>(null);
+
+  // ── 새 소식 알림 (2026-09-16 · 사용자 요청 「화주포털에도 적용」) ─────────────
+  // 🔴 **새 폴링도 새 구독도 만들지 않는다.** 바로 아래 `counts` 는 이미 Realtime
+  //    5개 표가 흘러드는 한 곳이라, 그 값이 **늘어난 순간**만 보면 된다.
+  //    🔴 여기에 되풀이 타이머를 넣지 말 것 — 포털은 anon-locked 가 아니라서
+  //    폴링이 필요 없다(관리자 쪽이 15초 폴링인 것과 사정이 다르다).
+  //    ⚠️ 낱말을 일부러 피해 적었다 — 「타이머가 늘지 않았나」를 `grep` 으로 세는
+  //    자리가 있어서, 주석에 그 낱말을 쓰면 **내 주석이 그 검사를 오염시킨다**.
+  const [toasts, setToasts] = useState<AlertToastItem[]>([]);
+  const [unseen, setUnseen] = useState(0);
+  // 🔴 키가 **없는 것**과 **0인 것**을 갈라야 한다(첫 조회에는 울리지 않는다).
+  const prevCountsRef = useRef<Partial<PortalAlertCounts>>({});
+  const toastSeqRef = useRef(0);
 
   // 항목별 배지 개수를 다시 계산 — dispatches/invoices/announcements는
   // "마지막 확인 시각 이후 변경된 행 수".
@@ -265,6 +285,50 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
     };
   }, [sheetOpen]);
 
+  // 🔴 **`counts` 가 늘어난 순간**만 잡는다 — 규칙 셋(첫 조회 · 감소 · 키별 판정)은
+  //    `lib/alertCore.ts` 의 `collectRises()` 한 곳에 있다(관리자와 같은 함수다).
+  //    🔴 **여기에 다시 적지 말 것.**
+  //
+  // 🔴 **`displayCounts` 가 아니라 `counts` 를 본다.** `displayCounts` 는 지금 보고
+  //    있는 화면의 배지를 0으로 눌러 둔 값이라, 그것으로 재면 **견적 화면을 열어둔
+  //    사이에 도착한 견적을 영영 못 알린다.** 배지는 눌러 두는 게 맞고(보고 있으니까)
+  //    배너는 떠야 한다 — 목록이 스스로 다시 그려지지는 않기 때문이다.
+  useEffect(() => {
+    if (PUBLIC_PATHS.includes(pathname || "")) return;
+    const rises = collectPortalRises(prevCountsRef.current, counts);
+    if (rises.length === 0) return;
+    // 🔴 **말은 여기서 만들어 넘긴다** — 배너는 라벨을 모른다(관리자가 같은 배너를
+    //    쓰는데 그쪽 말은 「새 발주요청」이다). 정의처는 `PORTAL_ALERTS` 다.
+    const fired: AlertToastItem[] = rises.map((r) => ({
+      id: ++toastSeqRef.current,
+      title: PORTAL_ALERTS[r.kind].title,
+      href: PORTAL_ALERTS[r.kind].href,
+      count: r.count,
+    }));
+    // 🔴 배너는 최근 셋까지만 쌓는다 — 더 쌓이면 화면 오른쪽이 통째로 덮인다.
+    setToasts((t) => [...t, ...fired].slice(-3));
+    setUnseen((n) => n + fired.reduce((sum, f) => sum + f.count, 0));
+    // 🔴 소리는 꺼져 있을 수 있고 자동재생 정책에 막힐 수도 있다 — 어느 쪽이든
+    //    배너와 탭 제목은 위에서 이미 떴다.
+    if (isAlertSoundOn()) void playAlertChime();
+  }, [counts, pathname]);
+
+  // 🔴 **다른 탭을 보고 있을 때 유일하게 보이는 신호**가 탭 제목이다.
+  //    화면으로 돌아오면 원래대로 되돌린다.
+  useEffect(() => {
+    if (PUBLIC_PATHS.includes(pathname || "")) return;
+    applyUnseenTitle(unseen);
+  }, [unseen, pathname]);
+
+  useEffect(() => {
+    if (PUBLIC_PATHS.includes(pathname || "")) return;
+    function onVisible() {
+      if (document.visibilityState === "visible") setUnseen(0);
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [pathname]);
+
   useEffect(() => {
     if (PUBLIC_PATHS.includes(pathname || "")) return;
 
@@ -344,6 +408,10 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
       <button type="button" onClick={handleLogout} className="pv2-foot-link">
         로그아웃
       </button>
+      {/* 🔴 여기에 두면 **사이드바와 바텀시트가 한 번에** 덮인다 — 이 함수를 둘이
+          같이 쓴다. 따로 그리면 한쪽만 고쳐진다.
+          🔴 **`placement="up-left"` 다** — 사이드바 발치라 아래로 열면 화면 밖으로 나간다. */}
+      <AlertSoundMenu placement="up-left" />
     </div>
   );
 
@@ -407,6 +475,13 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
           <div className="pv2-main-inner">{children}</div>
         </main>
       </div>
+
+      {/* 🔴 배너는 `.pv2-shell`(사이드바+본문 그리드) **밖**이다 — 안에 두면 격자
+          칸 하나로 잡혀 레이아웃이 밀린다. `.aintake-wrap` 이 `position: fixed` 라
+          자리는 어디에 두든 화면 오른쪽 아래다.
+          ⚠️ 모바일에서는 하단 탭바와 겹치므로 `.portal-v2` 안일 때만 바닥 여백을
+          더 준다(globals.css · 순수 추가). */}
+      <AlertToast items={toasts} onDismiss={(id) => setToasts((t) => t.filter((x) => x.id !== id))} />
 
       {/* 모바일 하단 탭바 — 선택 표시는 아이콘 채움 + 텍스트 진해짐만 (시안 §7) */}
       <nav className="pv2-tabbar" aria-label="운송관리 하단 메뉴">

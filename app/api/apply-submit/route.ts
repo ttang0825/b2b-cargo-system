@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { recordConsents } from "@/lib/consent";
+import { notifyNewIntake } from "@/lib/pushNotify";
 
 export async function POST(req: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -167,6 +168,15 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
+
+
+  // 🔴 **새 접수를 직원 기기에 알린다**(38차 B장). 발송처는 `lib/pushNotify.ts` 하나다 —
+  //    세 접수 라우트가 각자 문구를 만들면 조용히 갈린다.
+  // 🔴 **이 줄이 접수를 막으면 안 된다.** `notifyNewIntake()` 는 **절대 던지지 않고**
+  //    스스로 짧은 상한 안에서 끝난다(VAPID 미등록이면 아무것도 안 한다).
+  //    ⚠️ `await` 인 것은 의도다 — 서버리스 함수는 응답 뒤에 얼어붙어서 떠 있는
+  //    약속이 끝나지 않는다. 그 사유는 `lib/pushNotify.ts` 머리에 적어 뒀다.
+  await notifyNewIntake("applications");
 
   return NextResponse.json({ ok: true });
 }
