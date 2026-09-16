@@ -17,6 +17,7 @@ import {
   joinDateTime,
   optionChipStyle,
   quickDateButtons,
+  requiredMark,
   timeSlots,
   useOpenKey,
 } from "@/components/landing/form/Fields";
@@ -39,11 +40,15 @@ import "@/app/landing.css";
 // 🔴 **선택지는 전부 정의처 참조다** — 톤수 `VEHICLE_TYPES_PUBLIC` · 차종
 //    `QUOTE_BODY_TYPES`(22종) · 상하차조건 `LOADING_METHODS`(8종). 시안의 7종·6종을
 //    따르지 말 것(25차가 7 → 21 로 늘렸고 리뷰에서 22종이 됐다).
-// 🔴 **물품특성·운송시간·왕복편도는 `rate_surcharges` 가 정본**이라 서버 API 로 이름만
+// 🔴 **물품특성·운송시간·왕복/편도는 `rate_surcharges` 가 정본**이라 서버 API 로 이름만
 //    받아온다(21차 — 금액은 비공개). 하드코딩하지 말 것.
+// 🔴 **카테고리 이름에 슬래시가 있다 — `"왕복/편도"` 다.** 39차 A장 전까지 이 화면만
+//    `surcharge["왕복편도"]`(슬래시 없음)로 찾고 있어서 **옵션이 0개**였고, 드롭다운을
+//    눌러도 아무것도 안 나왔다(사용자 신고 「왕복,편도 드롭메뉴 안됨」). 다른 화면 넷은
+//    전부 `"왕복/편도"` 였다. **키를 손으로 다시 적지 말고 아래 `SURCHARGE_KEYS` 를 쓸 것.**
 //
 // 🔴 **상세 정보(접이식) 값 중 DB 컬럼이 없는 것은 특이사항(`notes`)에 한 줄씩 붙인다.**
-//    `public_quote_requests` 에는 물품특성·왕복편도·대기시간·경유지수·희망 하차 일시·
+//    `public_quote_requests` 에는 물품특성·왕복/편도·대기시간·경유지수·희망 하차 일시·
 //    운송시간 컬럼이 **없다**(코드 전수 확인). 31차는 DB 변경 0이 조건이라 27차가
 //    「당착/내착」을 특이사항 한 줄로 이은 것과 같은 방식을 썼다 — 그 값들은 공개문의
 //    상세와 **견적 전환 프리필**(`notes` → 견적 특이사항)까지 그대로 따라간다.
@@ -53,6 +58,17 @@ import "@/app/landing.css";
 // 사용자가 "「선택」부분의 글씨가 시안과 선명도가 다르다"고 해서 그쪽 값을 시안 실측값
 // (배경 #F0EFEB · 글자 #6C6B66)으로 올렸다. 여기서 다시 덮어쓰지 말 것.
 const detailChip: CSSProperties = { ...optionChipStyle };
+
+/** 🔴 `rate_surcharges.category` 이름. **DB 값과 한 글자도 다르면 안 된다** — 서버가
+ *  `category` 로 그룹핑해서 내려주므로, 이름이 어긋나면 그 칸만 **빈 배열**이 되어
+ *  선택지가 하나도 없는 드롭다운이 된다(예외도 경고도 없다 · 원칙 55번과 같은 결).
+ *  🔴 화면에서 문자열을 직접 적지 말고 이 상수를 쓸 것 — 39차 A장이 고친 버그가
+ *     정확히 「직접 적다가 슬래시를 빠뜨린 것」이다. */
+const SURCHARGE_KEYS = {
+  trait: "물품특성",
+  trip: "왕복/편도",
+  transport: "운송시간",
+} as const;
 
 type Picks = Record<string, string>;
 
@@ -151,12 +167,16 @@ export default function PublicQuotePage() {
     e.preventDefault();
     setError(null);
 
-    if (!form.name.trim() || !form.phone.trim()) {
-      setError("성함(업체명)과 연락처를 입력해주세요.");
-      return;
-    }
+    // 🔴 검사 순서는 **화면에 보이는 순서**와 같아야 한다 — 출발지가 비었는데 「성함을
+    //    입력해주세요」가 뜨면 화면의 「필수」 표시와 안내가 서로 다른 곳을 가리킨다.
+    // 🔴 네이티브 `required` 를 쓰지 않는 것은 의도다(폼에 `noValidate` 가 붙어 있다) —
+    //    브라우저 검사가 React 핸들러보다 먼저 걸려 우리 오류 문구가 안 뜬다(PR #121).
     if (!form.origin.trim() || !form.destination.trim()) {
       setError("출발지와 도착지를 입력해주세요.");
+      return;
+    }
+    if (!form.name.trim() || !form.phone.trim()) {
+      setError("성함(업체명)과 연락처를 입력해주세요.");
       return;
     }
     if (!agreed) {
@@ -246,7 +266,7 @@ export default function PublicQuotePage() {
               {/* ── 필수 입력 ─────────────────────────── */}
               <div style={cardStyle}>
                 <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 8 }}>
-                  <label style={fieldLabel}>출발지</label>
+                  <label style={fieldLabel}>출발지 {requiredMark}</label>
                   <button
                     type="button"
                     onClick={() =>
@@ -285,7 +305,7 @@ export default function PublicQuotePage() {
                   />
                 </div>
 
-                <label style={{ ...fieldLabel, marginTop: 20 }}>도착지</label>
+                <label style={{ ...fieldLabel, marginTop: 20 }}>도착지 {requiredMark}</label>
                 <div style={{ marginTop: 8 }}>
                   <AddressSearch
                     label=""
@@ -315,7 +335,7 @@ export default function PublicQuotePage() {
                   style={{ ...fieldStyle, marginTop: 8 }}
                 />
 
-                <label style={{ ...fieldLabel, marginTop: 20 }}>성함 / 업체명</label>
+                <label style={{ ...fieldLabel, marginTop: 20 }}>성함 / 업체명 {requiredMark}</label>
                 <input
                   type="text"
                   value={form.name}
@@ -324,7 +344,7 @@ export default function PublicQuotePage() {
                   style={{ ...fieldStyle, marginTop: 8 }}
                 />
 
-                <label style={{ ...fieldLabel, marginTop: 20 }}>연락처</label>
+                <label style={{ ...fieldLabel, marginTop: 20 }}>연락처 {requiredMark}</label>
                 <input
                   type="tel"
                   inputMode="numeric"
@@ -385,8 +405,8 @@ export default function PublicQuotePage() {
                       </p>
                     )}
                     <div className="landing-cargo-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 16 }}>
-                      {dd("trait", "물품특성", surcharge["물품특성"] || [], "선택 안 함", "14px 15px")}
-                      {dd("trip", "왕복/편도", surcharge["왕복편도"] || [], "선택 안 함", "14px 15px")}
+                      {dd("trait", "물품특성", surcharge[SURCHARGE_KEYS.trait] || [], "선택 안 함", "14px 15px")}
+                      {dd("trip", "왕복/편도", surcharge[SURCHARGE_KEYS.trip] || [], "선택 안 함", "14px 15px")}
                       {dd("load", "상차조건", LOADING_METHODS.map((m) => m.label), "기본운송", "14px 15px")}
                       {dd("unload", "하차조건", LOADING_METHODS.map((m) => m.label), "기본운송", "14px 15px")}
                       <div>
@@ -443,7 +463,7 @@ export default function PublicQuotePage() {
                           <div style={{ flex: 1, minWidth: 0 }}>{dd("unloadTime", undefined, timeSlots(), "시간 선택", "14px 15px")}</div>
                         </div>
                       </div>
-                      {dd("transport", "운송시간", surcharge["운송시간"] || [], "선택 안 함", "14px 15px")}
+                      {dd("transport", "운송시간", surcharge[SURCHARGE_KEYS.transport] || [], "선택 안 함", "14px 15px")}
                     </div>
                   </div>
 

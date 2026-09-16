@@ -67,6 +67,20 @@ const menuItem = (active: boolean, selected: boolean): CSSProperties => ({
 /** 폼 라벨. 시안 값 그대로다. */
 export const fieldLabel: CSSProperties = { display: "block", fontSize: 14, fontWeight: 600, color: "#6B6759" };
 
+/** 필수 항목 표시. 라벨 뒤에 `{" "}` 와 함께 놓는다 — `<label>회사명 {requiredMark}</label>`
+ *
+ *  🔴 **빨간 `*` 가 아니라 회색 「필수」 글자다**(31차 리뷰 — 사용자 확정).
+ *     `*` 로 바꾸지 말 것: 공개 폼 3화면이 같은 표시를 써야 하고, 시안이 글자다.
+ *  🔴 **`/apply` 지역 상수였던 것을 39차 A장에 여기로 옮겼다** — `/quote` 가 같은 표시를
+ *     쓰려면 정의처가 하나여야 한다(원칙 12·37·43 과 같은 결). 화면에 다시 적지 말 것.
+ *  ⚠️ 이 표시는 **눈에 보이는 안내일 뿐 제출을 막지 않는다** — 막는 것은 각 화면의
+ *     제출 직전 검사다(네이티브 `required` 는 React 핸들러보다 먼저 걸려 우리 오류
+ *     문구가 안 뜬다 · PR #121 이 같은 자리에서 겪었다). **둘이 어긋나지 않게 할 것.**
+ */
+export const requiredMark = (
+  <span style={{ marginLeft: 4, fontSize: 12.5, fontWeight: 500, color: "#A8A79F" }}>필수</span>
+);
+
 /** 입력창. 시안 값 그대로다. */
 // 🔴 **입력창 글자는 16px 이다 — 시안의 15px 을 그대로 쓰지 말 것.**
 // iOS Safari 는 16px 미만 입력창에 포커스하면 화면을 자동으로 확대하고, 그러면 뷰포트가
