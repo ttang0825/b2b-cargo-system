@@ -1,8 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // 화주포털 웹 푸시 — **발송 정의처** (화주포털 B장)
 //
-// 🔴 **여기가 화주 쪽 유일한 발송처다.** 부르는 곳이 다섯(견적 제출 · 배차 상태 셋 ·
-//    정산 확정)이라 각자 만들면 문구와 실패 처리가 갈린다(38차 `lib/pushNotify.ts` ·
+// 🔴 **여기가 화주 쪽 유일한 발송처다.** 부르는 곳이 여럿(견적 제출 · 배차 상태를
+//    바꾸는 화면 넷)이라 각자 만들면 문구와 실패 처리가 갈린다(38차 `lib/pushNotify.ts` ·
 //    35차 `marginCalc` · 36차 `receivableCalc` 와 같은 결).
 //
 // 🔴 **직원용(`lib/pushNotify.ts`)과 표가 다르다** — `customer_push_subscriptions`.
@@ -22,28 +22,32 @@ import { createServiceClient } from "@/lib/supabaseServiceClient";
 import { sendWebPush } from "@/lib/webPush";
 
 /**
- * 알릴 사건. 🔴 **A장의 `PortalAlertKind`(배지 네 종류)와 다른 것이다** —
+ * 알릴 사건. 🔴 **A장의 `PortalAlertKind`(화면 안 알림)와 다른 것이다** —
  * 그쪽은 「무엇이 바뀌었나」를 세는 것이고 이쪽은 **「무슨 일이 있었나」**다.
  * 🔴 **`lib/portalAlert.ts` 를 import 하지 말 것** — 그 모듈은 소리(`alertCore`)를
  *    끌고 오고, 라벨도 「견적 업데이트」라 푸시에는 맞지 않는다.
  *
- * ⚠️ **공지사항은 없다**(사용자 확정 2026-09-16 — *「견적과 배차,운송 정산만」*).
- *    🔴 넣지 말 것 — 전체 공지라 모든 화주 폰이 한꺼번에 울린다.
+ * 🔴 **사건은 셋뿐이다**(사용자 확정 2026-09-16 저녁 — *「화주포탈은 상차완료,
+ *    하차완료, 공지사항 알림도 빼자. 견적을 받을때, 배차완료, 운송완료 시에만
+ *    알림이 가게 설정」*). 그날 낮의 첫 확정은 *「견적과 배차,운송 정산만」* 이라
+ *    다섯이었는데, **저녁에 사용자가 더 좁혔다.**
+ *
+ *    빠진 것과 그 이유 —
+ *      공지사항        전체 공지라 **모든 화주 폰이 한꺼번에** 울린다(처음부터 없었다)
+ *      정산(`invoice_confirmed`)  *「화주포털 알림중 정산관련해서는 알림이 안뜨는게
+ *                      좋겠다」* — 세금계산서 발행완료 · 화주입금완료 · 차주지급완료
+ *      상차완료·하차완료  위 저녁 확정. 운송 도중의 중간 보고라 폰을 울릴 일이 아니다
+ *
+ *    🔴 **되살리지 말 것** — 화면 안 알림(`lib/portalAlert.ts`)에서도 정산·공지를
+ *    같이 없앴으므로, 푸시만 되살리면 **폰으로는 오는데 화면에는 안 뜨는** 상태가 된다.
  */
-export type PortalPushEvent =
-  | "quote_submitted"
-  | "dispatch_confirmed"
-  | "pickup_completed"
-  | "delivery_completed"
-  | "invoice_confirmed";
+export type PortalPushEvent = "quote_submitted" | "dispatch_confirmed" | "transport_completed";
 
 /** 🔴 **무슨 일이 있었는가만** 적는다. 금액·구간·상호·차주는 넣지 않는다. */
 const PORTAL_PUSH_MESSAGES: Record<PortalPushEvent, { title: string; url: string }> = {
   quote_submitted: { title: "새 견적서가 도착했습니다", url: "/customer/quotes" },
   dispatch_confirmed: { title: "배차가 확정되었습니다", url: "/customer/dispatches" },
-  pickup_completed: { title: "상차가 완료되었습니다", url: "/customer/dispatches" },
-  delivery_completed: { title: "하차가 완료되었습니다", url: "/customer/dispatches" },
-  invoice_confirmed: { title: "정산 내역이 확정되었습니다", url: "/customer/invoices" },
+  transport_completed: { title: "운송이 완료되었습니다", url: "/customer/dispatches" },
 };
 
 export const PORTAL_PUSH_EVENTS = Object.keys(PORTAL_PUSH_MESSAGES) as PortalPushEvent[];

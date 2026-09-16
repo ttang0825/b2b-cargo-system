@@ -38,7 +38,9 @@ const SEND_BUDGET_MS = 3000;
 function buildPayload(kind: IntakeKind) {
   const meta = INTAKE_ALERTS[kind];
   return JSON.stringify({
-    title: `새 ${meta.label}`,
+    // 🔴 **말은 `INTAKE_ALERTS` 가 완성해서 준다** — 여기서 `새 …` 를 붙이면
+    //    배너(`TopNav`)와 폰의 말이 갈린다.
+    title: meta.title,
     body: "눌러서 확인해 주세요",
     url: meta.href,
     // 같은 종류의 알림이 여러 개 쌓이지 않게 브라우저가 겹쳐 준다
