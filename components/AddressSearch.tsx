@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode } from "react";
-import { useDaumPostcode } from "@/lib/useDaumPostcode";
+import { pickSelectedAddress, useDaumPostcode } from "@/lib/useDaumPostcode";
 import RequiredMark from "@/components/RequiredMark";
 
 type AddressSearchProps = {
@@ -35,14 +35,19 @@ export default function AddressSearch({
   style,
   children,
 }: AddressSearchProps) {
-  const { ready, open } = useDaumPostcode();
+  const { ready, open, enterToSearch } = useDaumPostcode();
 
-  function handleSearch() {
+  // 🔴 `q` 를 주면 팝업이 **그 검색 결과를 이미 보여준 상태로** 열린다(39차 D장).
+  //    규칙과 엔터 처리는 `lib/useDaumPostcode.ts` 하나이고 포털 부품
+  //    (`components/pv2/Pv2AddressField.tsx`)도 같은 훅을 쓴다 — 여기에 다시 적지 말 것.
+  function handleSearch(q?: string) {
     open((data) => {
-      const addr = data.roadAddress || data.jibunAddress;
-      onChange(addr, data.sido || "", data.sigungu || "");
+      // 🔴 **사용자가 고른 타입 그대로** 넣는다(`pickSelectedAddress`) — 지번을 골랐는데
+      //    도로명이 들어가던 것을 고친 것이다(사용자 신고 2026-09-16).
+      //    🔴 여기에 `roadAddress || jibunAddress` 를 다시 적지 말 것.
+      onChange(pickSelectedAddress(data), data.sido || "", data.sigungu || "");
       onDetailChange("");
-    });
+    }, q);
   }
 
   return (
@@ -57,9 +62,14 @@ export default function AddressSearch({
         {required ? <RequiredMark /> : null}
       </label>
       <div style={{ display: "flex", gap: 6 }}>
+        {/* 🔴 엔터로 바로 검색한다(39차 D장) — `enterToSearch` 가 **폼 제출을 먼저
+            막고**(`/quote`·`/apply` 는 anon INSERT 경로라 문의가 접수된다) 친 글자를
+            검색어로 넘긴다. 🔴 `autoComplete="off"` 를 빼지 말 것(원칙 17번) —
+            브라우저 자동완성이 주소검색 결과 위에 겹친다. */}
         <input
           value={value}
           onChange={(e) => onChange(e.target.value, "", "")}
+          onKeyDown={enterToSearch(value, handleSearch)}
           placeholder={placeholder}
           autoComplete="off"
           style={{ flex: 1, minWidth: 0, boxSizing: "border-box" }}
@@ -75,7 +85,7 @@ export default function AddressSearch({
             cursor: "pointer",
             flexShrink: 0,
           }}
-          onClick={handleSearch}
+          onClick={() => handleSearch()}
           disabled={!ready}
         >
           주소검색
