@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode } from "react";
-import { useDaumPostcode } from "@/lib/useDaumPostcode";
+import { pickSelectedAddress, useDaumPostcode } from "@/lib/useDaumPostcode";
 import RequiredMark from "@/components/RequiredMark";
 
 type AddressSearchProps = {
@@ -42,8 +42,10 @@ export default function AddressSearch({
   //    (`components/pv2/Pv2AddressField.tsx`)도 같은 훅을 쓴다 — 여기에 다시 적지 말 것.
   function handleSearch(q?: string) {
     open((data) => {
-      const addr = data.roadAddress || data.jibunAddress;
-      onChange(addr, data.sido || "", data.sigungu || "");
+      // 🔴 **사용자가 고른 타입 그대로** 넣는다(`pickSelectedAddress`) — 지번을 골랐는데
+      //    도로명이 들어가던 것을 고친 것이다(사용자 신고 2026-09-16).
+      //    🔴 여기에 `roadAddress || jibunAddress` 를 다시 적지 말 것.
+      onChange(pickSelectedAddress(data), data.sido || "", data.sigungu || "");
       onDetailChange("");
     }, q);
   }

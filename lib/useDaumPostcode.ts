@@ -8,12 +8,38 @@ declare global {
   }
 }
 
-type DaumPostcodeData = {
+export type DaumPostcodeData = {
   roadAddress: string;
   jibunAddress: string;
+  /**
+   * 🔴 **사용자가 팝업에서 무엇을 골랐는가** — `"R"` 도로명 · `"J"` 지번.
+   *    ⚠️ **`addressType`(검색 결과 자체의 타입)과 다른 필드다** — 고른 것을 말하는 쪽은
+   *    이것이다. 확인은 `react-daum-postcode@4.0.0` 의 `Address` 타입
+   *    (`addressType: 'R'|'J'` · `userSelectedType: 'R'|'J'` 가 **둘 다** 있다).
+   * ⚠️ 옛 스크립트가 안 줄 수도 있어 optional 로 둔다 — 없으면 도로명 우선(옛 동작).
+   */
+  userSelectedType?: "R" | "J";
   sido: string;
   sigungu: string;
 };
+
+/**
+ * 🔴 **사용자가 팝업에서 고른 그 주소**를 돌려준다(39차 D장 후속 · 사용자 신고 2026-09-16
+ * *"주소 팝업창에서 뜨는 주소중 지번을 골랐는데, 왜 도로명이 자동으로 뜨나?"*).
+ *
+ * ⚠️ **그전에는 두 부품이 각자 `roadAddress || jibunAddress` 라 적고 있었다** — 팝업이
+ *    「지번」 탭을 주는데도 **고른 것과 다른 값이 칸에 들어갔다.** 도로명이 있는 주소는
+ *    사실상 전부라 **지번 선택이 통째로 무시되고 있었다.**
+ * 🔴 **정의처를 여기 하나로 모았다 — 부품에 다시 적지 말 것.** 주소 부품이 둘이라
+ *    (`AddressSearch` · `Pv2AddressField`) 각자 적으면 반드시 한쪽이 낡는다.
+ * 🔴 **폴백은 남긴다** — 고른 쪽이 비어 있는 주소가 있다(도로명이 없는 지번 전용 등).
+ * ⚠️ **`data.address` 를 쓰지 않았다** — 그 필드도 고른 타입을 따르지만, 뜻이 바뀌면
+ *    조용히 틀린다. `userSelectedType` 으로 **명시적으로 가르는 편**이 읽기도 쉽다.
+ */
+export function pickSelectedAddress(data: DaumPostcodeData): string {
+  if (data.userSelectedType === "J") return data.jibunAddress || data.roadAddress || "";
+  return data.roadAddress || data.jibunAddress || "";
+}
 
 // 다음(Daum) 우편번호 스크립트를 페이지당 한 번만 로드하는 공용 훅.
 // 여러 화면에서 각자 <script> 태그를 붙이던 방식을 하나로 통합.

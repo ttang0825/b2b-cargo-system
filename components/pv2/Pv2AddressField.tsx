@@ -1,6 +1,6 @@
 "use client";
 
-import { useDaumPostcode } from "@/lib/useDaumPostcode";
+import { pickSelectedAddress, useDaumPostcode } from "@/lib/useDaumPostcode";
 
 /**
  * 화주포털 v2 전용 주소 입력 — 도로명주소 + 주소검색 버튼 + 상세주소.
@@ -42,10 +42,10 @@ export default function Pv2AddressField({
   //    (`components/AddressSearch.tsx`)도 같은 훅을 쓴다 — 여기에 다시 적지 말 것.
   function handleSearch(q?: string) {
     open((data) => {
-      // 원본 AddressSearch 와 같은 우선순위 — 도로명 먼저, 없으면 지번
-      const addr = data.roadAddress || data.jibunAddress || "";
+      // 🔴 **사용자가 고른 타입 그대로** 넣는다(`pickSelectedAddress`) — 원본
+      //    `AddressSearch` 와 **같은 함수**를 쓴다. 🔴 여기에 규칙을 다시 적지 말 것.
       onDetailChange("");
-      onChange(addr, data.sido || "", data.sigungu || "");
+      onChange(pickSelectedAddress(data), data.sido || "", data.sigungu || "");
     }, q);
   }
 
