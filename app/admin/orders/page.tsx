@@ -17,7 +17,7 @@ import {
   BODY_TYPES,
 } from "@/lib/constants";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
-import { generateDailyNumber } from "@/lib/generateNumber";
+import { insertWithDailyNumber } from "@/lib/generateNumber";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import { getCurrentStaffId } from "@/lib/currentStaff";
 import { getOrCreateIndividualCustomer, findIndividualCustomerByPhone } from "@/lib/individualCustomer";
@@ -462,7 +462,6 @@ function OrdersPageInner() {
     }
 
     setSaving(true);
-    const orderNo = await generateDailyNumber("orders", "O");
 
     const fullOrigin = [form.origin, form.originDetail].filter((v) => v.trim()).join(" ");
     const fullDestination = [form.destination, form.destinationDetail].filter((v) => v.trim()).join(" ");
@@ -484,8 +483,9 @@ function OrdersPageInner() {
       );
     }
 
-    const { error } = await supabase.from("orders").insert({
-      order_no: orderNo,
+    // 🔴 **`order_no` 를 여기에 직접 넣지 말 것** — `insertWithDailyNumber` 가 채우고,
+    //    번호가 겹치면 다시 뽑아 재시도한다(`lib/generateNumber.ts` 머리말 참고).
+    const { error } = await insertWithDailyNumber("orders", "O", {
       created_by: await getCurrentStaffId(),
       company_id: customerMode === "company" ? selectedCompany!.id : null,
       guest_name: customerMode === "guest" ? form.guest_name : null,

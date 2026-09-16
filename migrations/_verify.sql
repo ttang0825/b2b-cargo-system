@@ -1129,3 +1129,64 @@ select
   count(distinct ca.company_id)                                    as 회사수
 from customer_push_subscriptions s
 join customer_accounts ca on ca.id = s.customer_account_id;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- ㉔ 🔴 견적번호·오더번호 중복 (2026-09-16 · 신고 「duplicate key … quotes_quote_no_key」)
+--
+-- `lib/generateNumber.ts` 가 번호를 **「그날 만들어진 행 수 + 1」**로 만들던 시절의
+-- 흔적을 본다. 그 방식은 **한 건이라도 지워지면 곧바로 겹치고, 한 번 겹치면 영영
+-- 저장이 안 된다**(계속 같은 번호를 뽑는다). 지금은 「그날 최대 번호 + 1」이다.
+--
+-- 🔴 「견적 저장이 안 된다」·「화주요청 배지가 안 사라진다」는 신고를 받으면 여기부터.
+--    둘은 **한 뿌리다** — insert 가 실패하면 `portal_order_requests` 가 `대기중` 으로
+--    남아 배지가 그대로다.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- ㉔-a  날짜별 「건수 vs 최대 번호」 — 둘이 다르면 그날 지워진 건이 있다는 뜻이다.
+--       🔴 옛 방식에서는 이 차이가 곧 **다음 저장 실패**였다.
+select '㉔-a 견적번호' as 구분,
+       substring(quote_no from 3 for 8) as 날짜,
+       count(*)                          as 건수,
+       max((substring(quote_no from 12))::int) as 최대번호,
+       case when count(*) = max((substring(quote_no from 12))::int)
+            then 'OK' else '빈 번호 있음(삭제됨)' end as 판정
+  from quotes
+ where quote_no ~ '^Q-[0-9]{8}-[0-9]{3}$'
+ group by 1, 2
+ order by 2 desc
+ limit 10;
+
+select '㉔-b 오더번호' as 구분,
+       substring(order_no from 3 for 8) as 날짜,
+       count(*)                          as 건수,
+       max((substring(order_no from 12))::int) as 최대번호,
+       case when count(*) = max((substring(order_no from 12))::int)
+            then 'OK' else '빈 번호 있음(삭제됨)' end as 판정
+  from orders
+ where order_no ~ '^O-[0-9]{8}-[0-9]{3}$'
+ group by 1, 2
+ order by 2 desc
+ limit 10;
+
+-- ㉔-c  실제 중복이 있는가 (유니크 제약이 있으면 0행이어야 한다)
+select '㉔-c 중복' as 구분, 'quotes' as 표, quote_no as 번호, count(*) as 건수
+  from quotes where quote_no is not null group by 1,2,3 having count(*) > 1
+union all
+select '㉔-c 중복', 'orders', order_no, count(*)
+  from orders where order_no is not null group by 1,2,3 having count(*) > 1;
+
+-- ㉔-d  번호 컬럼의 유니크 제약 — `quotes` 에만 있고 `orders` 에는 없을 수 있다.
+--       🔴 없으면 중복이 **에러 없이 조용히 저장된다**(더 나쁘다).
+select '㉔-d 제약' as 구분, conrelid::regclass::text as 표, conname as 제약명,
+       pg_get_constraintdef(oid) as 정의
+  from pg_constraint
+ where conrelid in ('quotes'::regclass, 'orders'::regclass)
+   and pg_get_constraintdef(oid) ilike '%quote_no%'
+    or conrelid in ('quotes'::regclass, 'orders'::regclass)
+   and pg_get_constraintdef(oid) ilike '%order_no%'
+ order by 2, 3;
+
+-- ㉔-e  처리되지 않은 채 남은 발주요청 — 배지가 이 수를 센다.
+--       🔴 견적 저장이 실패한 건은 여기 `대기중` 으로 남는다.
+select '㉔-e 발주요청' as 구분, status as 상태, count(*) as 건수
+  from portal_order_requests group by 1, 2 order by 2;

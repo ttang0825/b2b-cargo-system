@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { generateDailyNumber } from "@/lib/generateNumber";
+import { insertWithDailyNumber } from "@/lib/generateNumber";
 import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import { formatPhoneNumber, VEHICLE_TYPES_ALL } from "@/lib/constants";
@@ -884,7 +884,6 @@ function QuotesPageInner() {
     }
 
     setSaving(true);
-    const quoteNo = await generateDailyNumber("quotes", "Q");
 
     const fullOrigin = [form.origin, form.originDetail]
       .filter((v) => v.trim())
@@ -894,10 +893,11 @@ function QuotesPageInner() {
       .join(" ");
 
     const staffId = await getCurrentStaffId();
-    const { data: newQuote, error } = await supabase
-      .from("quotes")
-      .insert({
-        quote_no: quoteNo,
+    // 🔴 **`quote_no` 를 여기에 직접 넣지 말 것** — `insertWithDailyNumber` 가 채운다.
+    //    번호가 겹치면(그날 건을 지웠거나 동시에 저장하면) 그 함수가 **다시 뽑아
+    //    재시도**한다. 직접 넣으면 재시도가 같은 번호를 다시 쓴다.
+    //    ⚠️ 이 자리가 실제로 저장을 통째로 막았다(2026-09-16 · `lib/generateNumber.ts`).
+    const { data: newQuote, error } = await insertWithDailyNumber("quotes", "Q", {
         created_by: staffId,
         company_id: customerMode === "company" ? selectedCompany!.id : null,
         // 이름은 선택이라 빈 값이면 null 로 — 목록이 `guest_name ||` 로 대체 표기한다
@@ -967,9 +967,7 @@ function QuotesPageInner() {
           대기시간_분: Number(form.waitingMinutes) || 0,
           경유지수: Number(form.waypointCount) || 0,
         },
-      })
-      .select("id")
-      .single();
+    });
 
     if (error) {
       setSaving(false);
