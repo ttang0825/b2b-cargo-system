@@ -16,7 +16,7 @@ import { COMPANY_SUPPORT_PHONE, COMPANY_SUPPORT_HOURS } from "@/lib/contactInfo"
 import AlertToast, { type AlertToastItem } from "@/components/AlertToast";
 import AlertSoundMenu from "@/components/AlertSoundMenu";
 import PortalPushSubscribeButton from "@/components/PortalPushSubscribeButton";
-import { applyUnseenTitle, isAlertSoundOn, playAlertChime } from "@/lib/alertCore";
+import { applyUnseenTitle, dropToastsForPath, isAlertSoundOn, playAlertChime } from "@/lib/alertCore";
 import { PORTAL_ALERTS, collectPortalRises, type PortalAlertCounts } from "@/lib/portalAlert";
 
 const PUBLIC_PATHS = ["/customer/login", "/customer/support-verify"];
@@ -313,6 +313,36 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
     //    배너와 탭 제목은 위에서 이미 떴다.
     if (isAlertSoundOn()) void playAlertChime();
   }, [counts, pathname]);
+
+  // ── 알림을 눌러 들어오면 창 안의 배너를 치운다 (2026-09-16 사용자 요청) ──────
+  //
+  // 🔴 **화면이 바뀔 때만 돈다**(`[pathname]`). 배너가 뜰 때마다 돌면 **그 화면을 열어 둔
+  //    사이에 도착한 소식을 영영 못 알린다** — 배지는 눌러 두고 배너는 띄우기로 한
+  //    자리다. 판정은 `lib/alertCore.ts` 의 `dropToastsForPath()` 한 곳이다.
+  // 🔴 **탭 제목(`unseen`)은 여기서 안 건드린다** — 탭이 보이는 순간 0이 되고, 알림을
+  //    누르면 창이 앞으로 나오므로 이미 처리된다. 같이 빼면 두 번 빠진다.
+  useEffect(() => {
+    if (PUBLIC_PATHS.includes(pathname || "")) return;
+    setToasts((t) => dropToastsForPath(t, pathname));
+  }, [pathname]);
+
+  // 🔴 **이미 그 화면을 보고 있을 때는 주소가 안 바뀐다** — 그래서 서비스워커가
+  //    「알림을 눌렀다」를 따로 알려주고, 그때도 배너를 치운다.
+  //    ⚠️ 서비스워커가 없거나(미지원·미등록) 메시지가 안 와도 위의 주소 규칙이 남아 있어
+  //    보통은 치워진다 — 이건 그 틈만 메우는 것이다.
+  useEffect(() => {
+    if (PUBLIC_PATHS.includes(pathname || "")) return;
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+    function onMessage(e: MessageEvent) {
+      const data = e.data as { type?: unknown; url?: unknown } | null;
+      if (!data || data.type !== "wecarry-notification-click") return;
+      const url = typeof data.url === "string" ? data.url : "";
+      if (!url) return;
+      setToasts((t) => dropToastsForPath(t, url));
+    }
+    navigator.serviceWorker.addEventListener("message", onMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", onMessage);
+  }, [pathname]);
 
   // 🔴 **다른 탭을 보고 있을 때 유일하게 보이는 신호**가 탭 제목이다.
   //    화면으로 돌아오면 원래대로 되돌린다.

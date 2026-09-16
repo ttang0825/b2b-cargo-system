@@ -163,6 +163,18 @@ self.addEventListener("notificationclick", (event) => {
         await client.focus();
         // 🔴 `navigate()` 가 막힌 브라우저가 있어 실패해도 넘어간다 — 적어도 창은 떴다.
         if (client.navigate) await client.navigate(target).catch(() => undefined);
+        // 🔴 **창 안의 배너를 치우라고 알려 준다**(사용자 요청 2026-09-16) —
+        //    알림을 눌러 들어왔으면 그 배너는 할 일을 다 한 것이다.
+        //    ⚠️ **이미 그 화면을 보고 있을 때를 위해 필요하다** — 그때는 주소가 안 바뀌어
+        //    화면 쪽의 「주소가 바뀌면 치운다」 규칙에 안 걸린다.
+        //    🔴 받는 쪽이 없어도 아무 일도 안 일어난다(한 방향 알림이다).
+        if (client.postMessage) {
+          try {
+            client.postMessage({ type: "wecarry-notification-click", url: target });
+          } catch (e) {
+            // 배너 치우기는 곁다리다 — 실패해도 화면 이동은 이미 끝났다.
+          }
+        }
         return;
       }
       await self.clients.openWindow(target);

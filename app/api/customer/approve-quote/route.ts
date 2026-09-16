@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { notifyNewIntake } from "@/lib/pushNotify";
 
 // 화주 견적 승인 — 27차 리뷰(클로드디자인 신규 시안)에서 신설.
 //
@@ -122,6 +123,21 @@ export async function POST(req: Request) {
       { status: 409 }
     );
   }
+
+  // 🔴 **담당자에게 알린다**(사용자 요청 2026-09-16 — *「화주가 견적 승인시에도 알림이
+  //    필요하다」*). 화주가 승인한 순간부터 **배차 시계가 돌기 시작**하는데, 그전에는
+  //    담당자가 관리자 화면을 열어 두고 배지를 봐야만 알 수 있었다.
+  //
+  // 🔴 **여기서는 `await` 한다** — 서버리스 함수는 응답을 돌려준 뒤 **얼어붙어서**
+  //    fire-and-forget 으로 두면 **푸시가 아예 안 나간다**(38차 B장이 실제로 겪었다).
+  //    그 함수는 **절대 던지지 않고** 3초 상한이 걸려 있어 승인 응답을 막지 않는다.
+  //
+  // 🟢 **화면 안 배너는 이 호출과 무관하게 뜬다** — `TopNav` 가 `quotes` 를 Realtime 으로
+  //    보고 있어서 배지가 늘고, 늘어난 순간 배너가 뜬다(A장). 여기서 보내는 것은
+  //    **브라우저를 닫아도 오는 쪽**(B장)이다.
+  //    ⚠️ 그래서 **담당자가 직접 「수주」로 바꾼 경우에는 배너만 뜨고 푸시는 안 간다** —
+  //    본인이 한 일이라 폰까지 부를 이유가 없다. 🔴 고장이 아니다.
+  await notifyNewIntake("approvedQuotes");
 
   return NextResponse.json({ ok: true, status: APPROVED_TO });
 }
