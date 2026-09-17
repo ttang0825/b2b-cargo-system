@@ -522,6 +522,14 @@
   display: block;
 }
 
+/* 워드마크 컴팩트 판(「WeCarry」만). 🔴 **520px 이하에서만 나온다** — 아래 미디어쿼리와
+   한 벌이고, 여기서 숨기지 않으면 데스크탑에 로고가 둘 그려진다.
+   🔴 **클래스 둘이라야 한다**(0,0,2,0) — `.landing-logo` 의 `display: block` 과 특성도가
+   같으면 선언 순서가 이겨서, 다음에 누가 규칙을 정렬할 때 조용히 둘 다 보인다(원칙 58번). */
+.landing-logo.landing-logo-compact {
+  display: none;
+}
+
 /* 어두운 CTA 띠 위의 법적 문서 링크. 🔴 전역 `site-footer-link` 를 덮어쓰지 않으려고
    `<LegalLinks linkClassName="landing-legal-link" />` 로 넘겨 쓴다. */
 .landing-legal-link {
@@ -681,7 +689,21 @@
 
 @media (max-width: 520px) {
   .landing-header { padding-left: 16px !important; padding-right: 16px !important; }
+  /* 🔴 **이 27px 은 컴팩트 판에는 안 걸린다** — 바로 아래 규칙이 클래스 둘
+     (`.landing-logo.landing-logo-compact`, 0,0,3,0)로 **특성도를 올려서** 이긴다.
+     🔴 **선언 순서로 맞추지 말 것**(원칙 58번) — 같은 특성도로 두면 다음에 누가
+     규칙을 정렬할 때 조용히 27px 로 되돌아간다. */
   .landing-header .landing-logo { height: 27px !important; }
+  /* 🔴 **높이 44px 은 실측으로 정한 값이다 — 임의로 올리지 말 것.**
+       · 가로 — 종횡비 3.77:1 이라 폭이 165.8px 이고, **360px 화면에서 단추까지의
+         간격이 정확히 24px**(헤더 `gap` 의 최소값)이다. 45px 부터는 넘친다.
+         ⚠️ 지금 전체 판(27px)도 폭이 175.6px 이라 360px 에서 간격이 24px 이다 —
+         **오늘보다 빡빡해지지 않는다**(오히려 9.8px 여유가 생긴다).
+       · 세로 — 헤더가 58 → **69px** 로 11px 높아진다. `position: fixed` 라 아래
+         내용은 밀리지 않고, 700px 이하 히어로 위 여백이 96px 이라 **27px 남는다.**
+     🔴 **`.landing-logo` 쪽 높이만 고치고 이 줄을 안 고치면 두 판본이 어긋난다.** */
+  .landing-header .landing-logo.landing-logo-full { display: none !important; }
+  .landing-header .landing-logo.landing-logo-compact { display: block !important; height: 44px !important; }
   .landing-nav { gap: 6px !important; }
   .landing-nav a { padding: 8px 12px !important; font-size: 12.5px !important; }
   .landing-nav-full { display: none !important; }

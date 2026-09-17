@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, type CSSProperties } from "react";
-import BrandLogo from "@/components/BrandLogo";
+import BrandLogo, { WORDMARK_VIEWBOX_COMPACT } from "@/components/BrandLogo";
 
 const pill = (bg: string, fg: string): CSSProperties => ({
   display: "inline-flex",
@@ -83,7 +83,17 @@ export default function LandingHeader() {
             워드마크가 통째로 찌그러졌다(실측 430px 폭 61 · 390px 21 · **360px 0**).
             사용자가 「홈버튼 로고도 너무 작게 표시된다」로 신고한 것이 이것이다. */
         style={{ display: "flex", alignItems: "center", flex: "0 0 auto", color: "#0E0F12" }}>
-        <BrandLogo className="landing-logo" />
+        {/* 🔴 **두 벌을 그려 두고 미디어쿼리로 하나만 보여준다**(2026-09-17) —
+            바로 아래 단추 라벨과 같은 방식이다. `viewBox` 는 CSS 로 못 바꾼다.
+            ⚠️ **520px 이하에서 「위캐리 운송」이 사라지는 것은 의도다.** 그 폭에서는
+            로고가 27px 까지 줄어드는데, 그러면 한글 글자 높이가 **약 16px** 이라
+            계단처럼 깨져 보인다(사용자 신고 2026-09-17). 가로로 짧아진 만큼 세로를
+            키워 「WeCarry」 글자를 **17.7px → 28.8px(+63%)** 로 올린 것이고,
+            로고 폭은 오히려 **175.6 → 165.8px 로 줄어** 좁은 화면이 덜 빡빡해진다.
+            🔴 **컴팩트 판을 없애고 27px 로 되돌리지 말 것** — 되돌리면 그 신고가
+            그대로 돌아온다. 🔴 **데스크탑(521px 이상)은 한 글자도 안 바뀐다.** */}
+        <BrandLogo className="landing-logo landing-logo-full" />
+        <BrandLogo className="landing-logo landing-logo-compact" viewBox={WORDMARK_VIEWBOX_COMPACT} />
       </Link>
 
       {/* 🔴 두 버튼 사이 간격을 인라인 `marginLeft: -22` 로 주지 말 것 — 데스크탑에서는

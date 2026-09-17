@@ -16,20 +16,50 @@ import type { CSSProperties } from "react";
 //
 // 종횡비 6.50:1 (높이 28px -> 폭 182px). width를 고정하지 말고 높이만 지정할 것.
 //
+// 🔴 **판본이 둘이다**(2026-09-17). 좁은 화면에서 「위캐리 운송」을 떼고 「WeCarry」만
+// 보여주기 위해 viewBox 만 잘라 쓴다 — **path 는 하나이고 그림 파일도 하나다.**
+// viewBox 밖은 SVG 가 알아서 잘라내므로 컴팩트 전용 파일을 따로 만들지 말 것.
+//
 // 접근성: 이 SVG 자체는 `aria-hidden`이고, 감싸는 링크가 `aria-label`로 이름을 제공함
 // (텍스트를 이미지로 바꾸면 스크린리더가 읽을 내용이 사라지므로 반드시 필요).
 
+/** 전체 워드마크 — 「WeCarry 위캐리 운송」. 종횡비 6.50:1 */
+export const WORDMARK_VIEWBOX = "9 25 982 151";
+
 /**
+ * 「WeCarry」까지만 남긴 판본 — 종횡비 **3.77:1**.
+ *
+ * 🔴 **`569` 를 줄이지 말 것** — 아트웍이 `x 571.37`(아래 사선 띠의 꼭짓점)까지 있고
+ *   viewBox 오른쪽 끝이 `9 + 569 = 578` 이라 여백이 6.6 남는다(전체 판본의 오른쪽
+ *   여백과 같은 값). 더 줄이면 **사선 띠 끝이 잘린다.**
+ * 🔴 **늘리지도 말 것** — 한글 「위」가 `x 609.4` 에서 시작해서 610 을 넘기면 글자
+ *   왼쪽 획이 비어져 나온다. 비어 있는 구간은 `571.4 ~ 609.4` 뿐이다(16배 렌더 실측).
+ * ⚠️ 높이(`25 151`)는 전체 판본과 **같아야 한다** — 다르면 두 판본의 글자 크기가
+ *   어긋나서 폭만 바뀌는 것이 아니라 그림이 튄다.
+ */
+export const WORDMARK_VIEWBOX_COMPACT = "9 25 569 151";
+
+/**
+ * @param viewBox 🔴 `WORDMARK_VIEWBOX`(기본) 또는 `WORDMARK_VIEWBOX_COMPACT` 만 넘길 것 —
+ *   임의의 값을 적으면 글자가 잘린다. 값의 정의처는 위 두 상수다.
  * @param style 인라인 크기 지정용. 🔴 31차 `SubmitDone` 이 클래스 없이 높이만 주려고
  *   더했다 — `LegalLinks` 에 `linkClassName` 을 더한 것과 같은 **추가만 하는** 방식이다.
  *   ⚠️ `fill="currentColor"` 는 그대로 두어야 한다(부모 color 를 상속해 다크 배경에서도
  *   보인다 — 27차). `style` 로 `fill` 을 덮지 말 것.
  */
-export default function BrandLogo({ className, style }: { className?: string; style?: CSSProperties }) {
+export default function BrandLogo({
+  className,
+  style,
+  viewBox = WORDMARK_VIEWBOX,
+}: {
+  className?: string;
+  style?: CSSProperties;
+  viewBox?: string;
+}) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="9 25 982 151"
+      viewBox={viewBox}
       fill="currentColor"
       className={className}
       style={style}
