@@ -2,13 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
-import { ANNOUNCEMENTS_LAST_SEEN_KEY as LAST_SEEN_KEY } from "@/lib/portalNotifications";
+import {
+  ANNOUNCEMENTS_LAST_SEEN_KEY as LAST_SEEN_KEY,
+  ANNOUNCEMENT_NOTICE_FIELD,
+} from "@/lib/portalNotifications";
+import AnnouncementBody from "@/components/AnnouncementBody";
 import { useListSearchSort } from "@/lib/useListSearchSort";
 
 export default function PortalAnnouncementsPage() {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const { search, setSearch, result: visibleItems } = useListSearchSort(
     items,
@@ -20,18 +25,29 @@ export default function PortalAnnouncementsPage() {
 
   useEffect(() => {
     async function load() {
-      const { data } = await supabase
+      // 🔴 `content_format` 을 빼지 말 것 — 없으면 옛 평문 공지를 서식으로 읽어
+      //    줄바꿈이 통째로 사라진다(`_verify.sql` ㉙-f — 기존 행에 실제로 있다).
+      // 🔴 `announced_at` 은 「새 글」 판정 기준이다(`ANNOUNCEMENT_NOTICE_FIELD`).
+      const { data, error } = await supabase
         .from("announcements")
-        .select("id,title,content,created_at")
+        .select(`id,title,content,content_format,created_at,${ANNOUNCEMENT_NOTICE_FIELD}`)
         .order("created_at", { ascending: false })
         .limit(50);
+
+      // 🔴 조회 실패를 빈 목록으로 삼키지 말 것(원칙 55번) — "등록된 공지사항이
+      //    없습니다" 가 떠서 원인을 짚을 단서가 하나도 안 남는다.
+      if (error) setLoadError(error.message);
 
       const lastSeenStr = typeof window !== "undefined" ? localStorage.getItem(LAST_SEEN_KEY) : null;
       const lastSeen = lastSeenStr ? new Date(lastSeenStr) : null;
 
       const withNewFlag = (data || []).map((a) => ({
         ...a,
-        isNew: lastSeen ? new Date(a.created_at) > lastSeen : true,
+        // 🔴 `created_at` 이 아니라 `announced_at` 이다 — 담당자가 오타를 고쳐도
+        //    「화주에게 다시 알림」을 켜지 않았으면 새 글로 뜨지 않는다.
+        isNew: lastSeen
+          ? new Date((a as any)[ANNOUNCEMENT_NOTICE_FIELD]) > lastSeen
+          : true,
       }));
 
       setItems(withNewFlag);
@@ -65,6 +81,8 @@ export default function PortalAnnouncementsPage() {
           />
         </div>
       )}
+
+      {loadError && <div className="error-box">공지사항을 불러오지 못했습니다: {loadError}</div>}
 
       {loading ? (
         <div className="empty-state">불러오는 중...</div>
@@ -121,16 +139,11 @@ export default function PortalAnnouncementsPage() {
                   </span>
                 </button>
                 {isOpen && a.content && (
-                  <div
-                    style={{
-                      padding: "0 20px 18px",
-                      fontSize: 13.5,
-                      color: "var(--text)",
-                      lineHeight: 1.6,
-                      whiteSpace: "pre-wrap",
-                    }}
-                  >
-                    {a.content}
+                  <div style={{ padding: "0 20px 18px", fontSize: 13.5, color: "var(--text)" }}>
+                    {/* 🔴 관리자 미리보기와 **같은 부품**이다 — 따로 그리지 말 것.
+                        `whiteSpace: pre-wrap` 은 옛 평문 공지용으로 그 부품 안
+                        (`.ann-body-plain`)에 들어 있다. */}
+                    <AnnouncementBody content={a.content} format={a.content_format} />
                   </div>
                 )}
               </div>

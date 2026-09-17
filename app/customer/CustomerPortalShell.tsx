@@ -8,6 +8,7 @@ import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import PublicPageHeader from "@/components/PublicPageHeader";
 import PortalIcon, { PortalIconName } from "@/components/PortalIcon";
 import {
+  ANNOUNCEMENT_NOTICE_FIELD,
   getLastSeen,
   markSeen,
   getAcknowledgedRequestIds,
@@ -218,7 +219,10 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
       supabase
         .from("announcements")
         .select("id", { count: "exact", head: true })
-        .gt("created_at", getLastSeen("announcements") || epoch),
+        // 🔴 `created_at` 이 아니라 `announced_at` 이다(2026-09-17) — 담당자가 공지를
+        //    고쳐도 「화주에게 다시 알림」을 켜지 않았으면 배지가 안 오른다.
+        //    🔴 홈 「안 읽음 N」·목록 NEW 알약과 **같은 기준**이어야 한다.
+        .gt(ANNOUNCEMENT_NOTICE_FIELD, getLastSeen("announcements") || epoch),
       company
         ? supabase.from("portal_order_requests").select("id").eq("company_id", company).neq("status", "대기중")
         : Promise.resolve({ data: [] as { id: string }[] }),
@@ -433,7 +437,9 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
       .on("postgres_changes", { event: "*", schema: "public", table: "quotes" }, () => loadCounts(companyId))
       .on("postgres_changes", { event: "*", schema: "public", table: "dispatches" }, () => loadCounts(companyId))
       .on("postgres_changes", { event: "*", schema: "public", table: "invoices" }, () => loadCounts(companyId))
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "announcements" }, () => loadCounts(companyId))
+      // 🔴 `INSERT` 만 듣지 말 것 — 공지 「수정」이 생기면서 **고칠 때 「다시 알림」을
+      //    켠 경우**에도 배지가 올라가야 한다. 그건 UPDATE 로 온다.
+      .on("postgres_changes", { event: "*", schema: "public", table: "announcements" }, () => loadCounts(companyId))
       .on("postgres_changes", { event: "*", schema: "public", table: "portal_order_requests" }, () => loadCounts(companyId))
       .subscribe();
 

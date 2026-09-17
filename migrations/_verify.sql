@@ -1527,3 +1527,78 @@ select tablename, policyname, cmd, roles::text, qual
 from pg_policies
 where schemaname = 'public' and tablename in ('orders', 'dispatches', 'quotes')
 order by tablename, policyname;
+
+-- ㉙  공지사항 편집기 (서식·이미지·미리보기·수정) 착수 전 실측 — 2026-09-17
+--     🔴 **읽기 전용이다.** 지시서 1장 2·3·10번이 요구하는 값을 잰다.
+--     🔴 **본문 글자를 찍지 않는다** — 이 저장소는 public 이고 Actions 로그는 누구나 본다.
+--        공지 본문에는 화주 상호·담당자 연락처가 들어 있을 수 있으므로 **길이와 유무만** 센다.
+
+-- ㉙-a  `announcements` 표의 컬럼 전수 — 🔴 화면 `select` 의 다섯 칸이 전부라고
+--       단정하지 않는다. `updated_at` 이 있는가 · `content` 의 타입과 길이 제한.
+select ordinal_position, column_name, data_type, character_maximum_length,
+       is_nullable, column_default
+from information_schema.columns
+where table_schema = 'public' and table_name = 'announcements'
+order by ordinal_position;
+
+-- ㉙-b  제약조건·인덱스·트리거 — `updated_at` 자동 갱신 트리거가 걸려 있는가
+--       (다른 7개 표에는 있다). 없으면 A장이 같이 만들어야 한다.
+select conname, pg_get_constraintdef(oid) as def
+from pg_constraint where conrelid = 'public.announcements'::regclass order by conname;
+
+select indexname, indexdef from pg_indexes
+where schemaname = 'public' and tablename = 'announcements' order by indexname;
+
+select tgname, pg_get_triggerdef(oid) as def
+from pg_trigger where tgrelid = 'public.announcements'::regclass and not tgisinternal
+order by tgname;
+
+-- ㉙-c  🚨 **이번 작업에서 가장 급한 조사** — 누가 이 표에 INSERT/UPDATE 할 수 있는가.
+--       🔴 화주포털 계정과 직원 계정이 **둘 다 `authenticated` 롤**이라(19차),
+--       `to authenticated` 로 열린 쓰기 정책이 있으면 **화주 한 명이 모든 화주 화면에
+--       코드를 심을 수 있는 구멍**이 된다(본문이 HTML 이 되는 순간).
+select c.relrowsecurity as "RLS 켜짐", c.relforcerowsecurity as "강제"
+from pg_class c join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public' and c.relname = 'announcements';
+
+select policyname, cmd, roles::text, qual, with_check
+from pg_policies
+where schemaname = 'public' and tablename = 'announcements'
+order by cmd, policyname;
+
+-- ㉙-d  롤별 테이블 권한(GRANT) — 정책과 별개의 방어선이다(③ 차수가 아직 회수 전).
+select grantee, string_agg(privilege_type, ',' order by privilege_type) as privs
+from information_schema.role_table_grants
+where table_schema = 'public' and table_name = 'announcements'
+  and grantee in ('anon', 'authenticated', 'service_role')
+group by grantee order by grantee;
+
+-- ㉙-e  Realtime publication 에 들어 있는가 — 포털 홈·셸이 `postgres_changes` 로
+--       듣고 있다(원칙 5번). A장이 컬럼을 늘려도 이 등록은 그대로여야 한다.
+select pubname, tablename from pg_publication_tables
+where schemaname = 'public' and tablename = 'announcements';
+
+-- ㉙-f  행 수와 본문의 성질 — 🔴 **글자는 찍지 않는다.**
+--       🚨 `content` 에 줄바꿈이 있는 행이 하나라도 있으면, HTML 렌더러로 바꾸는 순간
+--       그 줄바꿈이 통째로 사라진다(`content_format` 이 그것을 막는다).
+select
+  count(*)                                                as "전체 행수",
+  count(*) filter (where is_active)                       as "게시 중",
+  count(*) filter (where content is null)                 as "본문 없음",
+  count(*) filter (where content like '%' || chr(10) || '%') as "줄바꿈 있는 행",
+  count(*) filter (where content like '%<%')              as "홑화살괄호 있는 행",
+  coalesce(max(length(content)), 0)                       as "가장 긴 본문 글자수",
+  coalesce(round(avg(length(content))), 0)                as "평균 본문 글자수",
+  min(created_at)                                         as "가장 오래된 등록일",
+  max(created_at)                                         as "가장 최근 등록일"
+from public.announcements;
+
+-- ㉙-g  저장공간(Storage) 현황 — C장이 버킷을 처음 만드는 일인지 확인한다.
+--       🔴 `dispatch-photos` 하나만 나와야 한다(17차 POD·인수증).
+select id, name, public, file_size_limit, allowed_mime_types, created_at
+from storage.buckets order by created_at;
+
+select policyname, cmd, roles::text
+from pg_policies
+where schemaname = 'storage' and tablename = 'objects'
+order by policyname;
