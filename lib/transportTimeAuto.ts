@@ -37,20 +37,23 @@ export type TransportTimeName = (typeof TRANSPORT_TIME)[keyof typeof TRANSPORT_T
  * 상차 일시가 어느 운송시간에 드는지.
  *
  * ```
- *   토·일                    주말
- *   00:00 ~ 05:59           새벽
- *   06:00 ~ 07:59           출퇴근/혼잡
- *   08:00 ~ 17:59           평일 주간
- *   18:00 ~ 19:59           출퇴근/혼잡
- *   20:00 ~ 23:59           평일 야간
+ *   00:00 ~ 05:59           새벽          ← 요일보다 먼저 본다
+ *   토·일 06:00 ~ 23:59      주말
+ *   평일 06:00 ~ 07:59       출퇴근/혼잡
+ *   평일 08:00 ~ 17:59       평일 주간
+ *   평일 18:00 ~ 19:59       출퇴근/혼잡
+ *   평일 20:00 ~ 23:59       평일 야간
  * ```
  *
- * 🔴 **주말이 시간대보다 먼저다** — 기존 동작(관리자 견적 등록)을 그대로 유지한 것이다.
- *    바꾸면 주말 새벽 건이 `주말`(+10,000)에서 `새벽`(+20,000)으로 **금액이 오른다.**
- *    ⚠️ 새벽이 더 어려운 시간이라 반대가 맞다는 의견이 있을 수 있다 — **바꾸려면 먼저
- *    물을 것**(금액이 바뀌는 자리다).
+ * 🔴 **새벽이 요일보다 먼저다**(사용자 확정 2026-09-17 — *「새벽우선」*).
+ *    ⚠️ **39차까지는 반대였다**(주말이 먼저 · 관리자 견적 등록의 기존 동작을 옮긴 것).
+ *    그래서 **토·일 00:00~05:59 상차 건의 가산이 `주말`(+10,000)에서 `새벽`(+20,000)으로
+ *    올랐다** — 실제로 금액이 바뀐 변경이다. 🔴 **「주말이 먼저다」로 적힌 옛 기록을
+ *    근거로 되돌리지 말 것.** 근거는 **새벽이 배차가 더 어려운 시간**이라는 것이고,
+ *    주말 낮(06:00~)은 그대로 `주말` 이다.
  * 🔴 **`공휴일` 은 자동으로 고를 수 없다** — 저장소에 공휴일 달력이 없다. 목록에는 그대로
  *    있으므로 담당자·화주가 직접 고른다. **달력을 임의로 하드코딩하지 말 것**(매년 바뀐다).
+ *    ⚠️ 그래서 **공휴일 새벽도 `새벽` 으로 잡힌다**(공휴일을 아예 모르기 때문이다).
  */
 export function classifyTransportTime(pickupLocalInput: string | null | undefined): TransportTimeName | null {
   if (!pickupLocalInput) return null;
@@ -59,11 +62,14 @@ export function classifyTransportTime(pickupLocalInput: string | null | undefine
   const d = new Date(pickupLocalInput);
   if (Number.isNaN(d.getTime())) return null;
 
+  // 🔴 **새벽을 요일보다 먼저 본다**(2026-09-17 사용자 확정) — 순서를 뒤집으면
+  //    토·일 00:00~05:59 건이 다시 `주말`(+10,000)로 떨어진다.
+  const hour = d.getHours();
+  if (hour < 6) return TRANSPORT_TIME.dawn;
+
   const day = d.getDay();
   if (day === 0 || day === 6) return TRANSPORT_TIME.weekend;
 
-  const hour = d.getHours();
-  if (hour < 6) return TRANSPORT_TIME.dawn;
   if (hour < 8) return TRANSPORT_TIME.rush;
   if (hour < 18) return TRANSPORT_TIME.day;
   if (hour < 20) return TRANSPORT_TIME.rush;
