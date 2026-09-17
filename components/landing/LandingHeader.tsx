@@ -57,11 +57,18 @@ export default function LandingHeader() {
         padding: "18px max(56px, calc((100% - 1200px) / 2))",
         background: scrolled ? "rgba(255,255,255,0.94)" : "transparent",
         borderBottom: scrolled ? "1px solid rgba(21,24,33,0.08)" : "1px solid transparent",
-        backdropFilter: "blur(28px) saturate(1.05)",
+        // 🔴 **흐림은 배경이 생겼을 때만 건다**(2026-09-17) — 투명한 상태에도 `blur(28px)`
+        //    가 항상 걸려 있었고, 그 밑에서 **히어로 교차 애니메이션이 10초마다 돌아**
+        //    헤더 띠 뒤가 매 프레임 다시 흐려졌다. 투명할 때는 흐릴 배경 자체가 없으므로
+        //    얻는 것이 없고, 그 위에 겹쳐 그려지는 **로고 사선이 거칠어질 수 있다**
+        //    (사용자 신고 — 헤더 워드마크가 「지글지글」).
+        //    ⚠️ **눈에 보이는 변화가 있다** — 첫 화면에서 헤더 띠(약 83px) 뒤의 사진이
+        //    흐리지 않고 선명해진다. 이 변화가 싫으면 **이 줄만 되돌리면 된다.**
+        backdropFilter: scrolled ? "blur(28px) saturate(1.05)" : "none",
         // 🔴 **시작이 `transparent` 인 것을 유지한다 — 불투명하게 만들지 말 것.**
         //    히어로가 전면 사진 띠라, 첫 화면에서 헤더가 흰 판이 되면 그 구도가 깨진다.
         //    지시서 3-2 의 「0.92 → 1」은 헤더가 원래 불투명한 화면을 전제한 값이다.
-        transition: "background var(--mo-fast, 160ms) var(--mo-inout, ease), border-color var(--mo-fast, 160ms) var(--mo-inout, ease)",
+        transition: "background var(--mo-fast, 160ms) var(--mo-inout, ease), border-color var(--mo-fast, 160ms) var(--mo-inout, ease), backdrop-filter var(--mo-fast, 160ms) var(--mo-inout, ease)",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
