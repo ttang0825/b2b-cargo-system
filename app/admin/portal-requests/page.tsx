@@ -316,56 +316,83 @@ export default function PortalRequestsPage() {
                     </span>
                   </td>
                   <td className="cell-nowrap" onClick={(e) => e.stopPropagation()}>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", maxWidth: 190 }}>
-                      {r.status === "대기중" && (
+                    {/* 🔴 **대기중 행은 세 줄이다**(사용자 지시 2026-09-17) —
+                        ① 「승인(견적작성)」 한 줄 가득 ② 「반려」·「삭제」 ③ 「전화로 처리함」.
+                        그전에는 넷이 `flex-wrap` 으로 섞여서 폭에 따라 줄이 매번 달라졌고,
+                        **가장 많이 누르는 승인 버튼이 반려·삭제와 같은 크기**로 붙어 있었다.
+                        🔴 **「전화로 처리함」을 지우거나 숨기지 말 것** — 견적 저장이 실패해
+                        발주요청이 `대기중` 으로 남았을 때 푸는 유일한 탈출구다(PR #167 ①).
+                        🔴 **`isAdmin` 이 아니면 삭제 자리는 비어야 한다**(둘째 줄에 반려만). */}
+                    <div style={{ display: "grid", gap: 6, minWidth: 148, maxWidth: 190 }}>
+                      {r.status === "대기중" ? (
                         <>
                           <button
                             className="btn"
-                            style={{ padding: "5px 10px", fontSize: 11.5 }}
+                            style={{
+                              // 🔴 한 줄 가득 + 조금 크게 — 이 줄이 이 화면의 기본 동작이다
+                              width: "100%",
+                              justifyContent: "center",
+                              padding: "7px 10px",
+                              fontSize: 12.5,
+                            }}
                             disabled={processingId === r.id}
                             onClick={() => handleApprove(r)}
                           >
                             승인(견적작성)
                           </button>
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <button
+                              className="btn-danger"
+                              style={{ flex: 1, padding: "5px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                              disabled={processingId === r.id}
+                              onClick={() => handleReject(r)}
+                            >
+                              반려
+                            </button>
+                            {isAdmin && (
+                              <button
+                                className="btn-danger"
+                                style={{ flex: 1, padding: "5px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                                disabled={processingId === r.id}
+                                onClick={() => handleDelete(r)}
+                              >
+                                삭제
+                              </button>
+                            )}
+                          </div>
                           <button
-                            className="btn-danger"
-                            style={{ padding: "5px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                            type="button"
+                            className="btn-quiet"
                             disabled={processingId === r.id}
-                            onClick={() => handleReject(r)}
+                            onClick={() => handleManualApprove(r)}
+                            title="견적을 만들지 않고 목록에서만 승인됨으로 표시합니다"
                           >
-                            반려
+                            전화로 처리함
                           </button>
                         </>
-                      )}
-                      {r.status === "승인됨" && r.quote_id && (
-                        <button
-                          className="btn-ghost"
-                          style={{ padding: "5px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
-                          onClick={() => router.push(`/admin/quotes/${r.quote_id}`)}
-                        >
-                          견적 보기
-                        </button>
-                      )}
-                      {isAdmin && (
-                        <button
-                          className="btn-danger"
-                          style={{ padding: "5px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
-                          disabled={processingId === r.id}
-                          onClick={() => handleDelete(r)}
-                        >
-                          삭제
-                        </button>
-                      )}
-                      {r.status === "대기중" && (
-                        <button
-                          type="button"
-                          className="btn-quiet"
-                          disabled={processingId === r.id}
-                          onClick={() => handleManualApprove(r)}
-                          title="견적을 만들지 않고 목록에서만 승인됨으로 표시합니다"
-                        >
-                          전화로 처리함
-                        </button>
+                      ) : (
+                        // 대기중이 아닌 행은 그대로 — 버튼이 많아야 둘이라 한 줄이면 된다
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          {r.status === "승인됨" && r.quote_id && (
+                            <button
+                              className="btn-ghost"
+                              style={{ padding: "5px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                              onClick={() => router.push(`/admin/quotes/${r.quote_id}`)}
+                            >
+                              견적 보기
+                            </button>
+                          )}
+                          {isAdmin && (
+                            <button
+                              className="btn-danger"
+                              style={{ padding: "5px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                              disabled={processingId === r.id}
+                              onClick={() => handleDelete(r)}
+                            >
+                              삭제
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   </td>

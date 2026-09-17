@@ -59,7 +59,15 @@ export type DispatchCancelReason = {
 export const DISPATCH_CANCEL_REASONS: DispatchCancelReason[] = [
   { code: "driver_noshow",     adminLabel: "차주 변심·연락두절",  driverFault: true,  customerLabel: "배차 차량 변경",  awaitsRedispatch: true  },
   { code: "driver_breakdown",  adminLabel: "차주 차량 고장·사고", driverFault: true,  customerLabel: "배차 차량 변경",  awaitsRedispatch: true  },
-  { code: "fare_disagreement", adminLabel: "운임 협의 결렬",     driverFault: true,  customerLabel: "배차 차량 변경",  awaitsRedispatch: true  },
+  // ⚠️ **이름과 「차주 책임」이 2026-09-17 에 바뀌었다**(사용자 지시:
+  //    *「"운임 협의 결렬"을 "운임료 조정 필요"로 바꾸고」*).
+  //    🔴 **코드(`fare_disagreement`)는 그대로다** — 이미 이 코드로 저장된 행이 있고
+  //       DB 에 CHECK 가 없어서(PR #171) 코드를 바꾸면 옛 행이 **이름 없는 사유**가 된다.
+  //    🔴 **`driverFault` 를 `true` 로 되돌리지 말 것** — 이름이 바뀌면서 뜻이
+  //       「차주와 협상이 깨졌다」에서 **「우리 운임이 낮아 올려야 한다」**로 옮겨졌다.
+  //       우리 쪽 가격 문제를 차주 이력에 세면 그 숫자를 아무도 못 믿는다
+  //       (PR #171 이 *「특히 운임 협의 결렬」*로 열어 둔 물음의 답이다).
+  { code: "fare_disagreement", adminLabel: "운임료 조정 필요",   driverFault: false, customerLabel: "배차 차량 변경",  awaitsRedispatch: true  },
   // 🔴 화주가 취소한 건은 **다시 배차하지 않는다** — 「재배차 접수 중」을 띄우지 말 것.
   { code: "customer_request",  adminLabel: "화주 요청 취소",     driverFault: false, customerLabel: "고객 요청 취소",  awaitsRedispatch: false },
   { code: "cargo_not_ready",   adminLabel: "화물 준비 안 됨",    driverFault: false, customerLabel: "상차 준비 미완",  awaitsRedispatch: true  },
@@ -192,3 +200,26 @@ export function dispatchCancelAwaitsRedispatch(code: string | null | undefined):
  *    CSS 는 이 상수를 못 읽는다. **한쪽을 고치면 반대쪽도 같이 고칠 것.**
  */
 export const DISPATCH_CANCEL_CUSTOMER_STYLE = { color: "#B4423A", bg: "#FDF3F2" };
+
+
+/**
+ * 🔴 **이 사유로 취소하면 견적 금액을 고치러 보낸다** (사용자 지시 2026-09-17).
+ *
+ * *「이 사유 선택으로 취소시 자동으로 해당 견적의 견적관리 수정으로 이동하고
+ *   최종견적금액에 옅은 빨간색으로 강조해서 수정을 유도하자」*
+ *
+ * 배차가 안 잡혀 운임을 올려야 하는 상황이라, 취소한 담당자가 **다음에 할 일이 정해져
+ * 있다** — 견적 금액을 올리는 것이다. 그 길을 화면이 대신 걸어 준다.
+ *
+ * 🔴 **다른 사유에는 붙이지 말 것** — 화주 요청 취소·화물 준비 안 됨은 금액 문제가
+ *    아니라서, 견적 수정 화면으로 보내면 담당자가 「왜 여기로 왔지」가 된다.
+ */
+export const CANCEL_REASON_NEEDS_QUOTE_REVISION = "fare_disagreement";
+
+/** 견적 상세를 「금액 고치는 상태」로 여는 쿼리스트링. 🔴 화면에서 문자열을 다시 적지 말 것. */
+export const QUOTE_REVISE_AMOUNT_PARAM = "revise";
+export const QUOTE_REVISE_AMOUNT_VALUE = "amount";
+
+/** 그 안내 문구 — 견적 상세가 그대로 그린다. */
+export const QUOTE_REVISE_AMOUNT_NOTICE =
+  "배차가 잡히지 않아 배차를 취소했습니다. 최종 견적금액을 조정한 뒤 저장해주세요.";

@@ -8620,6 +8620,27 @@ tbody tr:hover {
 /* 🔴 배차 카드의 오더번호 줄은 `.pv2-qtop`(flex + gap)과 달리 **평범한 인라인 흐름**
    이라 여백이 저절로 생기지 않는다 — 두 클래스로 특성도를 올려 준다(원칙 58번).
    `vertical-align` 을 빼면 14px 글자 옆에서 알약이 위로 떠 보인다(실측 보정값). */
+/* 「수정견적」 — 승인 뒤 금액이 조정된 견적. 🔴 「업데이트」와 뜻이 달라 색을 갈랐다
+   (`components/pv2/Pv2RevisedMark.tsx` 머리말 참고). 🔴 **새 색이 아니라 포털 잉크를
+   뒤집은 것**이다. 🔴 `inline-flex` + `vertical-align` 이라 `.pv2-qprice` 의
+   `text-align`(데스크탑 오른쪽 · 모바일 왼쪽)을 그대로 따라간다 — 그 규칙을 flex 로
+   바꾸면 모바일 정렬을 두 클래스로 다시 이겨야 한다(원칙 58번). */
+.portal-v2 .pv2-revised {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  margin-right: 6px;
+  border-radius: 999px;
+  background: #1a1a1a;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  white-space: nowrap;
+  vertical-align: middle;
+}
 .portal-v2 .pv2-dno-line .pv2-updated {
   margin-left: 8px;
   vertical-align: 2px;

@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { VEHICLE_TYPES_ALL } from "@/lib/constants";
 import { STATUS_OPTIONS as COMPANY_STATUS_ORDER } from "@/lib/statusColors";
-import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
+import { getCurrentStaffId, getCurrentStaffName, getCurrentStaffRole } from "@/lib/currentStaff";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import { calcInclusiveAmount } from "@/lib/vat";
@@ -43,6 +43,12 @@ import {
   formatAdjustment,
   QUOTE_ADJUSTMENT_LABEL,
 } from "@/lib/quoteAdjustment";
+import { baseFareAbsorbingAdjustment } from "@/lib/quoteFareLines";
+import {
+  QUOTE_REVISE_AMOUNT_PARAM,
+  QUOTE_REVISE_AMOUNT_VALUE,
+  QUOTE_REVISE_AMOUNT_NOTICE,
+} from "@/lib/dispatchCancel";
 import {
   minDropoffDateTime as minDropoffDateTimeOf,
   isDropoffGapOk,
@@ -61,6 +67,12 @@ import {
   syncQuoteAmountToOrders,
   type LinkedOrder,
 } from "@/lib/quoteAmountSync";
+import { isQuoteRevision } from "@/lib/quoteRevision";
+import {
+  diffRecordFields,
+  logRecordChange,
+} from "@/lib/recordChangeLog";
+import RecordChangeLogPanel from "@/components/RecordChangeLogPanel";
 
 const STATUS_OPTIONS = ["상담중", "견적제출", "수주", "보류", "실패"];
 
@@ -174,6 +186,15 @@ export default function QuoteDetailPage() {
   const hasOrder = linkedOrders.length > 0;
   const [amountSyncNotice, setAmountSyncNotice] = useState<string | null>(null);
   const [linkedOrdersError, setLinkedOrdersError] = useState<string | null>(null);
+  /** 저장이 끝나면 올려서 수정 이력 패널을 다시 읽게 한다(펼쳐 둔 채로 저장했을 때) */
+  const [changeLogKey, setChangeLogKey] = useState(0);
+  /**
+   * 🔴 「운임료 조정 필요」로 배차를 취소하면 이 화면으로 **금액을 고치라고** 보내진다
+   *    (`lib/dispatchCancel.ts`). 그때 편집을 열고 금액 칸을 옅은 빨강으로 강조한다.
+   * 🔴 **저장하면 꺼진다** — 안 끄면 고친 뒤에도 계속 빨갛다.
+   */
+  const searchParams = useSearchParams();
+  const [reviseAmount, setReviseAmount] = useState(false);
   const [sendingQuoteSms, setSendingQuoteSms] = useState(false);
   const [quoteSmsSent, setQuoteSmsSent] = useState(false);
   const [excelBusy, setExcelBusy] = useState(false);
@@ -320,7 +341,9 @@ export default function QuoteDetailPage() {
     //    (원칙 55번) — 그때는 아래 저장이 오더를 **아예 손대지 않는다.**
     const { data: orderRows, error: orderErr } = await supabase
       .from("orders")
-      .select("id,order_no,status,customer_charge")
+      // 🔴 `customer_charge_vat_included` 는 **수정 이력의 「전」**에 쓴다 — 빼면
+      //    안 바뀐 건도 「부가세 별도로 바뀜」으로 남는다.
+      .select("id,order_no,status,customer_charge,customer_charge_vat_included")
       .eq("quote_id", id);
     setLinkedOrdersError(orderErr ? orderErr.message : null);
     setLinkedOrders((orderRows || []) as LinkedOrder[]);
@@ -332,6 +355,20 @@ export default function QuoteDetailPage() {
     if (id) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  /* 🔴 배차 취소(운임료 조정 필요)에서 넘어온 경우 — 편집을 열고 금액을 강조한다.
+     🔴 **`quote` 가 들어온 뒤에 연다** — 먼저 열면 `editForm` 이 아직 비어 있어
+        담당자가 빈 칸을 본다(`load()` 가 채운다). */
+  useEffect(() => {
+    if (!quote) return;
+    if (
+      searchParams?.get(QUOTE_REVISE_AMOUNT_PARAM) === QUOTE_REVISE_AMOUNT_VALUE
+    ) {
+      setEditing(true);
+      setReviseAmount(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quote?.id]);
 
   async function handleStatusChange(status: string) {
     const staffId = await getCurrentStaffId();
@@ -483,6 +520,14 @@ export default function QuoteDetailPage() {
       // 🔴 도착구분 한 줄을 특이사항으로 잇는다 — 이미 있으면 다시 붙이지 않는다
       notes: buildNotesWithArrival(editForm.notes, dropoffArrivalType) || null,
       final_amount: Number(editForm.final_amount) || null,
+      /* 🔴 **차액은 「조정」 줄이 아니라 기본운임으로 흡수된다**(사용자 지시 2026-09-17:
+         *「계산 내역에 "조정"으로 들어가지 말고 기본운임에 들어가게 하자」*).
+         ⚠️ **36차 E장의 「기본운임을 덮어쓰지 않는다」를 뒤집은 것이다** — 사유와
+            되돌리기 금지는 `lib/quoteFareLines.ts` 의 `baseFareAbsorbingAdjustment()` 머리말.
+         🔴 **금액이 비어 있으면 손대지 않는다**(그 함수가 `null` 을 돌려준다). */
+      ...(baseFareAbsorbingAdjustment(quote, items, nextAmount) != null
+        ? { base_fare: baseFareAbsorbingAdjustment(quote, items, nextAmount) }
+        : {}),
       loading_type: editForm.loading_type,
       mixed_shipper_consent: editForm.loading_type === "mixable" ? editForm.mixed_shipper_consent : false,
       mixed_discount_type: editForm.loading_type === "mixable" ? editForm.mixed_discount_type : null,
@@ -520,7 +565,24 @@ export default function QuoteDetailPage() {
         첫거래지원할인: (quote.selected_options as any)?.첫거래지원할인 || false,
       },
       updated_by: await getCurrentStaffId(),
+      /* ── 「수정견적」 신호 ──────────────────────────────────────────────────
+         🔴 **`updated_at` 으로 대신하지 말 것** — 메모 한 줄에도 움직인다(PR #164).
+         🔴 **`수주` 인 견적의 금액이 실제로 바뀐 때만** 찍는다(`lib/quoteRevision.ts`).
+         ⚠️ 한 번 찍힌 값은 **다시 지우지 않는다** — 되돌려 적어도 「조정이 있었다」는
+            사실은 남는다. 배지는 운송이 끝나면 저절로 사라진다. */
+      ...(isQuoteRevision({
+        status: quote.status,
+        beforeAmount: quote.final_amount,
+        afterAmount: nextAmount,
+      })
+        ? { revised_at: new Date().toISOString() }
+        : {}),
     };
+
+    /* 🔴 **수정 이력은 payload 를 만든 뒤, 저장 전에 미리 뽑는다** — 저장이 끝나면
+       `load()` 가 `quote` 를 새 값으로 갈아치워 「전」을 알 수 없게 된다. */
+    const changes = diffRecordFields("quotes", quote, payload);
+    const staffName = await getCurrentStaffName();
 
     if (force) {
       const { error } = await supabase.from("quotes").update(payload).eq("id", id);
@@ -529,9 +591,11 @@ export default function QuoteDetailPage() {
         setSaveError(error.message);
         return;
       }
-      await applyAmountToOrders(amountTargets, nextAmount, payload.updated_by);
+      await applyAmountToOrders(amountTargets, nextAmount, payload.updated_by, staffName);
+      await writeChangeLog(changes, payload.updated_by, staffName);
       setSaving(false);
       setEditing(false);
+      setReviseAmount(false);
       load();
       return;
     }
@@ -554,10 +618,36 @@ export default function QuoteDetailPage() {
     }
     // 🔴 **견적이 실제로 저장된 뒤에만** 오더를 고친다 — 충돌로 막힌 저장에서 오더만
     //    바뀌면 두 화면의 금액이 갈린다.
-    await applyAmountToOrders(amountTargets, nextAmount, payload.updated_by);
+    await applyAmountToOrders(amountTargets, nextAmount, payload.updated_by, staffName);
+    await writeChangeLog(changes, payload.updated_by, staffName);
     setSaving(false);
     setEditing(false);
+    setReviseAmount(false);
     load();
+  }
+
+  /**
+   * 🔴 **저장이 성공한 뒤에만 부른다.** 실패해도 저장을 되돌리지 않지만 **조용히
+   *    넘어가지도 않는다**(원칙 55번) — 안 그러면 「이력이 왜 비어 있지」를 화면에서
+   *    알 길이 없다.
+   */
+  async function writeChangeLog(
+    changes: Parameters<typeof logRecordChange>[1]["changes"],
+    staffId: string | null,
+    staffName: string | null
+  ) {
+    const { logged, error } = await logRecordChange(supabase, {
+      target: "quotes",
+      recordId: id,
+      staffId,
+      staffName,
+      changes,
+    });
+    if (error) {
+      setSaveError(`견적은 저장했지만 수정 이력을 남기지 못했습니다: ${error}`);
+      return;
+    }
+    if (logged) setChangeLogKey((k) => k + 1);
   }
 
   /**
@@ -568,14 +658,25 @@ export default function QuoteDetailPage() {
   async function applyAmountToOrders(
     targets: LinkedOrder[],
     amount: number | null,
-    staffId: string | null
+    staffId: string | null,
+    staffName: string | null
   ) {
     setAmountSyncNotice(null);
     if (amount == null || targets.length === 0) return;
-    const { error } = await syncQuoteAmountToOrders(supabase, targets, amount, staffId);
+    const { error, logError } = await syncQuoteAmountToOrders(
+      supabase,
+      targets,
+      amount,
+      staffId,
+      staffName
+    );
     if (error) {
       setSaveError(`견적은 저장했지만 연결된 오더 금액 반영에 실패했습니다: ${error}`);
       return;
+    }
+    // 🔴 금액은 반영됐는데 이력만 실패한 경우 — 조용히 넘어가지 않는다(원칙 55번).
+    if (logError) {
+      setSaveError(`오더 금액은 반영했지만 그 오더의 수정 이력을 남기지 못했습니다: ${logError}`);
     }
     setAmountSyncNotice(
       `연결된 운송오더 ${targets
@@ -724,16 +825,50 @@ export default function QuoteDetailPage() {
               </option>
             ))}
           </select>
+          {/* 🔴 **이미 오더가 있으면 「생성」을 먼저 내놓지 않는다**(사용자 지시 2026-09-17:
+              *「수정 견적은 한번 수주로 된 견적이고 이미 운송오더가 만들어져 있는 상황이라
+              견적 상세에서 "운송오더 생성" 버튼이 있으면 안될것 같다」*). 그 자리에
+              **「해당 운송오더 이동」**을 놓고, 「추가 운송오더 생성」은 그 옆에 둔다.
+              🔴 **「추가 생성」을 없애지 말 것** — 한 견적을 여러 차수로 나눠 싣는 경우가
+                 있고, 지우면 그때 오더를 만들 길이 사라진다(실측: 지금 오더 2건 이상인
+                 견적은 0건이라 아직 쓰인 적 없는 경로다).
+              🔴 **조회 실패(`linkedOrdersError`)면 「생성」만 내놓는다** — 오더가 없는
+                 것과 못 읽은 것을 구분할 수 없으니, 없던 동작으로 되돌아가는 쪽이 안전하다.
+                 그 사실은 바로 위 빨간 줄이 이미 말하고 있다. */}
           {quote.status === "수주" && (
-            <button
-              className="btn"
-              style={{ marginLeft: 12, fontSize: 12.5, padding: "6px 12px" }}
-              onClick={() =>
-                router.push(`/admin/orders?from_quote=${quote.id}`)
-              }
-            >
-              + 운송오더 생성
-            </button>
+            <span style={{ marginLeft: 12, display: "inline-flex", gap: 8, flexWrap: "wrap" }}>
+              {hasOrder && !linkedOrdersError ? (
+                <>
+                  {linkedOrders.map((o) => (
+                    <button
+                      key={o.id}
+                      className="btn"
+                      style={{ fontSize: 12.5, padding: "6px 12px" }}
+                      onClick={() => router.push(`/admin/orders/${o.id}`)}
+                    >
+                      {linkedOrders.length > 1
+                        ? `${o.order_no || "운송오더"} 이동`
+                        : "해당 운송오더 이동"}
+                    </button>
+                  ))}
+                  <button
+                    className="btn btn-ghost"
+                    style={{ fontSize: 12.5, padding: "6px 12px" }}
+                    onClick={() => router.push(`/admin/orders?from_quote=${quote.id}`)}
+                  >
+                    + 추가 운송오더 생성
+                  </button>
+                </>
+              ) : (
+                <button
+                  className="btn"
+                  style={{ fontSize: 12.5, padding: "6px 12px" }}
+                  onClick={() => router.push(`/admin/orders?from_quote=${quote.id}`)}
+                >
+                  + 운송오더 생성
+                </button>
+              )}
+            </span>
           )}
           {/* 🔴 화주가 포털에서 직접 승인한 건임을 표시한다(2026-08-29). 이 줄이 없으면
               담당자가 손으로 `수주` 로 바꾼 건과 구분되지 않는다 — 28차 §5-1 이 찾아낸
@@ -1229,12 +1364,36 @@ export default function QuoteDetailPage() {
               />
             </div>
 
-            <div className="field">
-              <label>최종 견적금액(원)</label>
+            {/* 🔴 배차 취소(운임료 조정 필요)에서 넘어오면 **옅은 빨강으로 강조**한다
+                (사용자 지시 2026-09-17). 🔴 **강한 빨강을 쓰지 말 것** — 오류가 아니라
+                「여기를 고쳐 달라」는 안내다. 값은 이 저장소가 이미 쓰는 쌍이다
+                (`#FDF3F2` / `#B4423A` — 취소·반려 배지와 같은 색). */}
+            <div
+              className="field"
+              style={
+                reviseAmount
+                  ? {
+                      background: "#FDF3F2",
+                      border: "1px solid #F0C9C5",
+                      borderRadius: 10,
+                      padding: 12,
+                      margin: -4,
+                    }
+                  : undefined
+              }
+            >
+              <label style={reviseAmount ? { color: "#B4423A", fontWeight: 700 } : undefined}>
+                최종 견적금액(원)
+              </label>
               <MoneyInput
                 value={editForm.final_amount}
                 onChange={(v) => setEditForm({ ...editForm, final_amount: v })}
               />
+              {reviseAmount && (
+                <p style={{ fontSize: 11.5, color: "#B4423A", marginTop: 6, marginBottom: 0, fontWeight: 600 }}>
+                  {QUOTE_REVISE_AMOUNT_NOTICE}
+                </p>
+              )}
               <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, marginBottom: 0 }}>
                 기본운임·가산 내역은 자동 재계산되지 않습니다. 필요하면 최종금액을 직접 조정해주세요.
               </p>
@@ -1447,6 +1606,10 @@ export default function QuoteDetailPage() {
         </p>
         {quoteSmsError && <div className="error-box" style={{ marginTop: 8 }}>{quoteSmsError}</div>}
       </div>
+
+      {/* 🔴 **문자 이력 바로 위**에 둔다 — 둘 다 「되짚어 보는 기록」이라 같이 모아야
+          담당자가 한 자리에서 본다. 🔴 기본 접힘이다(상세가 이미 길다). */}
+      <RecordChangeLogPanel target="quotes" recordId={quote.id} refreshKey={changeLogKey} />
 
       <SmsLogPanel relatedType="quote" relatedId={quote.id} />
 

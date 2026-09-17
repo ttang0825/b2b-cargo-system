@@ -31,6 +31,8 @@
  *    금액이 아래로(배차·정산) 퍼져 있을 수 있다.
  *    🔴 원칙 39번이 오더의 정산방식을 잠그는 것과 **같은 목록**이다 — 갈라 적지 말 것.
  */
+import { diffRecordFields, logRecordChange } from "@/lib/recordChangeLog";
+
 export const ORDER_AMOUNT_SYNC_CONFIRM_STATUSES: string[] = [
   "배차완료",
   "운송중",
@@ -42,6 +44,8 @@ export type LinkedOrder = {
   order_no: string | null;
   status: string | null;
   customer_charge: number | null;
+  /** 🔴 **수정 이력에 「전」을 적으려면 필요하다** — 없으면 안 바뀐 건도 바뀐 것으로 남는다. */
+  customer_charge_vat_included?: boolean | null;
 };
 
 /** 최소한의 질의 인터페이스 — 화면이 쓰는 클라이언트를 그대로 받는다(목으로 갈아끼우기 쉽다). */
@@ -86,21 +90,47 @@ export async function syncQuoteAmountToOrders(
   client: OrderClient,
   orders: LinkedOrder[],
   amount: number,
-  staffId: string | null
-): Promise<{ updated: LinkedOrder[]; error: string | null }> {
-  if (orders.length === 0) return { updated: [], error: null };
+  staffId: string | null,
+  staffName?: string | null
+): Promise<{ updated: LinkedOrder[]; error: string | null; logError: string | null }> {
+  if (orders.length === 0) return { updated: [], error: null, logError: null };
+  const payload = {
+    customer_charge: Math.round(amount),
+    // 🔴 `final_amount` 는 공급가액이다 — 이 줄을 빼지 말 것(위 머리말 참고).
+    customer_charge_vat_included: false,
+  };
   const { error } = await (client as any)
     .from("orders")
-    .update({
-      customer_charge: Math.round(amount),
-      // 🔴 `final_amount` 는 공급가액이다 — 이 줄을 빼지 말 것(위 머리말 참고).
-      customer_charge_vat_included: false,
-      updated_by: staffId,
-    })
+    .update({ ...payload, updated_by: staffId })
     .in(
       "id",
       orders.map((o) => o.id)
     );
-  if (error) return { updated: [], error: error.message };
-  return { updated: orders, error: null };
+  if (error) return { updated: [], error: error.message, logError: null };
+
+  /* ── 🔴 **오더 수정 이력에 남긴다 — 이 블록을 지우지 말 것.** ────────────────
+     사용자 신고(2026-09-17): *「운송오더가 청구금액이 바꼈는데 수정이력에 남지 않는다」*.
+     처음에는 오더 **상세에서 직접 고칠 때만** 기록했는데, 담당자가 실제로 금액을 바꾸는
+     자리는 **견적 쪽이 더 많다**(그것이 바로 앞 차수가 이 함수를 만든 이유다).
+     그래서 이력이 「누가 언제 얼마로 바꿨나」를 절반만 담고 있었다.
+
+     🔴 **화면이 아니라 이 함수 안에서 남긴다** — 부르는 곳이 늘어날 때 한쪽만 기록하는
+        상태가 다시 생긴다(원칙 53번과 같은 결).
+     🔴 **기록에 실패해도 금액 반영을 되돌리지 않는다** — 다만 `logError` 로 올려서
+        화면이 말하게 한다(원칙 55번). */
+  const logErrors: string[] = [];
+  for (const o of orders) {
+    const changes = diffRecordFields("orders", o, payload);
+    if (changes.length === 0) continue;
+    const { error: lErr } = await logRecordChange(client as any, {
+      target: "orders",
+      recordId: o.id,
+      staffId,
+      staffName: staffName ?? null,
+      changes,
+    });
+    if (lErr) logErrors.push(`${o.order_no || o.id}: ${lErr}`);
+  }
+
+  return { updated: orders, error: null, logError: logErrors.length ? logErrors.join(" / ") : null };
 }

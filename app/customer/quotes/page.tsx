@@ -9,6 +9,10 @@ import MixableBadge from "@/components/MixableBadge";
 //    `lib/usePortalSeenAt.ts` 한 곳이고 화면에서 다시 적지 말 것.
 import Pv2UpdatedMark from "@/components/pv2/Pv2UpdatedMark";
 import { isUpdatedSince, usePortalSeenAt } from "@/lib/usePortalSeenAt";
+// 🔴 「업데이트」와 **다른 배지**다 — 신호도 뜻도 다르다(그 파일 머리말 참고).
+import Pv2RevisedMark from "@/components/pv2/Pv2RevisedMark";
+import { isQuoteRevisionVisible } from "@/lib/quoteRevision";
+import { getDispatchStage } from "@/lib/dispatchStage";
 import Pv2Select from "@/components/pv2/Pv2Select";
 import Pv2PrintModal from "@/components/pv2/Pv2PrintModal";
 import { useListSearchSort } from "@/lib/useListSearchSort";
@@ -107,6 +111,13 @@ export default function CustomerQuotesPage() {
   // 엑셀 생성 중인 견적 id(버튼 중복 클릭 방지)
   const [excelBusyId, setExcelBusyId] = useState<string | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
+  /**
+   * 「수정견적」 배지가 아직 떠 있어야 하는 견적 id.
+   *
+   * 🔴 **`revised_at` 이 있는 견적이 하나라도 있을 때만** 채운다 — 없으면 조회를
+   *    아예 안 한다(`filterCancelledForCustomer` 와 같은 「필요할 때만」 방식).
+   */
+  const [revisedVisible, setRevisedVisible] = useState<Record<string, boolean>>({});
   // 견적 승인 확인 모달
   const [approveTarget, setApproveTarget] = useState<any | null>(null);
   const [approveBusy, setApproveBusy] = useState(false);
@@ -242,7 +253,7 @@ export default function CustomerQuotesPage() {
     const { data, error } = await supabase
       .from("quotes")
       .select(
-        "id,quote_no,origin,destination,vehicle_type,item,base_fare,final_amount,status,selected_options,loading_type,collection_method,billing_cycle,direct_collection_point,notes,requested_pickup_at,requested_dropoff_at,created_at,updated_at"
+        "id,quote_no,origin,destination,vehicle_type,item,base_fare,final_amount,status,selected_options,loading_type,collection_method,billing_cycle,direct_collection_point,notes,requested_pickup_at,requested_dropoff_at,created_at,updated_at,revised_at"
       )
       .order("created_at", { ascending: false })
       .limit(100);
@@ -262,7 +273,78 @@ export default function CustomerQuotesPage() {
     if (rErr) setPageError(`발주 요청을 불러오지 못했습니다: ${rErr.message}`);
     setRequests(rej || []);
 
+    await loadRevisedVisibility(data || []);
+
     setLoading(false);
+  }
+
+  /**
+   * 「수정견적」 배지가 언제 사라지는가 — 사용자 원문: *「이 수정견적 뱃지는 운송이
+   * 완료된 후 자동으로 사라지면 된다」*.
+   *
+   * 🔴 **`orders.status` 로 재지 말 것** — `하차완료` 배차는 오더에서 `운송중` 인데
+   *    화주 화면은 그것을 이미 **「운송완료」로 보여준다**(29차 3단계 매핑). 오더 상태로
+   *    재면 화주 눈에는 운송이 끝났는데 배지만 남는다. 판정은 `lib/dispatchStage.ts` 다.
+   *
+   * 🔴 **조회 실패는 「보여주는 쪽」으로 떨어진다**(PR #171 과 같은 판단) — 완료된 건에
+   *    배지가 남는 것은 눈에 거슬릴 뿐이지만, 못 읽었다고 감추면 **조정 사실 자체가
+   *    화주에게 전달되지 않는다.**
+   */
+  async function loadRevisedVisibility(rows: any[]) {
+    const revised = rows.filter((q) => q.revised_at);
+    if (revised.length === 0) {
+      setRevisedVisible({});
+      return;
+    }
+    // 실패하거나 오더가 아직 없으면 전부 보이는 쪽으로 시작한다.
+    const next: Record<string, boolean> = {};
+    revised.forEach((q) => {
+      next[q.id] = true;
+    });
+
+    const quoteIds = revised.map((q) => q.id);
+    const { data: orderRows, error: oErr } = await supabase
+      .from("orders")
+      .select("id,quote_id")
+      .in("quote_id", quoteIds);
+    if (oErr || !orderRows || orderRows.length === 0) {
+      setRevisedVisible(next);
+      return;
+    }
+
+    const { data: dispRows, error: dErr } = await supabase
+      .from("dispatches")
+      .select("order_id,dispatch_status,pickup_confirmed,delivery_confirmed")
+      .in(
+        "order_id",
+        orderRows.map((o: any) => o.id)
+      );
+    if (dErr) {
+      setRevisedVisible(next);
+      return;
+    }
+
+    // 오더 → 그 오더에 붙은 배차들의 단계(배차가 없으면 0 = 아직 접수 단계다)
+    const stagesByOrder: Record<string, number[]> = {};
+    (dispRows || []).forEach((d: any) => {
+      (stagesByOrder[d.order_id] ||= []).push(getDispatchStage(d));
+    });
+
+    const stagesByQuote: Record<string, number[]> = {};
+    orderRows.forEach((o: any) => {
+      const stages = stagesByOrder[o.id] || [];
+      // 🔴 한 오더에 배차가 여럿이면(재배차) **가장 앞선 것**이 그 오더의 단계다 —
+      //    취소된 옛 배차는 `getDispatchStage()` 가 언제나 0 으로 돌려준다.
+      (stagesByQuote[o.quote_id] ||= []).push(stages.length ? Math.max(...stages) : 0);
+    });
+
+    revised.forEach((q) => {
+      next[q.id] = isQuoteRevisionVisible({
+        revisedAt: q.revised_at,
+        orderStages: stagesByQuote[q.id] || [],
+      });
+    });
+    setRevisedVisible(next);
   }
 
   // 🔴 Realtime 이 끊겼을 때의 그물(`lib/portalRefresh.ts`) — 포털 네 화면이 같이 쓴다.
@@ -457,7 +539,14 @@ export default function CustomerQuotesPage() {
                         ) : (
                           <>
                             <div className="pv2-qvat">견적 금액 (부가세 별도)</div>
-                            <div className="pv2-qprice">{won(supply)}</div>
+                            {/* 🔴 사용자 원문 *「금액 앞에 "수정견적" 이라고 뱃지」* —
+                                `inline-flex` 라 금액과 같은 줄에서 앞에 서고, 좁으면
+                                윗줄로 넘어간다(정렬은 `.pv2-qprice` 의 `text-align`
+                                그대로 데스크탑 오른쪽 · 모바일 왼쪽). */}
+                            <div className="pv2-qprice">
+                              {revisedVisible[q.id] && <Pv2RevisedMark />}
+                              {won(supply)}
+                            </div>
                           </>
                         )}
                       </div>
