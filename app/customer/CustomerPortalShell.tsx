@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
+import { emitPortalRefresh } from "@/lib/portalRefresh";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import PublicPageHeader from "@/components/PublicPageHeader";
 import PortalIcon, { PortalIconName } from "@/components/PortalIcon";
@@ -392,6 +393,11 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
       const url = typeof data.url === "string" ? data.url : "";
       if (!url) return;
       setToasts((t) => dropToastsForPath(t, url));
+      // 🔴 **배너만 치우면 화면은 옛 값 그대로다**(사용자 신고 2026-09-17) —
+      //    이미 그 화면이 열려 있으면 주소가 안 바뀌어 리액트가 다시 마운트되지 않고,
+      //    그 사이 Realtime 이 끊겨 있었으면 놓친 이벤트는 다시 오지 않는다.
+      //    🔴 **한 벌이다 — 이 줄만 지우면 「알림은 왔는데 화면은 어제 것」이 된다.**
+      emitPortalRefresh();
     }
     navigator.serviceWorker.addEventListener("message", onMessage);
     return () => navigator.serviceWorker.removeEventListener("message", onMessage);
@@ -407,11 +413,17 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
   useEffect(() => {
     if (PUBLIC_PATHS.includes(pathname || "")) return;
     function onVisible() {
-      if (document.visibilityState === "visible") setUnseen(0);
+      if (document.visibilityState !== "visible") return;
+      setUnseen(0);
+      // 🔴 **탭이 뒤로 갔다 오면 배지도 다시 센다** — 모바일은 백그라운드에서 웹소켓이
+      //    끊기고 **놓친 이벤트를 다시 보내주지 않는다.** 화면(`usePortalRefresh`)과
+      //    배지가 같은 신호를 써야 「목록은 새것인데 배지는 옛것」이 안 생긴다.
+      loadCounts(companyId);
     }
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [pathname]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, companyId]);
 
   useEffect(() => {
     if (PUBLIC_PATHS.includes(pathname || "")) return;

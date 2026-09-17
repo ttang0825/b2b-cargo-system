@@ -6,6 +6,7 @@ import {
   isDispatchCancelled,
 } from "@/lib/dispatchCancel";
 import { filterCancelledForCustomer } from "@/lib/portalCancelledDispatches";
+import { usePortalRefresh } from "@/lib/portalRefresh";
 import Link from "next/link";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import {
@@ -194,6 +195,9 @@ export default function CustomerHomePage() {
     setUnreadNotices(unreadRes.count || 0);
     setLoading(false);
   }
+
+  // 🔴 Realtime 이 끊겼을 때의 그물(`lib/portalRefresh.ts`) — 배차·정산 화면과 같은 규칙.
+  usePortalRefresh(load);
 
   useEffect(() => {
     load();

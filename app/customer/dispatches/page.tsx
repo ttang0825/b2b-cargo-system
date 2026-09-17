@@ -8,6 +8,7 @@ import {
   isDispatchCancelled,
 } from "@/lib/dispatchCancel";
 import { filterCancelledForCustomer } from "@/lib/portalCancelledDispatches";
+import { usePortalRefresh } from "@/lib/portalRefresh";
 import { dispatchIssueCustomerLabel } from "@/lib/dispatchIssue";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import MixableBadge from "@/components/MixableBadge";
@@ -130,8 +131,10 @@ export default function CustomerDispatchesPage() {
     "desc"
   );
 
-  useEffect(() => {
-    async function load() {
+  // 🔴 **컴포넌트 안에 두는 것이 의도다** — effect 안에 가둬 두면 「화면이 다시 보일 때
+  //    다시 받아온다」(`lib/portalRefresh.ts`)에서 부를 수 없다. setState 만 쓰므로
+  //    렌더마다 새로 만들어져도 문제가 없다.
+  async function load() {
       // 🔴 `pickup_confirmed`·`delivery_confirmed` 를 빼지 말 것 — 「문제발생」은
       //    상태값을 덮어써서 단계를 알 수 없고, 이 두 boolean 으로만 복원된다.
       // 🔴 `driver_payout_amount` 등 차주 지급 정보는 조회하지 않는다(DB GRANT 가
@@ -162,7 +165,13 @@ export default function CustomerDispatchesPage() {
       //    `lib/portalCancelledDispatches.ts` 에 있다(홈과 같은 규칙을 써야 한다).
       setDispatches(await filterCancelledForCustomer(supabase, (data || []) as any[]));
       setLoading(false);
-    }
+  }
+
+  // 🔴 **Realtime 이 끊겼을 때의 그물이다** — 탭이 뒤로 갔다 오거나, 알림을 눌렀는데
+  //    이미 그 화면이라 주소가 안 바뀐 경우를 메운다(`lib/portalRefresh.ts`).
+  usePortalRefresh(load);
+
+  useEffect(() => {
     load();
 
     const channel = supabase
