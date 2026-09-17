@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { VEHICLE_TYPES_ALL } from "@/lib/constants";
@@ -43,6 +43,12 @@ import {
   formatAdjustment,
   QUOTE_ADJUSTMENT_LABEL,
 } from "@/lib/quoteAdjustment";
+import { baseFareAbsorbingAdjustment } from "@/lib/quoteFareLines";
+import {
+  QUOTE_REVISE_AMOUNT_PARAM,
+  QUOTE_REVISE_AMOUNT_VALUE,
+  QUOTE_REVISE_AMOUNT_NOTICE,
+} from "@/lib/dispatchCancel";
 import {
   minDropoffDateTime as minDropoffDateTimeOf,
   isDropoffGapOk,
@@ -182,6 +188,13 @@ export default function QuoteDetailPage() {
   const [linkedOrdersError, setLinkedOrdersError] = useState<string | null>(null);
   /** 저장이 끝나면 올려서 수정 이력 패널을 다시 읽게 한다(펼쳐 둔 채로 저장했을 때) */
   const [changeLogKey, setChangeLogKey] = useState(0);
+  /**
+   * 🔴 「운임료 조정 필요」로 배차를 취소하면 이 화면으로 **금액을 고치라고** 보내진다
+   *    (`lib/dispatchCancel.ts`). 그때 편집을 열고 금액 칸을 옅은 빨강으로 강조한다.
+   * 🔴 **저장하면 꺼진다** — 안 끄면 고친 뒤에도 계속 빨갛다.
+   */
+  const searchParams = useSearchParams();
+  const [reviseAmount, setReviseAmount] = useState(false);
   const [sendingQuoteSms, setSendingQuoteSms] = useState(false);
   const [quoteSmsSent, setQuoteSmsSent] = useState(false);
   const [excelBusy, setExcelBusy] = useState(false);
@@ -328,7 +341,9 @@ export default function QuoteDetailPage() {
     //    (원칙 55번) — 그때는 아래 저장이 오더를 **아예 손대지 않는다.**
     const { data: orderRows, error: orderErr } = await supabase
       .from("orders")
-      .select("id,order_no,status,customer_charge")
+      // 🔴 `customer_charge_vat_included` 는 **수정 이력의 「전」**에 쓴다 — 빼면
+      //    안 바뀐 건도 「부가세 별도로 바뀜」으로 남는다.
+      .select("id,order_no,status,customer_charge,customer_charge_vat_included")
       .eq("quote_id", id);
     setLinkedOrdersError(orderErr ? orderErr.message : null);
     setLinkedOrders((orderRows || []) as LinkedOrder[]);
@@ -340,6 +355,20 @@ export default function QuoteDetailPage() {
     if (id) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  /* 🔴 배차 취소(운임료 조정 필요)에서 넘어온 경우 — 편집을 열고 금액을 강조한다.
+     🔴 **`quote` 가 들어온 뒤에 연다** — 먼저 열면 `editForm` 이 아직 비어 있어
+        담당자가 빈 칸을 본다(`load()` 가 채운다). */
+  useEffect(() => {
+    if (!quote) return;
+    if (
+      searchParams?.get(QUOTE_REVISE_AMOUNT_PARAM) === QUOTE_REVISE_AMOUNT_VALUE
+    ) {
+      setEditing(true);
+      setReviseAmount(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quote?.id]);
 
   async function handleStatusChange(status: string) {
     const staffId = await getCurrentStaffId();
@@ -491,6 +520,14 @@ export default function QuoteDetailPage() {
       // 🔴 도착구분 한 줄을 특이사항으로 잇는다 — 이미 있으면 다시 붙이지 않는다
       notes: buildNotesWithArrival(editForm.notes, dropoffArrivalType) || null,
       final_amount: Number(editForm.final_amount) || null,
+      /* 🔴 **차액은 「조정」 줄이 아니라 기본운임으로 흡수된다**(사용자 지시 2026-09-17:
+         *「계산 내역에 "조정"으로 들어가지 말고 기본운임에 들어가게 하자」*).
+         ⚠️ **36차 E장의 「기본운임을 덮어쓰지 않는다」를 뒤집은 것이다** — 사유와
+            되돌리기 금지는 `lib/quoteFareLines.ts` 의 `baseFareAbsorbingAdjustment()` 머리말.
+         🔴 **금액이 비어 있으면 손대지 않는다**(그 함수가 `null` 을 돌려준다). */
+      ...(baseFareAbsorbingAdjustment(quote, items, nextAmount) != null
+        ? { base_fare: baseFareAbsorbingAdjustment(quote, items, nextAmount) }
+        : {}),
       loading_type: editForm.loading_type,
       mixed_shipper_consent: editForm.loading_type === "mixable" ? editForm.mixed_shipper_consent : false,
       mixed_discount_type: editForm.loading_type === "mixable" ? editForm.mixed_discount_type : null,
@@ -554,10 +591,11 @@ export default function QuoteDetailPage() {
         setSaveError(error.message);
         return;
       }
-      await applyAmountToOrders(amountTargets, nextAmount, payload.updated_by);
+      await applyAmountToOrders(amountTargets, nextAmount, payload.updated_by, staffName);
       await writeChangeLog(changes, payload.updated_by, staffName);
       setSaving(false);
       setEditing(false);
+      setReviseAmount(false);
       load();
       return;
     }
@@ -580,10 +618,11 @@ export default function QuoteDetailPage() {
     }
     // 🔴 **견적이 실제로 저장된 뒤에만** 오더를 고친다 — 충돌로 막힌 저장에서 오더만
     //    바뀌면 두 화면의 금액이 갈린다.
-    await applyAmountToOrders(amountTargets, nextAmount, payload.updated_by);
+    await applyAmountToOrders(amountTargets, nextAmount, payload.updated_by, staffName);
     await writeChangeLog(changes, payload.updated_by, staffName);
     setSaving(false);
     setEditing(false);
+    setReviseAmount(false);
     load();
   }
 
@@ -619,14 +658,25 @@ export default function QuoteDetailPage() {
   async function applyAmountToOrders(
     targets: LinkedOrder[],
     amount: number | null,
-    staffId: string | null
+    staffId: string | null,
+    staffName: string | null
   ) {
     setAmountSyncNotice(null);
     if (amount == null || targets.length === 0) return;
-    const { error } = await syncQuoteAmountToOrders(supabase, targets, amount, staffId);
+    const { error, logError } = await syncQuoteAmountToOrders(
+      supabase,
+      targets,
+      amount,
+      staffId,
+      staffName
+    );
     if (error) {
       setSaveError(`견적은 저장했지만 연결된 오더 금액 반영에 실패했습니다: ${error}`);
       return;
+    }
+    // 🔴 금액은 반영됐는데 이력만 실패한 경우 — 조용히 넘어가지 않는다(원칙 55번).
+    if (logError) {
+      setSaveError(`오더 금액은 반영했지만 그 오더의 수정 이력을 남기지 못했습니다: ${logError}`);
     }
     setAmountSyncNotice(
       `연결된 운송오더 ${targets
@@ -1314,12 +1364,36 @@ export default function QuoteDetailPage() {
               />
             </div>
 
-            <div className="field">
-              <label>최종 견적금액(원)</label>
+            {/* 🔴 배차 취소(운임료 조정 필요)에서 넘어오면 **옅은 빨강으로 강조**한다
+                (사용자 지시 2026-09-17). 🔴 **강한 빨강을 쓰지 말 것** — 오류가 아니라
+                「여기를 고쳐 달라」는 안내다. 값은 이 저장소가 이미 쓰는 쌍이다
+                (`#FDF3F2` / `#B4423A` — 취소·반려 배지와 같은 색). */}
+            <div
+              className="field"
+              style={
+                reviseAmount
+                  ? {
+                      background: "#FDF3F2",
+                      border: "1px solid #F0C9C5",
+                      borderRadius: 10,
+                      padding: 12,
+                      margin: -4,
+                    }
+                  : undefined
+              }
+            >
+              <label style={reviseAmount ? { color: "#B4423A", fontWeight: 700 } : undefined}>
+                최종 견적금액(원)
+              </label>
               <MoneyInput
                 value={editForm.final_amount}
                 onChange={(v) => setEditForm({ ...editForm, final_amount: v })}
               />
+              {reviseAmount && (
+                <p style={{ fontSize: 11.5, color: "#B4423A", marginTop: 6, marginBottom: 0, fontWeight: 600 }}>
+                  {QUOTE_REVISE_AMOUNT_NOTICE}
+                </p>
+              )}
               <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, marginBottom: 0 }}>
                 기본운임·가산 내역은 자동 재계산되지 않습니다. 필요하면 최종금액을 직접 조정해주세요.
               </p>

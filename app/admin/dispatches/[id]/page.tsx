@@ -70,6 +70,9 @@ import {
   canCancelDispatch,
   dispatchCancelAdminLabel,
   dispatchStatusAdminLabel,
+  CANCEL_REASON_NEEDS_QUOTE_REVISION,
+  QUOTE_REVISE_AMOUNT_PARAM,
+  QUOTE_REVISE_AMOUNT_VALUE,
 } from "@/lib/dispatchCancel";
 import SmsLogPanel from "@/components/SmsLogPanel";
 import SmsConfirmModal, { SmsPreview } from "@/components/SmsConfirmModal";
@@ -273,7 +276,7 @@ export default function DispatchDetailPage() {
     const { data, error } = await supabase
       .from("dispatches")
       .select(
-        "*, orders(id,order_no,origin,destination,item,vehicle_type,loading_type,special_notes,mixed_discount_type,mixed_discount_amount,mixed_discount_percent), drivers(id,name,phone,vehicles(vehicle_number,vehicle_type))"
+        "*, orders(id,order_no,quote_id,origin,destination,item,vehicle_type,loading_type,special_notes,mixed_discount_type,mixed_discount_amount,mixed_discount_percent), drivers(id,name,phone,vehicles(vehicle_number,vehicle_type))"
       )
       .eq("id", id)
       .single();
@@ -1183,6 +1186,24 @@ export default function DispatchDetailPage() {
     setCancelling(false);
     setCancelOpen(false);
     setCancelForm({ reason: "", note: "" });
+
+    /* ── 🔴 「운임료 조정 필요」면 견적 금액을 고치러 보낸다 (사용자 지시 2026-09-17) ──
+       *「이 사유 선택으로 취소시 자동으로 해당 견적의 견적관리 수정으로 이동하고
+         최종견적금액에 옅은 빨간색으로 강조해서 수정을 유도하자」*
+       🔴 **`load()` 대신 이동한다** — 다시 불러 봐야 담당자가 곧바로 떠날 화면이다.
+       🔴 **견적이 연결돼 있지 않으면 이동하지 않는다**(직접 만든 오더는 `quote_id` 가
+          `null` 이다) — 그때는 평소처럼 이 화면에 남는다. */
+    if (
+      cancelForm.reason === CANCEL_REASON_NEEDS_QUOTE_REVISION &&
+      dispatch.orders?.quote_id
+    ) {
+      router.push(
+        `/admin/quotes/${dispatch.orders.quote_id}` +
+          `?${QUOTE_REVISE_AMOUNT_PARAM}=${QUOTE_REVISE_AMOUNT_VALUE}`
+      );
+      return;
+    }
+
     // 🔴 부분 병합이 아니라 전체 재조회다(원칙 36번) — `updated_at` 이 트리거로
     //    갱신되므로 이어지는 낙관적 잠금 저장이 오탐한다.
     load();

@@ -134,6 +134,7 @@ export default function OrderDetailPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   /** 저장이 끝나면 올려서 수정 이력 패널을 다시 읽게 한다(펼쳐 둔 채로 저장했을 때) */
   const [changeLogKey, setChangeLogKey] = useState(0);
+  const [hasLiveDispatch, setHasLiveDispatch] = useState(false);
   /** 「지금 상차」 칩 — 저장하는 순간의 시각으로 맞춘다(등록 화면·견적 폼과 같은 처리) */
   const [pickupNow, setPickupNow] = useState(false);
   /**
@@ -267,6 +268,13 @@ export default function OrderDetailPage() {
     const rows = (dispatchRows || []) as { id: string; dispatch_status: string | null }[];
     const live = rows.find((d) => !isDispatchCancelled(d.dispatch_status));
     setLinkedDispatchId((live || rows[0])?.id || null);
+    /* 🔴 **살아 있는 배차가 있는지를 따로 들고 있는다**(사용자 지시 2026-09-17:
+          *「취소된 나오는 운송오더 상세에는 "배차상세보기" "배차등록" 버튼이 있어야 한다」*).
+       취소 건만 남은 오더는 **둘 다** 필요하다 — 사유·경위를 보러 갈 곳(취소된 배차)과
+       다시 배차를 잡을 곳이 서로 다른 화면이다.
+       🔴 **`linkedDispatchId` 하나로 가르지 말 것** — 그러면 취소 건이 있다는 이유로
+          재배차 버튼이 사라진다(지금까지가 그 상태였다). */
+    setHasLiveDispatch(!!live);
 
     // 🔴 **이미 이어져 있으면 후보를 부르지 않는다** — 연결된 오더에 「연결」 UI 가
     //    남아 있으면 담당자가 다른 견적으로 갈아 끼울 수 있게 되고, 그건 이 화면이
@@ -600,15 +608,25 @@ export default function OrderDetailPage() {
         <div style={{ display: "flex", gap: 8 }}>
           {!editing ? (
             <>
-              {linkedDispatchId ? (
+              {linkedDispatchId && (
                 <Link href={`/admin/dispatches/${linkedDispatchId}`} className="btn btn-ghost">
                   배차 상세보기
                 </Link>
-              ) : (
-                <Link href={`/admin/dispatches?from_order=${id}`} className="btn">
-                  배차관리로 이동
-                </Link>
               )}
+              {/* 🔴 **취소 건만 남았으면 「배차 상세보기」와 나란히 선다** — 사유를 보러
+                  갈 곳과 다시 배차를 잡을 곳이 다른 화면이라 둘 다 필요하다.
+                  ⚠️ 배차가 아예 없을 때의 문구(「배차관리로 이동」)는 **그대로 뒀다** —
+                     이번 지시는 취소 건에 대한 것이고, 가는 곳은 둘이 같다. */}
+              {!hasLiveDispatch &&
+                (linkedDispatchId ? (
+                  <Link href={`/admin/dispatches?from_order=${id}`} className="btn">
+                    + 배차 등록
+                  </Link>
+                ) : (
+                  <Link href={`/admin/dispatches?from_order=${id}`} className="btn">
+                    배차관리로 이동
+                  </Link>
+                ))}
               <button
                 className="btn"
                 onClick={() => {

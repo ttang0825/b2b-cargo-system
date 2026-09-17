@@ -128,3 +128,49 @@ export function buildQuoteFareLines(
 
   return { base, surcharge, surchargeNames, surchargeLabel, discountLines, adjustment };
 }
+
+/**
+ * 「최종 견적금액 직접 입력」으로 바뀐 차액을 **「조정」 줄이 아니라 기본운임에 흡수**시킨
+ * 새 `base_fare` 를 돌려준다.  (사용자 지시 2026-09-17)
+ *
+ * 사용자 원문: *「견적에서 견적을 추가하는 경우 계산 내역에 "조정"으로 들어가지 말고
+ * 기본운임에 들어가게 하자. 계산서 증액된 금액이 조정으로 들어가면 안좋을 것 같다」*
+ *
+ * ⚠️ **36차 E장의 「기본운임을 덮어쓰지 않는다」를 뒤집은 것이다.**
+ *    🔴 그때의 사용자 원문도 *「최종금액 직접 입력을 수정했을 때 **기본운임에서 + - 되어서**
+ *       해당 최종금액이 맞춰 줘야 한다」* 였는데, 그 세션이 **줄을 하나 더하는 쪽**으로 읽고
+ *       그것을 「사용자 확정」으로 적어 뒀다. 같은 지시가 두 번 왔으므로 이제 글자 그대로 한다.
+ *    🔴 **`lib/quoteAdjustment.ts` 머리말의 「기본운임을 덮어쓰지 않는다」를 근거로
+ *       되돌리지 말 것** — 그 문단은 같은 커밋에서 고쳤다.
+ *
+ * 🔴 **E장이 걱정한 것**(「운임기준표에서 나온 값이라는 사실이 사라진다」)**은 수정 이력이
+ *    답한다** — 이 PR 이 만든 `activity_logs` 에 `기본운임 120,000원 → 140,000원` 이
+ *    남아서, 「왜 이 거리에 이 금액인가」를 되짚을 수 있다. 🔴 그래서
+ *    **`FIELD_SPECS.quotes` 에서 `base_fare` 를 빼지 말 것** — 빼면 이 뒤집기가 근거를 잃는다.
+ *
+ * 🔴 **화주가 보는 식으로 맞춘다** — 이 파일의 `buildQuoteFareLines()` 와 같은 항
+ *    (반올림된 `surcharge_amount` + 할인 줄)을 쓴다. 관리자 상세가 쓰는
+ *    `calcQuoteAdjustment()`(개별 줄 합)로 맞추면 **화주 견적서 쪽에 반올림 차액만큼
+ *    「조정」 줄이 새로 생긴다** — 지금은 0인 자리다.
+ *    ⚠️ 그래서 **관리자 상세에는 반올림 차액이 그대로 남는다**(v12 C장이 이미 「고장이
+ *    아니다」로 적어 둔 그 값이고, 담당자가 올린 금액은 이제 거기 안 섞인다).
+ *
+ * 🔴 **`final_amount` 가 없으면 `null` 을 돌려준다 — 그때는 기본운임을 건드리지 않는다.**
+ *    금액이 아직 없는 견적의 기본운임을 0으로 만들면 운임기준표 산출값이 통째로 사라진다.
+ */
+export function baseFareAbsorbingAdjustment(
+  quote: QuoteFareQuote,
+  items: QuoteFareItem[],
+  finalAmount: number | null | undefined
+): number | null {
+  if (finalAmount === null || finalAmount === undefined) return null;
+  const list = items || [];
+  const discountTotal = list
+    .filter((it) => (it.amount || 0) < 0)
+    .reduce((sum, it) => sum + (it.amount || 0), 0);
+  const surcharge =
+    quote.surcharge_amount != null
+      ? Number(quote.surcharge_amount)
+      : list.reduce((sum, it) => sum + Math.max(it.amount || 0, 0), 0);
+  return Math.round(Number(finalAmount) - surcharge - discountTotal);
+}

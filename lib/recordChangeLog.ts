@@ -145,6 +145,11 @@ const FIELD_SPECS: Record<RecordChangeTarget, Record<string, FieldSpec>> = {
     requested_pickup_at: DT("희망 상차일시"),
     requested_dropoff_at: DT("희망 하차일시"),
     notes: T("특이사항"),
+    // 🔴 **빼지 말 것** — 2026-09-17 부터 「최종금액 직접 입력」의 차액이 이 값에
+    //    흡수된다(`baseFareAbsorbingAdjustment`). 36차 E장이 「기본운임을 덮어쓰면
+    //    운임기준표에서 나온 값이라는 사실이 사라진다」고 반대했던 자리이고,
+    //    **그 걱정에 답하는 것이 바로 이 줄이다.**
+    base_fare: WON("기본운임"),
     final_amount: WON("최종 견적금액"),
     loading_type: { label: "적재구분", format: LOADING_TYPE },
     mixed_shipper_consent: { label: "혼적 화주동의", format: fmtBool("동의", "미동의") },
