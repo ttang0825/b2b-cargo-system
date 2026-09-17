@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { DISPATCH_STATUS_CANCELLED } from "@/lib/dispatchCancel";
+import { dispatchIssueCustomerLabel } from "@/lib/dispatchIssue";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import MixableBadge from "@/components/MixableBadge";
 import {
@@ -128,7 +129,9 @@ export default function CustomerDispatchesPage() {
       const { data, error } = await supabase
         .from("dispatches")
         .select(
-          "id,dispatch_status,pickup_confirmed,delivery_confirmed,issue_occurred,created_at,updated_at,orders(order_no,origin,destination,requested_pickup_at,item,vehicle_type,loading_type,collection_method,billing_cycle,direct_collection_point)"
+          // 🔴 `issue_reason` 만 가져온다 — **`issue_notes`(경위)는 내부 메모라 안 보낸다.**
+          //    화면이 안 그리는 것과 API 가 아예 안 주는 것은 다른 방어선이다.
+          "id,dispatch_status,pickup_confirmed,delivery_confirmed,issue_occurred,issue_reason,created_at,updated_at,orders(order_no,origin,destination,requested_pickup_at,item,vehicle_type,loading_type,collection_method,billing_cycle,direct_collection_point)"
         )
         // 🔴 **취소된 배차는 화주에게 보이지 않는다**(사용자 확정 (A), 2026-09-17).
         //    화주에게 필요한 정보는 「차가 바뀐다」뿐이고, 취소 카드와 새 배차 카드가
@@ -265,7 +268,18 @@ export default function CustomerDispatchesPage() {
 
                 {/* 🔴 4번째 알약이 아니라 알약 위의 별도 배지다(사용자 확정 6번) */}
                 {issue && (
-                  <div className="pv2-dissue">{DISPATCH_ISSUE_STYLE.label}</div>
+                  <div className="pv2-dissue">
+                    {DISPATCH_ISSUE_STYLE.label}
+                    {/* 🔴 **순화한 말이다**(`lib/dispatchIssue.ts`) — 관리자 라벨
+                        (「화물 없어짐」 등)을 그대로 끌어오지 말 것. 특히 「분실」은
+                        보험 약관이 면책으로 정의한 낱말이라 **쓰면 안 된다.**
+                        🔴 사유가 없는 옛 건은 **배지만 그린다**(「확인 중」을 지어내지 않는다). */}
+                    {dispatchIssueCustomerLabel(d.issue_reason) && (
+                      <span style={{ fontWeight: 600, opacity: 0.85 }}>
+                        · {dispatchIssueCustomerLabel(d.issue_reason)}
+                      </span>
+                    )}
+                  </div>
                 )}
 
                 <div className="pv2-dsteps">

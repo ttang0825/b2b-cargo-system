@@ -62,6 +62,8 @@ import {
 import { localInputToISOString } from "@/lib/localDateTime";
 import { fetchDispatchSmsPreview } from "@/lib/notifyDispatchSms";
 import { notifyPortalPushForDispatchStatus } from "@/lib/notifyPortalPush";
+import { DISPATCH_ISSUE_REASONS, dispatchIssueNeedsGuide } from "@/lib/dispatchIssue";
+import { getIncidentGuide, INCIDENT_PHOTO_NOTE } from "@/lib/incidentGuide";
 import {
   DISPATCH_CANCEL_REASONS,
   DISPATCH_STATUS_CANCELLED,
@@ -243,6 +245,7 @@ export default function DispatchDetailPage() {
     pickup_confirmed: false,
     delivery_confirmed: false,
     issue_occurred: false,
+    issue_reason: "",
     issue_notes: "",
     memo: "",
     assignment_type: "internal" as "internal" | "external",
@@ -288,6 +291,7 @@ export default function DispatchDetailPage() {
       pickup_confirmed: data.pickup_confirmed || false,
       delivery_confirmed: data.delivery_confirmed || false,
       issue_occurred: data.issue_occurred || false,
+      issue_reason: data.issue_reason || "",
       issue_notes: data.issue_notes || "",
       memo: data.memo || "",
       assignment_type: (data.assignment_type as "internal" | "external") || "internal",
@@ -1032,6 +1036,14 @@ export default function DispatchDetailPage() {
       setActionError("차주 직접수금액은 음수로 입력할 수 없습니다.", "save");
       return;
     }
+    // 🔴 **「문제 발생」을 켰으면 사유가 있어야 한다** — 사유 없는 문제발생은 화주에게
+    //    빨간 배지만 보내고 아무것도 말해주지 않는다(그것이 이번 작업의 출발점이다).
+    //    🔴 화면 표시(`*`)와 이 검사는 **같은 조건**이어야 한다.
+    if (editForm.issue_occurred && !editForm.issue_reason) {
+      setSaving(false);
+      setActionError("문제 사유를 선택하십시오.", "save");
+      return;
+    }
     const payload = {
       customer_charge: editForm.customer_charge
         ? Number(editForm.customer_charge)
@@ -1049,7 +1061,10 @@ export default function DispatchDetailPage() {
       pickup_confirmed: editForm.pickup_confirmed,
       delivery_confirmed: editForm.delivery_confirmed,
       issue_occurred: editForm.issue_occurred,
-      issue_notes: editForm.issue_notes || null,
+      // 🔴 **꺼지면 둘 다 비운다** — 체크를 풀었는데 사유가 남아 있으면 화주 화면에
+      //    배지는 없는데 사유만 뜨는 상태가 된다.
+      issue_reason: editForm.issue_occurred ? editForm.issue_reason || null : null,
+      issue_notes: editForm.issue_occurred ? editForm.issue_notes || null : null,
       memo: editForm.memo || null,
       origin_company_name: editForm.origin_company_name.trim() || null,
       origin_contact_name: editForm.origin_contact_name.trim() || null,
@@ -2673,16 +2688,78 @@ export default function DispatchDetailPage() {
           </label>
         </div>
         {editForm.issue_occurred && (
-          <div className="field" style={{ marginBottom: 14 }}>
-            <label>문제 상세 내용</label>
-            <textarea
-              rows={2}
-              value={editForm.issue_notes}
-              onChange={(e) =>
-                setEditForm({ ...editForm, issue_notes: e.target.value })
-              }
-            />
-          </div>
+          <>
+            <div className="field" style={{ marginBottom: 14 }}>
+              <label>
+                문제 사유 <span style={{ color: "var(--danger)" }}>*</span>
+              </label>
+              <select
+                value={editForm.issue_reason}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, issue_reason: e.target.value })
+                }
+              >
+                <option value="">선택하십시오</option>
+                {DISPATCH_ISSUE_REASONS.map((r) => (
+                  <option key={r.code} value={r.code}>
+                    {r.adminLabel}
+                  </option>
+                ))}
+              </select>
+              {/* 🔴 화주가 **다른 말**을 본다는 것을 담당자가 알아야 한다 — 모르면
+                  「왜 내가 고른 말이 안 나오지」가 되고, 순화한 라벨을 되돌리려 한다. */}
+              <p style={{ margin: "4px 0 0", fontSize: 11.5, color: "var(--text-muted)" }}>
+                화주 화면에는 순화한 말로 나갑니다. 아래 상세 내용은 화주에게 나가지 않습니다.
+              </p>
+            </div>
+
+            {/* ── 사고 체크리스트 ─────────────────────────────────────────────
+                🔴 **관리자 전용이다** — 화주에게 보이면 보험 조건이 협상 카드가 된다.
+                🔴 **「확인함」 체크박스를 달지 말 것** — 누른 기록이 곧
+                   「알고도 안 했다」의 증거가 된다. 보여주기만 한다. */}
+            {dispatchIssueNeedsGuide(editForm.issue_reason) && (
+              <div
+                style={{
+                  border: "1px solid #FCA5A5",
+                  background: "#FEF2F2",
+                  borderRadius: "var(--radius)",
+                  padding: "12px 14px",
+                  marginBottom: 14,
+                }}
+              >
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>
+                  지금 확인할 것
+                </div>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, lineHeight: 1.65 }}>
+                  {getIncidentGuide(editForm.issue_reason).map((line, i) => (
+                    <li
+                      key={i}
+                      style={{
+                        color: line.tone === "danger" ? "#B91C1C" : "var(--text-muted)",
+                        fontWeight: line.tone === "danger" ? 600 : 400,
+                      }}
+                    >
+                      {line.text}
+                    </li>
+                  ))}
+                  <li style={{ color: "var(--text-muted)" }}>{INCIDENT_PHOTO_NOTE}</li>
+                </ul>
+              </div>
+            )}
+
+            <div className="field" style={{ marginBottom: 14 }}>
+              {/* 🔴 **자유 서술을 드롭다운으로 대체하지 말 것** — 드롭다운은 **분류**이고
+                  이것은 **경위**다. 둘 다 필요하다. */}
+              <label>문제 상세 내용 (내부 기록)</label>
+              <textarea
+                rows={2}
+                value={editForm.issue_notes}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, issue_notes: e.target.value })
+                }
+              />
+            </div>
+          </>
         )}
         <div className="field">
           <label>배차 메모</label>
