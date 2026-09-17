@@ -10,7 +10,12 @@ import {
   INVOICE_STATUS_OPTIONS,
   getInvoiceStatusColor,
 } from "@/lib/invoiceStatusColors";
-import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
+import DateRangeFilter, {
+  DatePreset,
+  CustomDateRange,
+  EMPTY_CUSTOM_RANGE,
+  getDateRange,
+} from "@/components/DateRangeFilter";
 import { getCurrentStaffId } from "@/lib/currentStaff";
 import MoneyInput from "@/components/MoneyInput";
 import MixableBadge from "@/components/MixableBadge";
@@ -156,6 +161,8 @@ function InvoicesPageInner() {
   const [statusFilter, setStatusFilter] = useState("전체");
   const [settlementFilter, setSettlementFilter] = useState("전체");
   const [period, setPeriod] = useState<DatePreset>("all");
+  // 직접지정 구간(2026-09-17). `period === "custom"` 일 때만 쓰인다.
+  const [customRange, setCustomRange] = useState<CustomDateRange>(EMPTY_CUSTOM_RANGE);
 
   const [selectedOrderId, setSelectedOrderId] = useState("");
   const [billingPeriod, setBillingPeriod] = useState(currentMonth());
@@ -196,9 +203,12 @@ function InvoicesPageInner() {
     driver_vat_included: boolean;
   } | null>(null);
 
-  async function loadInvoices(preset: DatePreset = period) {
+  async function loadInvoices(
+    preset: DatePreset = period,
+    custom: CustomDateRange = customRange
+  ) {
     setLoading(true);
-    const { from } = getDateRange(preset);
+    const { from, to } = getDateRange(preset, custom);
     let query = supabase
       .from("invoices")
       .select(
@@ -207,6 +217,8 @@ function InvoicesPageInner() {
       .order("created_at", { ascending: false })
       .limit(preset === "all" ? ALL_PERIOD_LIMIT : FILTERED_PERIOD_LIMIT);
     if (from) query = query.gte("created_at", from);
+    // 🔴 `to` 는 **다음 날 자정**이라 `lt` 여야 끝날 그 자체가 포함된다(정의처 주석).
+    if (to) query = query.lt("created_at", to);
 
     const { data, error } = await query;
     if (error) setError(error.message);
@@ -323,9 +335,9 @@ function InvoicesPageInner() {
 
   // 기간 필터 변경 시 정산 목록만 다시 로드
   useEffect(() => {
-    loadInvoices(period);
+    loadInvoices(period, customRange);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [period]);
+  }, [period, customRange.from, customRange.to]);
 
   async function handleSelectOrder(orderId: string) {
     setSelectedOrderId(orderId);
@@ -576,8 +588,15 @@ function InvoicesPageInner() {
           </p>
         </div>
         {activeTab === "individual" && (
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <DateRangeFilter value={period} onChange={setPeriod} />
+          <div
+            style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}
+          >
+            <DateRangeFilter
+              value={period}
+              onChange={setPeriod}
+              custom={customRange}
+              onCustomChange={setCustomRange}
+            />
             <button className="btn" onClick={() => setShowForm((v) => !v)}>
               {showForm ? "닫기" : "+ 신규 정산 등록"}
             </button>
@@ -610,10 +629,10 @@ function InvoicesPageInner() {
         <>
       {error && <div className="error-box">오류: {error}</div>}
 
-      {period === "all" && invoices.length >= ALL_PERIOD_LIMIT && (
+      {invoices.length >= (period === "all" ? ALL_PERIOD_LIMIT : FILTERED_PERIOD_LIMIT) && (
         <div className="error-box">
-          최근 {ALL_PERIOD_LIMIT}건만 표시 중입니다. 더 오래된 데이터를 보려면
-          기간 필터를 좁혀서 확인해주세요.
+          최근 {period === "all" ? ALL_PERIOD_LIMIT : FILTERED_PERIOD_LIMIT}건만 표시
+          중입니다. 더 오래된 데이터를 보려면 기간 필터를 좁혀서 확인해주세요.
         </div>
       )}
 
