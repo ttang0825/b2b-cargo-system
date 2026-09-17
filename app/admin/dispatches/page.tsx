@@ -111,6 +111,9 @@ type DispatchRow = {
 };
 
 // "전체" 기간을 선택해도 한 번에 너무 많은 데이터를 불러오지 않도록 안전장치로 상한을 둠
+/** 🔴 「취소건 숨기기」 기억용 키 — 이 브라우저에만 남는 **보기 취향**이다(DB 아님). */
+const HIDE_CANCELLED_KEY = "admin-dispatches-hide-cancelled";
+
 const ALL_PERIOD_LIMIT = 500;
 const FILTERED_PERIOD_LIMIT = 500;
 
@@ -131,6 +134,39 @@ function DispatchesPageInner() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
+  /**
+   * 「취소건 숨기기」 (사용자 지시 2026-09-17: *「배차관리 목록에서 취소건을 안보이게
+   * 하는 옵션도 있으면 좋겠다」*).
+   *
+   * 🔴 **기본은 「보이기」다** — 기본으로 감추면 취소 건이 **없어진 것으로 오해**한다.
+   *    「옵션」이라는 말 그대로 담당자가 켜는 것이다.
+   * 🔴 **감출 때는 몇 건을 감췄는지 반드시 적는다**(아래 `hiddenCancelCount`) —
+   *    조용히 사라지면 「배차가 왜 안 보이지」가 된다(원칙 55번과 같은 결).
+   * 🔴 **조회에서 빼지 말 것**(`.neq()` 금지) — 화면에서만 거른다. 조회에서 빼면
+   *    「최근 N건만 표시」 상한이 취소 건을 세지 못해 목록 개수가 들쭉날쭉해지고,
+   *    켜고 끌 때마다 다시 불러와야 한다.
+   * ⚠️ 고른 값은 **이 브라우저에만** 남는다(`localStorage`) — 담당자마다 보기 취향이
+   *    다르고, 매번 다시 누르게 하면 이 옵션을 만든 뜻이 없다.
+   */
+  const [hideCancelled, setHideCancelled] = useState(false);
+
+  useEffect(() => {
+    // 🔴 사생활 모드·저장소 차단에서 던질 수 있으니 반드시 감싼다.
+    try {
+      setHideCancelled(localStorage.getItem(HIDE_CANCELLED_KEY) === "1");
+    } catch {
+      /* 못 읽으면 기본값(보이기) 그대로 */
+    }
+  }, []);
+
+  function toggleHideCancelled(next: boolean) {
+    setHideCancelled(next);
+    try {
+      localStorage.setItem(HIDE_CANCELLED_KEY, next ? "1" : "0");
+    } catch {
+      /* 못 써도 이번 화면에서는 동작한다 */
+    }
+  }
   const [period, setPeriod] = useState<DatePreset>("all");
   // 직접지정 구간(2026-09-17). `period === "custom"` 일 때만 쓰인다.
   const [customRange, setCustomRange] = useState<CustomDateRange>(EMPTY_CUSTOM_RANGE);
@@ -556,7 +592,7 @@ function DispatchesPageInner() {
     }
   }
 
-  const filtered = useMemo(() => {
+  const searched = useMemo(() => {
     if (!search.trim()) return dispatches;
     const q = search.trim().toLowerCase();
     return dispatches.filter((d) => {
@@ -568,6 +604,17 @@ function DispatchesPageInner() {
       );
     });
   }, [dispatches, search]);
+
+  const filtered = useMemo(
+    () =>
+      hideCancelled
+        ? searched.filter((d) => !isDispatchCancelled(d.dispatch_status))
+        : searched,
+    [searched, hideCancelled]
+  );
+
+  /** 🔴 **검색까지 마친 뒤 감춘 건수다** — 「검색 결과에서 몇 건을 감췄나」가 맞는 말이다. */
+  const hiddenCancelCount = searched.length - filtered.length;
 
   return (
     <main className="container">
@@ -820,7 +867,16 @@ function DispatchesPageInner() {
         </div>
       )}
 
-      <div style={{ position: "relative", maxWidth: 320, marginBottom: 16 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 14,
+          flexWrap: "wrap",
+          marginBottom: 16,
+        }}
+      >
+      <div style={{ position: "relative", maxWidth: 320, flex: "1 1 240px" }}>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -852,6 +908,32 @@ function DispatchesPageInner() {
             ×
           </button>
         )}
+      </div>
+
+        {/* 🔴 **기본은 꺼짐**(취소 건이 보인다) — 켜면 몇 건을 감췄는지 옆에 적는다. */}
+        <label
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            fontSize: 13,
+            color: "var(--text-muted)",
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={hideCancelled}
+            onChange={(e) => toggleHideCancelled(e.target.checked)}
+          />
+          취소건 숨기기
+          {hideCancelled && hiddenCancelCount > 0 && (
+            <span style={{ color: "var(--text)", fontWeight: 600 }}>
+              ({hiddenCancelCount}건 숨김)
+            </span>
+          )}
+        </label>
       </div>
 
       <div className="card">
