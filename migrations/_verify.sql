@@ -1269,3 +1269,75 @@ select '㉕-e 발주요청 운송시간' as 구분,
   from portal_order_requests
  group by 2
  order by 3 desc;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- ㉖ 🔴 배차 취소·문제발생 착수 전 실측 (2026-09-17)
+--
+-- 「배차확정 후 차주가 취소하면 어떻게 하나」·「사고가 났을 때 화주가 무엇을 보나」를
+-- 만들기 전에 잰다. 🔴 **화면 상수(`DISPATCH_STATUS_OPTIONS`)와 DB CHECK 가 다를 수
+-- 있다** — 이 절이 재는 것은 **DB** 쪽이다.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+\echo ''
+\echo '=== ㉖ 배차 취소·문제발생 착수 전 실측 ==='
+
+\echo '--- ㉖-a 🔴 dispatches 의 CHECK 제약 전수 (허용값을 그대로 옮겨 적을 것) ---'
+select conname as 제약명, pg_get_constraintdef(oid) as 정의
+  from pg_constraint
+ where conrelid = 'dispatches'::regclass
+   and contype = 'c'
+ order by conname;
+
+\echo '--- ㉖-b 🔴 orders 의 CHECK 제약 전수 (취소 시 되돌릴 상태) ---'
+select conname as 제약명, pg_get_constraintdef(oid) as 정의
+  from pg_constraint
+ where conrelid = 'orders'::regclass
+   and contype = 'c'
+ order by conname;
+
+\echo '--- ㉖-c 배차 상태별 건수 + 문제발생 체크 (운영 실측) ---'
+select coalesce(dispatch_status, '(없음)') as 배차상태,
+       count(*)                            as 건수,
+       count(*) filter (where issue_occurred)        as "issue_occurred_true",
+       count(*) filter (where pickup_confirmed)      as 상차확인,
+       count(*) filter (where delivery_confirmed)    as 하차확인
+  from dispatches
+ group by 1
+ order by 2 desc;
+
+\echo '--- ㉖-d 🔴 두 신호가 어긋난 건 (관리자와 화주가 다른 것을 보는 건) ---'
+select count(*) filter (where dispatch_status = '문제발생' and not coalesce(issue_occurred,false)) as "상태만_문제발생",
+       count(*) filter (where dispatch_status <> '문제발생' and coalesce(issue_occurred,false))    as "체크만_문제발생",
+       count(*) filter (where issue_notes is not null and issue_notes <> '')                       as "issue_notes_있음"
+  from dispatches;
+
+\echo '--- ㉖-e 오더 상태별 건수 + 배차 유무 (재배차 후보 판정의 모수) ---'
+select coalesce(o.status, '(없음)') as 오더상태,
+       count(*)                                                   as 오더수,
+       count(*) filter (where d.cnt is not null and d.cnt > 0)     as "배차_있음",
+       count(*) filter (where d.cnt is null)                       as "배차_없음"
+  from orders o
+  left join (select order_id, count(*) as cnt from dispatches group by 1) d
+    on d.order_id = o.id
+ group by 1
+ order by 2 desc;
+
+\echo '--- ㉖-f 🔴 한 오더에 배차가 둘 이상인 건 (지금은 0이어야 한다) ---'
+select count(*) as "배차_2건이상_오더수"
+  from (select order_id from dispatches where order_id is not null
+         group by 1 having count(*) > 1) t;
+
+\echo '--- ㉖-g dispatches 의 취소·문제 관련 컬럼이 이미 있는가 (원칙 27번) ---'
+select column_name as 컬럼, data_type as 타입, is_nullable as "null허용"
+  from information_schema.columns
+ where table_schema = 'public' and table_name = 'dispatches'
+   and column_name in ('cancel_reason','cancel_reason_note','cancelled_at','cancelled_by',
+                       'issue_reason','issue_occurred','issue_notes')
+ order by column_name;
+
+\echo '--- ㉖-h 차주 수 + 누적 운송건수 분포 (2-5 집계의 모수) ---'
+select count(*)                                   as 차주수,
+       count(*) filter (where coalesce(completed_trip_count,0) > 0) as "운송건수_1이상",
+       max(completed_trip_count)                  as 최대운송건수,
+       count(*) filter (where rating is not null)  as "평점_있음"
+  from drivers;
