@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { DISPATCH_STATUS_CANCELLED } from "@/lib/dispatchCancel";
 import Link from "next/link";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import {
@@ -148,6 +149,13 @@ export default function CustomerHomePage() {
         //    이 줄을 `neq("운송완료")` 하나로 되돌리면 "진행 중인 운송" 블록에
         //    「운송완료」 배지가 달린 행이 나타난다.
         .not("dispatch_status", "in", "(운송완료,하차완료)")
+        // 🔴 **취소된 배차는 화주에게 보이지 않는다**(사용자 확정 (A), 2026-09-17).
+        //    화주에게 필요한 정보는 「차가 바뀐다」뿐이고, 취소 카드와 새 배차 카드가
+        //    나란히 있으면 **어느 것이 유효한지** 알 수 없다(이 목록은 오더가 아니라
+        //    **배차 단위**라 재배차하면 카드가 둘이 된다).
+        //    ⚠️ 그래서 **그 건이 목록에서 잠시 사라진다** — 「왜 사라졌는지」는
+        //    배너·푸시(`lib/portalAlert.ts`)가 말한다. 🔴 **둘 중 하나만 지우지 말 것.**
+        .neq("dispatch_status", DISPATCH_STATUS_CANCELLED)
         .order("created_at", { ascending: false })
         .limit(5),
       supabase

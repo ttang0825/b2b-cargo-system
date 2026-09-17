@@ -60,6 +60,11 @@ export function notifyPortalPush(
 const PORTAL_PUSH_BY_DISPATCH_STATUS: Record<string, PortalPushEvent> = {
   배차확정: "dispatch_confirmed",
   운송완료: "transport_completed",
+  // 🔴 **배차확정과 짝이다**(2026-09-17) — 확정 푸시가 이미 나간 건이 무효가 되는
+  //    것이라, 안 알리면 화주 화면이 **조용히 되돌아간다**.
+  //    ⚠️ 화주 화면은 취소된 배차를 **감추므로**(사용자 확정 (A)) 이 알림이
+  //    「그 건이 왜 사라졌는지」를 말해 주는 **유일한 경로**다. 🔴 빼지 말 것.
+  취소: "dispatch_cancelled",
 };
 
 export function notifyPortalPushForDispatchStatus(

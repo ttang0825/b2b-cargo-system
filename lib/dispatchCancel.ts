@@ -1,0 +1,104 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// 배차 취소 사유 — **유일 정의처** (2026-09-17)
+//
+// 배경(사용자): *「배차확정 후 배차기사의 변심으로 취소한 경우, 어떻게 해야하나?」*
+//
+// 그전에는 길이 **삭제 하나뿐**이었다 — 행이 통째로 사라져서 ① 차주가 몇 번 펑크냈는지
+// 아무데도 안 남고 ② 배차확정 푸시는 이미 갔는데 화주 화면이 **조용히 「접수」로 되돌아가고**
+// ③ 급히 더 비싼 차를 잡아 마진이 깎여도 **왜 깎였는지가 없었다.**
+//
+// 🔴 **「차주 책임」 칸이 이 표의 존재 이유다.** 차주 상세의 취소 건수 집계가 이 칸으로
+//    가른다 — 🔴 **화주 요청 취소를 차주 이력에 세지 말 것**(우리도 차주도 잘못이 없다).
+//
+// 🔴 **화주 라벨에 차주를 탓하는 말을 쓰지 말 것.** 「차주 변심」이 화주 화면에 뜨면
+//    **회사가 배차를 못 지킨 것**으로 읽힌다. 화주에게 필요한 정보는 **「차가 바뀐다」**뿐이다.
+//    ⚠️ 지금은 화주 화면이 취소된 배차를 **아예 감추지만**(사용자 확정 (A), 2026-09-17)
+//    화주 라벨을 지우지 않았다 — 「취소됨 배지로 보여준다」로 뒤집힐 때 다시 필요하고,
+//    그때 이 칸이 없으면 **관리자 라벨이 그대로 화주에게 나간다.**
+//
+// 🔴 **`cancel_reason_note`(자유 서술)는 내부 전용이다** — 화주 화면·견적서·엑셀 0줄.
+//
+// 🔴 **DB 에 CHECK 를 걸지 않았다** — 사유 목록은 실무가 굳기 전이라 늘어난다.
+//    그래서 **이 파일이 유일한 방어선**이고, 화면에서 코드 문자열을 직접 적지 말 것.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type DispatchCancelReasonCode =
+  | "driver_noshow"
+  | "driver_breakdown"
+  | "fare_disagreement"
+  | "customer_request"
+  | "cargo_not_ready"
+  | "weather_road"
+  | "etc";
+
+export type DispatchCancelReason = {
+  code: DispatchCancelReasonCode;
+  /** 담당자가 보는 정확한 말. */
+  adminLabel: string;
+  /**
+   * 🔴 **차주 이력에 셀 것인가.** 차주 상세의 「취소」 건수가 이 값이 `true` 인 것만 센다.
+   *    🔴 `customer_request`·`cargo_not_ready`·`weather_road` 를 `true` 로 바꾸지 말 것 —
+   *    차주 잘못이 아닌 것을 차주 이력에 쌓으면 그 숫자를 아무도 못 믿는다.
+   */
+  driverFault: boolean;
+  /**
+   * 화주가 보는 순화한 말(§5-4 패턴 — `lib/quoteStatusLabels.ts` 와 같은 결).
+   * 🔴 **차주를 탓하는 말을 넣지 말 것.**
+   */
+  customerLabel: string;
+};
+
+/** 🔴 배열 순서가 곧 드롭다운 순서다 — 흔한 것부터. */
+export const DISPATCH_CANCEL_REASONS: DispatchCancelReason[] = [
+  { code: "driver_noshow",     adminLabel: "차주 변심·연락두절",  driverFault: true,  customerLabel: "배차 차량 변경" },
+  { code: "driver_breakdown",  adminLabel: "차주 차량 고장·사고", driverFault: true,  customerLabel: "배차 차량 변경" },
+  { code: "fare_disagreement", adminLabel: "운임 협의 결렬",     driverFault: true,  customerLabel: "배차 차량 변경" },
+  { code: "customer_request",  adminLabel: "화주 요청 취소",     driverFault: false, customerLabel: "고객 요청 취소" },
+  { code: "cargo_not_ready",   adminLabel: "화물 준비 안 됨",    driverFault: false, customerLabel: "상차 준비 미완" },
+  { code: "weather_road",      adminLabel: "기상·도로 사정",     driverFault: false, customerLabel: "기상·도로 사정" },
+  { code: "etc",               adminLabel: "기타",              driverFault: false, customerLabel: "배차 변경" },
+];
+
+/** 🔴 **차주 책임인 사유 코드** — 차주별 취소 집계가 이것으로 거른다. */
+export const DRIVER_FAULT_CANCEL_CODES: string[] = DISPATCH_CANCEL_REASONS.filter(
+  (r) => r.driverFault
+).map((r) => r.code);
+
+export function getDispatchCancelReason(
+  code: string | null | undefined
+): DispatchCancelReason | null {
+  if (!code) return null;
+  return DISPATCH_CANCEL_REASONS.find((r) => r.code === code) || null;
+}
+
+/** 담당자 화면용. 모르는 코드는 **코드를 그대로 보여준다**(조용히 비우지 않는다 · 원칙 55번). */
+export function dispatchCancelAdminLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return getDispatchCancelReason(code)?.adminLabel || code;
+}
+
+/**
+ * 화주 화면용. 🔴 모르는 코드는 **가장 무난한 말로 떨어뜨린다** — 담당자 화면과 달리
+ * 여기서 코드(`driver_noshow`)가 그대로 보이면 그 자체가 차주를 탓하는 말이 된다.
+ */
+export function dispatchCancelCustomerLabel(code: string | null | undefined): string {
+  return getDispatchCancelReason(code)?.customerLabel || "배차 변경";
+}
+
+/** 🔴 `dispatch_status` 의 값이다 — 화면에서 문자열을 직접 적지 말 것. */
+export const DISPATCH_STATUS_CANCELLED = "취소";
+
+/**
+ * 🔴 **이 상태에서는 취소로 갈 수 없다.**
+ *
+ *    `운송완료` 는 정산이 이미 만들어졌을 수 있다(`lib/autoCreateInvoice.ts` 가
+ *    그 상태에서 돈다). 그 되돌리기는 **별도 설계**이고, 여기서 열어 주면 정산 건이
+ *    남은 채로 배차만 취소된 상태가 만들어진다.
+ *    ⚠️ 착수 시점 실측으로 운영 배차 **11건이 전부 `운송완료`** 였다 — 이 가드가
+ *    없으면 지금 화면에 있는 모든 건에 취소 버튼이 뜬다.
+ */
+export const CANCEL_BLOCKED_STATUSES: string[] = ["운송완료", DISPATCH_STATUS_CANCELLED];
+
+export function canCancelDispatch(status: string | null | undefined): boolean {
+  return !CANCEL_BLOCKED_STATUSES.includes(status || "");
+}

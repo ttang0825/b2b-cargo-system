@@ -23,6 +23,7 @@ import MixableBadge from "@/components/MixableBadge";
 import { shortAddress } from "@/lib/shortAddress";
 import { fetchDispatchSmsPreview } from "@/lib/notifyDispatchSms";
 import { notifyPortalPushForDispatchStatus } from "@/lib/notifyPortalPush";
+import { DISPATCH_STATUS_CANCELLED } from "@/lib/dispatchCancel";
 import SmsConfirmModal, { SmsPreview } from "@/components/SmsConfirmModal";
 import RecurringContractBadge from "@/components/RecurringContractBadge";
 import AdminMobileList from "@/components/AdminMobileList";
@@ -194,6 +195,14 @@ function DispatchesPageInner() {
    *    실제 배차가 있는 것만 뺀다」 두 단계다.
    * 🔴 **`error` 를 버리지 말 것**(원칙 55번) — 조회가 실패하면 후보가 빈 채로
    *    조용히 「배차할 오더가 없습니다」가 되어 원인을 짚을 단서가 안 남는다.
+   *
+   * 🚨 **「살아 있는」 배차만 뺀다**(2026-09-17 · 배차 취소 신설).
+   *    그전에는 `dispatches` 를 **상태 필터 없이** 전수 조회해서 `takenIds` 를 만들었다.
+   *    그대로 두고 `취소` 를 만들면 **취소된 배차가 남아 그 오더가 후보에서 영영 빠지고
+   *    재배차를 할 수 없다** — 취소 기능을 만드는 의미가 통째로 사라진다.
+   *    🔴 **`.neq()` 를 지우지 말 것.** 🔴 그리고 **두 단계는 그대로다** —
+   *    「상태로 좁히고(`접수`·`배차중`) → 살아 있는 배차가 있는 것만 뺀다」.
+   *    한 단계로 합치면 담당자가 손으로 `배차중` 으로 바꿔둔, 배차 **없는** 오더가 빠진다.
    */
   async function loadAvailableOrders() {
     const { data, error: ordErr } = await supabase
@@ -210,7 +219,9 @@ function DispatchesPageInner() {
     }
     const { data: taken, error: dispErr } = await supabase
       .from("dispatches")
-      .select("order_id");
+      .select("order_id")
+      // 🚨 취소된 배차는 「없는 것」으로 본다 — 이 줄이 빠지면 재배차가 막힌다.
+      .neq("dispatch_status", DISPATCH_STATUS_CANCELLED);
     if (dispErr) {
       setError(`기존 배차를 확인하지 못했습니다: ${dispErr.message}`);
       setAvailableOrders([]);

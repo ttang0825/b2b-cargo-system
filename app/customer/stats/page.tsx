@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { DISPATCH_STATUS_CANCELLED } from "@/lib/dispatchCancel";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import { exportMultiSheetExcel, buildExportFilename } from "@/lib/exportExcel";
 import Pv2DatePicker from "@/components/pv2/Pv2DatePicker";
@@ -317,6 +318,13 @@ export default function PortalStatsPage() {
         .select(
           "dispatch_status,pickup_confirmed,delivery_confirmed,issue_occurred,created_at,orders(order_no,origin,destination,requested_pickup_at,item,vehicle_type,loading_type,collection_method,billing_cycle)"
         )
+        // 🔴 **취소된 배차는 화주에게 보이지 않는다**(사용자 확정 (A), 2026-09-17).
+        //    화주에게 필요한 정보는 「차가 바뀐다」뿐이고, 취소 카드와 새 배차 카드가
+        //    나란히 있으면 **어느 것이 유효한지** 알 수 없다(이 목록은 오더가 아니라
+        //    **배차 단위**라 재배차하면 카드가 둘이 된다).
+        //    ⚠️ 그래서 **그 건이 목록에서 잠시 사라진다** — 「왜 사라졌는지」는
+        //    배너·푸시(`lib/portalAlert.ts`)가 말한다. 🔴 **둘 중 하나만 지우지 말 것.**
+        .neq("dispatch_status", DISPATCH_STATUS_CANCELLED)
         .gte("created_at", fromIso)
         .order("created_at", { ascending: false })
         .limit(2000),
