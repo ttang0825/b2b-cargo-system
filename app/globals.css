@@ -24,6 +24,16 @@
   --brand-yellow-border: #f0e7c4; /* 옅은 노랑 위에 얹는 카드·칩 테두리 */
   --brand-yellow-tint: #f5f2e3; /* 아이콘 자리 배경 */
   --brand-yellow-text: #8a6d00; /* 흰/옅은 배경 위 옐로 계열 진한 텍스트 */
+  /* ── 관리자 목록·폼의 「지금 손대야 하는 것」 표시 (2026-09-16 · 소수정 ②⑥) ──────
+     🔴 **화면 파일에 리터럴로 다시 적지 말 것** — 발주요청 고정 행이 `#FFFBEB` 를
+     직접 쓰고 있어서, 「확인중」 행에 같은 색을 깔 때 두 곳이 갈릴 뻔했다.
+     🔴 **`--brand-yellow-soft`(#fffdf0)를 쓰지 말 것** — 랜딩 섹션 배경용이라 흰 표
+     위에서는 거의 구분되지 않는다(실측). 이쪽은 한 단계 진하다.
+     ⚠️ 두 값이 다른 것은 의도다 — 행은 넓어서 옅어도 보이고, 입력칸은 좁아서
+     조금 더 진해야 「비었다」가 눈에 들어온다. */
+  --admin-row-attention: #fffbeb; /* 목록 행 바탕 — 발주요청·확인중 견적 */
+  --admin-field-attention: #fffaea; /* 입력칸 바탕 — 꼭 채워야 하는 칸 */
+  --admin-field-attention-border: #e6d59a; /* 그 입력칸 테두리 */
   --radius: 14px;
   --radius-lg: 20px;
   --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
@@ -8584,4 +8594,108 @@ tbody tr:hover {
    아래로 처진다 — 이 알약만 가운데로 맞춘다(다른 항목의 baseline 정렬은 그대로 둔다). */
 .portal-v2 .pv2-qtop .pv2-updated {
   align-self: center;
+}
+
+/* ── 관리자 목록의 상태 컬러 캡 (2026-09-16 · 소수정 ④) ──────────────────────
+   🔴 **모양만 여기 있고 색은 `lib/quoteStatusLabels.ts` 의 `quoteStatusAdminStyle()`
+   이 인라인으로 준다** — 색을 CSS 로 옮기면 상태가 늘 때 두 곳을 고쳐야 하고,
+   그 둘이 갈리면 「목록에서만 회색인 상태」가 생긴다.
+   🔴 `white-space: nowrap` 을 빼지 말 것 — 좁은 칸에서 「운송오더 생성 필요」
+   배지와 같은 칸에 들어가 두 글자씩 끊긴다. */
+.status-cap {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+/* ── 「평소에 쓰는 버튼이 아니다」 (2026-09-16 · 소수정 ①) ────────────────────
+   `btn-ghost` 보다 한 단계 약한 글자 버튼. 탈출구라 **지우면 안 되지만**
+   담당자가 「승인(견적작성)」 대신 습관적으로 누르면 견적서가 안 만들어진다 —
+   그래서 남기되 눈에 덜 띄게 둔다.
+   🔴 `display: none` 으로 숨기지 말 것(숨기면 탈출구가 없는 것과 같다). */
+.btn-quiet {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 5px 4px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: rgba(95, 107, 120, 0.4);
+  cursor: pointer;
+}
+.btn-quiet:hover:not(:disabled) {
+  color: var(--text);
+  text-decoration-color: currentColor;
+}
+.btn-quiet:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ── 꼭 채워야 하는 입력칸 (2026-09-16 · 소수정 ⑥) ───────────────────────────
+   🔴 **값이 있으면 강조를 끈다** — 다 채운 화면이 통째로 노래지면 강조가 뜻을
+   잃는다. 끄고 켜는 판정은 화면이 하고(`className` 을 붙였다 뗀다) 여기는 모양만.
+   🔴 `.field input` 과 특성도가 같으면 선언 순서에 진다(원칙 58번) — 클래스 둘로
+   올려 뒀으니 `.attention-field input` 으로 줄이지 말 것. */
+.field.attention-field input,
+.field.attention-field select,
+.field.attention-field textarea {
+  background: var(--admin-field-attention);
+  border-color: var(--admin-field-attention-border);
+}
+.field.attention-field input:focus,
+.field.attention-field select:focus,
+.field.attention-field textarea:focus {
+  border-color: var(--accent);
+}
+
+/* ── 견적 폼 「상세 입력 펼치기」 손잡이 (2026-09-16 · 소수정 ③) ───────────────
+   🔴 `.quote-form` 스코프가 **아니다** — 손잡이 자체는 폼 칸이 아니라서
+   `.quote-form .field` 규칙이 걸리면 안 된다. 이름만 같은 계열로 둔다.
+   🔴 접힌 것과 펼친 것이 같은 자리에 있어야 한다 — 위치가 바뀌면 누른 사람이
+   화면을 다시 찾아야 한다. */
+.quote-form-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 2px 0 10px;
+  padding: 11px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.quote-form-toggle:hover {
+  background: #e9ebee;
+}
+.quote-form-toggle-caret {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+.quote-form-toggle-hint {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  word-break: keep-all;
+}
+@media (max-width: 700px) {
+  /* 🔴 좁은 화면에서는 안내가 줄을 밀어내므로 감춘다 — 손잡이 글자만으로도 뜻이 통한다 */
+  .quote-form-toggle-hint {
+    display: none;
+  }
 }

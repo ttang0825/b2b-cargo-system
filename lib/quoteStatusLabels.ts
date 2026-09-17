@@ -8,9 +8,12 @@
 //    바로 그 증상이었다).
 //
 // 🔴 **이 파일은 이제 두 갈래다**(2026-09-16).
-//      `quoteStatusStyle()`       화주 화면 — `보류`→「협의 중」처럼 **순화한 말**
+//      `quoteStatusStyle()`       화주 화면 — `보류`→「협의 중」처럼 **순화한 말** + 색
 //      `quoteStatusAdminLabel()`  관리자 화면 — DB 값 그대로, **`상담중` 만 「확인중」**
+//      `quoteStatusAdminStyle()`  관리자 화면 — 위 글자 + **관리자 전용 색**(맨 아래)
 //    담당자에게는 `보류`·`실패` 가 정확한 말이라 관리자 화면은 앞엣것을 쓰지 않는다.
+//    🔴 **색도 갈렸다** — 관리자에서 옐로는 「내가 할 일」, 화주에서 옐로는 「성사」다.
+//    사유는 `ADMIN_STYLES` 주석에 있다. **둘을 한 매핑으로 합치지 말 것.**
 //    ⚠️ **한동안 이 머리말이 「관리자 화면은 이 매핑을 쓰지 않는다」로만 적혀 있었다** —
 //    그때는 이 파일에 화주용 하나뿐이었기 때문이다. 아래 함수를 「화주 전용 파일에
 //    관리자 것이 섞였다」며 옮기지 말 것(같은 낱말을 두 곳에 적으면 갈린다).
@@ -103,4 +106,39 @@ const ADMIN_LABELS: Record<string, string> = {
 export function quoteStatusAdminLabel(status: string | null | undefined): string {
   if (!status) return "-";
   return ADMIN_LABELS[status] || status;
+}
+
+/**
+ * 관리자 목록에 찍을 **컬러 캡**(2026-09-16 · 소수정 ④).
+ *
+ * 🔴 **화주용 `STYLES` 를 그대로 쓰지 않는다 — 말도 색도 다르다.**
+ *    - 말 : 화주는 순화한 말(「협의 중」·「취소」), 담당자는 DB 값 그대로.
+ *    - 색 : 화주 목록에서 옐로는 **「운송 확정」**(성사)인데, 관리자 목록에서 옐로는
+ *           **「내가 지금 할 일」**이다(발주요청 행·「운송오더 생성 필요」 배지가
+ *           이미 그 색이다). 두 뜻이 한 화면에 같이 있으면 훑을 때 읽히지 않는다.
+ *    그래서 관리자에서만 **`확인중` 을 옐로로, `수주` 를 초록으로** 옮겼다.
+ *    🔴 **이 매핑을 화주 화면에 가져다 쓰지 말 것**(화주포털 0줄이 이 차수의 전제다).
+ *
+ * 🔴 **`실패` 를 강한 빨강으로 칠하지 말 것** — 끝난 건이라 목록에서 가장 조용해야
+ *    한다. 지금 값(`#FDF3F2` 바탕 + `#B4423A` 글자)은 화주 화면과 같은 쌍이고,
+ *    배경이 거의 흰색이라 목록을 시뻘겋게 만들지 않는다.
+ *
+ * 🔴 **모르는 값은 회색으로 그리되 글자는 그대로 보여준다**(상태가 늘었을 때
+ *    배지가 조용히 비지 않게 — `quoteStatusStyle()` 과 같은 규칙).
+ */
+const ADMIN_STYLES: Record<string, QuoteStatusStyle> = {
+  // 옐로 = 담당자가 지금 손대야 하는 것(금액을 정해야 한다)
+  상담중: { label: "확인중", color: "#92400E", bg: "#FEF3C7" },
+  견적제출: { label: "견적제출", color: "#1D57C6", bg: "#E8EFFC" },
+  // 초록 = 성사. 🔴 화주용처럼 옐로로 되돌리지 말 것(위 사유)
+  수주: { label: "수주", color: "#1B7F3B", bg: "#E6F6EC" },
+  보류: { label: "보류", color: "#7A5F00", bg: "#F4F3EF" },
+  실패: { label: "실패", color: "#B4423A", bg: "#FDF3F2" },
+};
+
+export function quoteStatusAdminStyle(status: string | null | undefined): QuoteStatusStyle {
+  if (!status) return { label: "-", color: "#6B6759", bg: "#F4F3EF" };
+  return (
+    ADMIN_STYLES[status] || { label: quoteStatusAdminLabel(status), color: "#6B6759", bg: "#F4F3EF" }
+  );
 }

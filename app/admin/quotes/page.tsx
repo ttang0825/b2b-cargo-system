@@ -34,7 +34,7 @@ import { orderBodyTypes } from "@/lib/vehicleBodyTypes";
 import { CUSTOMER_APPROVED_LABEL, formatCustomerApprovedAt } from "@/lib/quoteApproval";
 // 🔴 관리자 화면도 `상담중` 을 「확인중」으로 그린다(사용자 지시 2026-09-16).
 //    DB 값은 그대로이고 **보이는 글자만** 바꾼다 — 정의처는 이 파일 하나다.
-import { quoteStatusAdminLabel } from "@/lib/quoteStatusLabels";
+import { quoteStatusAdminStyle } from "@/lib/quoteStatusLabels";
 import RecurringContractBadge from "@/components/RecurringContractBadge";
 import { fetchUnlinkedWonQuoteIds } from "@/lib/unlinkedWonQuotes";
 import AdminMobileList from "@/components/AdminMobileList";
@@ -240,6 +240,27 @@ function QuotesPageInner() {
   const [companyResults, setCompanyResults] = useState<CompanyLite[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<CompanyLite | null>(
     null
+  );
+
+  // ── 견적 상세 입력 접기 (2026-09-16 · 소수정 ③) ────────────────────────────
+  //
+  // 사용자 지시: *"견적관리에서 처음에 견적 적는곳이 화주업체검색까지만 노출되어
+  // 있고 그아래 정보들은 펼칠수 있게 하자. (…) 그러면 견적목록도 한눈에 들어올것
+  // 같다."* — 목적은 **목록을 보이게 하는 것**이지 입력을 줄이는 것이 아니다.
+  //
+  // 🔴 **`<details>` 를 쓰지 않았다** — 열림을 코드가 정해야 하는 자리가 넷이고
+  //    (화주 선택 · 개인/신규 전환 · 프리필 진입 · 저장 성공 후 접기),
+  //    `<details>` 는 사용자가 연 것과 코드가 연 것을 구분할 수 없다.
+  // 🔴 **`display: none` 이 아니라 조건부 렌더다** — 숨긴 채로 두면 `required` 가
+  //    달린 주소 칸이 DOM 에 남아 브라우저가 *"invalid form control is not
+  //    focusable"* 로 **제출을 조용히 막는다.** 폼 값은 전부 `form` state 에 있어서
+  //    떼었다 붙여도 잃는 것이 없다.
+  // 🔴 **저장에 실패했을 때 접지 말 것** — 담당자가 방금 적은 것이 통째로 사라진
+  //    것처럼 보인다(접어도 값은 남지만 그것을 알 길이 없다).
+  // 🔴 프리필로 들어오면 **처음부터 펼친다** — 「견적 작성」을 눌러 온 사람은 이미
+  //    적으러 온 것이라, 접힌 화면을 한 번 더 누르게 하면 그냥 손해다.
+  const [detailsOpen, setDetailsOpen] = useState(
+    () => !!(fromRequestId || fromQuoteRequestId)
   );
 
   const [form, setForm] = useState({
@@ -1103,6 +1124,10 @@ function QuotesPageInner() {
     //    (포털 발주 폼이 같은 이유로 같게 비운다).
     setPickupNow(false);
     setDropoffArrivalType(null);
+    // 🔴 **저장에 성공했을 때만 접는다**(소수정 ③). 위의 실패 분기들은 전부 이 줄에
+    //    닿기 전에 `return` 한다 — 실패했는데 접으면 방금 적은 것이 사라진 것처럼 보인다.
+    //    접는 이유는 사용자 지시 그대로다: 저장하고 나면 **목록이 한눈에 들어와야 한다.**
+    setDetailsOpen(false);
     loadQuotes(period);
   }
 
@@ -1185,7 +1210,12 @@ function QuotesPageInner() {
                 type="button"
                 className={customerMode === "guest" ? "btn" : "btn btn-ghost"}
                 style={{ fontSize: 12.5, padding: "7px 12px" }}
-                onClick={() => setCustomerMode("guest")}
+                onClick={() => {
+                  setCustomerMode("guest");
+                  // 🔴 개인·신규 고객은 **고를 화주가 없다** — 여기서 안 펼치면
+                  //    「기존 화주」 쪽에만 자동 펼침이 있는 셈이 되어 한쪽만 동작한다.
+                  setDetailsOpen(true);
+                }}
               >
                 개인 / 신규 고객
               </button>
@@ -1242,6 +1272,10 @@ function QuotesPageInner() {
                         onClick={() => {
                           setSelectedCompany(c);
                           setCompanyResults([]);
+                          // 🔴 소수정 ③ — 화주를 고르는 순간 아래를 펼친다(사용자 확정
+                          //    *"회사명 입력시 자동으로 펼쳐져도 된다"*). 골랐다는 것은
+                          //    이제 내용을 적겠다는 뜻이다.
+                          setDetailsOpen(true);
                           // 🔴 36차 A장 — 계약 청구주기를 **기본값으로 복사**한다.
                           //   🔴 아직 손대지 않은 초기값(`per_order`)일 때만 갈아끼운다 —
                           //      35차 자동 기입의 「차량만 예외」와 같은 규칙이고,
@@ -1309,6 +1343,48 @@ function QuotesPageInner() {
               </div>
             )}
 
+            {/* ── 펼침 손잡이 (2026-09-16 · 소수정 ③) ─────────────────────────
+                🔴 **`<button type="button">` 이다** — `type` 을 빼면 폼 안의 기본값이
+                `submit` 이라 누르는 순간 견적이 저장된다(원칙 34번과 같은 자리).
+                🔴 **접혀 있을 때 「몇 가지를 더 적어야 하는지」를 말한다** — 손잡이만
+                두면 「여기서 끝인가」로 읽힌다. */}
+            <button
+              type="button"
+              className="quote-form-toggle"
+              onClick={() => setDetailsOpen((v) => !v)}
+              aria-expanded={detailsOpen}
+            >
+              {/* 🔴 **글자(`▸`·`▾`)가 아니라 SVG 다** — 실측에서 그 글리프가 폭 6px·
+                  높이 14px 로 그려져 **손잡이인지 알아볼 수 없었다**(본문 서체에 맞는
+                  모양이 없어 위쪽에 작게 붙는다). PR #129 의 `⋯` 가 네모로 나오던 것과
+                  같은 자리다 — **글자로 되돌리지 말 것.** */}
+              <svg
+                className="quote-form-toggle-caret"
+                width="14"
+                height="14"
+                viewBox="0 0 14 14"
+                fill="none"
+                aria-hidden
+                style={{ transform: detailsOpen ? "rotate(90deg)" : undefined }}
+              >
+                <path
+                  d="M5 3l4 4-4 4"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <strong>{detailsOpen ? "상세 입력 접기" : "상세 입력 펼치기"}</strong>
+              {!detailsOpen && (
+                <span className="quote-form-toggle-hint">
+                  구간 · 일정 · 화물 · 요청사항을 적고 저장합니다
+                </span>
+              )}
+            </button>
+
+            {detailsOpen && (
+            <>
             <div className="form-grid quote-form-grid" style={{ padding: 0 }}>
               {/* ── 블록 번호 배지 색 ────────────────────────────────────────────────
                   🔴 **`var(--brand-yellow)`(#ffd833) 다 — 리터럴로 다시 적지 말 것**
@@ -1978,6 +2054,8 @@ function QuotesPageInner() {
             <button className="btn" type="submit" disabled={saving}>
               {saving ? "저장 중..." : "견적 저장"}
             </button>
+            </>
+            )}
           </form>
         </div>
 
@@ -2170,7 +2248,7 @@ function QuotesPageInner() {
                 <tr
                   key={`req-${r.id}`}
                   onClick={() => router.push(`/admin/quotes?from_request=${r.id}`)}
-                  style={{ cursor: "pointer", background: "#FFFBEB" }}
+                  style={{ cursor: "pointer", background: "var(--admin-row-attention)" }}
                 >
                   <td className="cell-nowrap">
                     <span
@@ -2200,8 +2278,14 @@ function QuotesPageInner() {
                   <td className="cell-nowrap" style={{ color: "var(--text-muted)", fontSize: 12.5 }}>
                     견적 전
                   </td>
-                  <td className="cell-nowrap" style={{ color: "var(--text-muted)", fontSize: 12.5 }}>
-                    대기중
+                  <td className="cell-nowrap">
+                    {/* 🔴 견적 행과 **같은 모양**이어야 한다 — 한쪽만 캡이면 같은 칸에
+                        두 종류의 글씨가 섞여 상태를 훑는 눈이 걸린다. 색은 「확인중」과
+                        같은 계열이다(둘 다 「담당자가 지금 할 일」이고, 무엇인지는 왼쪽
+                        「발주요청」 배지가 말한다). */}
+                    <span className="status-cap" style={{ background: "#FEF3C7", color: "#92400E" }}>
+                      대기중
+                    </span>
                   </td>
                   <td className="cell-nowrap" style={{ fontSize: 12.5 }}>
                     {r.created_at ? new Date(r.created_at).toLocaleDateString("ko-KR") : "-"}
@@ -2215,7 +2299,16 @@ function QuotesPageInner() {
                 <tr
                   key={q.id}
                   onClick={() => router.push(`/admin/quotes/${q.id}`)}
-                  style={{ cursor: "pointer" }}
+                  /* 🔴 **판정은 DB 값 `상담중` 이다 — `"확인중"` 과 비교하지 말 것.**
+                     「확인중」은 화면에 찍는 글자일 뿐이고 `quotes.status` 의 CHECK 는
+                     여전히 `상담중` 이다(`lib/quoteStatusLabels.ts` 머리말).
+                     🔴 색은 발주요청 고정 행과 **같은 토큰**이다 — 둘 다 「담당자가
+                     지금 손대야 하는 줄」이고, 무엇인지는 「발주요청」 배지와 상태 캡이
+                     말한다. 새 색을 만들어 갈라놓지 말 것. */
+                  style={{
+                    cursor: "pointer",
+                    background: q.status === "상담중" ? "var(--admin-row-attention)" : undefined,
+                  }}
                 >
                   <td className="cell-nowrap">
                     <span className="num">{q.quote_no}</span>
@@ -2245,7 +2338,19 @@ function QuotesPageInner() {
                     )}
                   </td>
                   <td className="cell-nowrap">
-                    <div>{quoteStatusAdminLabel(q.status)}</div>
+                    {/* 🔴 컬러 캡 — 색은 `quoteStatusAdminStyle()` 이 정한다(화주용
+                        `quoteStatusStyle()` 과 **말도 색도 다르다**). 여기에 색을 적지 말 것. */}
+                    <div>
+                      <span
+                        className="status-cap"
+                        style={{
+                          background: quoteStatusAdminStyle(q.status).bg,
+                          color: quoteStatusAdminStyle(q.status).color,
+                        }}
+                      >
+                        {quoteStatusAdminStyle(q.status).label}
+                      </span>
+                    </div>
                     {/* 🔴 **`TopNav` 「견적 관리」 배지가 세는 바로 그 건이다**(34차 리뷰
                         1라운드). 배지는 숫자만 말하고 어느 건인지 볼 화면이 없어서
                         「알림이 계속 남아 있다」가 됐다 — 규칙은
@@ -2335,6 +2440,9 @@ function QuotesPageInner() {
                 ...pendingRequests.map((r) => ({
                   key: `req-${r.id}`,
                   onClick: () => router.push(`/admin/quotes?from_request=${r.id}`),
+                  // 🔴 데스크탑 `<tr>` 과 같은 바탕 — 한쪽만 칠하면 화면 크기에 따라
+                  //    같은 목록이 다르게 읽힌다(원칙 13번).
+                  highlight: true,
                   title: "발주요청",
                   tags: (
                     <>
@@ -2369,6 +2477,8 @@ function QuotesPageInner() {
                 ...quotes.map((q) => ({
                   key: q.id,
                   onClick: () => router.push(`/admin/quotes/${q.id}`),
+                  // 🔴 DB 값 `상담중` 으로 가른다(화면 글자 「확인중」이 아니다)
+                  highlight: q.status === "상담중",
                   title: q.quote_no,
                   tags: (
                     <>
@@ -2421,7 +2531,20 @@ function QuotesPageInner() {
                         "-"
                       ),
                     },
-                    { label: "상태", value: quoteStatusAdminLabel(q.status) },
+                    {
+                      label: "상태",
+                      value: (
+                        <span
+                          className="status-cap"
+                          style={{
+                            background: quoteStatusAdminStyle(q.status).bg,
+                            color: quoteStatusAdminStyle(q.status).color,
+                          }}
+                        >
+                          {quoteStatusAdminStyle(q.status).label}
+                        </span>
+                      ),
+                    },
                     {
                       label: "일시",
                       value: new Date(q.created_at).toLocaleDateString("ko-KR"),

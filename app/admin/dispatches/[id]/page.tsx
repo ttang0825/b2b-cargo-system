@@ -89,7 +89,30 @@ export default function DispatchDetailPage() {
   const [dispatch, setDispatch] = useState<any>(null);
   const [smsPreview, setSmsPreview] = useState<SmsPreview | null>(null);
   const [loading, setLoading] = useState(true);
+  /**
+   * 🔴 **화면 로딩 실패 전용이다**(원칙 33번). 아래 가드가 이 값 하나로 화면 전체를
+   *    「배차 정보를 불러오지 못했습니다」로 덮기 때문에, **액션 실패를 여기 담으면
+   *    이미 불러온 상세가 통째로 사라진다.**
+   *    ⚠️ 2026-09-16(소수정 ⑧) 전까지 이 화면이 실제로 그랬다 — 배차확정 검사에
+   *    걸리면 화면이 통째로 오류로 바뀌었고(사용자 신고 *"새로운 페이지에서 오류가
+   *    뜬다"*), 아래쪽에 있던 `{error && …}` 배너는 이 가드가 먼저 `return` 해서
+   *    **한 번도 그려진 적이 없었다.** PR #153 이 운송오더 상세에서 고친 그 버그가
+   *    여기 남아 있었던 것이다. 🔴 액션 실패는 `actionError` 로 받을 것.
+   */
   const [error, setError] = useState<string | null>(null);
+
+  /**
+   * 액션(저장·확정·삭제 등) 실패 — 화면을 덮지 않고 **누른 자리**에 띄운다.
+   * `scope` 가 어디에 그릴지 정한다(PR #154 의 「오류는 누른 자리에」와 같은 장치).
+   * 🔴 **`scope` 를 하나로 되돌리지 말 것** — 맨 위 한 곳에만 그리면 배차확정
+   *    버튼에서 1,000px 넘게 떨어져 「아무 일도 안 일어난다」로 읽힌다.
+   */
+  type ActionErrorScope = "page" | "confirm" | "save";
+  const [actionError, setActionErrorState] = useState<
+    { scope: ActionErrorScope; message: string } | null
+  >(null);
+  const setActionError = (message: string | null, scope: ActionErrorScope = "page") =>
+    setActionErrorState(message ? { scope, message } : null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -583,28 +606,41 @@ export default function DispatchDetailPage() {
   }
 
   async function handleConfirm() {
-    setError(null);
+    setActionError(null);
     if (
       settlementValue.collection_method === "driver_direct" &&
       (!settlementValue.direct_collection_point || settlementValue.direct_collection_point === "undecided")
     ) {
-      setError("선착불(차주 직접수금) 건은 배차확정 전에 지급조건(선불/착불)을 먼저 확정해주세요.");
+      setActionError(
+        "선착불(차주 직접수금) 건은 배차확정 전에 지급조건(선불/착불)을 먼저 확정해주세요.",
+        "confirm"
+      );
       return;
     }
     if (editForm.assignment_type === "internal") {
       if (!editForm.driver_id) {
-        setError("배차확정하려면 차주를 먼저 선택해주세요.");
+        setActionError("배차확정하려면 차주를 먼저 선택해주세요.", "confirm");
         return;
       }
     } else {
       if (!confirmedNetworkId) {
-        setError("실제로 배차가 확정된 정보망을 선택해주세요.");
+        setActionError("실제로 배차가 확정된 정보망을 선택해주세요.", "confirm");
         return;
       }
       if (!externalDriverName.trim() || !externalDriverPhone.trim()) {
-        setError("배정된 차주의 이름과 연락처를 입력해주세요.");
+        setActionError("배정된 차주의 이름과 연락처를 입력해주세요.", "confirm");
         return;
       }
+    }
+    // ── 차주 지급운임 필수 (2026-09-16 · 소수정 ⑥) ─────────────────────────
+    // 🔴 **막는 곳은 배차확정뿐이다**(사용자 확정) — 배차 등록 단계에서는 차주도
+    //    운임도 아직 협의 중이라 비워둘 수 있어야 한다. 확정은 「이 조건으로 간다」는
+    //    선언이고, 여기서 금액이 비면 정산 자동등록이 0원으로 굳는다.
+    // 🔴 **`> 0` 이 아니라 「비었는가」로 본다** — 0원 배차가 실무에 있을 수 있고
+    //    (사급·회차 등) 그것까지 막으면 확정 자체를 못 한다. 막는 것은 **누락**이다.
+    if (String(editForm.driver_payout ?? "").trim() === "") {
+      setActionError("차주 지급운임을 입력해주세요. (배차확정에 필요합니다)", "confirm");
+      return;
     }
 
     setConfirming(true);
@@ -628,7 +664,7 @@ export default function DispatchDetailPage() {
     const { error } = await supabase.from("dispatches").update(payload).eq("id", id);
     if (error) {
       setConfirming(false);
-      setError(error.message);
+      setActionError(error.message, "confirm");
       return;
     }
     if (dispatch?.orders?.id) {
@@ -653,7 +689,7 @@ export default function DispatchDetailPage() {
       .update({ dispatch_status: status, updated_by: await getCurrentStaffId() })
       .eq("id", id);
     if (error) {
-      setError(error.message);
+      setActionError(error.message);
       return;
     }
     if (dispatch?.orders?.id && DISPATCH_TO_ORDER_STATUS[status]) {
@@ -708,7 +744,7 @@ export default function DispatchDetailPage() {
   async function handleSettlementFieldsChange(next: CollectionMethodValue, reason: string | null) {
     if (!dispatch) return;
     setSettlementSaving(true);
-    setError(null);
+    setActionError(null);
     const staffId = await getCurrentStaffId();
     const before = settlementValue;
     const legacyMapped = mapToLegacySettlementType(
@@ -728,7 +764,7 @@ export default function DispatchDetailPage() {
       .eq("id", id);
     if (error) {
       setSettlementSaving(false);
-      setError(error.message);
+      setActionError(error.message);
       return;
     }
     if (reason) {
@@ -764,7 +800,7 @@ export default function DispatchDetailPage() {
   async function handlePayoutCalcSave() {
     if (!dispatch) return;
     setPayoutCalcSaving(true);
-    setError(null);
+    setActionError(null);
     const result = calcSettlement({
       driverBaseFare: Number(payoutCalcForm.driver_base_fare) || 0,
       industrialInsuranceApplicable: payoutCalcForm.industrial_insurance_applicable,
@@ -789,7 +825,7 @@ export default function DispatchDetailPage() {
       .eq("id", id);
     setPayoutCalcSaving(false);
     if (error) {
-      setError(error.message);
+      setActionError(error.message);
       return;
     }
     load();
@@ -905,7 +941,7 @@ export default function DispatchDetailPage() {
       driverVatIncluded: editForm.driver_vat_included,
     });
     if (result.kind === "error") {
-      setError(`정산 자동등록에 실패했습니다: ${result.message}`);
+      setActionError(`정산 자동등록에 실패했습니다: ${result.message}`);
     }
   }
 
@@ -929,7 +965,7 @@ export default function DispatchDetailPage() {
   // (다른 필드들처럼 배치 저장에 묶어두지 않음 — 단순 상태 토글이라 원칙 28번
   // 낙관적 잠금 예외에 해당, handleStatusChange와 동일한 방식)
   async function handleProgressCheck(field: "pickup_confirmed" | "delivery_confirmed", checked: boolean) {
-    setError(null);
+    setActionError(null);
     const updatedPickup = field === "pickup_confirmed" ? checked : editForm.pickup_confirmed;
     const updatedDelivery = field === "delivery_confirmed" ? checked : editForm.delivery_confirmed;
     const nextStatus = computeStatusFromChecks(dispatch.dispatch_status, updatedPickup, updatedDelivery);
@@ -947,7 +983,7 @@ export default function DispatchDetailPage() {
 
     const { error } = await supabase.from("dispatches").update(payload).eq("id", id);
     if (error) {
-      setError(error.message);
+      setActionError(error.message);
       return;
     }
 
@@ -973,17 +1009,17 @@ export default function DispatchDetailPage() {
   }
 
   async function handleSave(force = false) {
-    setError(null);
+    setActionError(null);
     setSaving(true);
     setConflict(false);
     if (editForm.brokerage_fee && Number(editForm.brokerage_fee) < 0) {
       setSaving(false);
-      setError("주선수수료는 음수로 입력할 수 없습니다.");
+      setActionError("주선수수료는 음수로 입력할 수 없습니다.", "save");
       return;
     }
     if (editForm.driver_direct_collection_amount && Number(editForm.driver_direct_collection_amount) < 0) {
       setSaving(false);
-      setError("차주 직접수금액은 음수로 입력할 수 없습니다.");
+      setActionError("차주 직접수금액은 음수로 입력할 수 없습니다.", "save");
       return;
     }
     const payload = {
@@ -1030,7 +1066,7 @@ export default function DispatchDetailPage() {
       const { error } = await supabase.from("dispatches").update(payload).eq("id", id);
       setSaving(false);
       if (error) {
-        setError(error.message);
+        setActionError(error.message, "save");
         return;
       }
       router.push("/admin/dispatches");
@@ -1045,7 +1081,7 @@ export default function DispatchDetailPage() {
     );
     setSaving(false);
     if (error) {
-      setError(error);
+      setActionError(error, "save");
       return;
     }
     if (hasConflict) {
@@ -1070,7 +1106,7 @@ export default function DispatchDetailPage() {
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       setDeleting(false);
-      setError(data.error || "삭제에 실패했습니다.");
+      setActionError(data.error || "삭제에 실패했습니다.");
       return;
     }
     if (dispatch.orders?.id) {
@@ -1112,6 +1148,11 @@ export default function DispatchDetailPage() {
   // 공급가액이고 차주 지급운임은 실제 지급되는 최종금액(부가세 포함
   // 기준)이라 기준이 달랐던 것을 부가세 포함가로 맞춰서 계산(PR #63
   // 리뷰 피드백, 정산관리 "수수료(마진)"과 동일한 계산식으로 통일)
+  // 🔴 소수정 ⑥ — 「비었는가」만 본다(0원 배차가 실무에 있을 수 있어 `> 0` 로
+  //    보면 안 된다). `handleConfirm()` 의 검사와 **같은 조건**이라야 한다 —
+  //    갈리면 「노랗게 강조는 되는데 확정은 되는」 또는 그 반대가 된다.
+  const payoutMissing = String(editForm.driver_payout ?? "").trim() === "";
+
   const margin =
     editForm.customer_charge && editForm.driver_payout
       ? calcInclusiveAmount(Number(editForm.customer_charge)) - Number(editForm.driver_payout)
@@ -1156,7 +1197,14 @@ export default function DispatchDetailPage() {
         )}
       </div>
 
-      {error && <div className="error-box">오류: {error}</div>}
+      {/* 🔴 **여기에는 `scope: "page"` 만 그린다**(소수정 ⑧). 배차확정·저장 실패는
+          그 버튼 옆에서 따로 그리므로 여기 오면 안 된다 — 맨 위 한 곳에만 그렸더니
+          1,000px 위에 떠서 「아무 일도 안 일어난다」가 됐던 것이 PR #154 의 교훈이다.
+          🔴 **`error`(로딩 실패)를 여기서 그리지 말 것** — 그쪽은 위 가드가 화면
+          전체로 이미 보여준다. */}
+      {actionError?.scope === "page" && (
+        <div className="error-box">오류: {actionError.message}</div>
+      )}
 
       <div className="card" style={{ padding: 20, marginBottom: 20 }}>
         <div style={{ marginBottom: 14 }}>
@@ -1411,6 +1459,14 @@ export default function DispatchDetailPage() {
                       "아직 선택되지 않았습니다"
                     )}
                   </p>
+                  {/* 🔴 **오류는 이 창 안, 버튼 바로 위에 뜬다**(사용자 신고 ⑧ —
+                      *"새로운 페이지에서 오류가 뜨는데, 그러지 말고 그 창안에서
+                      해당 정보를 채우거나 선택하라고 오류 메세지가 떠야 한다"*). */}
+                  {actionError?.scope === "confirm" && (
+                    <div className="error-box" style={{ marginBottom: 10 }}>
+                      {actionError.message}
+                    </div>
+                  )}
                   <button className="btn" onClick={handleConfirm} disabled={!editForm.driver_id || confirming}>
                     {confirming ? "확정 중..." : "배차확정"}
                   </button>
@@ -1455,6 +1511,13 @@ export default function DispatchDetailPage() {
                     <input value={externalVehiclePlate} onChange={(e) => setExternalVehiclePlate(e.target.value)} />
                   </div>
                   <div style={{ gridColumn: "1 / -1" }}>
+                    {/* 🔴 신고 ⑧ 이 가리킨 자리가 정확히 여기다 — 정보망을 안 고르거나
+                        차주 정보를 안 채우고 누르면 화면이 통째로 오류로 바뀌었다. */}
+                    {actionError?.scope === "confirm" && (
+                      <div className="error-box" style={{ marginBottom: 10 }}>
+                        {actionError.message}
+                      </div>
+                    )}
                     <button className="btn" onClick={handleConfirm} disabled={confirming}>
                       {confirming ? "확정 중..." : "배차확정"}
                     </button>
@@ -1572,8 +1635,23 @@ export default function DispatchDetailPage() {
               />
             </div>
           </div>
-          <div className="field">
-            <label>차주 지급운임(원)</label>
+          {/* ── 차주 지급운임 (2026-09-16 · 소수정 ⑥) ────────────────────────────
+              🔴 **값이 있으면 강조를 끈다** — 다 채운 화면이 통째로 노래지면 강조가
+                 뜻을 잃는다. 판정은 여기서 하고 모양은 `.attention-field`(globals.css).
+              🔴 **`required` 를 붙이지 않았다** — 이 칸은 `<form>` 안이 아니라 버튼
+                 들로 저장하는 화면이라 네이티브 검사가 걸리지 않고, 막는 자리는
+                 `handleConfirm()` 하나뿐이다(등록·저장 단계는 비워도 된다).
+              🔴 **안내 문구와 배차확정 검사는 한 벌이다** — 표시만 하고 검사를 빼면
+                 그냥 통과한다(34차 필수 강조와 같은 규칙). */}
+          <div className={`field${payoutMissing ? " attention-field" : ""}`}>
+            <label>
+              차주 지급운임(원)
+              {payoutMissing && (
+                <span style={{ marginLeft: 6, fontSize: 11.5, color: "var(--brand-yellow-text)", fontWeight: 600 }}>
+                  배차확정에 필요합니다
+                </span>
+              )}
+            </label>
             <MoneyInput
               value={String(editForm.driver_payout)}
               onChange={(v) => setEditForm({ ...editForm, driver_payout: v })}
@@ -2475,6 +2553,12 @@ export default function DispatchDetailPage() {
         />
       )}
 
+      {/* 🔴 저장 실패는 **저장 버튼 옆**에 뜬다(원칙 33번 · PR #154 와 같은 장치) */}
+      {actionError?.scope === "save" && (
+        <div className="error-box" style={{ marginBottom: 10 }}>
+          {actionError.message}
+        </div>
+      )}
       <button className="btn" onClick={() => handleSave()} disabled={saving}>
         {saving ? "저장 중..." : "변경사항 저장"}
       </button>

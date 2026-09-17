@@ -71,9 +71,12 @@ export default function PortalRequestsPage() {
     router.push(`/admin/quotes?from_request=${req.id}`);
   }
 
+  // 🔴 이 버튼을 지우지 말 것 — 「승인(견적작성)」이 실패했을 때 요청이 「대기중」으로
+  // 남아 배지가 영영 안 사라지는 것을 푸는 유일한 탈출구다(PR #163 이 그 증상이었다).
+  // 이름과 자리만 바꿔 「평소에 쓰는 버튼이 아니다」를 드러낸다.
   async function handleManualApprove(req: any) {
     const confirmed = window.confirm(
-      "이 요청을 이미 다른 방식으로 처리하셨나요? 견적과 연결하지 않고 상태만 '승인됨'으로 표시합니다."
+      "이 요청을 전화·문자로 이미 처리하셨나요?\n\n견적과 연결하지 않고 목록에서만 '승인됨'으로 표시합니다. 견적서는 만들어지지 않습니다."
     );
     if (!confirmed) return;
     setProcessingId(req.id);
@@ -355,12 +358,13 @@ export default function PortalRequestsPage() {
                       )}
                       {r.status === "대기중" && (
                         <button
-                          className="btn-ghost"
-                          style={{ padding: "5px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                          type="button"
+                          className="btn-quiet"
                           disabled={processingId === r.id}
                           onClick={() => handleManualApprove(r)}
+                          title="견적을 만들지 않고 목록에서만 승인됨으로 표시합니다"
                         >
-                          수동 승인 처리
+                          전화로 처리함
                         </button>
                       )}
                     </div>
