@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { DISPATCH_STATUS_CANCELLED } from "@/lib/dispatchCancel";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import { exportMultiSheetExcel, buildExportFilename } from "@/lib/exportExcel";
 import Pv2DatePicker from "@/components/pv2/Pv2DatePicker";
@@ -317,6 +318,12 @@ export default function PortalStatsPage() {
         .select(
           "dispatch_status,pickup_confirmed,delivery_confirmed,issue_occurred,created_at,orders(order_no,origin,destination,requested_pickup_at,item,vehicle_type,loading_type,collection_method,billing_cycle)"
         )
+        // 🔴 **엑셀에서는 취소된 배차를 뺀다 — 여기만 조회 화면과 다르다.**
+        //    조회 화면은 「지금 어떤 상태인가」라 취소 건도 보여주지만(2026-09-17 지시),
+        //    이 엑셀은 **운송 실적**이다. 일어나지 않은 운송이 실적 표에 한 줄로 서면
+        //    건수·구간 집계가 실제보다 부풀고, 그 표는 화주가 회계에 쓴다.
+        //    🔴 **「조회 화면과 다르니 맞추자」로 지우지 말 것** — 성격이 다른 산출물이다.
+        .neq("dispatch_status", DISPATCH_STATUS_CANCELLED)
         .gte("created_at", fromIso)
         .order("created_at", { ascending: false })
         .limit(2000),

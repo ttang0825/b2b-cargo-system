@@ -62,6 +62,15 @@ import {
 import { localInputToISOString } from "@/lib/localDateTime";
 import { fetchDispatchSmsPreview } from "@/lib/notifyDispatchSms";
 import { notifyPortalPushForDispatchStatus } from "@/lib/notifyPortalPush";
+import { DISPATCH_ISSUE_REASONS, dispatchIssueNeedsGuide } from "@/lib/dispatchIssue";
+import { getIncidentGuide, INCIDENT_PHOTO_NOTE } from "@/lib/incidentGuide";
+import {
+  DISPATCH_CANCEL_REASONS,
+  DISPATCH_STATUS_CANCELLED,
+  canCancelDispatch,
+  dispatchCancelAdminLabel,
+  dispatchStatusAdminLabel,
+} from "@/lib/dispatchCancel";
 import SmsLogPanel from "@/components/SmsLogPanel";
 import SmsConfirmModal, { SmsPreview } from "@/components/SmsConfirmModal";
 import PickupDropoffContactFields, {
@@ -107,7 +116,7 @@ export default function DispatchDetailPage() {
    * 🔴 **`scope` 를 하나로 되돌리지 말 것** — 맨 위 한 곳에만 그리면 배차확정
    *    버튼에서 1,000px 넘게 떨어져 「아무 일도 안 일어난다」로 읽힌다.
    */
-  type ActionErrorScope = "page" | "confirm" | "save";
+  type ActionErrorScope = "page" | "confirm" | "save" | "cancel";
   const [actionError, setActionErrorState] = useState<
     { scope: ActionErrorScope; message: string } | null
   >(null);
@@ -115,6 +124,10 @@ export default function DispatchDetailPage() {
     setActionErrorState(message ? { scope, message } : null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // 배차 취소 — 사유를 받아야 하므로 전용 모달이다(원칙 39번과 같은 결).
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelForm, setCancelForm] = useState({ reason: "", note: "" });
   const [isAdmin, setIsAdmin] = useState(false);
   const [conflict, setConflict] = useState(false);
 
@@ -233,6 +246,7 @@ export default function DispatchDetailPage() {
     pickup_confirmed: false,
     delivery_confirmed: false,
     issue_occurred: false,
+    issue_reason: "",
     issue_notes: "",
     memo: "",
     assignment_type: "internal" as "internal" | "external",
@@ -278,6 +292,7 @@ export default function DispatchDetailPage() {
       pickup_confirmed: data.pickup_confirmed || false,
       delivery_confirmed: data.delivery_confirmed || false,
       issue_occurred: data.issue_occurred || false,
+      issue_reason: data.issue_reason || "",
       issue_notes: data.issue_notes || "",
       memo: data.memo || "",
       assignment_type: (data.assignment_type as "internal" | "external") || "internal",
@@ -1022,6 +1037,14 @@ export default function DispatchDetailPage() {
       setActionError("차주 직접수금액은 음수로 입력할 수 없습니다.", "save");
       return;
     }
+    // 🔴 **「문제 발생」을 켰으면 사유가 있어야 한다** — 사유 없는 문제발생은 화주에게
+    //    빨간 배지만 보내고 아무것도 말해주지 않는다(그것이 이번 작업의 출발점이다).
+    //    🔴 화면 표시(`*`)와 이 검사는 **같은 조건**이어야 한다.
+    if (editForm.issue_occurred && !editForm.issue_reason) {
+      setSaving(false);
+      setActionError("문제 사유를 선택하십시오.", "save");
+      return;
+    }
     const payload = {
       customer_charge: editForm.customer_charge
         ? Number(editForm.customer_charge)
@@ -1039,7 +1062,10 @@ export default function DispatchDetailPage() {
       pickup_confirmed: editForm.pickup_confirmed,
       delivery_confirmed: editForm.delivery_confirmed,
       issue_occurred: editForm.issue_occurred,
-      issue_notes: editForm.issue_notes || null,
+      // 🔴 **꺼지면 둘 다 비운다** — 체크를 풀었는데 사유가 남아 있으면 화주 화면에
+      //    배지는 없는데 사유만 뜨는 상태가 된다.
+      issue_reason: editForm.issue_occurred ? editForm.issue_reason || null : null,
+      issue_notes: editForm.issue_occurred ? editForm.issue_notes || null : null,
       memo: editForm.memo || null,
       origin_company_name: editForm.origin_company_name.trim() || null,
       origin_contact_name: editForm.origin_contact_name.trim() || null,
@@ -1091,10 +1117,87 @@ export default function DispatchDetailPage() {
     router.push("/admin/dispatches");
   }
 
+  /**
+   * 🔴 **배차 취소 — 행을 남기고 사유를 적는다**(2026-09-17 · 사용자 신고
+   *    *「배차확정 후 배차기사의 변심으로 취소한 경우, 어떻게 해야하나?」*).
+   *
+   * 🔴 **삭제와 다른 것이다.** 삭제는 행이 사라져 ① 차주가 몇 번 펑크냈는지 안 남고
+   *    ② 화주 화면이 조용히 되돌아가고 ③ 마진이 왜 깎였는지가 없다. 취소는 남긴다.
+   *
+   * 🔴 **사유가 없으면 저장하지 않는다** — 사유 없는 취소 기록은 나중에 아무것도
+   *    말해주지 않는다(차주 이력 집계가 `cancel_reason` 으로 가른다).
+   * 🔴 **되돌리는 경로를 만들지 말 것** — `취소` 에서 `배차확정` 으로 되살리면
+   *    `cancelled_at` 이 남은 채 살아나 집계가 어긋난다. **새 배차를 만드는 것이
+   *    정상 경로**이고, 그래서 이 화면의 상태 드롭다운은 `취소` 일 때 읽기 전용이다.
+   * 🔴 **`completed_trip_count` 는 건드리지 않는다** — `운송완료` 에서 취소로 갈 수
+   *    없게 막아 뒀으므로(`canCancelDispatch`) ±1 로직이 걸릴 일이 없다.
+   */
+  async function handleCancel() {
+    if (!dispatch) return;
+    if (!cancelForm.reason) {
+      setActionError("취소 사유를 선택하십시오.", "cancel");
+      return;
+    }
+    // 🔴 화면이 막고 있어도 **저장 직전에 다시 본다** — 다른 탭에서 상태가 바뀌었을 수 있다.
+    if (!canCancelDispatch(dispatch.dispatch_status)) {
+      setActionError(
+        `${dispatch.dispatch_status} 상태에서는 취소할 수 없습니다. 정산이 이미 만들어졌을 수 있습니다.`,
+        "cancel"
+      );
+      return;
+    }
+    setCancelling(true);
+    setActionError(null);
+
+    const staffId = await getCurrentStaffId();
+    const { error: updErr } = await supabase
+      .from("dispatches")
+      .update({
+        dispatch_status: DISPATCH_STATUS_CANCELLED,
+        cancel_reason: cancelForm.reason,
+        // 🔴 빈 문자열이 아니라 `null` 을 넣는다 — 화면이 `||` 로 대체 표기한다.
+        cancel_reason_note: cancelForm.note.trim() || null,
+        cancelled_at: new Date().toISOString(),
+        cancelled_by: staffId,
+        updated_by: staffId,
+      })
+      .eq("id", id);
+    if (updErr) {
+      setCancelling(false);
+      setActionError(updErr.message, "cancel");
+      return;
+    }
+
+    // 🔴 오더를 되돌린다 — 이것이 없으면 재배차 후보에 들어오지 않는다.
+    if (dispatch.orders?.id && DISPATCH_TO_ORDER_STATUS[DISPATCH_STATUS_CANCELLED]) {
+      await supabase
+        .from("orders")
+        .update({ status: DISPATCH_TO_ORDER_STATUS[DISPATCH_STATUS_CANCELLED] })
+        .eq("id", dispatch.orders.id);
+    }
+
+    // 🔴 화주에게 알린다 — 배차확정 푸시가 **이미 갔기 때문**이다(사용자 확정 2번).
+    //    본문에 사유를 싣지 않는다(잠금화면에 그대로 뜬다).
+    notifyPortalPushForDispatchStatus(id, DISPATCH_STATUS_CANCELLED, dispatch.dispatch_status);
+
+    setCancelling(false);
+    setCancelOpen(false);
+    setCancelForm({ reason: "", note: "" });
+    // 🔴 부분 병합이 아니라 전체 재조회다(원칙 36번) — `updated_at` 이 트리거로
+    //    갱신되므로 이어지는 낙관적 잠금 저장이 오탐한다.
+    load();
+  }
+
   async function handleDelete() {
     if (!dispatch) return;
+    // 🔴 **삭제 버튼은 남긴다** — 잘못 만든 배차를 없애는 용도로 여전히 필요하다.
+    //    다만 차주가 취소한 건까지 여기로 오면 이력이 통째로 사라지므로 문구를 가른다.
     const confirmed = window.confirm(
-      "이 배차 기록을 삭제하시겠습니까? 연결된 오더는 '접수' 상태로 되돌아갑니다."
+      "이 배차 기록을 완전히 삭제하시겠습니까?\n\n" +
+        "· 차주가 취소한 건이면 삭제가 아니라 「배차 취소」를 쓰십시오. " +
+        "삭제하면 사유도 차주 이력도 남지 않습니다.\n" +
+        "· 삭제는 잘못 만든 배차를 없애는 용도입니다.\n\n" +
+        "연결된 오더는 '접수' 상태로 되돌아갑니다."
     );
     if (!confirmed) return;
     setDeleting(true);
@@ -1179,6 +1282,22 @@ export default function DispatchDetailPage() {
             {dispatch.orders?.origin} → {dispatch.orders?.destination}
           </p>
         </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {/* 🔴 **`.btn-danger` 가 아니라 한 단계 약하게** — 삭제와 나란히 두 개의
+              빨간 버튼이 있으면 어느 쪽이 되돌릴 수 없는 것인지 흐려진다.
+              🔴 **`운송완료`·`취소` 에서는 그리지 않는다**(정산이 이미 있을 수 있다). */}
+          {canCancelDispatch(dispatch.dispatch_status) && (
+            <button
+              className="btn"
+              onClick={() => {
+                setActionError(null);
+                setCancelOpen(true);
+              }}
+              style={{ fontSize: 13.5, fontWeight: 600 }}
+            >
+              배차 취소
+            </button>
+          )}
         {isAdmin && (
           <button
             className="btn-danger"
@@ -1195,6 +1314,7 @@ export default function DispatchDetailPage() {
             {deleting ? "확인 중..." : "배차 삭제"}
           </button>
         )}
+        </div>
       </div>
 
       {/* 🔴 **여기에는 `scope: "page"` 만 그린다**(소수정 ⑧). 배차확정·저장 실패는
@@ -1202,6 +1322,39 @@ export default function DispatchDetailPage() {
           1,000px 위에 떠서 「아무 일도 안 일어난다」가 됐던 것이 PR #154 의 교훈이다.
           🔴 **`error`(로딩 실패)를 여기서 그리지 말 것** — 그쪽은 위 가드가 화면
           전체로 이미 보여준다. */}
+      {/* ── 취소된 배차 안내 ──────────────────────────────────────────────────
+          🔴 **왜 취소됐는지가 이 화면에 없으면 취소를 기록하는 의미가 없다.**
+             사유는 코드로 저장되므로 `lib/dispatchCancel.ts` 가 말을 붙인다.
+          🔴 **경위(`cancel_reason_note`)는 내부 전용이다** — 화주 화면 0줄. */}
+      {dispatch.dispatch_status === DISPATCH_STATUS_CANCELLED && (
+        <div
+          style={{
+            border: "1px solid var(--border)",
+            background: "#F9FAFB",
+            borderRadius: "var(--radius)",
+            padding: "12px 14px",
+            marginBottom: 14,
+          }}
+        >
+          <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 4 }}>
+            취소된 배차 — {dispatchCancelAdminLabel(dispatch.cancel_reason)}
+          </div>
+          {dispatch.cancel_reason_note && (
+            <div style={{ fontSize: 13, marginBottom: 4, whiteSpace: "pre-wrap" }}>
+              {dispatch.cancel_reason_note}
+            </div>
+          )}
+          <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+            {dispatch.cancelled_at
+              ? new Date(dispatch.cancelled_at).toLocaleString("ko-KR")
+              : "시각 미상"}
+            {" · "}
+            {/* 🔴 되살리는 경로를 만들지 않았다는 것을 담당자가 알아야 한다. */}
+            되돌릴 수 없습니다 — 다시 보내려면 이 오더로 <strong>새 배차</strong>를 등록하십시오.
+          </div>
+        </div>
+      )}
+
       {actionError?.scope === "page" && (
         <div className="error-box">오류: {actionError.message}</div>
       )}
@@ -1223,6 +1376,23 @@ export default function DispatchDetailPage() {
               }}
             >
               접수중
+            </span>
+          ) : dispatch.dispatch_status === DISPATCH_STATUS_CANCELLED ? (
+            /* 🔴 **취소는 되돌릴 수 없다** — 드롭다운으로 두면 `배차확정` 으로
+                되살릴 수 있고, 그러면 `cancelled_at` 이 남은 채 살아나 집계가 어긋난다.
+                재배차는 **새 배차를 만드는 것**이 정상 경로다. */
+            <span
+              style={{
+                fontWeight: 600,
+                padding: "5px 10px",
+                borderRadius: 999,
+                background: statusColor.bg,
+                color: statusColor.text,
+              }}
+            >
+              {/* 🔴 화면 글자는 「배차취소」이고 **DB 값은 `취소` 그대로**다
+                  (사용자 지시 2026-09-17 · 목록과 같은 말이어야 한다). */}
+              {dispatchStatusAdminLabel(dispatch.dispatch_status)}
             </span>
           ) : (
             <select
@@ -2521,16 +2691,78 @@ export default function DispatchDetailPage() {
           </label>
         </div>
         {editForm.issue_occurred && (
-          <div className="field" style={{ marginBottom: 14 }}>
-            <label>문제 상세 내용</label>
-            <textarea
-              rows={2}
-              value={editForm.issue_notes}
-              onChange={(e) =>
-                setEditForm({ ...editForm, issue_notes: e.target.value })
-              }
-            />
-          </div>
+          <>
+            <div className="field" style={{ marginBottom: 14 }}>
+              <label>
+                문제 사유 <span style={{ color: "var(--danger)" }}>*</span>
+              </label>
+              <select
+                value={editForm.issue_reason}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, issue_reason: e.target.value })
+                }
+              >
+                <option value="">선택하십시오</option>
+                {DISPATCH_ISSUE_REASONS.map((r) => (
+                  <option key={r.code} value={r.code}>
+                    {r.adminLabel}
+                  </option>
+                ))}
+              </select>
+              {/* 🔴 화주가 **다른 말**을 본다는 것을 담당자가 알아야 한다 — 모르면
+                  「왜 내가 고른 말이 안 나오지」가 되고, 순화한 라벨을 되돌리려 한다. */}
+              <p style={{ margin: "4px 0 0", fontSize: 11.5, color: "var(--text-muted)" }}>
+                화주 화면에는 순화한 말로 나갑니다. 아래 상세 내용은 화주에게 나가지 않습니다.
+              </p>
+            </div>
+
+            {/* ── 사고 체크리스트 ─────────────────────────────────────────────
+                🔴 **관리자 전용이다** — 화주에게 보이면 보험 조건이 협상 카드가 된다.
+                🔴 **「확인함」 체크박스를 달지 말 것** — 누른 기록이 곧
+                   「알고도 안 했다」의 증거가 된다. 보여주기만 한다. */}
+            {dispatchIssueNeedsGuide(editForm.issue_reason) && (
+              <div
+                style={{
+                  border: "1px solid #FCA5A5",
+                  background: "#FEF2F2",
+                  borderRadius: "var(--radius)",
+                  padding: "12px 14px",
+                  marginBottom: 14,
+                }}
+              >
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>
+                  지금 확인할 것
+                </div>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, lineHeight: 1.65 }}>
+                  {getIncidentGuide(editForm.issue_reason).map((line, i) => (
+                    <li
+                      key={i}
+                      style={{
+                        color: line.tone === "danger" ? "#B91C1C" : "var(--text-muted)",
+                        fontWeight: line.tone === "danger" ? 600 : 400,
+                      }}
+                    >
+                      {line.text}
+                    </li>
+                  ))}
+                  <li style={{ color: "var(--text-muted)" }}>{INCIDENT_PHOTO_NOTE}</li>
+                </ul>
+              </div>
+            )}
+
+            <div className="field" style={{ marginBottom: 14 }}>
+              {/* 🔴 **자유 서술을 드롭다운으로 대체하지 말 것** — 드롭다운은 **분류**이고
+                  이것은 **경위**다. 둘 다 필요하다. */}
+              <label>문제 상세 내용 (내부 기록)</label>
+              <textarea
+                rows={2}
+                value={editForm.issue_notes}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, issue_notes: e.target.value })
+                }
+              />
+            </div>
+          </>
         )}
         <div className="field">
           <label>배차 메모</label>
@@ -2541,6 +2773,116 @@ export default function DispatchDetailPage() {
           />
         </div>
       </div>
+
+      {/* ── 배차 취소 모달 ────────────────────────────────────────────────────
+          🔴 **사유를 강제하려고 일반 편집폼에서 떼어냈다**(원칙 39번과 같은 결) —
+             여러 필드를 한 번에 저장하는 폼 안에 넣으면 사유 입력을 강제할 방법이 없다. */}
+      {cancelOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="dispatch-cancel-title"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 60,
+            padding: 16,
+          }}
+          onClick={() => !cancelling && setCancelOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "#fff",
+              // 🔴 모달은 색·정렬·줄바꿈을 **자기가 선언한다**(PR #129 의 그 자리) —
+              //    상속에 맡기면 어두운 배경 안에서 글자가 안 보이거나 가로로 끌린다.
+              color: "var(--text)",
+              whiteSpace: "normal",
+              textAlign: "left",
+              borderRadius: "var(--radius)",
+              padding: 20,
+              width: "100%",
+              maxWidth: 420,
+            }}
+          >
+            <h3 id="dispatch-cancel-title" style={{ margin: "0 0 4px", fontSize: 16 }}>
+              배차 취소
+            </h3>
+            <p style={{ margin: "0 0 14px", fontSize: 12.5, color: "var(--text-muted)" }}>
+              기록은 남고 연결된 오더는 다시 배차할 수 있는 상태로 돌아갑니다.
+              화주에게는 「배차가 변경되었습니다」로 알립니다.
+            </p>
+
+            <div className="field" style={{ marginBottom: 12 }}>
+              <label>
+                취소 사유 <span style={{ color: "var(--danger)" }}>*</span>
+              </label>
+              <select
+                value={cancelForm.reason}
+                onChange={(e) => setCancelForm({ ...cancelForm, reason: e.target.value })}
+              >
+                <option value="">선택하십시오</option>
+                {DISPATCH_CANCEL_REASONS.map((r) => (
+                  <option key={r.code} value={r.code}>
+                    {r.adminLabel}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="field" style={{ marginBottom: 12 }}>
+              <label>경위 (선택)</label>
+              <textarea
+                rows={2}
+                value={cancelForm.note}
+                onChange={(e) => setCancelForm({ ...cancelForm, note: e.target.value })}
+                placeholder="예: 상차 1시간 전 연락, 대차 수배함"
+              />
+              {/* 🔴 화주에게 안 간다는 것을 담당자가 알아야 솔직하게 적는다. */}
+              <p style={{ margin: "4px 0 0", fontSize: 11.5, color: "var(--text-muted)" }}>
+                내부 기록입니다 — 화주 화면에는 나오지 않습니다.
+              </p>
+            </div>
+
+            {/* 🔴 오류는 **누른 자리**에(원칙 33번) */}
+            {actionError?.scope === "cancel" && (
+              <div className="error-box" style={{ marginBottom: 10 }}>
+                {actionError.message}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                className="btn btn-ghost"
+                onClick={() => setCancelOpen(false)}
+                disabled={cancelling}
+              >
+                닫기
+              </button>
+              <button
+                className="btn-danger"
+                onClick={handleCancel}
+                // 🔴 사유가 없으면 누를 수 없다 — 화면과 `handleCancel()` 이 **같은 조건**이다.
+                disabled={cancelling || !cancelForm.reason}
+                style={{
+                  padding: "9px 16px",
+                  borderRadius: "var(--radius)",
+                  fontSize: 13.5,
+                  fontWeight: 600,
+                  cursor: cancelling || !cancelForm.reason ? "not-allowed" : "pointer",
+                  opacity: cancelling || !cancelForm.reason ? 0.6 : 1,
+                }}
+              >
+                {cancelling ? "취소 처리 중..." : "배차 취소"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {conflict && (
         <ConflictWarning

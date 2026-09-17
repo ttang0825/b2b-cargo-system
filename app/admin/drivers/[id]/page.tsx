@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  DISPATCH_STATUS_CANCELLED,
+  DRIVER_FAULT_CANCEL_CODES,
+} from "@/lib/dispatchCancel";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
@@ -40,7 +44,25 @@ export default function DriverDetailPage() {
   const [vehicles, setVehicles] = useState<VehicleForm[]>([]);
   const [deletedVehicleIds, setDeletedVehicleIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  /**
+   * 🔴 **로딩 실패 전용이다**(원칙 33번). 아래 `if (error || !driver)` 가드가
+   *    이미 불러온 상세를 통째로 덮으므로, **저장·삭제 실패를 여기 담지 말 것.**
+   *    ⚠️ 2026-09-17 전까지 이 화면이 실제로 그랬다 — 삭제가 실패하면 화면이
+   *    「차주 정보를 불러오지 못했습니다」로 바뀌었다. PR #153(오더 상세)·
+   *    PR #167(배차 상세)이 고친 그 버그가 여기 남아 있었던 것이고 **다섯 번째**다.
+   */
   const [error, setError] = useState<string | null>(null);
+  /** 액션(저장·삭제) 실패 — 화면을 덮지 않고 **인라인 배너**로만 보여준다. */
+  const [actionError, setActionError] = useState<string | null>(null);
+  /**
+   * 🔴 **취소 건수는 저장하지 않고 표시 시점에 센다**(35차 마진 · 36차 미수금과 같은 패턴).
+   *    `drivers` 에 컬럼을 두면 낡고, 취소 기록을 지웠을 때 안 맞는다.
+   *    🔴 **`driverFault` 인 사유만 센다** — 화주 요청 취소는 차주 잘못이 아니다.
+   *    ⚠️ 착수 시점 실측으로 운영 배차가 **전부 외부 배정이고 `driver_id` 가 0건**이라
+   *    지금은 **어느 차주를 봐도 0** 이다(사용자 확정 (A) — 구조를 맞춰 두고 값이
+   *    쌓이기를 기다린다). 🔴 **「값이 안 나오니 지우자」로 없애지 말 것.**
+   */
+  const [cancelCount, setCancelCount] = useState<number | null>(null);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -91,6 +113,15 @@ export default function DriverDetailPage() {
       }))
     );
     setDeletedVehicleIds([]);
+    // 🔴 조회 실패를 삼키면 「0건」으로 보여 사실과 다른 말을 한다(원칙 55번) —
+    //    실패하면 `null` 로 두고 화면이 「-」를 그린다.
+    const { count: cancelCnt, error: cancelErr } = await supabase
+      .from("dispatches")
+      .select("id", { count: "exact", head: true })
+      .eq("driver_id", id)
+      .eq("dispatch_status", DISPATCH_STATUS_CANCELLED)
+      .in("cancel_reason", DRIVER_FAULT_CANCEL_CODES);
+    setCancelCount(cancelErr ? null : cancelCnt || 0);
     setEditForm({
       name: data.name || "",
       phone: data.phone || "",
@@ -138,7 +169,7 @@ export default function DriverDetailPage() {
 
   async function handleSave() {
     setSaving(true);
-    setError(null);
+    setActionError(null);
     const { error } = await supabase
       .from("drivers")
       .update({
@@ -163,7 +194,7 @@ export default function DriverDetailPage() {
 
     if (error) {
       setSaving(false);
-      setError(error.message);
+      setActionError(error.message);
       return;
     }
 
@@ -204,7 +235,7 @@ export default function DriverDetailPage() {
   async function handleDelete() {
     if (!driver) return;
     setDeleting(true);
-    setError(null);
+    setActionError(null);
     const dispatchRes = await supabase
       .from("dispatches")
       .select("id", { count: "exact", head: true })
@@ -231,7 +262,7 @@ export default function DriverDetailPage() {
     setDeleting(false);
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      setError(data.error || "삭제에 실패했습니다.");
+      setActionError(data.error || "삭제에 실패했습니다.");
       return;
     }
     router.push("/admin/drivers");
@@ -267,12 +298,22 @@ export default function DriverDetailPage() {
         </Link>
       </div>
 
+      {/* 🔴 액션 실패는 **화면을 덮지 않는다**(원칙 33번) — 위쪽 전체화면 가드는
+          로딩 실패 전용이다. */}
+      {actionError && (
+        <div className="error-box" style={{ marginBottom: 12 }}>
+          {actionError}
+        </div>
+      )}
+
       <div className="page-header">
         <div>
           <h1 className="page-title">{driver.name}</h1>
           <p className="page-desc">
             차량 {vehicles.length}대 등록 · 누적 운송{" "}
-            {driver.completed_trip_count || 0}건
+            {driver.completed_trip_count || 0}건 · 취소{" "}
+            {/* 🔴 조회에 실패했으면 「0건」이라고 말하지 않는다(원칙 55번). */}
+            {cancelCount === null ? "-" : `${cancelCount}건`}
           </p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -464,6 +505,13 @@ export default function DriverDetailPage() {
             <Field label="평점" value={driver.rating} />
             <Field label="보험 만기일" value={driver.insurance_expiry} />
             <Field label="누적 운송건수" value={driver.completed_trip_count || 0} />
+            {/* 🔴 **차주 책임인 취소만** 센다 — 화주 요청 취소·기상은 빠진다
+                (`lib/dispatchCancel.ts` 의 `driverFault`). 저장값이 아니라
+                **표시 시점 계산**이라 취소 기록을 지우면 이 수도 같이 줄어든다. */}
+            <Field
+              label="취소 건수 (차주 사유)"
+              value={cancelCount === null ? "-" : `${cancelCount}건`}
+            />
             <Field label="클레임 이력" value={driver.claim_history} />
           </div>
         )}

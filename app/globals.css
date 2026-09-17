@@ -5680,6 +5680,34 @@ tbody tr:hover {
   color: #b4423a;
   margin-top: -8px;
 }
+/* 배차 취소 안내 — 2026-09-17 (사용자 지시로 「감춘다」를 뒤집으면서 신설).
+   🔴 **`.pv2-dissue`(문제발생)와 색을 같게 하지 말 것** — 취소는 사고가 아니다.
+      빨강으로 칠하면 화주가 화물에 문제가 생긴 것으로 읽는다(중립 회색이다).
+   🔴 **알약 줄 위, 문제발생 배지와 같은 자리다** — 두 배지는 같이 뜰 수 있다
+      (문제발생 뒤에 취소된 건). 그래서 `.pv2-dissue` 의 `margin-top: -8px` 를
+      여기 그대로 쓰지 않고 줄 간격을 따로 준다. */
+.pv2-dcancel {
+  align-self: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: -8px;
+}
+.pv2-dcancel-tag {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 99px;
+  padding: 6px 14px;
+  font-size: 13.5px;
+  font-weight: 700;
+  background: #f4f3ef;
+  color: #6b6759;
+}
+.pv2-dcancel-note {
+  font-size: 12.5px;
+  color: #6b6759;
+}
 .pv2-dsteps {
   display: flex;
   align-items: center;

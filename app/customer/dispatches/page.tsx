@@ -1,6 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import {
+  DISPATCH_CANCEL_CUSTOMER_NOTE,
+  dispatchCancelAwaitsRedispatch,
+  dispatchCancelCustomerBadge,
+  isDispatchCancelled,
+} from "@/lib/dispatchCancel";
+import { filterCancelledForCustomer } from "@/lib/portalCancelledDispatches";
+import { usePortalRefresh } from "@/lib/portalRefresh";
+import { dispatchIssueCustomerLabel } from "@/lib/dispatchIssue";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import MixableBadge from "@/components/MixableBadge";
 import {
@@ -108,6 +117,10 @@ export default function CustomerDispatchesPage() {
       //    DB 6종으로만 되면 「배차완료」로 검색해도 안 걸린다.
       DISPATCH_STAGE_LABELS[getDispatchStage(d)],
       hasDispatchIssue(d) ? DISPATCH_ISSUE_STYLE.label : null,
+      // 🔴 화면에 뜨는 말로 검색된다 — 「배차 취소」로 찾을 수 있어야 한다.
+      isDispatchCancelled(d.dispatch_status)
+        ? dispatchCancelCustomerBadge(d.cancel_reason)
+        : null,
     ],
     {
       created_at: (d) => d.created_at,
@@ -118,8 +131,10 @@ export default function CustomerDispatchesPage() {
     "desc"
   );
 
-  useEffect(() => {
-    async function load() {
+  // 🔴 **컴포넌트 안에 두는 것이 의도다** — effect 안에 가둬 두면 「화면이 다시 보일 때
+  //    다시 받아온다」(`lib/portalRefresh.ts`)에서 부를 수 없다. setState 만 쓰므로
+  //    렌더마다 새로 만들어져도 문제가 없다.
+  async function load() {
       // 🔴 `pickup_confirmed`·`delivery_confirmed` 를 빼지 말 것 — 「문제발생」은
       //    상태값을 덮어써서 단계를 알 수 없고, 이 두 boolean 으로만 복원된다.
       // 🔴 `driver_payout_amount` 등 차주 지급 정보는 조회하지 않는다(DB GRANT 가
@@ -127,17 +142,36 @@ export default function CustomerDispatchesPage() {
       const { data, error } = await supabase
         .from("dispatches")
         .select(
-          "id,dispatch_status,pickup_confirmed,delivery_confirmed,issue_occurred,created_at,updated_at,orders(order_no,origin,destination,requested_pickup_at,item,vehicle_type,loading_type,collection_method,billing_cycle,direct_collection_point)"
+          // 🔴 `issue_reason` 만 가져온다 — **`issue_notes`(경위)는 내부 메모라 안 보낸다.**
+          //    화면이 안 그리는 것과 API 가 아예 안 주는 것은 다른 방어선이다.
+          // 🔴 `order_id`·`cancel_reason` 을 빼지 말 것 — 취소된 건을 「접수로 돌아간
+          //    재배차 대기」로 보여주는 데 둘 다 필요하다(`lib/portalCancelledDispatches.ts`).
+          //    🔴 **`cancel_reason_note`(경위)는 내부 전용이라 안 보낸다** —
+          //    `issue_notes` 와 같은 방어선이다(화면이 안 그리는 것과 다른 층이다).
+          "id,order_id,dispatch_status,cancel_reason,pickup_confirmed,delivery_confirmed,issue_occurred,issue_reason,created_at,updated_at,orders(order_no,origin,destination,requested_pickup_at,item,vehicle_type,loading_type,collection_method,billing_cycle,direct_collection_point)"
         )
+        // 🔴 **취소된 배차를 감추지 않는다**(사용자 지시 2026-09-17 — 하루 전 확정 (A)를
+        //    사용자가 배포본을 보고 뒤집었다: *「사라지는게 아니라 접수 상태로 돌아가고
+        //    배차가 취소되었음이 표시가 되어야 할것 같다」*).
+        //    🔴 **`.neq("dispatch_status", 취소)` 를 되살리지 말 것** — 그러면 화주가
+        //    「내 건이 왜 없어졌지」를 겪는다. 중복 카드는 아래 함수가 가른다.
         .order("created_at", { ascending: false })
         .limit(100);
       // 🔴 조회 실패를 삼키면 "저장은 됐는데 목록이 빈" 상태가 되고 원인을 짚을
       //    단서가 없다(원칙 55번).
       if (error) setPageError(error.message);
       else setPageError(null);
-      setDispatches(data || []);
+      // 🔴 재배차가 끝난 오더의 취소 카드만 걷어낸다 — 규칙은 화면이 아니라
+      //    `lib/portalCancelledDispatches.ts` 에 있다(홈과 같은 규칙을 써야 한다).
+      setDispatches(await filterCancelledForCustomer(supabase, (data || []) as any[]));
       setLoading(false);
-    }
+  }
+
+  // 🔴 **Realtime 이 끊겼을 때의 그물이다** — 탭이 뒤로 갔다 오거나, 알림을 눌렀는데
+  //    이미 그 화면이라 주소가 안 바뀐 경우를 메운다(`lib/portalRefresh.ts`).
+  usePortalRefresh(load);
+
+  useEffect(() => {
     load();
 
     const channel = supabase
@@ -219,9 +253,19 @@ export default function CustomerDispatchesPage() {
             const issue = hasDispatchIssue(d);
             const created = shortDate(d.created_at);
             const pickup = shortDate(o.requested_pickup_at);
+            const cancelled = isDispatchCancelled(d.dispatch_status);
             const subs = [
               created ? `${created} 접수` : "접수",
-              stage >= 1 ? "차량 배차됨" : "배차 대기",
+              // 🔴 취소된 건은 「배차 대기」가 아니라 **「재배차 대기」**다 — 한 번
+              //    배차됐다가 풀린 것이라 화주가 보는 말이 달라야 한다.
+              //    ⚠️ 화주가 취소한 건은 다시 배차하지 않으므로 그 말을 쓰지 않는다.
+              cancelled
+                ? dispatchCancelAwaitsRedispatch(d.cancel_reason)
+                  ? "재배차 대기"
+                  : "배차 취소"
+                : stage >= 1
+                ? "차량 배차됨"
+                : "배차 대기",
               // 🔴 완료 알약에 일시를 넣지 말 것 — `dispatches` 에 완료 시각 컬럼이
               //    아예 없다(53차 ⑦). 「완료」 한 단어로 끝낸다.
               stage === 2 ? "완료" : pickup ? `${pickup} 예정` : "예정",
@@ -255,9 +299,40 @@ export default function CustomerDispatchesPage() {
                   </div>
                 </div>
 
+                {/* ── 취소 안내 ────────────────────────────────────────────────
+                    🔴 **단계 알약은 「접수」로 돌아가 있고**(`lib/dispatchStage.ts`)
+                       **왜 돌아갔는지는 이 줄이 말한다.** 둘은 한 벌이다 —
+                       한쪽만 지우면 「멀쩡히 배차됐던 건이 이유 없이 접수로 되돌아간」
+                       화면이 된다(사용자 지시 2026-09-17).
+                    🔴 **말은 `lib/dispatchCancel.ts` 가 만든다** — 화면에서 이어
+                       붙이지 말 것(홈과 같은 말이어야 한다).
+                    🔴 **경위(`cancel_reason_note`)를 그리지 말 것** — 내부 전용이고
+                       애초에 조회하지도 않는다. */}
+                {cancelled && (
+                  <div className="pv2-dcancel">
+                    <span className="pv2-dcancel-tag">
+                      {dispatchCancelCustomerBadge(d.cancel_reason)}
+                    </span>
+                    {dispatchCancelAwaitsRedispatch(d.cancel_reason) && (
+                      <span className="pv2-dcancel-note">{DISPATCH_CANCEL_CUSTOMER_NOTE}</span>
+                    )}
+                  </div>
+                )}
+
                 {/* 🔴 4번째 알약이 아니라 알약 위의 별도 배지다(사용자 확정 6번) */}
                 {issue && (
-                  <div className="pv2-dissue">{DISPATCH_ISSUE_STYLE.label}</div>
+                  <div className="pv2-dissue">
+                    {DISPATCH_ISSUE_STYLE.label}
+                    {/* 🔴 **순화한 말이다**(`lib/dispatchIssue.ts`) — 관리자 라벨
+                        (「화물 없어짐」 등)을 그대로 끌어오지 말 것. 특히 「분실」은
+                        보험 약관이 면책으로 정의한 낱말이라 **쓰면 안 된다.**
+                        🔴 사유가 없는 옛 건은 **배지만 그린다**(「확인 중」을 지어내지 않는다). */}
+                    {dispatchIssueCustomerLabel(d.issue_reason) && (
+                      <span style={{ fontWeight: 600, opacity: 0.85 }}>
+                        · {dispatchIssueCustomerLabel(d.issue_reason)}
+                      </span>
+                    )}
+                  </div>
                 )}
 
                 <div className="pv2-dsteps">

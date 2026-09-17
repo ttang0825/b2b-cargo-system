@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { STATUS_OPTIONS, getStatusColor } from "@/lib/statusColors";
 import { getDispatchStatusColor } from "@/lib/dispatchStatusColors";
+import { dispatchStatusAdminLabel } from "@/lib/dispatchCancel";
 import RecurringContractBadge from "@/components/RecurringContractBadge";
 // 🔴 라벨(건별/월정산)을 여기 적지 말 것 — 화주 항목의 정의처는 `lib/companyFields.ts`
 //    하나이고, 거기서 값이 늘면 이 목록도 같이 따라가야 한다(36차 A장).
@@ -456,7 +457,9 @@ export default function CustomersPage() {
                           color: getDispatchStatusColor(c.latestDispatchStatus).text,
                         }}
                       >
-                        {c.latestDispatchStatus}
+                        {/* 🔴 화면 글자만 「배차취소」다(배차 목록·상세와 같은 말) —
+                            DB 값은 `취소` 그대로다. */}
+                        {dispatchStatusAdminLabel(c.latestDispatchStatus)}
                       </span>
                     ) : (
                       "-"

@@ -41,13 +41,25 @@ import { sendWebPush } from "@/lib/webPush";
  *    🔴 **되살리지 말 것** — 화면 안 알림(`lib/portalAlert.ts`)에서도 정산·공지를
  *    같이 없앴으므로, 푸시만 되살리면 **폰으로는 오는데 화면에는 안 뜨는** 상태가 된다.
  */
-export type PortalPushEvent = "quote_submitted" | "dispatch_confirmed" | "transport_completed";
+export type PortalPushEvent =
+  | "quote_submitted"
+  | "dispatch_confirmed"
+  | "transport_completed"
+  // 🔴 **배차 취소**(2026-09-17 · 사용자 확정 2번 「화면 배너 + 웹 푸시까지」).
+  //    ⚠️ 위 「되살리지 말 것」 목록과 부딪히지 않는다 — 거기서 뺀 것은 **정산·공지·
+  //    상차완료·하차완료**이고, 취소는 **`dispatch_confirmed` 와 짝을 이루는 같은 결**이다.
+  //    배차확정 푸시가 **이미 나간 뒤**에 그것이 무효가 되는 것이라, 안 알리면
+  //    화주 화면이 조용히 되돌아간다. 🔴 **「알림을 좁혔다」를 근거로 빼지 말 것.**
+  | "dispatch_cancelled";
 
 /** 🔴 **무슨 일이 있었는가만** 적는다. 금액·구간·상호·차주는 넣지 않는다. */
 const PORTAL_PUSH_MESSAGES: Record<PortalPushEvent, { title: string; url: string }> = {
   quote_submitted: { title: "새 견적서가 도착했습니다", url: "/customer/quotes" },
   dispatch_confirmed: { title: "배차가 확정되었습니다", url: "/customer/dispatches" },
   transport_completed: { title: "운송이 완료되었습니다", url: "/customer/dispatches" },
+  // 🔴 **사유를 본문에 넣지 말 것** — 잠금화면·배너에 그대로 뜨고 옆사람이 본다.
+  //    그리고 「차주 변심」류는 화주에게 **회사가 배차를 못 지킨 것**으로 읽힌다.
+  dispatch_cancelled: { title: "배차가 변경되었습니다", url: "/customer/dispatches" },
 };
 
 export const PORTAL_PUSH_EVENTS = Object.keys(PORTAL_PUSH_MESSAGES) as PortalPushEvent[];

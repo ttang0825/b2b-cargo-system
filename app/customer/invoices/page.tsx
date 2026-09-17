@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
+import { usePortalRefresh } from "@/lib/portalRefresh";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import MixableBadge from "@/components/MixableBadge";
 import {
@@ -148,8 +149,8 @@ export default function CustomerInvoicesPage() {
     return { monthTotal, unpaidTotal, unpaidCount, taxCount, latestTaxDate };
   }, [invoices]);
 
-  useEffect(() => {
-    async function load() {
+  // 🔴 effect 밖에 둔다 — 「화면이 다시 보일 때 다시 받아온다」가 부를 수 있어야 한다.
+  async function load() {
       const { data, error } = await supabase
         .from("invoices")
         .select(PORTAL_INVOICE_FIELDS)
@@ -162,7 +163,11 @@ export default function CustomerInvoicesPage() {
       setInvoices(rows);
       await loadExtraCharges(rows);
       setLoading(false);
-    }
+  }
+
+  usePortalRefresh(load);
+
+  useEffect(() => {
     load();
 
     const channel = supabase

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
+import { usePortalRefresh } from "@/lib/portalRefresh";
 import MixableBadge from "@/components/MixableBadge";
 // 🔴 **배너와 별개인 목록 안 표시**(2026-09-16 사용자 지시) — 판정은
 //    `lib/usePortalSeenAt.ts` 한 곳이고 화면에서 다시 적지 말 것.
@@ -263,6 +264,9 @@ export default function CustomerQuotesPage() {
 
     setLoading(false);
   }
+
+  // 🔴 Realtime 이 끊겼을 때의 그물(`lib/portalRefresh.ts`) — 포털 네 화면이 같이 쓴다.
+  usePortalRefresh(load);
 
   useEffect(() => {
     load();

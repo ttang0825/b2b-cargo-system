@@ -93,8 +93,9 @@ export function collectPortalRises(
 
 // ── 배너를 띄울 상태 ─────────────────────────────────────────────────────────
 //
-// 🔴 **웹 푸시(B장)의 사건 셋과 같은 뜻이다** — `lib/portalPushNotify.ts` 의
-//    `quote_submitted` · `dispatch_confirmed` · `transport_completed`.
+// 🔴 **웹 푸시(B장)의 사건 넷과 같은 뜻이다** — `lib/portalPushNotify.ts` 의
+//    `quote_submitted` · `dispatch_confirmed` · `transport_completed` ·
+//    `dispatch_cancelled`(2026-09-17 신설).
 //    🔴 **한쪽만 고치지 말 것** — 갈리면 「폰으로는 오는데 화면에는 안 뜨는」(또는 그
 //    반대) 상태가 된다. 그 둘을 한 파일로 합치지도 말 것(푸시 모듈은 서버 전용이고
 //    이 모듈은 소리(`alertCore`)를 끌고 온다).
@@ -120,5 +121,14 @@ export const PORTAL_ALERT_QUOTE_STATUSES = ["견적제출"] as const;
  *    보여준다**(`lib/dispatchStage.ts` 2단계). 여기는 푸시와 같이 **`운송완료` 에만**
  *    건다 — 담당자가 `하차완료` 에서 멈추면 완료 배너가 안 뜬다. 🔴 단계로 바꿔 걸면
  *    `하차완료` 에서도 울리는데 **그것은 이 확정과 반대다 — 바꾸려면 먼저 물을 것.**
+ *
+ * 🔴 **`취소` 가 셋째다**(2026-09-17 · 사용자 확정 「화면 배너 + 웹 푸시까지」).
+ *    ⚠️ 바로 위가 「상차완료를 넣지 말 것」이라 적고 있는데 **취소는 그 결이 아니다** —
+ *    운송 도중의 중간 보고가 아니라 **이미 나간 배차확정 알림이 무효가 되는 것**이다.
+ *    🔴 「알림을 좁혔다」를 근거로 빼지 말 것.
+ *    ⚠️ 그리고 화주 화면은 취소된 배차를 **감추므로**(사용자 확정 (A), 2026-09-17)
+ *    이 배너와 푸시가 **「그 건이 왜 사라졌는지」를 말해 주는 유일한 경로**다.
+ *    🔴 **`lib/notifyPortalPush.ts` 의 매핑과 한 벌이다** — 한쪽만 고치면 「폰으로는
+ *    오는데 화면에는 안 뜨는」(또는 그 반대) 상태가 된다.
  */
-export const PORTAL_ALERT_DISPATCH_STATUSES = ["배차확정", "운송완료"] as const;
+export const PORTAL_ALERT_DISPATCH_STATUSES = ["배차확정", "운송완료", "취소"] as const;

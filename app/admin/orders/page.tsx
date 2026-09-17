@@ -10,6 +10,7 @@ import {
   type UnlinkedWonQuote,
 } from "@/lib/unlinkedWonQuotes";
 import { ORDER_STATUS_OPTIONS, getOrderStatusColor } from "@/lib/orderStatusColors";
+import { DISPATCH_STATUS_CANCELLED } from "@/lib/dispatchCancel";
 import {
   formatPhoneNumber,
   VEHICLE_TYPES_ALL,
@@ -257,6 +258,12 @@ function OrdersPageInner() {
    *    `운송완료` 인데 배차가 없는 것은 데이터가 어긋난 것이라 오히려 보여야 한다.
    * 🔴 조회에 실패했으면(`null`) **감추지 않는다** — 없는 것을 있다고 하는 쪽이
    *    「버튼이 통째로 사라졌다」보다 낫다(원칙 55번의 같은 결).
+   *
+   * 🚨 **`dispatchedOrderIds` 는 「살아 있는」 배차만 담는다**(2026-09-17).
+   *    ⚠️ 여기 있는 `status === "취소"` 는 **오더의 취소**이고 배차의 취소가 아니다 —
+   *    헷갈리지 말 것. 배차 쪽은 `loadDispatchedOrders()` 의 `.neq()` 가 맡는다.
+   *    🔴 **그 줄이 빠지면 취소된 배차가 남아 「+ 배차 등록」이 영영 안 보인다**
+   *    (배차 목록의 후보 조건과 **같은 사고**이고, 여기까지 고쳐야 두 입구가 맞는다).
    */
   function needsDispatch(orderId: string, status: string) {
     if (status === "취소") return false;
@@ -265,7 +272,11 @@ function OrdersPageInner() {
   }
 
   async function loadDispatchedOrders() {
-    const { data, error } = await supabase.from("dispatches").select("order_id");
+    const { data, error } = await supabase
+      .from("dispatches")
+      .select("order_id")
+      // 🚨 취소된 배차는 「없는 것」으로 본다 — 지우면 재배차 버튼이 사라진다.
+      .neq("dispatch_status", DISPATCH_STATUS_CANCELLED);
     if (error) {
       setDispatchedOrderIds(null);
       return;
