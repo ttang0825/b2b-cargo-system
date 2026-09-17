@@ -172,3 +172,23 @@ export function dispatchCancelAwaitsRedispatch(code: string | null | undefined):
   const reason = getDispatchCancelReason(code);
   return !reason || reason.awaitsRedispatch;
 }
+
+/**
+ * 🔴 **화주 화면의 취소 배지 색 — 옅은 레드**(사용자 지시 2026-09-17:
+ *    *「화주포털에 뜨는 "배차취소,재배차 접수중" 뱃지는 옅은 레드로 표시해주자」*).
+ *
+ *    ⚠️ **하루 전에는 중립 회색이었고**(`#F4F3EF` / `#6B6759`) `app/globals.css` 의
+ *    `.pv2-dcancel-tag` 주석이 *「`.pv2-dissue`(문제발생)와 색을 같게 하지 말 것 —
+ *    취소는 사고가 아니다」* 라고 적고 있었다. **사용자가 그것을 뒤집었다** —
+ *    🔴 **그 옛 주석을 근거로 회색으로 되돌리지 말 것**(같은 커밋에서 고쳤다).
+ *
+ *    🔴 **새 색을 만들지 않았다** — 27차 시안 팔레트의 빨강 쌍이고
+ *    `DISPATCH_ISSUE_STYLE`(문제 발생)과 **같은 값**이다. 그래서 두 배지가 한 카드에
+ *    같이 떠도 색이 같은데, **가르는 것은 색이 아니라 말이다**(「문제 발생」 /
+ *    「배차 취소 · 재배차 접수 중」). 🔴 헷갈린다는 신고가 오면 **새 색을 지어내지 말고**
+ *    모양(테두리·자리)으로 가를 것.
+ *
+ *    ⚠️ **같은 값이 `app/globals.css` 의 `.pv2-dcancel-tag` 에도 리터럴로 있다** —
+ *    CSS 는 이 상수를 못 읽는다. **한쪽을 고치면 반대쪽도 같이 고칠 것.**
+ */
+export const DISPATCH_CANCEL_CUSTOMER_STYLE = { color: "#B4423A", bg: "#FDF3F2" };

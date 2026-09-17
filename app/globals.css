@@ -5681,10 +5681,16 @@ tbody tr:hover {
   margin-top: -8px;
 }
 /* 배차 취소 안내 — 2026-09-17 (사용자 지시로 「감춘다」를 뒤집으면서 신설).
-   🔴 **`.pv2-dissue`(문제발생)와 색을 같게 하지 말 것** — 취소는 사고가 아니다.
-      빨강으로 칠하면 화주가 화물에 문제가 생긴 것으로 읽는다(중립 회색이다).
+   🔴 **색은 옅은 레드다**(사용자 지시 2026-09-17 — *「"배차취소,재배차 접수중" 뱃지는
+      옅은 레드로」*). ⚠️ 이 자리에는 *「`.pv2-dissue`(문제발생)와 색을 같게 하지 말 것 —
+      취소는 사고가 아니다」* 라고 적혀 있었고 **사용자가 그것을 뒤집었다** —
+      🔴 **그 문장을 근거로 회색(`#f4f3ef`/`#6b6759`)으로 되돌리지 말 것.**
+   🔴 **새 색을 만들지 않았다** — 값은 `lib/dispatchCancel.ts` 의
+      `DISPATCH_CANCEL_CUSTOMER_STYLE` 과 같고 CSS 는 그 상수를 못 읽으므로
+      **리터럴이 두 곳에 있다. 한쪽을 고치면 반대쪽도 같이 고칠 것.**
    🔴 **알약 줄 위, 문제발생 배지와 같은 자리다** — 두 배지는 같이 뜰 수 있다
-      (문제발생 뒤에 취소된 건). 그래서 `.pv2-dissue` 의 `margin-top: -8px` 를
+      (문제발생 뒤에 취소된 건). 색이 같아졌으므로 **가르는 것은 말이다**
+      (「문제 발생」 / 「배차 취소 · …」). 그래서 `.pv2-dissue` 의 `margin-top: -8px` 를
       여기 그대로 쓰지 않고 줄 간격을 따로 준다. */
 .pv2-dcancel {
   align-self: flex-start;
@@ -5701,8 +5707,8 @@ tbody tr:hover {
   padding: 6px 14px;
   font-size: 13.5px;
   font-weight: 700;
-  background: #f4f3ef;
-  color: #6b6759;
+  background: #fdf3f2;
+  color: #b4423a;
 }
 .pv2-dcancel-note {
   font-size: 12.5px;

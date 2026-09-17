@@ -2,10 +2,14 @@
 
 import { useEffect, useState } from "react";
 import {
+  DISPATCH_CANCEL_CUSTOMER_STYLE,
   dispatchCancelCustomerBadge,
-  isDispatchCancelled,
 } from "@/lib/dispatchCancel";
-import { filterCancelledForCustomer } from "@/lib/portalCancelledDispatches";
+import {
+  filterCancelledForCustomer,
+  getPortalCancelNotice,
+  type PortalRedispatchMap,
+} from "@/lib/portalCancelledDispatches";
 import { usePortalRefresh } from "@/lib/portalRefresh";
 import Link from "next/link";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
@@ -101,6 +105,8 @@ export default function CustomerHomePage() {
   const [pendingQuotes, setPendingQuotes] = useState<QuoteRow[]>([]);
   const [unpaidInvoices, setUnpaidInvoices] = useState<InvoiceRow[]>([]);
   const [activeDispatches, setActiveDispatches] = useState<DispatchRow[]>([]);
+  // 🔴 재배차가 접수 중인 오더의 취소 이력 — 조회 화면과 **같은 함수**가 채운다.
+  const [redispatch, setRedispatch] = useState<PortalRedispatchMap>(new Map());
   // 🔴 공지는 최근 5건까지 보여준다(PR #103 리뷰). 25차까지는 1건이었다.
   const [announcements, setAnnouncements] = useState<AnnouncementRow[]>([]);
   // 안 읽은 공지 수. 🔴 사이드바 배지와 **같은 규칙**이어야 한다 —
@@ -183,14 +189,12 @@ export default function CustomerHomePage() {
     setUnpaidInvoices((invoicesRes.data as unknown as InvoiceRow[]) || []);
     // 🔴 규칙은 화면이 아니라 `lib/portalCancelledDispatches.ts` 에 있다 —
     //    배차·운송 조회와 **같은 함수**를 쓴다.
-    setActiveDispatches(
-      (
-        await filterCancelledForCustomer(
-          supabase,
-          ((dispatchesRes.data as unknown as DispatchRow[]) || []) as any[]
-        )
-      ).slice(0, 5) as unknown as DispatchRow[]
+    const dispatchView = await filterCancelledForCustomer(
+      supabase,
+      ((dispatchesRes.data as unknown as DispatchRow[]) || []) as any[]
     );
+    setActiveDispatches(dispatchView.rows.slice(0, 5) as unknown as DispatchRow[]);
+    setRedispatch(dispatchView.redispatch);
     setAnnouncements((announcementRes.data as AnnouncementRow[]) || []);
     setUnreadNotices(unreadRes.count || 0);
     setLoading(false);
@@ -343,15 +347,28 @@ export default function CustomerHomePage() {
                 {/* 🔴 취소된 건은 단계가 「접수」로 돌아가 있으므로(`lib/dispatchStage.ts`)
                     **왜 돌아갔는지를 여기서 말해야 한다** — 배지 하나를 빼면 화주는
                     배차됐던 건이 이유 없이 접수로 되돌아간 것으로 본다.
-                    🔴 말은 조회 화면과 **같은 함수**가 만든다. */}
-                {isDispatchCancelled(d.dispatch_status) && (
-                  <span
-                    className="pv2-status-badge"
-                    style={{ background: "#F4F3EF", color: "#6B6759" }}
-                  >
-                    {dispatchCancelCustomerBadge(d.cancel_reason)}
-                  </span>
-                )}
+                    🔴 **재배차가 접수된 뒤에도 배차확정 전까지 계속 뜬다** — 새 배차 카드가
+                    취소 이력을 이어받는다. 🔴 `isDispatchCancelled(d.dispatch_status)` 로
+                    되돌리지 말 것(그러면 재배차 접수 순간 배지가 사라진다).
+                    🔴 말도 판정도 조회 화면과 **같은 함수**가 한다. */}
+                {(() => {
+                  // 🔴 **취소된 건뿐 아니라 「재배차 접수 중」인 새 배차에도 뜬다**
+                  //    (사용자 지시 2026-09-17 — *「이때까지는 배차취소 뱃지가 남아있고
+                  //    배차완료가 됐을때 사라지게 하자」*). 판정은 조회 화면과 같은 함수다.
+                  const notice = getPortalCancelNotice(d, redispatch);
+                  if (!notice) return null;
+                  return (
+                    <span
+                      className="pv2-status-badge"
+                      style={{
+                        background: DISPATCH_CANCEL_CUSTOMER_STYLE.bg,
+                        color: DISPATCH_CANCEL_CUSTOMER_STYLE.color,
+                      }}
+                    >
+                      {dispatchCancelCustomerBadge(notice.reason)}
+                    </span>
+                  );
+                })()}
                 <span
                   className="pv2-status-badge"
                   style={{

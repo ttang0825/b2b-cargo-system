@@ -54,6 +54,13 @@ import { buildNotesWithArrival, arrivalTypeLabel, ARRIVAL_TIME_FREE_NOTE } from 
 // 🔴 **`<option value>` 는 DB 값 그대로 두고 보이는 글자만 바꾼다** —
 //    값까지 바꾸면 `quotes_status_check` 위반으로 상태 변경이 실패한다.
 import { quoteStatusAdminLabel } from "@/lib/quoteStatusLabels";
+import {
+  amountSyncConfirmMessage,
+  needsAmountSyncConfirm,
+  ordersNeedingAmountSync,
+  syncQuoteAmountToOrders,
+  type LinkedOrder,
+} from "@/lib/quoteAmountSync";
 
 const STATUS_OPTIONS = ["상담중", "견적제출", "수주", "보류", "실패"];
 
@@ -161,7 +168,12 @@ export default function QuoteDetailPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const [mixedDiscountTiers, setMixedDiscountTiers] = useState<MixedLoadingDiscountTierRow[]>([]);
-  const [hasOrder, setHasOrder] = useState(false);
+  // 🔴 **건수가 아니라 행을 들고 있어야 한다** — 견적 금액을 고칠 때 그 오더들의
+  //    청구금액을 같이 맞춘다(`lib/quoteAmountSync.ts`). 그전에는 `count` 만 셌다.
+  const [linkedOrders, setLinkedOrders] = useState<LinkedOrder[]>([]);
+  const hasOrder = linkedOrders.length > 0;
+  const [amountSyncNotice, setAmountSyncNotice] = useState<string | null>(null);
+  const [linkedOrdersError, setLinkedOrdersError] = useState<string | null>(null);
   const [sendingQuoteSms, setSendingQuoteSms] = useState(false);
   const [quoteSmsSent, setQuoteSmsSent] = useState(false);
   const [excelBusy, setExcelBusy] = useState(false);
@@ -304,11 +316,14 @@ export default function QuoteDetailPage() {
       .eq("quote_id", id);
     setItems(itemData || []);
 
-    const { count: orderCount } = await supabase
+    // 🔴 조회 실패를 삼키면 「금액을 고쳤는데 오더가 안 따라왔다」가 조용히 일어난다
+    //    (원칙 55번) — 그때는 아래 저장이 오더를 **아예 손대지 않는다.**
+    const { data: orderRows, error: orderErr } = await supabase
       .from("orders")
-      .select("id", { count: "exact", head: true })
+      .select("id,order_no,status,customer_charge")
       .eq("quote_id", id);
-    setHasOrder((orderCount || 0) > 0);
+    setLinkedOrdersError(orderErr ? orderErr.message : null);
+    setLinkedOrders((orderRows || []) as LinkedOrder[]);
 
     setLoading(false);
   }
@@ -426,6 +441,18 @@ export default function QuoteDetailPage() {
     }
 
 
+    /* ── 견적 금액 → 연결된 오더 청구금액 ─────────────────────────────────────
+       🔴 사용자 지시 2026-09-17: *「기존견적에서 금액을 올리는 수정을 하면 이와 연결되어
+          있던 오더도 그 금액이 자동으로 적용되면 좋겠다」*.
+       🔴 **묻지 않고 바로 반영하는 것이 기본이다**(그것이 지시다) — 배차가 이미 내려간
+          오더일 때만 한 번 확인한다(`lib/quoteAmountSync.ts`). */
+    const nextAmount = Number(editForm.final_amount) || null;
+    const amountTargets =
+      nextAmount != null ? ordersNeedingAmountSync(linkedOrders, nextAmount) : [];
+    if (amountTargets.length > 0 && needsAmountSyncConfirm(amountTargets)) {
+      if (!window.confirm(amountSyncConfirmMessage(amountTargets, nextAmount as number))) return;
+    }
+
     setSaving(true);
 
     const fullOrigin = [editForm.origin, editForm.originDetail].filter((v) => v.trim()).join(" ");
@@ -497,11 +524,13 @@ export default function QuoteDetailPage() {
 
     if (force) {
       const { error } = await supabase.from("quotes").update(payload).eq("id", id);
-      setSaving(false);
       if (error) {
+        setSaving(false);
         setSaveError(error.message);
         return;
       }
+      await applyAmountToOrders(amountTargets, nextAmount, payload.updated_by);
+      setSaving(false);
       setEditing(false);
       load();
       return;
@@ -513,17 +542,47 @@ export default function QuoteDetailPage() {
       payload,
       quote.updated_at
     );
-    setSaving(false);
     if (error) {
+      setSaving(false);
       setSaveError(error);
       return;
     }
     if (hasConflict) {
+      setSaving(false);
       setConflict(true);
       return;
     }
+    // 🔴 **견적이 실제로 저장된 뒤에만** 오더를 고친다 — 충돌로 막힌 저장에서 오더만
+    //    바뀌면 두 화면의 금액이 갈린다.
+    await applyAmountToOrders(amountTargets, nextAmount, payload.updated_by);
+    setSaving(false);
     setEditing(false);
     load();
+  }
+
+  /**
+   * 🔴 **견적 저장이 성공한 뒤에만 부른다.** 실패해도 견적 저장을 되돌리지 않는다 —
+   *    견적은 이미 저장됐고, 오더 금액은 오더 화면에서 고칠 수 있다. 다만 **조용히
+   *    넘어가지 않는다**(원칙 55번).
+   */
+  async function applyAmountToOrders(
+    targets: LinkedOrder[],
+    amount: number | null,
+    staffId: string | null
+  ) {
+    setAmountSyncNotice(null);
+    if (amount == null || targets.length === 0) return;
+    const { error } = await syncQuoteAmountToOrders(supabase, targets, amount, staffId);
+    if (error) {
+      setSaveError(`견적은 저장했지만 연결된 오더 금액 반영에 실패했습니다: ${error}`);
+      return;
+    }
+    setAmountSyncNotice(
+      `연결된 운송오더 ${targets
+        .map((o) => o.order_no || o.id)
+        .join(", ")} 의 화주 청구금액도 ${amount.toLocaleString()}원(부가세 별도)으로 함께 수정했습니다. ` +
+        `배차의 화주 청구금액과 이미 만들어진 정산 건은 따로 확인해주세요.`
+    );
   }
 
   async function handleDelete() {
@@ -625,6 +684,22 @@ export default function QuoteDetailPage() {
 
       {error && <div className="error-box">오류: {error}</div>}
       {saveError && <div className="error-box">오류: {saveError}</div>}
+      {/* 🔴 조회가 실패하면 **금액을 고쳐도 오더가 안 따라간다** — 그 사실을 말한다. */}
+      {linkedOrdersError && (
+        <div className="error-box">
+          연결된 운송오더를 불러오지 못했습니다(금액이 오더에 반영되지 않습니다): {linkedOrdersError}
+        </div>
+      )}
+      {/* 🔴 **무엇이 같이 바뀌었는지 말한다** — 돈이라 조용히 지나가면 안 된다. */}
+      {amountSyncNotice && (
+        <div
+          className="card"
+          style={{ padding: "10px 14px", marginBottom: 20, fontSize: 12.5, color: "var(--text-muted)" }}
+          role="status"
+        >
+          {amountSyncNotice}
+        </div>
+      )}
 
       <div className="card" style={{ padding: 20, marginBottom: 20 }}>
         <div style={{ marginBottom: 14 }}>
@@ -1018,7 +1093,8 @@ export default function QuoteDetailPage() {
             />
             {hasOrder && (
               <p style={{ gridColumn: "1 / -1", fontSize: 11, color: "var(--text-muted)", margin: "-6px 0 0" }}>
-                이 견적은 이미 오더로 전환되었습니다. 정산방식을 수정해도 기존 오더에는 자동 반영되지 않습니다.
+                이 견적은 이미 오더로 전환되었습니다. <strong>정산방식</strong>을 수정해도 기존
+                오더에는 자동 반영되지 않습니다(최종 견적금액은 함께 반영됩니다).
               </p>
             )}
 
@@ -1162,6 +1238,15 @@ export default function QuoteDetailPage() {
               <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, marginBottom: 0 }}>
                 기본운임·가산 내역은 자동 재계산되지 않습니다. 필요하면 최종금액을 직접 조정해주세요.
               </p>
+              {/* 🔴 **금액은 오더로 따라간다**(2026-09-17) — 바로 위 정산방식 안내가
+                  「자동 반영되지 않습니다」라고 말하므로, 여기서 갈라 주지 않으면
+                  담당자가 금액도 안 넘어가는 줄 안다. */}
+              {hasOrder && (
+                <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, marginBottom: 0 }}>
+                  저장하면 연결된 운송오더의 화주 청구금액(부가세 별도)도 이 금액으로 함께
+                  바뀝니다. 배차·정산 금액은 따로 확인해주세요.
+                </p>
+              )}
             </div>
 
             <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8, marginTop: 4 }}>

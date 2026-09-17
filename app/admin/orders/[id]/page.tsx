@@ -23,6 +23,7 @@ import {
   type UnlinkedWonQuote,
 } from "@/lib/unlinkedWonQuotes";
 import { notifyBadgeRefresh } from "@/lib/notifyBadgeRefresh";
+import { isDispatchCancelled } from "@/lib/dispatchCancel";
 // 🔴 하차 최소 간격의 정의처는 `lib/dropoffGap.ts` 하나다 — 이 화면에는 하한이 **아예
 //    없었고**, 등록 화면만 2시간이라 같은 오더인데 등록과 수정의 규칙이 달랐다.
 import {
@@ -144,6 +145,7 @@ export default function OrderDetailPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [conflict, setConflict] = useState(false);
   const [linkedDispatchId, setLinkedDispatchId] = useState<string | null>(null);
+  const [linkedDispatchError, setLinkedDispatchError] = useState<string | null>(null);
   const [settlementModalOpen, setSettlementModalOpen] = useState(false);
   const [settlementSaving, setSettlementSaving] = useState(false);
   /**
@@ -243,13 +245,24 @@ export default function OrderDetailPage() {
       special_notes: data.special_notes || "",
     });
 
-    const { data: dispatchRow } = await supabase
+    /* 🔴 **「배차 상세보기」는 살아 있는 배차로 간다** — 사용자 신고 2026-09-17:
+          *「한번 배차취소 이력이 있는 배차중인 운송오더 상세에서 "배차상세보기"로
+          들어가면 배차취소된 배차상세로 가는데, 새로 접수중인 배차상세로 이동해야 한다」*.
+       🔴 그전에는 `.limit(1)` 만 걸고 **정렬도 상태 조건도 없었다** — PostgREST 는
+          순서를 보장하지 않으므로 한 오더에 배차가 둘 이상이면 **어느 것이 잡힐지
+          알 수 없었다**(취소 건이 잡히면 담당자가 죽은 배차를 연다).
+       🔴 **취소 건만 있을 때는 그 취소 건으로 보낸다** — 「배차관리로 이동」으로 바꾸면
+          방금 취소한 배차를 여는 길이 사라진다(사유·경위가 거기 있다). */
+    const { data: dispatchRows, error: dispatchErr } = await supabase
       .from("dispatches")
-      .select("id")
+      .select("id,dispatch_status,created_at")
       .eq("order_id", id)
-      .limit(1)
-      .maybeSingle();
-    setLinkedDispatchId(dispatchRow?.id || null);
+      .order("created_at", { ascending: false });
+    // 🔴 조회 실패를 삼키면 「배차가 있는데 버튼이 안 뜬다」가 된다(원칙 55번).
+    setLinkedDispatchError(dispatchErr ? dispatchErr.message : null);
+    const rows = (dispatchRows || []) as { id: string; dispatch_status: string | null }[];
+    const live = rows.find((d) => !isDispatchCancelled(d.dispatch_status));
+    setLinkedDispatchId((live || rows[0])?.id || null);
 
     // 🔴 **이미 이어져 있으면 후보를 부르지 않는다** — 연결된 오더에 「연결」 UI 가
     //    남아 있으면 담당자가 다른 견적으로 갈아 끼울 수 있게 되고, 그건 이 화면이
@@ -610,6 +623,13 @@ export default function OrderDetailPage() {
         {/* 🔴 **액션 실패는 여기 인라인으로만** 보여준다(원칙 33번) — 위쪽 로딩 실패용
             `error` 를 같이 쓰면 `if (error || !order)` 가드에 걸려 **채우던 폼이 통째로
             사라진다.** 자리가 버튼 바로 아래라 누른 사람 눈에 바로 들어온다. */}
+        {/* 🔴 배차 조회가 실패하면 **버튼이 「배차관리로 이동」으로 바뀌어** 배차가 없는 것처럼
+            보인다 — 그 사실을 조용히 넘기지 않는다(원칙 55번). */}
+        {linkedDispatchError && (
+          <div className="error-box" style={{ marginTop: 12 }} role="alert">
+            연결된 배차를 불러오지 못했습니다: {linkedDispatchError}
+          </div>
+        )}
         {actionError && (
           <div className="error-box" style={{ marginTop: 12 }} role="alert">
             {actionError}

@@ -5,9 +5,12 @@ import {
   DISPATCH_CANCEL_CUSTOMER_NOTE,
   dispatchCancelAwaitsRedispatch,
   dispatchCancelCustomerBadge,
-  isDispatchCancelled,
 } from "@/lib/dispatchCancel";
-import { filterCancelledForCustomer } from "@/lib/portalCancelledDispatches";
+import {
+  filterCancelledForCustomer,
+  getPortalCancelNotice,
+  type PortalRedispatchMap,
+} from "@/lib/portalCancelledDispatches";
 import { usePortalRefresh } from "@/lib/portalRefresh";
 import { dispatchIssueCustomerLabel } from "@/lib/dispatchIssue";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
@@ -85,6 +88,9 @@ function stepStyle(i: number, cur: number) {
 
 export default function CustomerDispatchesPage() {
   const [dispatches, setDispatches] = useState<any[]>([]);
+  // 🔴 **취소 이력을 이어받을 오더 목록**(재배차가 접수 중인 것만) —
+  //    `lib/portalCancelledDispatches.ts` 가 채운다. 화면에서 직접 만들지 말 것.
+  const [redispatch, setRedispatch] = useState<PortalRedispatchMap>(new Map());
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
   const [period, setPeriod] = useState<PortalPeriod>(PORTAL_PERIOD_ALL);
@@ -118,9 +124,13 @@ export default function CustomerDispatchesPage() {
       DISPATCH_STAGE_LABELS[getDispatchStage(d)],
       hasDispatchIssue(d) ? DISPATCH_ISSUE_STYLE.label : null,
       // 🔴 화면에 뜨는 말로 검색된다 — 「배차 취소」로 찾을 수 있어야 한다.
-      isDispatchCancelled(d.dispatch_status)
-        ? dispatchCancelCustomerBadge(d.cancel_reason)
-        : null,
+      //    🔴 **재배차 접수 중인 카드도 배지를 달고 있으므로 같이 걸려야 한다** —
+      //    `isDispatchCancelled` 로만 보면 그 카드는 화면에 「배차 취소」라고 떠 있는데
+      //    검색으로는 안 나온다.
+      (() => {
+        const n = getPortalCancelNotice(d, redispatch);
+        return n ? dispatchCancelCustomerBadge(n.reason) : null;
+      })(),
     ],
     {
       created_at: (d) => d.created_at,
@@ -163,7 +173,11 @@ export default function CustomerDispatchesPage() {
       else setPageError(null);
       // 🔴 재배차가 끝난 오더의 취소 카드만 걷어낸다 — 규칙은 화면이 아니라
       //    `lib/portalCancelledDispatches.ts` 에 있다(홈과 같은 규칙을 써야 한다).
-      setDispatches(await filterCancelledForCustomer(supabase, (data || []) as any[]));
+      // 🔴 취소 카드를 걷어내는 것과 **재배차 카드에 취소 이력을 이어 붙이는 것**이
+      //    한 함수에서 나온다 — 화면에서 조건을 다시 적지 말 것.
+      const view = await filterCancelledForCustomer(supabase, (data || []) as any[]);
+      setDispatches(view.rows);
+      setRedispatch(view.redispatch);
       setLoading(false);
   }
 
@@ -253,14 +267,16 @@ export default function CustomerDispatchesPage() {
             const issue = hasDispatchIssue(d);
             const created = shortDate(d.created_at);
             const pickup = shortDate(o.requested_pickup_at);
-            const cancelled = isDispatchCancelled(d.dispatch_status);
+            // 🔴 **취소된 카드와 「재배차 접수 중」 카드가 같은 배지를 단다** —
+            //    판정은 `lib/portalCancelledDispatches.ts` 한 곳이다.
+            const cancelNotice = getPortalCancelNotice(d, redispatch);
             const subs = [
               created ? `${created} 접수` : "접수",
-              // 🔴 취소된 건은 「배차 대기」가 아니라 **「재배차 대기」**다 — 한 번
-              //    배차됐다가 풀린 것이라 화주가 보는 말이 달라야 한다.
+              // 🔴 취소 이력이 있는 건은 「배차 대기」가 아니라 **「재배차 대기」**다 —
+              //    한 번 배차됐다가 풀린 것이라 화주가 보는 말이 달라야 한다.
               //    ⚠️ 화주가 취소한 건은 다시 배차하지 않으므로 그 말을 쓰지 않는다.
-              cancelled
-                ? dispatchCancelAwaitsRedispatch(d.cancel_reason)
+              cancelNotice
+                ? dispatchCancelAwaitsRedispatch(cancelNotice.reason)
                   ? "재배차 대기"
                   : "배차 취소"
                 : stage >= 1
@@ -308,12 +324,12 @@ export default function CustomerDispatchesPage() {
                        붙이지 말 것(홈과 같은 말이어야 한다).
                     🔴 **경위(`cancel_reason_note`)를 그리지 말 것** — 내부 전용이고
                        애초에 조회하지도 않는다. */}
-                {cancelled && (
+                {cancelNotice && (
                   <div className="pv2-dcancel">
                     <span className="pv2-dcancel-tag">
-                      {dispatchCancelCustomerBadge(d.cancel_reason)}
+                      {dispatchCancelCustomerBadge(cancelNotice.reason)}
                     </span>
-                    {dispatchCancelAwaitsRedispatch(d.cancel_reason) && (
+                    {dispatchCancelAwaitsRedispatch(cancelNotice.reason) && (
                       <span className="pv2-dcancel-note">{DISPATCH_CANCEL_CUSTOMER_NOTE}</span>
                     )}
                   </div>
