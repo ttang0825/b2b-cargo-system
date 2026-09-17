@@ -1436,3 +1436,58 @@ select cnt as "한_오더의_배차_수", count(*) as "그런_오더_수"
   from (select order_id, count(*) as cnt from dispatches group by order_id) x
  group by 1
  order by 1;
+
+-- ㉘ 견적·오더 수정 이력 + 「수정견적」 배지 착수 전 실측 (2026-09-17) ─────────────
+--
+-- 사용자 요청 셋 —
+--   ① 승인된 견적이 견적조정으로 수정되면 화주포털 목록 금액 앞에 「수정견적」 배지
+--      (운송이 완료되면 사라진다)
+--   ② 이미 오더가 있는 견적 상세에서 「+ 운송오더 생성」 대신 「해당 운송오더 이동」과
+--      「추가 운송오더 생성」
+--   ③ 견적 상세·오더 상세에 **수정 이력**
+--
+-- 🔴 **원칙 27번 사전 확인이다** — 새로 만들 컬럼·표가 이미 있으면
+--    `add column if not exists` 가 조용히 아무것도 안 하고 넘어간다.
+
+-- ㉘-a  `quotes` 에 「수정견적」 신호로 쓸 컬럼이 이미 있는가.
+--       🔴 여기에 `revised_at` 이 나오면 **신설하지 말고 그 컬럼을 쓸 것.**
+select column_name, data_type, is_nullable
+from information_schema.columns
+where table_name = 'quotes'
+  and (column_name like '%revis%' or column_name like '%approved%'
+       or column_name in ('updated_at','status','final_amount'))
+order by column_name;
+
+-- ㉘-b  수정 이력을 담을 표가 이미 있는가 — 🔴 있으면 새로 만들지 말고 그것을 쓸 것.
+--       (이 저장소에는 `settlement_type_change_logs`·`invoice_amendment_logs` 가 있고
+--        둘 다 **한 필드 전용**이라 일반 수정 이력에는 못 쓴다 — 그 사실을 확인한다.)
+select table_name
+from information_schema.tables
+where table_schema = 'public' and table_name like '%log%'
+order by table_name;
+
+-- ㉘-c  ② 버튼이 실제로 몇 건에 영향을 주는가 — 수주 견적과 그 오더 수.
+select q.status,
+       count(*) as 견적수,
+       count(*) filter (where o.cnt > 0) as "오더있음",
+       count(*) filter (where o.cnt > 1) as "오더2건이상"
+from quotes q
+left join lateral (select count(*) as cnt from orders where quote_id = q.id) o on true
+group by q.status
+order by q.status;
+
+-- ㉘-d  ① 배지가 사라지는 기준 — 오더 상태 분포. 🔴 `하차완료` 는 오더에서 `운송중`
+--       이고 `운송완료` 만 완료다(`lib/dispatchStatusColors.ts`). 화주 화면은 둘 다
+--       「운송완료」로 보여주므로(`lib/dispatchStage.ts`) **배차 단계로 재야 한다.**
+select o.status as "오더상태", d.dispatch_status as "배차상태", count(*)
+from orders o
+left join dispatches d on d.order_id = o.id
+group by o.status, d.dispatch_status
+order by 1, 2;
+
+-- ㉘-e  `staff_accounts` 를 직원 세션이 읽을 수 있는가 — 수정 이력에 「누가」를
+--       붙이려면 이름 조회가 되어야 한다(`ProcessedByFooter` 가 이미 쓰는 경로).
+select policyname, cmd, roles::text
+from pg_policies
+where schemaname = 'public' and tablename = 'staff_accounts'
+order by policyname;
