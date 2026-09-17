@@ -1491,3 +1491,13 @@ select policyname, cmd, roles::text
 from pg_policies
 where schemaname = 'public' and tablename = 'staff_accounts'
 order by policyname;
+
+-- ㉘-f  ㉘-b 가 드러낸 **내가 모르던 표 둘**의 컬럼 — 🔴 재사용할 수 있으면 새로
+--       만들지 않는다(원칙 27번과 같은 결). `activity_logs` 는 21차가 「죽은 표 6개」로
+--       분류해 RLS 만 켜 둔 레거시이고(정책 0개 · 0행), `settlement_field_change_logs`
+--       는 정산방식 전용이다. **둘 다 실제 컬럼을 보고 판단한다.**
+select table_name, ordinal_position, column_name, data_type, is_nullable, column_default
+from information_schema.columns
+where table_schema = 'public'
+  and table_name in ('activity_logs', 'settlement_field_change_logs')
+order by table_name, ordinal_position;

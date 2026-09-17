@@ -1,27 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
-
-// staff_accounts 이름 조회 결과를 화면 전체에서 재사용 (매 상세화면마다 다시 안 불러오게)
-let staffNameCache: Record<string, string> | null = null;
-let staffNameCachePromise: Promise<Record<string, string>> | null = null;
-
-async function loadStaffNames(): Promise<Record<string, string>> {
-  if (staffNameCache) return staffNameCache;
-  if (!staffNameCachePromise) {
-    staffNameCachePromise = (async () => {
-      const { data } = await supabase.from("staff_accounts").select("id,name");
-      const map: Record<string, string> = {};
-      (data || []).forEach((s: any) => {
-        map[s.id] = s.name;
-      });
-      staffNameCache = map;
-      return map;
-    })();
-  }
-  return staffNameCachePromise;
-}
+// 🔴 **캐시는 `lib/staffNames.ts` 하나다**(2026-09-17 분리) — 수정 이력 패널이 같은
+//    조회를 하므로, 여기에 다시 만들면 같은 화면에서 `staff_accounts` 를 두 번 읽는다.
+import { loadStaffNames } from "@/lib/staffNames";
 
 function formatDate(value: string) {
   const d = new Date(value);
