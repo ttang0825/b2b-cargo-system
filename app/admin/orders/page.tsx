@@ -24,7 +24,12 @@ import { getOrCreateIndividualCustomer, findIndividualCustomerByPhone } from "@/
 import DateTimePicker from "@/components/DateTimePicker";
 import MoneyInput from "@/components/MoneyInput";
 import VatBasisSelect from "@/components/VatBasisSelect";
-import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
+import DateRangeFilter, {
+  DatePreset,
+  CustomDateRange,
+  EMPTY_CUSTOM_RANGE,
+  getDateRange,
+} from "@/components/DateRangeFilter";
 import AddressSearch from "@/components/AddressSearch";
 import PickupDropoffContactFields, {
   EMPTY_PICKUP_DROPOFF_CONTACT,
@@ -124,6 +129,8 @@ function OrdersPageInner() {
   const [sortKey, setSortKey] = useState("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [period, setPeriod] = useState<DatePreset>("all");
+  // 직접지정 구간(2026-09-17). `period === "custom"` 일 때만 쓰인다.
+  const [customRange, setCustomRange] = useState<CustomDateRange>(EMPTY_CUSTOM_RANGE);
   /**
    * 「수주인데 운송오더가 없는 견적」 — `TopNav` 「견적 관리」 배지와 **같은 규칙**이다
    * (`lib/unlinkedWonQuotes.ts`). 34차 리뷰 1라운드에 신고된
@@ -195,9 +202,12 @@ function OrdersPageInner() {
   // 🔴 하한은 `lib/dropoffGap.ts` 가 정한다 — 이 화면에 숫자를 적지 말 것.
   const minDeliveryDateTime = minDropoffDateTime(form.requested_pickup_at);
 
-  async function loadOrders(preset: DatePreset = period) {
+  async function loadOrders(
+    preset: DatePreset = period,
+    custom: CustomDateRange = customRange
+  ) {
     setLoading(true);
-    const { from } = getDateRange(preset);
+    const { from, to } = getDateRange(preset, custom);
     let query = supabase
       .from("orders")
       .select(
@@ -206,6 +216,8 @@ function OrdersPageInner() {
       .order("created_at", { ascending: false })
       .limit(preset === "all" ? ALL_PERIOD_LIMIT : FILTERED_PERIOD_LIMIT);
     if (from) query = query.gte("created_at", from);
+    // 🔴 `to` 는 **다음 날 자정**이라 `lt` 여야 끝날 그 자체가 포함된다(정의처 주석).
+    if (to) query = query.lt("created_at", to);
 
     const { data, error } = await query;
     if (error) setError(error.message);
@@ -272,9 +284,9 @@ function OrdersPageInner() {
 
   // 기간 필터 변경 시 목록만 다시 로드
   useEffect(() => {
-    loadOrders(period);
+    loadOrders(period, customRange);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [period]);
+  }, [period, customRange.from, customRange.to]);
 
   // `orders.vehicle_type` 은 「톤수 차량형태」 한 문자열이라(35차 B-1) 드롭다운 두 개가
   // 쓸 값을 여기서 되짚는다. `lib/companyFields.ts` 의 `recommended_vehicle` 과 같은 관례다.
@@ -714,8 +726,15 @@ function OrdersPageInner() {
             {showForm ? "닫기" : "+ 신규 오더 등록"}
           </button>
         </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <DateRangeFilter value={period} onChange={setPeriod} />
+        <div
+          style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}
+        >
+          <DateRangeFilter
+            value={period}
+            onChange={setPeriod}
+            custom={customRange}
+            onCustomChange={setCustomRange}
+          />
         </div>
       </div>
 
@@ -778,10 +797,10 @@ function OrdersPageInner() {
         </div>
       )}
 
-      {period === "all" && orders.length >= ALL_PERIOD_LIMIT && (
+      {orders.length >= (period === "all" ? ALL_PERIOD_LIMIT : FILTERED_PERIOD_LIMIT) && (
         <div className="error-box">
-          최근 {ALL_PERIOD_LIMIT}건만 표시 중입니다. 더 오래된 데이터를 보려면
-          기간 필터를 좁혀서 확인해주세요.
+          최근 {period === "all" ? ALL_PERIOD_LIMIT : FILTERED_PERIOD_LIMIT}건만 표시
+          중입니다. 더 오래된 데이터를 보려면 기간 필터를 좁혀서 확인해주세요.
         </div>
       )}
 

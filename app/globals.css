@@ -8699,3 +8699,55 @@ tbody tr:hover {
     display: none;
   }
 }
+
+/* ── 관리자 목록 기간 필터 (2026-09-17 · 직접지정 신설) ──────────────────
+   🔴 화주포털 `Pv2PeriodFilter`(.pv2-period-*) 를 끌어오지 않았다 — `.pv2-*` 토큰은
+      `.portal-v2` 스코프 안에만 있어서 관리자에서는 색이 안 나온다(원칙 57번).
+      같은 동작을 관리자 생김새로 옮긴 것이고 프리셋 계산만 정의처를 함께 쓴다. */
+.date-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.date-range-presets {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.date-range-custom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.date-range-date {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.date-range-date:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.date-range-tilde {
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+@media (max-width: 700px) {
+  /* 🔴 날짜 칸 둘이 한 줄에 들어가야 한다 — 두 클래스로 특성도를 올려
+        `.date-range-custom` 안에서만 줄인다(원칙 58번). */
+  .date-range-custom .date-range-date {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 6px 8px;
+  }
+  .date-range-custom {
+    width: 100%;
+  }
+}

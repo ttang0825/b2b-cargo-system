@@ -11,7 +11,12 @@ import { formatPhoneNumber, VEHICLE_TYPES_ALL } from "@/lib/constants";
 import { calcInclusiveAmount } from "@/lib/vat";
 import { mapToLegacySettlementType } from "@/lib/settlementLabels";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
-import DateRangeFilter, { DatePreset, getDateRange } from "@/components/DateRangeFilter";
+import DateRangeFilter, {
+  DatePreset,
+  CustomDateRange,
+  EMPTY_CUSTOM_RANGE,
+  getDateRange,
+} from "@/components/DateRangeFilter";
 import DateTimePicker from "@/components/DateTimePicker";
 import AddressSearch from "@/components/AddressSearch";
 import MoneyInput from "@/components/MoneyInput";
@@ -57,6 +62,11 @@ import {
 // .field input 전역 CSS(width:100%, padding, border-radius 등)가 텍스트
 // 입력창 기준이라 체크박스/라디오에 그대로 적용되면 뭉개져 보임 — 명시적으로
 // 원래 크기로 되돌림
+// 목록 조회 상한. 🔴 직접지정으로 긴 구간을 고르면 여기에 걸리므로 화면이 알려야 한다
+//    (다른 세 목록 화면과 같은 장치다 — 이 화면에만 없었다).
+const ALL_PERIOD_LIMIT = 50;
+const FILTERED_PERIOD_LIMIT = 200;
+
 const CHECKBOX_STYLE: React.CSSProperties = { width: "auto", flexShrink: 0 };
 
 type Tier = {
@@ -187,6 +197,8 @@ function QuotesPageInner() {
   const [needOrderError, setNeedOrderError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [period, setPeriod] = useState<DatePreset>("all");
+  // 직접지정 구간(2026-09-17). `period === "custom"` 일 때만 쓰인다.
+  const [customRange, setCustomRange] = useState<CustomDateRange>(EMPTY_CUSTOM_RANGE);
   const [calculatingDistance, setCalculatingDistance] = useState(false);
   const [distanceAutoCalculated, setDistanceAutoCalculated] = useState(false);
   const [allowManualDistance, setAllowManualDistance] = useState(false);
@@ -314,17 +326,22 @@ function QuotesPageInner() {
     setRatesLoading(false);
   }
 
-  async function loadQuotes(preset: DatePreset = period) {
+  async function loadQuotes(
+    preset: DatePreset = period,
+    custom: CustomDateRange = customRange
+  ) {
     setLoading(true);
-    const { from } = getDateRange(preset);
+    const { from, to } = getDateRange(preset, custom);
     let query = supabase
       .from("quotes")
       .select(
         "id,quote_no,origin,destination,vehicle_type,final_amount,status,created_at,guest_name,approved_by_customer_at,companies(name,is_recurring_contract,recurring_contract_ended_on)"
       )
       .order("created_at", { ascending: false })
-      .limit(preset === "all" ? 50 : 200);
+      .limit(preset === "all" ? ALL_PERIOD_LIMIT : FILTERED_PERIOD_LIMIT);
     if (from) query = query.gte("created_at", from);
+    // 🔴 `to` 는 **다음 날 자정**이라 `lt` 여야 끝날 그 자체가 포함된다(정의처 주석).
+    if (to) query = query.lt("created_at", to);
 
     const { data, error } = await query;
     if (error) setError(error.message);
@@ -371,9 +388,9 @@ function QuotesPageInner() {
 
   // 기간 필터 변경 시 목록만 다시 로드
   useEffect(() => {
-    loadQuotes(period);
+    loadQuotes(period, customRange);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [period]);
+  }, [period, customRange.from, customRange.to]);
 
   // 화주 발주요청을 승인해서 넘어온 경우, 요청 내용을 견적 폼에 미리 채워줌
   useEffect(() => {
@@ -2196,8 +2213,20 @@ function QuotesPageInner() {
         }}
       >
         <h2 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>견적 목록</h2>
-        <DateRangeFilter value={period} onChange={setPeriod} />
+        <DateRangeFilter
+          value={period}
+          onChange={setPeriod}
+          custom={customRange}
+          onCustomChange={setCustomRange}
+        />
       </div>
+
+      {quotes.length >= (period === "all" ? ALL_PERIOD_LIMIT : FILTERED_PERIOD_LIMIT) && (
+        <div className="error-box" style={{ marginBottom: 12 }}>
+          최근 {period === "all" ? ALL_PERIOD_LIMIT : FILTERED_PERIOD_LIMIT}건만 표시
+          중입니다. 더 오래된 데이터를 보려면 기간 필터를 좁혀서 확인해주세요.
+        </div>
+      )}
 
       <div className="card" style={{ overflowX: "auto" }}>
         {/* 🔴 조회 실패를 빈 목록으로 두지 않는다 — 「새 요청이 없다」로 읽힌다 */}
