@@ -107,6 +107,14 @@
 
 .landing-hero-fade { animation: landingHeroCrossfade 10s ease-in-out infinite; }
 
+/* 🔴 **`image-set()` 을 모르는 브라우저용 대체 배경이다 — 지우지 말 것**(2026-09-17).
+   히어로 배경은 `app/page.tsx` 가 인라인 `image-set()` 으로 주는데, 그 함수를 모르는
+   브라우저는 **인라인 선언을 통째로 버려서 배경이 사라진다.** 값은 같은 인라인 style 이
+   주는 `--hero-fallback`(원본 2912 파일)이고 **둘은 한 벌이다.**
+   🟢 지원하는 브라우저에서는 인라인 선언이 이기므로 **이 그림을 받지 않는다**(실측). */
+.landing-hero-band,
+.landing-hero-fade { background-image: var(--hero-fallback); }
+
 .landing-page section h2,
 .landing-page section h3 { word-break: keep-all; }
 

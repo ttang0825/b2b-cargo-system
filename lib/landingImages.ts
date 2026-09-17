@@ -29,12 +29,38 @@ const BASE = "/landing";
 export const LANDING_IMAGES = {
   heroMain: `${BASE}/hero-main.jpg`,
   heroAlt: `${BASE}/hero-alt.jpg`,
+  /** 🔴 **히어로 축소본 4장은 중복이 아니다 — 「정리」하지 말 것**(2026-09-17).
+   *  사진 띠는 1600px 화면에서 약 1208px 폭이라 2912px 원본이 **0.5배로 줄어** 그려지고,
+   *  그 위에서 10초 교차 애니메이션이 계속 돈다. 그 조합에서 크롬이 사진을 저품질로
+   *  줄이면 **트럭 옆면 로고의 사선이 계단처럼 깨진다**(사용자 신고).
+   *  아래 파일들을 `image-set()` 으로 걸어 **줄이는 비율을 1배 가까이로** 만든다.
+   *  🔴 **원본 2장을 지우지 말 것** — 2배율 이상 화면과 모바일이 그것을 쓴다. */
+  heroMain1600: `${BASE}/hero-main-1600.jpg`,
+  heroMain2400: `${BASE}/hero-main-2400.jpg`,
+  heroAlt1600: `${BASE}/hero-alt-1600.jpg`,
+  heroAlt2400: `${BASE}/hero-alt-2400.jpg`,
   ctaBg: `${BASE}/cta-bg.jpg`,
   tmsOverview: `${BASE}/tms-overview.png`,
   /** ⚠️ 헤더·접수완료 화면은 이 파일이 아니라 `<BrandLogo />`(인라인 SVG)를 쓴다 —
    *  `currentColor` 를 상속받아야 다크 배경에서도 보이기 때문(27차). */
   logo: `${BASE}/wecarry-logo.svg`,
 } as const;
+
+/**
+ * 히어로 배경용 `image-set()` 문자열.
+ *
+ * 브라우저가 화면 배율에 맞는 파일 **하나만** 받는다 —
+ * 1x → 1600 · 1.25·1.5x → 2400 · 2x 이상 → 원본(2912).
+ *
+ * 🔴 **`image-set()` 을 모르는 브라우저는 이 선언을 통째로 버린다** — 그러면 배경이
+ * 사라지므로 호출부가 `--hero-fallback` 커스텀 속성을 함께 주고
+ * `app/landing.css` 가 `background-image: var(--hero-fallback)` 로 받는다.
+ * **둘은 한 벌이라 한쪽만 지우지 말 것.**
+ * 🟢 지원하는 브라우저에서는 인라인 선언이 이겨서 **대체 이미지를 받지 않는다**(실측).
+ */
+export function heroImageSet(x1: string, x15: string, x2: string): string {
+  return `image-set(url('${x1}') 1x, url('${x15}') 1.5x, url('${x2}') 2x)`;
+}
 
 /** 위캐리 서비스 4종 — 키 순서가 노출 순서 */
 export const LANDING_SERVICE_IMAGES = {
