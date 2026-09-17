@@ -23,7 +23,11 @@ import MixableBadge from "@/components/MixableBadge";
 import { shortAddress } from "@/lib/shortAddress";
 import { fetchDispatchSmsPreview } from "@/lib/notifyDispatchSms";
 import { notifyPortalPushForDispatchStatus } from "@/lib/notifyPortalPush";
-import { DISPATCH_STATUS_CANCELLED } from "@/lib/dispatchCancel";
+import {
+  DISPATCH_STATUS_CANCELLED,
+  dispatchStatusAdminLabel,
+  isDispatchCancelled,
+} from "@/lib/dispatchCancel";
 import SmsConfirmModal, { SmsPreview } from "@/components/SmsConfirmModal";
 import RecurringContractBadge from "@/components/RecurringContractBadge";
 import AdminMobileList from "@/components/AdminMobileList";
@@ -447,6 +451,15 @@ function DispatchesPageInner() {
   ) {
     const target = dispatches.find((d) => d.id === dispatchId);
     const prevStatus = target?.dispatch_status;
+
+    // 🔴 **취소된 배차의 상태는 바꿀 수 없다**(사용자 지시 2026-09-17:
+    //    *「다시 상태변화를 수정할수 없어야 한다」*). 화면이 드롭다운을 안 그리지만
+    //    **여기서도 막는다** — 되살아나면 `cancelled_at` 이 남은 채 살아나 차주 집계가
+    //    어긋나고, 재배차로 이미 만든 새 배차와 둘 다 살아 있게 된다.
+    if (isDispatchCancelled(prevStatus)) {
+      setError("취소된 배차는 상태를 바꿀 수 없습니다. 다시 보내려면 새 배차를 등록하십시오.");
+      return;
+    }
 
     const { error } = await supabase
       .from("dispatches")
@@ -888,7 +901,21 @@ function DispatchesPageInner() {
                   style={{ cursor: "pointer" }}
                 >
                   <td style={{ whiteSpace: "nowrap" }}>
-                    <span className="num">{d.orders?.order_no || "-"}</span>
+                    {/* 🔴 **취소된 건은 오더번호를 빨강으로**(사용자 지시 2026-09-17) —
+                        목록을 훑을 때 「이 줄은 끝난 건」이 한눈에 들어와야 한다.
+                        ⚠️ 상태 배지 색(회색)과 **일부러 다르다** — 배지는 「조용한 끝」,
+                        번호는 「이 줄을 다시 세지 말 것」이다. 🔴 모바일 카드에도 같이
+                        걸려 있다(원칙 13번 — 한쪽만 칠하면 화면 크기에 따라 다르게 읽힌다). */}
+                    <span
+                      className="num"
+                      style={
+                        isDispatchCancelled(d.dispatch_status)
+                          ? { color: "#B91C1C", fontWeight: 700 }
+                          : undefined
+                      }
+                    >
+                      {d.orders?.order_no || "-"}
+                    </span>
                     {d.orders?.loading_type === "mixable" && (
                       <div style={{ marginTop: 3 }}>
                         <MixableBadge />
@@ -921,7 +948,25 @@ function DispatchesPageInner() {
                     </span>
                   </td>
                   <td onClick={(e) => e.stopPropagation()} style={{ whiteSpace: "nowrap" }}>
-                    {d.dispatch_status === "접수중" ? (
+                    {/* 🔴 **취소는 드롭다운이 아니다**(사용자 지시 2026-09-17:
+                        *「다시 상태변화를 수정할수 없어야 한다」*).
+                        ⚠️ 그전에는 `<select value="취소">` 가 그려졌는데 `취소` 가
+                        `DISPATCH_STATUS_OPTIONS`(6종)에 **없어서** 브라우저가 첫 항목을
+                        골라 보여줬다 — **「배차확정」으로 보이고 누르면 진짜 그렇게
+                        바뀌는** 상태였다. 🔴 되돌리지 말 것.
+                        🔴 글자는 「배차취소」이고 **DB 값은 `취소` 그대로**다. */}
+                    {isDispatchCancelled(d.dispatch_status) ? (
+                      <span
+                        className="badge"
+                        style={{
+                          fontWeight: 600,
+                          background: getDispatchStatusColor(DISPATCH_STATUS_CANCELLED).bg,
+                          color: getDispatchStatusColor(DISPATCH_STATUS_CANCELLED).text,
+                        }}
+                      >
+                        {dispatchStatusAdminLabel(d.dispatch_status)}
+                      </span>
+                    ) : d.dispatch_status === "접수중" ? (
                       <button
                         type="button"
                         className="badge"
@@ -991,15 +1036,38 @@ function DispatchesPageInner() {
                 return {
                   key: d.id,
                   onClick: () => router.push(`/admin/dispatches/${d.id}`),
-                  title: d.orders?.order_no || "-",
+                  // 🔴 데스크탑 표와 **같이** 빨강으로 칠한다(원칙 13번).
+                  title: (
+                    <span
+                      style={
+                        isDispatchCancelled(d.dispatch_status)
+                          ? { color: "#B91C1C", fontWeight: 700 }
+                          : undefined
+                      }
+                    >
+                      {d.orders?.order_no || "-"}
+                    </span>
+                  ),
                   tags: (
                     <>
                       <RecurringContractBadge company={d.orders?.companies} small />
                       {d.orders?.loading_type === "mixable" && <MixableBadge />}
                     </>
                   ),
-                  action:
-                    d.dispatch_status === "접수중" ? (
+                  action: isDispatchCancelled(d.dispatch_status) ? (
+                    /* 🔴 데스크탑 표와 **같은 처리**다 — 드롭다운으로 두면 모바일에서만
+                       취소를 되살릴 수 있게 된다(원칙 13번의 이중관리 함정). */
+                    <span
+                      className="badge"
+                      style={{
+                        fontWeight: 600,
+                        background: getDispatchStatusColor(DISPATCH_STATUS_CANCELLED).bg,
+                        color: getDispatchStatusColor(DISPATCH_STATUS_CANCELLED).text,
+                      }}
+                    >
+                      {dispatchStatusAdminLabel(d.dispatch_status)}
+                    </span>
+                  ) : d.dispatch_status === "접수중" ? (
                       <button
                         type="button"
                         className="badge"

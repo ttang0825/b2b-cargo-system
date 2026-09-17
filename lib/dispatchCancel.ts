@@ -12,9 +12,9 @@
 //
 // 🔴 **화주 라벨에 차주를 탓하는 말을 쓰지 말 것.** 「차주 변심」이 화주 화면에 뜨면
 //    **회사가 배차를 못 지킨 것**으로 읽힌다. 화주에게 필요한 정보는 **「차가 바뀐다」**뿐이다.
-//    ⚠️ 지금은 화주 화면이 취소된 배차를 **아예 감추지만**(사용자 확정 (A), 2026-09-17)
-//    화주 라벨을 지우지 않았다 — 「취소됨 배지로 보여준다」로 뒤집힐 때 다시 필요하고,
-//    그때 이 칸이 없으면 **관리자 라벨이 그대로 화주에게 나간다.**
+//    ⚠️ **한동안 「화주 화면에서 아예 감춘다」였다**(2026-09-17 확정 (A)) — **같은 날
+//    사용자가 배포본을 보고 뒤집었다**: *「사라지는게 아니라 접수 상태로 돌아가고 배차가
+//    취소되었음이 표시가 되어야 할것 같다」*. 🔴 **그 옛 확정을 근거로 다시 감추지 말 것.**
 //
 // 🔴 **`cancel_reason_note`(자유 서술)는 내부 전용이다** — 화주 화면·견적서·엑셀 0줄.
 //
@@ -46,17 +46,25 @@ export type DispatchCancelReason = {
    * 🔴 **차주를 탓하는 말을 넣지 말 것.**
    */
   customerLabel: string;
+  /**
+   * 🔴 **이 취소 뒤에 다시 배차를 잡는가.**
+   *    화주 화면이 「재배차 접수 중」을 붙일지 이 값으로 가른다 —
+   *    🔴 **화주가 취소한 건에 「재배차 접수 중」을 띄우면 거짓말이 된다**
+   *    (그 건은 다시 배차하지 않는다).
+   */
+  awaitsRedispatch: boolean;
 };
 
 /** 🔴 배열 순서가 곧 드롭다운 순서다 — 흔한 것부터. */
 export const DISPATCH_CANCEL_REASONS: DispatchCancelReason[] = [
-  { code: "driver_noshow",     adminLabel: "차주 변심·연락두절",  driverFault: true,  customerLabel: "배차 차량 변경" },
-  { code: "driver_breakdown",  adminLabel: "차주 차량 고장·사고", driverFault: true,  customerLabel: "배차 차량 변경" },
-  { code: "fare_disagreement", adminLabel: "운임 협의 결렬",     driverFault: true,  customerLabel: "배차 차량 변경" },
-  { code: "customer_request",  adminLabel: "화주 요청 취소",     driverFault: false, customerLabel: "고객 요청 취소" },
-  { code: "cargo_not_ready",   adminLabel: "화물 준비 안 됨",    driverFault: false, customerLabel: "상차 준비 미완" },
-  { code: "weather_road",      adminLabel: "기상·도로 사정",     driverFault: false, customerLabel: "기상·도로 사정" },
-  { code: "etc",               adminLabel: "기타",              driverFault: false, customerLabel: "배차 변경" },
+  { code: "driver_noshow",     adminLabel: "차주 변심·연락두절",  driverFault: true,  customerLabel: "배차 차량 변경",  awaitsRedispatch: true  },
+  { code: "driver_breakdown",  adminLabel: "차주 차량 고장·사고", driverFault: true,  customerLabel: "배차 차량 변경",  awaitsRedispatch: true  },
+  { code: "fare_disagreement", adminLabel: "운임 협의 결렬",     driverFault: true,  customerLabel: "배차 차량 변경",  awaitsRedispatch: true  },
+  // 🔴 화주가 취소한 건은 **다시 배차하지 않는다** — 「재배차 접수 중」을 띄우지 말 것.
+  { code: "customer_request",  adminLabel: "화주 요청 취소",     driverFault: false, customerLabel: "고객 요청 취소",  awaitsRedispatch: false },
+  { code: "cargo_not_ready",   adminLabel: "화물 준비 안 됨",    driverFault: false, customerLabel: "상차 준비 미완",  awaitsRedispatch: true  },
+  { code: "weather_road",      adminLabel: "기상·도로 사정",     driverFault: false, customerLabel: "기상·도로 사정",  awaitsRedispatch: true  },
+  { code: "etc",               adminLabel: "기타",              driverFault: false, customerLabel: "배차 변경",      awaitsRedispatch: true  },
 ];
 
 /** 🔴 **차주 책임인 사유 코드** — 차주별 취소 집계가 이것으로 거른다. */
@@ -101,4 +109,66 @@ export const CANCEL_BLOCKED_STATUSES: string[] = ["운송완료", DISPATCH_STATU
 
 export function canCancelDispatch(status: string | null | undefined): boolean {
   return !CANCEL_BLOCKED_STATUSES.includes(status || "");
+}
+
+/**
+ * 🔴 **담당자 화면에 찍는 말** — DB 값은 `취소` 이고 화면 글자만 「배차취소」다
+ *    (사용자 지시 2026-09-17: *「내부시스템 목록에서 배차상태가 "배차취소"로 바뀌고」*).
+ *
+ *    🔴 **DB 값을 바꾸는 쪽으로 되돌리지 말 것** — `dispatches_dispatch_status_check`
+ *    를 갈아야 하고 **배포 순서가 어긋나면 배차 저장이 통째로 막힌다**(PR #163 이 그
+ *    증상이었고, PR #164 가 견적 「상담중 → 확인중」에서 내린 것과 같은 판단이다).
+ */
+export const DISPATCH_STATUS_CANCELLED_ADMIN_LABEL = "배차취소";
+
+/** 담당자 화면용 상태 라벨. 🔴 `취소` 말고는 **DB 값 그대로** 돌려준다. */
+export function dispatchStatusAdminLabel(status: string | null | undefined): string {
+  if (status === DISPATCH_STATUS_CANCELLED) return DISPATCH_STATUS_CANCELLED_ADMIN_LABEL;
+  return status || "-";
+}
+
+export function isDispatchCancelled(status: string | null | undefined): boolean {
+  return status === DISPATCH_STATUS_CANCELLED;
+}
+
+/**
+ * 🔴 **화주 화면에 띄우는 말 — 정의처는 여기 하나다**(사용자 지시 2026-09-17:
+ *    *「접수 상태로 돌아가고 배차가 취소되었음이 표시가 되어야 할것 같다.
+ *    "사정으로 인한 배차 취소후 재배차 접수중" 이런식으로」*).
+ *
+ *    ⚠️ **이것이 (A) 「화주 화면에서 감춘다」를 뒤집은 것이다** — 하루 전 확정이었고
+ *    사용자가 배포본을 보고 바꿨다. 🔴 **그 옛 확정을 근거로 다시 감추지 말 것.**
+ *
+ *    🔴 **차주를 탓하는 말을 넣지 말 것**(「차주 변심」이 뜨면 회사가 배차를 못 지킨
+ *    것으로 읽힌다) · 🔴 **회사의 책임을 시사하는 말도 넣지 말 것**(약관 제19조가
+ *    배상책임을 **차주와 그 보험자**에게 둔다) · 🔴 **「지연됩니다」처럼 결과를 단정하지
+ *    말 것**(새 차가 더 빨리 잡힐 수도 있다. 여기서 말할 것은 **지금 상태**뿐이다).
+ */
+export const DISPATCH_CANCEL_CUSTOMER_BADGE = "배차 취소";
+
+/** 🔴 재배차를 기다리는 건에만 덧붙인다(`awaitsRedispatch`). */
+export const DISPATCH_CANCEL_CUSTOMER_REDISPATCH = "재배차 접수 중";
+
+/** 카드 안에 한 줄로 적는 설명. 🔴 사유 코드·경위를 여기에 섞지 말 것. */
+export const DISPATCH_CANCEL_CUSTOMER_NOTE =
+  "사정에 따라 배차가 취소되어 다시 배차를 접수하고 있습니다.";
+
+/**
+ * 화주 화면의 배지 한 줄을 만든다.
+ * 🔴 **화면에서 문자열을 이어 붙이지 말 것** — 조회 화면과 홈이 같은 말을 써야 한다.
+ */
+export function dispatchCancelCustomerBadge(code: string | null | undefined): string {
+  const reason = getDispatchCancelReason(code);
+  // 🔴 사유를 안 적은 건(옛 데이터·수기 변경)은 **가장 무난한 쪽**으로 둔다 —
+  //    재배차를 기다리는 것이 기본 경로다.
+  if (!reason || reason.awaitsRedispatch) {
+    return `${DISPATCH_CANCEL_CUSTOMER_BADGE} · ${DISPATCH_CANCEL_CUSTOMER_REDISPATCH}`;
+  }
+  return `${DISPATCH_CANCEL_CUSTOMER_BADGE} · ${reason.customerLabel}`;
+}
+
+/** 🔴 재배차를 기다리는 건에만 설명 줄을 띄운다 — 화주가 취소한 건에 「재배차」는 거짓말이다. */
+export function dispatchCancelAwaitsRedispatch(code: string | null | undefined): boolean {
+  const reason = getDispatchCancelReason(code);
+  return !reason || reason.awaitsRedispatch;
 }

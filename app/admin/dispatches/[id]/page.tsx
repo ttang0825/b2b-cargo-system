@@ -69,6 +69,7 @@ import {
   DISPATCH_STATUS_CANCELLED,
   canCancelDispatch,
   dispatchCancelAdminLabel,
+  dispatchStatusAdminLabel,
 } from "@/lib/dispatchCancel";
 import SmsLogPanel from "@/components/SmsLogPanel";
 import SmsConfirmModal, { SmsPreview } from "@/components/SmsConfirmModal";
@@ -1389,7 +1390,9 @@ export default function DispatchDetailPage() {
                 color: statusColor.text,
               }}
             >
-              취소
+              {/* 🔴 화면 글자는 「배차취소」이고 **DB 값은 `취소` 그대로**다
+                  (사용자 지시 2026-09-17 · 목록과 같은 말이어야 한다). */}
+              {dispatchStatusAdminLabel(dispatch.dispatch_status)}
             </span>
           ) : (
             <select

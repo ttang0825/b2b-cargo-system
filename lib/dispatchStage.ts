@@ -11,6 +11,8 @@
  *    포털 1화면이 그 파일을 같이 쓴다).
  */
 
+import { DISPATCH_STATUS_CANCELLED } from "@/lib/dispatchCancel";
+
 export type DispatchStage = 0 | 1 | 2;
 
 /** 알약 라벨 3개 — 순서가 곧 단계 번호다. */
@@ -35,6 +37,12 @@ export function getDispatchStage(input: {
   delivery_confirmed?: boolean | null;
 }): DispatchStage {
   const s = input.dispatch_status;
+  // 🔴 **취소는 언제나 「접수」로 되돌아간다**(사용자 지시 2026-09-17:
+  //    *「접수 상태로 돌아가고 배차가 취소되었음이 표시가 되어야 할것 같다」*).
+  //    🔴 **아래 boolean 복원보다 먼저 와야 한다** — `상차완료` 에서 취소하면
+  //    `pickup_confirmed` 가 서 있어서 **「배차완료」로 남는다**(차는 이미 없는데).
+  //    ⚠️ 「취소됐다」는 사실은 단계가 아니라 **별도 배지**가 말한다(29차와 같은 결).
+  if (s === DISPATCH_STATUS_CANCELLED) return 0;
   if (s === "하차완료" || s === "운송완료") return 2;
   if (s === "배차확정" || s === "상차완료") return 1;
   if (s === "접수중") return 0;

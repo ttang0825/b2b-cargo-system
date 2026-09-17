@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { DISPATCH_STATUS_CANCELLED } from "@/lib/dispatchCancel";
+import {
+  dispatchCancelCustomerBadge,
+  isDispatchCancelled,
+} from "@/lib/dispatchCancel";
+import { filterCancelledForCustomer } from "@/lib/portalCancelledDispatches";
 import Link from "next/link";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
 import {
@@ -75,7 +79,9 @@ type InvoiceRow = {
 };
 type DispatchRow = {
   id: string;
+  order_id: string | null;
   dispatch_status: string;
+  cancel_reason: string | null;
   created_at: string;
   orders: {
     order_no: string | null;
@@ -143,21 +149,21 @@ export default function CustomerHomePage() {
       supabase
         .from("dispatches")
         .select(
-          "id,dispatch_status,pickup_confirmed,delivery_confirmed,issue_occurred,created_at,orders(order_no,origin,destination,requested_pickup_at,item,vehicle_type)"
+          // 🔴 `order_id`·`cancel_reason` 을 빼지 말 것 — 조회 화면과 **같은 규칙**으로
+          //    취소 건을 가르고 같은 말을 붙이는 데 둘 다 필요하다.
+          "id,order_id,dispatch_status,cancel_reason,pickup_confirmed,delivery_confirmed,issue_occurred,created_at,orders(order_no,origin,destination,requested_pickup_at,item,vehicle_type)"
         )
         // 🔴 3단계 매핑에서 `하차완료`도 「운송완료」 단계다(53차 ⑦ — 화물은 이미 도착했다).
         //    이 줄을 `neq("운송완료")` 하나로 되돌리면 "진행 중인 운송" 블록에
         //    「운송완료」 배지가 달린 행이 나타난다.
         .not("dispatch_status", "in", "(운송완료,하차완료)")
-        // 🔴 **취소된 배차는 화주에게 보이지 않는다**(사용자 확정 (A), 2026-09-17).
-        //    화주에게 필요한 정보는 「차가 바뀐다」뿐이고, 취소 카드와 새 배차 카드가
-        //    나란히 있으면 **어느 것이 유효한지** 알 수 없다(이 목록은 오더가 아니라
-        //    **배차 단위**라 재배차하면 카드가 둘이 된다).
-        //    ⚠️ 그래서 **그 건이 목록에서 잠시 사라진다** — 「왜 사라졌는지」는
-        //    배너·푸시(`lib/portalAlert.ts`)가 말한다. 🔴 **둘 중 하나만 지우지 말 것.**
-        .neq("dispatch_status", DISPATCH_STATUS_CANCELLED)
+        // 🔴 **취소된 배차를 감추지 않는다**(사용자 지시 2026-09-17) — 재배차를 기다리는
+        //    동안은 **아직 진행 중인 운송**이다. 조회 화면에서만 보이고 홈에서는 사라지면
+        //    같은 건이 화면마다 다르게 보인다(`lib/dispatchStage.ts` 가 세운 규칙과 같은 결).
+        //    ⚠️ **5건보다 넉넉히 받아 온다** — 아래에서 재배차가 끝난 취소 건을 걷어내므로
+        //    딱 5건만 받으면 걷어낸 만큼 목록이 비어 보인다.
         .order("created_at", { ascending: false })
-        .limit(5),
+        .limit(10),
       supabase
         .from("announcements")
         .select("id,title,content,created_at")
@@ -174,7 +180,16 @@ export default function CustomerHomePage() {
     setCompanyName(((accountRes?.data as any)?.companies as any)?.name || "");
     setPendingQuotes((quotesRes.data as QuoteRow[]) || []);
     setUnpaidInvoices((invoicesRes.data as unknown as InvoiceRow[]) || []);
-    setActiveDispatches((dispatchesRes.data as unknown as DispatchRow[]) || []);
+    // 🔴 규칙은 화면이 아니라 `lib/portalCancelledDispatches.ts` 에 있다 —
+    //    배차·운송 조회와 **같은 함수**를 쓴다.
+    setActiveDispatches(
+      (
+        await filterCancelledForCustomer(
+          supabase,
+          ((dispatchesRes.data as unknown as DispatchRow[]) || []) as any[]
+        )
+      ).slice(0, 5) as unknown as DispatchRow[]
+    );
     setAnnouncements((announcementRes.data as AnnouncementRow[]) || []);
     setUnreadNotices(unreadRes.count || 0);
     setLoading(false);
@@ -319,6 +334,18 @@ export default function CustomerHomePage() {
                     style={{ background: DISPATCH_ISSUE_STYLE.bg, color: DISPATCH_ISSUE_STYLE.color }}
                   >
                     {DISPATCH_ISSUE_STYLE.label}
+                  </span>
+                )}
+                {/* 🔴 취소된 건은 단계가 「접수」로 돌아가 있으므로(`lib/dispatchStage.ts`)
+                    **왜 돌아갔는지를 여기서 말해야 한다** — 배지 하나를 빼면 화주는
+                    배차됐던 건이 이유 없이 접수로 되돌아간 것으로 본다.
+                    🔴 말은 조회 화면과 **같은 함수**가 만든다. */}
+                {isDispatchCancelled(d.dispatch_status) && (
+                  <span
+                    className="pv2-status-badge"
+                    style={{ background: "#F4F3EF", color: "#6B6759" }}
+                  >
+                    {dispatchCancelCustomerBadge(d.cancel_reason)}
                   </span>
                 )}
                 <span

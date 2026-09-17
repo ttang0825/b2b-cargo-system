@@ -318,12 +318,11 @@ export default function PortalStatsPage() {
         .select(
           "dispatch_status,pickup_confirmed,delivery_confirmed,issue_occurred,created_at,orders(order_no,origin,destination,requested_pickup_at,item,vehicle_type,loading_type,collection_method,billing_cycle)"
         )
-        // 🔴 **취소된 배차는 화주에게 보이지 않는다**(사용자 확정 (A), 2026-09-17).
-        //    화주에게 필요한 정보는 「차가 바뀐다」뿐이고, 취소 카드와 새 배차 카드가
-        //    나란히 있으면 **어느 것이 유효한지** 알 수 없다(이 목록은 오더가 아니라
-        //    **배차 단위**라 재배차하면 카드가 둘이 된다).
-        //    ⚠️ 그래서 **그 건이 목록에서 잠시 사라진다** — 「왜 사라졌는지」는
-        //    배너·푸시(`lib/portalAlert.ts`)가 말한다. 🔴 **둘 중 하나만 지우지 말 것.**
+        // 🔴 **엑셀에서는 취소된 배차를 뺀다 — 여기만 조회 화면과 다르다.**
+        //    조회 화면은 「지금 어떤 상태인가」라 취소 건도 보여주지만(2026-09-17 지시),
+        //    이 엑셀은 **운송 실적**이다. 일어나지 않은 운송이 실적 표에 한 줄로 서면
+        //    건수·구간 집계가 실제보다 부풀고, 그 표는 화주가 회계에 쓴다.
+        //    🔴 **「조회 화면과 다르니 맞추자」로 지우지 말 것** — 성격이 다른 산출물이다.
         .neq("dispatch_status", DISPATCH_STATUS_CANCELLED)
         .gte("created_at", fromIso)
         .order("created_at", { ascending: false })
