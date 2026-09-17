@@ -40,6 +40,11 @@ export const LANDING_IMAGES = {
   heroAlt1600: `${BASE}/hero-alt-1600.jpg`,
   heroAlt2400: `${BASE}/hero-alt-2400.jpg`,
   ctaBg: `${BASE}/cta-bg.jpg`,
+  /** 🔴 **마감 CTA 축소본 2장도 중복이 아니다**(2026-09-17 · 히어로와 같은 이유).
+   *  그 띠는 1600px 화면에서 폭 1600px 인데 원본이 2912px 이라 **약 0.55배로 줄어**
+   *  그려진다. 🔴 **원본을 지우지 말 것** — 2배율 이상 화면이 그것을 쓴다. */
+  ctaBg1600: `${BASE}/cta-bg-1600.jpg`,
+  ctaBg2400: `${BASE}/cta-bg-2400.jpg`,
   tmsOverview: `${BASE}/tms-overview.png`,
   /** ⚠️ 헤더·접수완료 화면은 이 파일이 아니라 `<BrandLogo />`(인라인 SVG)를 쓴다 —
    *  `currentColor` 를 상속받아야 다크 배경에서도 보이기 때문(27차). */
@@ -47,18 +52,22 @@ export const LANDING_IMAGES = {
 } as const;
 
 /**
- * 히어로 배경용 `image-set()` 문자열.
+ * 배경 사진용 `image-set()` 문자열 — 히어로 2장과 마감 CTA 가 함께 쓴다.
  *
  * 브라우저가 화면 배율에 맞는 파일 **하나만** 받는다 —
  * 1x → 1600 · 1.25·1.5x → 2400 · 2x 이상 → 원본(2912).
  *
  * 🔴 **`image-set()` 을 모르는 브라우저는 이 선언을 통째로 버린다** — 그러면 배경이
- * 사라지므로 호출부가 `--hero-fallback` 커스텀 속성을 함께 주고
- * `app/landing.css` 가 `background-image: var(--hero-fallback)` 로 받는다.
+ * 사라지므로 호출부가 `--bg-fallback` 커스텀 속성을 함께 주고
+ * `app/landing.css` 가 `background-image: var(--bg-fallback)` 로 받는다.
  * **둘은 한 벌이라 한쪽만 지우지 말 것.**
  * 🟢 지원하는 브라우저에서는 인라인 선언이 이겨서 **대체 이미지를 받지 않는다**(실측).
+ *
+ * ⚠️ **이 함수는 2026-09-17 에 `heroImageSet` 에서 이름이 바뀌었다**(대체 배경 커스텀
+ *    속성도 `--hero-fallback` → `--bg-fallback`). 마감 CTA 가 같이 쓰게 되어 「hero」가
+ *    사실과 어긋났기 때문이다 — **옛 이름을 쓰는 기록을 보면 이 줄을 떠올릴 것.**
  */
-export function heroImageSet(x1: string, x15: string, x2: string): string {
+export function bgImageSet(x1: string, x15: string, x2: string): string {
   return `image-set(url('${x1}') 1x, url('${x15}') 1.5x, url('${x2}') 2x)`;
 }
 
