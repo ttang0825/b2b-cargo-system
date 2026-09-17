@@ -1501,3 +1501,21 @@ from information_schema.columns
 where table_schema = 'public'
   and table_name in ('activity_logs', 'settlement_field_change_logs')
 order by table_name, ordinal_position;
+
+-- ㉘-g  🔴 **`activity_logs` 를 되살려 쓸 수 있는가** — ㉘-f 가 그 표의 모양이
+--       (`table_name`·`record_id`·`action`·`changed_fields` jsonb) 일반 수정 이력에
+--       **그대로 맞는다**는 것을 보여줬다. 21차 `rls_enable_13` 이 「나중에 쓸 일이
+--       생기면 그때 정책을 만들면 된다」로 남겨 둔 표다.
+--       🔴 **남은 위험은 `user_id` 의 외래키다** — 원칙 27번이 기록한 사고
+--       (`quotes.created_by` 가 죽은 `profiles` 를 참조해 FK 위반으로 막혔다)와
+--       **같은 시대의 표**라 여기도 `profiles` 를 가리키고 있을 수 있다.
+select con.conname, pg_get_constraintdef(con.oid) as def
+from pg_constraint con
+where con.conrelid = 'public.activity_logs'::regclass
+order by con.conname;
+
+select indexname, indexdef from pg_indexes
+where schemaname = 'public' and tablename = 'activity_logs'
+order by indexname;
+
+select count(*) as "activity_logs 행수" from public.activity_logs;
