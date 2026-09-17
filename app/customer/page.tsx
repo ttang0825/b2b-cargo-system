@@ -20,7 +20,7 @@ import {
   DISPATCH_ISSUE_STYLE,
 } from "@/lib/dispatchStage";
 import { calcInclusiveAmount } from "@/lib/vat";
-import { getLastSeen } from "@/lib/portalNotifications";
+import { ANNOUNCEMENT_NOTICE_FIELD, getLastSeen } from "@/lib/portalNotifications";
 import InstallAppButton from "@/components/InstallAppButton";
 
 function won(n: number | null | undefined) {
@@ -97,7 +97,13 @@ type DispatchRow = {
     vehicle_type: string | null;
   } | null;
 };
-type AnnouncementRow = { id: string; title: string; content: string | null; created_at: string };
+type AnnouncementRow = {
+  id: string;
+  title: string;
+  content: string | null;
+  created_at: string;
+  announced_at: string;
+};
 
 export default function CustomerHomePage() {
   const [loading, setLoading] = useState(true);
@@ -173,7 +179,9 @@ export default function CustomerHomePage() {
         .limit(10),
       supabase
         .from("announcements")
-        .select("id,title,content,created_at")
+        // 🔴 홈은 **제목만** 그린다 — 본문을 그리게 되면 `content_format` 을 함께
+        //    받아 `AnnouncementBody` 로 그릴 것(평문을 서식으로 읽으면 줄바꿈이 사라진다).
+        .select(`id,title,content,created_at,${ANNOUNCEMENT_NOTICE_FIELD}`)
         .order("created_at", { ascending: false })
         .limit(5),
       // 안 읽은 공지 수는 목록 5건과 따로 센다 — 6건 이상 밀려 있을 수 있어서
@@ -181,7 +189,9 @@ export default function CustomerHomePage() {
       supabase
         .from("announcements")
         .select("id", { count: "exact", head: true })
-        .gt("created_at", lastSeen || "1970-01-01T00:00:00.000Z"),
+        // 🔴 `created_at` 이 아니라 `announced_at` 이다 — 사이드바 배지·목록 NEW 와
+        //    **같은 기준**이어야 한다(셋이 갈리면 숫자가 서로 안 맞는다).
+        .gt(ANNOUNCEMENT_NOTICE_FIELD, lastSeen || "1970-01-01T00:00:00.000Z"),
     ]);
 
     setCompanyName(((accountRes?.data as any)?.companies as any)?.name || "");
@@ -415,7 +425,9 @@ export default function CustomerHomePage() {
           <ul className="pv2-notices-list">
             {announcements.map((a) => {
               // 마지막 확인 기록이 없으면 전부 새 글로 본다(공지 페이지와 같은 판정)
-              const isNew = !noticeLastSeen || new Date(a.created_at) > new Date(noticeLastSeen);
+              const isNew =
+                !noticeLastSeen ||
+                new Date((a as any)[ANNOUNCEMENT_NOTICE_FIELD]) > new Date(noticeLastSeen);
               return (
                 <li key={a.id} className="pv2-notices-row">
                   <Link href="/customer/announcements" className="pv2-notices-link">
