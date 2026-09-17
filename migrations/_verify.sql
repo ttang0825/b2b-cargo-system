@@ -1349,3 +1349,90 @@ select count(*)                                              as 배차전체,
        count(*) filter (where assignment_type = 'external')  as "외부배정",
        count(*) filter (where assignment_type = 'internal')  as "내부배정"
   from dispatches;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- ㉗ 🔴 「화주포털이 바로 안 바뀐다」 진단 (2026-09-17)
+--
+-- 사용자 신고: *「배차취소를 하고 화주포털에 알림이 와서 들어갔는데 접수건이 두세개가
+-- 떠있고 바로 상태가 바뀌어 있지 않다. 내부시스템에서 그 창을 나오면 그제서야 화주
+-- 포털에서도 상태가 바뀐다」*
+--
+-- 화주포털의 즉시 갱신은 **Realtime(`postgres_changes`) 하나에 달려 있다** — 포털에는
+-- 되풀이 폴링이 없다(38차가 새 타이머를 0개로 유지했다). 그 경로가 끊기면 화면은
+-- **들어갈 때 한 번 받은 값**을 계속 보여준다.
+--
+-- 🔴 **코드를 열기 전에 여기부터 잰다** — publication 에 표가 없으면 코드는 아무 잘못이
+--    없고(원칙 5번의 그 자리), 있으면 원인은 브라우저 쪽(백그라운드 탭·같은 주소로의
+--    알림 이동)이다. 둘은 고치는 곳이 완전히 다르다.
+-- 🔴 **읽기 전용이다.** 🔴 Actions 로그는 누구나 보므로 상호·연락처를 찍지 않는다.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- ㉗-a  Realtime publication 에 든 표 — 🔴 여기에 `dispatches` 가 없으면 화주포털은
+--       영영 스스로 갱신되지 않는다(원칙 5번 — 「빠뜨리면 조용히 안 된다」).
+select schemaname as "스키마", tablename as "표"
+  from pg_publication_tables
+ where pubname = 'supabase_realtime'
+ order by 1, 2;
+
+-- ㉗-b  포털이 구독하는 다섯 표가 전부 들어 있는가 — 한 줄로 확인한다.
+select t.name                                                        as "표",
+       exists (select 1 from pg_publication_tables p
+                where p.pubname = 'supabase_realtime'
+                  and p.schemaname = 'public'
+                  and p.tablename = t.name)                          as "realtime_포함"
+  from (values ('quotes'), ('dispatches'), ('invoices'),
+               ('announcements'), ('portal_order_requests')) as t(name);
+
+-- ㉗-c  `dispatches` 의 REPLICA IDENTITY — 🔴 `d`(default = PK 만)면 UPDATE 이벤트의
+--       **옛 값**이 안 실린다. 지금 코드는 옛 값을 안 쓰지만, 앞으로 「무엇이 바뀌었나」로
+--       거르려 들면 여기서 막힌다.
+select relreplident as "replica_identity(d=기본 f=전체)"
+  from pg_class
+ where oid = 'public.dispatches'::regclass;
+
+-- ㉗-d  `dispatches` 의 RLS 정책 — 🔴 Realtime 은 **구독자마다 이 정책을 다시 태운다.**
+--       화주용 SELECT 정책이 없으면 이벤트가 화주에게 배달되지 않는다.
+select polname as "정책", polcmd as "명령",
+       pg_get_expr(polqual, polrelid) as "조건"
+  from pg_policy
+ where polrelid = 'public.dispatches'::regclass
+ order by polcmd, polname;
+
+-- ㉗-e  `dispatches` 의 컬럼 GRANT — 🔴 이번에 화주 조회에 더한 `order_id`·`cancel_reason`
+--       이 `authenticated` 에게 막혀 있으면 **목록 조회 자체가 400 으로 죽는다.**
+select grantee as "롤", string_agg(column_name, ', ' order by column_name) as "읽기_허용_컬럼"
+  from information_schema.column_privileges
+ where table_schema = 'public' and table_name = 'dispatches' and privilege_type = 'SELECT'
+   and grantee in ('anon', 'authenticated')
+ group by grantee;
+
+-- ㉗-f  지금 남아 있는 취소 배차 — 「접수건이 두세개」의 실측. 🔴 오더별로 센다:
+--       같은 오더에 취소가 여럿이면 화면 규칙(`lib/portalCancelledDispatches.ts`)이
+--       최신 하나만 남기고, 살아 있는 배차가 있으면 취소 카드를 감춘다.
+select count(*)                                                       as "취소_배차_전체",
+       count(distinct order_id)                                       as "취소된_오더_수",
+       count(*) filter (
+         where exists (select 1 from dispatches s
+                        where s.order_id = d.order_id
+                          and s.dispatch_status <> '취소')
+       )                                                              as "재배차된_취소건(화면에서 감춤)",
+       count(*) filter (
+         where not exists (select 1 from dispatches s
+                            where s.order_id = d.order_id
+                              and s.dispatch_status <> '취소')
+       )                                                              as "재배차_전(화면에 보임)"
+  from dispatches d
+ where d.dispatch_status = '취소';
+
+-- ㉗-g  취소 사유 분포 — 🔴 사유가 비어 있으면 화면이 「재배차 접수 중」으로 떨어진다.
+select coalesce(cancel_reason, '(없음)') as "사유코드", count(*) as "건수"
+  from dispatches
+ where dispatch_status = '취소'
+ group by 1
+ order by 2 desc;
+
+-- ㉗-h  한 오더에 배차가 여럿인 경우 — 🔴 화주 화면에 카드가 둘로 보이는 바로 그 자리다.
+select cnt as "한_오더의_배차_수", count(*) as "그런_오더_수"
+  from (select order_id, count(*) as cnt from dispatches group by order_id) x
+ group by 1
+ order by 1;
