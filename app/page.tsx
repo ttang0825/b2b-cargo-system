@@ -13,6 +13,7 @@ import BusinessInfoModal from "@/components/BusinessInfoModal";
 import { useRevealAll } from "@/components/landing/useReveal";
 import { useAutoMarquee } from "@/components/landing/useAutoMarquee";
 import { buildReasons, IMG, process, services, vehicles } from "@/components/landing/data";
+import { heroImageSet } from "@/lib/landingImages";
 import { INSURANCE_ENABLED } from "@/lib/insuranceInfo";
 import { COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
 
@@ -117,10 +118,19 @@ export default function LandingPage() {
       {/* ── 히어로 ─────────────────────────────────── */}
       <section id="top" className="landing-hero"
         style={{ position: "relative", height: 820, backgroundColor: "#F3F0E9", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "center", padding: `120px ${PAD} 56px` }}>
+        {/* 🔴 **배경이 `image-set()` 인 것은 선명도 때문이다 — `url()` 하나로 되돌리지 말 것**
+            (2026-09-17). 사진 띠는 1600px 화면에서 약 1208px 폭이라 2912px 원본이 **0.5배로
+            줄어** 그려지고 그 위에서 10초 교차 애니메이션이 돈다. 그 조합에서 크롬이 저품질로
+            줄이면 **트럭 옆면 로고의 사선이 계단처럼 깨진다**(사용자 신고). 배율에 맞는
+            축소본을 받게 해서 줄이는 비율을 1배 가까이로 만든다.
+            🔴 **`--hero-fallback` 과 `app/landing.css` 의 `background-image: var(--hero-fallback)`
+            은 한 벌이다** — `image-set()` 을 모르는 브라우저는 이 인라인 선언을 **통째로 버려서**
+            그것이 없으면 **배경이 사라진다.** 🟢 지원하는 브라우저는 인라인이 이겨서 대체
+            이미지를 **받지 않는다**(실측 — main·alt 각 1장). */}
         <div className="landing-hero-band"
-          style={{ position: "absolute", top: 0, right: 0, bottom: 0, width: "min(1520px, calc(80% - 72px))", backgroundColor: "#F3F0E9", backgroundImage: `url('${IMG.heroMain}')`, backgroundRepeat: "no-repeat", backgroundSize: "cover", backgroundPosition: "82% center", pointerEvents: "none" }}>
+          style={{ position: "absolute", top: 0, right: 0, bottom: 0, width: "min(1520px, calc(80% - 72px))", backgroundColor: "#F3F0E9", ["--hero-fallback" as any]: `url('${IMG.heroMain}')`, backgroundImage: heroImageSet(IMG.heroMain1600, IMG.heroMain2400, IMG.heroMain), backgroundRepeat: "no-repeat", backgroundSize: "cover", backgroundPosition: "82% center", pointerEvents: "none" } as CSSProperties}>
           <div className="landing-hero-fade"
-            style={{ position: "absolute", inset: 0, backgroundImage: `url('${IMG.heroAlt}')`, backgroundRepeat: "no-repeat", backgroundSize: "cover", backgroundPosition: "88% center", opacity: 0 }} />
+            style={{ position: "absolute", inset: 0, ["--hero-fallback" as any]: `url('${IMG.heroAlt}')`, backgroundImage: heroImageSet(IMG.heroAlt1600, IMG.heroAlt2400, IMG.heroAlt), backgroundRepeat: "no-repeat", backgroundSize: "cover", backgroundPosition: "88% center", opacity: 0 } as CSSProperties} />
         </div>
         <div className="landing-hero-scrim"
           style={{ position: "absolute", top: 0, bottom: 0, right: "calc(min(1520px, calc(80% - 72px)) - 320px)", width: 320, background: "linear-gradient(90deg, #F3F0E9 0%, rgba(243,240,233,0.98) 14%, rgba(243,240,233,0.86) 32%, rgba(243,240,233,0.58) 54%, rgba(243,240,233,0.26) 76%, rgba(243,240,233,0) 100%)", pointerEvents: "none" }} />

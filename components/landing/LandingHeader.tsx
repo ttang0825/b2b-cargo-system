@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, type CSSProperties } from "react";
-import BrandLogo from "@/components/BrandLogo";
+import BrandLogo, { WORDMARK_VIEWBOX_COMPACT } from "@/components/BrandLogo";
 
 const pill = (bg: string, fg: string): CSSProperties => ({
   display: "inline-flex",
@@ -57,11 +57,18 @@ export default function LandingHeader() {
         padding: "18px max(56px, calc((100% - 1200px) / 2))",
         background: scrolled ? "rgba(255,255,255,0.94)" : "transparent",
         borderBottom: scrolled ? "1px solid rgba(21,24,33,0.08)" : "1px solid transparent",
-        backdropFilter: "blur(28px) saturate(1.05)",
+        // 🔴 **흐림은 배경이 생겼을 때만 건다**(2026-09-17) — 투명한 상태에도 `blur(28px)`
+        //    가 항상 걸려 있었고, 그 밑에서 **히어로 교차 애니메이션이 10초마다 돌아**
+        //    헤더 띠 뒤가 매 프레임 다시 흐려졌다. 투명할 때는 흐릴 배경 자체가 없으므로
+        //    얻는 것이 없고, 그 위에 겹쳐 그려지는 **로고 사선이 거칠어질 수 있다**
+        //    (사용자 신고 — 헤더 워드마크가 「지글지글」).
+        //    ⚠️ **눈에 보이는 변화가 있다** — 첫 화면에서 헤더 띠(약 83px) 뒤의 사진이
+        //    흐리지 않고 선명해진다. 이 변화가 싫으면 **이 줄만 되돌리면 된다.**
+        backdropFilter: scrolled ? "blur(28px) saturate(1.05)" : "none",
         // 🔴 **시작이 `transparent` 인 것을 유지한다 — 불투명하게 만들지 말 것.**
         //    히어로가 전면 사진 띠라, 첫 화면에서 헤더가 흰 판이 되면 그 구도가 깨진다.
         //    지시서 3-2 의 「0.92 → 1」은 헤더가 원래 불투명한 화면을 전제한 값이다.
-        transition: "background var(--mo-fast, 160ms) var(--mo-inout, ease), border-color var(--mo-fast, 160ms) var(--mo-inout, ease)",
+        transition: "background var(--mo-fast, 160ms) var(--mo-inout, ease), border-color var(--mo-fast, 160ms) var(--mo-inout, ease), backdrop-filter var(--mo-fast, 160ms) var(--mo-inout, ease)",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
@@ -76,7 +83,17 @@ export default function LandingHeader() {
             워드마크가 통째로 찌그러졌다(실측 430px 폭 61 · 390px 21 · **360px 0**).
             사용자가 「홈버튼 로고도 너무 작게 표시된다」로 신고한 것이 이것이다. */
         style={{ display: "flex", alignItems: "center", flex: "0 0 auto", color: "#0E0F12" }}>
-        <BrandLogo className="landing-logo" />
+        {/* 🔴 **두 벌을 그려 두고 미디어쿼리로 하나만 보여준다**(2026-09-17) —
+            바로 아래 단추 라벨과 같은 방식이다. `viewBox` 는 CSS 로 못 바꾼다.
+            ⚠️ **520px 이하에서 「위캐리 운송」이 사라지는 것은 의도다.** 그 폭에서는
+            로고가 27px 까지 줄어드는데, 그러면 한글 글자 높이가 **약 16px** 이라
+            계단처럼 깨져 보인다(사용자 신고 2026-09-17). 가로로 짧아진 만큼 세로를
+            키워 「WeCarry」 글자를 **17.7px → 28.8px(+63%)** 로 올린 것이고,
+            로고 폭은 오히려 **175.6 → 165.8px 로 줄어** 좁은 화면이 덜 빡빡해진다.
+            🔴 **컴팩트 판을 없애고 27px 로 되돌리지 말 것** — 되돌리면 그 신고가
+            그대로 돌아온다. 🔴 **데스크탑(521px 이상)은 한 글자도 안 바뀐다.** */}
+        <BrandLogo className="landing-logo landing-logo-full" />
+        <BrandLogo className="landing-logo landing-logo-compact" viewBox={WORDMARK_VIEWBOX_COMPACT} />
       </Link>
 
       {/* 🔴 두 버튼 사이 간격을 인라인 `marginLeft: -22` 로 주지 말 것 — 데스크탑에서는
