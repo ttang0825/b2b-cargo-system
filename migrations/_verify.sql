@@ -1341,3 +1341,11 @@ select count(*)                                   as 차주수,
        max(completed_trip_count)                  as 최대운송건수,
        count(*) filter (where rating is not null)  as "평점_있음"
   from drivers;
+
+\echo '--- ㉖-i 🔴 배차가 내부 차주에 연결돼 있는가 (2-5 취소 집계가 성립하는 조건) ---'
+select count(*)                                              as 배차전체,
+       count(*) filter (where driver_id is not null)         as "내부차주_연결",
+       count(*) filter (where driver_id is null)             as "내부차주_없음",
+       count(*) filter (where assignment_type = 'external')  as "외부배정",
+       count(*) filter (where assignment_type = 'internal')  as "내부배정"
+  from dispatches;
