@@ -1519,3 +1519,11 @@ where schemaname = 'public' and tablename = 'activity_logs'
 order by indexname;
 
 select count(*) as "activity_logs 행수" from public.activity_logs;
+
+-- ㉘-h  「수정견적」 배지가 배차 단계로 사라지려면 **화주 세션이 `orders` 를 읽을 수
+--       있어야 한다** — 화주포털은 지금 `dispatches` 만 직접 읽는다(`orders` 는
+--       임베드로만 딸려온다). 🔴 못 읽으면 배지가 영영 안 사라진다.
+select tablename, policyname, cmd, roles::text, qual
+from pg_policies
+where schemaname = 'public' and tablename in ('orders', 'dispatches', 'quotes')
+order by tablename, policyname;

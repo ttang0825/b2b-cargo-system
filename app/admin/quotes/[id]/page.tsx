@@ -6,7 +6,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { VEHICLE_TYPES_ALL } from "@/lib/constants";
 import { STATUS_OPTIONS as COMPANY_STATUS_ORDER } from "@/lib/statusColors";
-import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
+import { getCurrentStaffId, getCurrentStaffName, getCurrentStaffRole } from "@/lib/currentStaff";
 import { LOADING_METHOD_OPTIONS } from "@/lib/loadingMethods";
 import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import { calcInclusiveAmount } from "@/lib/vat";
@@ -61,6 +61,12 @@ import {
   syncQuoteAmountToOrders,
   type LinkedOrder,
 } from "@/lib/quoteAmountSync";
+import { isQuoteRevision } from "@/lib/quoteRevision";
+import {
+  diffRecordFields,
+  logRecordChange,
+} from "@/lib/recordChangeLog";
+import RecordChangeLogPanel from "@/components/RecordChangeLogPanel";
 
 const STATUS_OPTIONS = ["상담중", "견적제출", "수주", "보류", "실패"];
 
@@ -174,6 +180,8 @@ export default function QuoteDetailPage() {
   const hasOrder = linkedOrders.length > 0;
   const [amountSyncNotice, setAmountSyncNotice] = useState<string | null>(null);
   const [linkedOrdersError, setLinkedOrdersError] = useState<string | null>(null);
+  /** 저장이 끝나면 올려서 수정 이력 패널을 다시 읽게 한다(펼쳐 둔 채로 저장했을 때) */
+  const [changeLogKey, setChangeLogKey] = useState(0);
   const [sendingQuoteSms, setSendingQuoteSms] = useState(false);
   const [quoteSmsSent, setQuoteSmsSent] = useState(false);
   const [excelBusy, setExcelBusy] = useState(false);
@@ -520,7 +528,24 @@ export default function QuoteDetailPage() {
         첫거래지원할인: (quote.selected_options as any)?.첫거래지원할인 || false,
       },
       updated_by: await getCurrentStaffId(),
+      /* ── 「수정견적」 신호 ──────────────────────────────────────────────────
+         🔴 **`updated_at` 으로 대신하지 말 것** — 메모 한 줄에도 움직인다(PR #164).
+         🔴 **`수주` 인 견적의 금액이 실제로 바뀐 때만** 찍는다(`lib/quoteRevision.ts`).
+         ⚠️ 한 번 찍힌 값은 **다시 지우지 않는다** — 되돌려 적어도 「조정이 있었다」는
+            사실은 남는다. 배지는 운송이 끝나면 저절로 사라진다. */
+      ...(isQuoteRevision({
+        status: quote.status,
+        beforeAmount: quote.final_amount,
+        afterAmount: nextAmount,
+      })
+        ? { revised_at: new Date().toISOString() }
+        : {}),
     };
+
+    /* 🔴 **수정 이력은 payload 를 만든 뒤, 저장 전에 미리 뽑는다** — 저장이 끝나면
+       `load()` 가 `quote` 를 새 값으로 갈아치워 「전」을 알 수 없게 된다. */
+    const changes = diffRecordFields("quotes", quote, payload);
+    const staffName = await getCurrentStaffName();
 
     if (force) {
       const { error } = await supabase.from("quotes").update(payload).eq("id", id);
@@ -530,6 +555,7 @@ export default function QuoteDetailPage() {
         return;
       }
       await applyAmountToOrders(amountTargets, nextAmount, payload.updated_by);
+      await writeChangeLog(changes, payload.updated_by, staffName);
       setSaving(false);
       setEditing(false);
       load();
@@ -555,9 +581,34 @@ export default function QuoteDetailPage() {
     // 🔴 **견적이 실제로 저장된 뒤에만** 오더를 고친다 — 충돌로 막힌 저장에서 오더만
     //    바뀌면 두 화면의 금액이 갈린다.
     await applyAmountToOrders(amountTargets, nextAmount, payload.updated_by);
+    await writeChangeLog(changes, payload.updated_by, staffName);
     setSaving(false);
     setEditing(false);
     load();
+  }
+
+  /**
+   * 🔴 **저장이 성공한 뒤에만 부른다.** 실패해도 저장을 되돌리지 않지만 **조용히
+   *    넘어가지도 않는다**(원칙 55번) — 안 그러면 「이력이 왜 비어 있지」를 화면에서
+   *    알 길이 없다.
+   */
+  async function writeChangeLog(
+    changes: Parameters<typeof logRecordChange>[1]["changes"],
+    staffId: string | null,
+    staffName: string | null
+  ) {
+    const { logged, error } = await logRecordChange(supabase, {
+      target: "quotes",
+      recordId: id,
+      staffId,
+      staffName,
+      changes,
+    });
+    if (error) {
+      setSaveError(`견적은 저장했지만 수정 이력을 남기지 못했습니다: ${error}`);
+      return;
+    }
+    if (logged) setChangeLogKey((k) => k + 1);
   }
 
   /**
@@ -724,16 +775,50 @@ export default function QuoteDetailPage() {
               </option>
             ))}
           </select>
+          {/* 🔴 **이미 오더가 있으면 「생성」을 먼저 내놓지 않는다**(사용자 지시 2026-09-17:
+              *「수정 견적은 한번 수주로 된 견적이고 이미 운송오더가 만들어져 있는 상황이라
+              견적 상세에서 "운송오더 생성" 버튼이 있으면 안될것 같다」*). 그 자리에
+              **「해당 운송오더 이동」**을 놓고, 「추가 운송오더 생성」은 그 옆에 둔다.
+              🔴 **「추가 생성」을 없애지 말 것** — 한 견적을 여러 차수로 나눠 싣는 경우가
+                 있고, 지우면 그때 오더를 만들 길이 사라진다(실측: 지금 오더 2건 이상인
+                 견적은 0건이라 아직 쓰인 적 없는 경로다).
+              🔴 **조회 실패(`linkedOrdersError`)면 「생성」만 내놓는다** — 오더가 없는
+                 것과 못 읽은 것을 구분할 수 없으니, 없던 동작으로 되돌아가는 쪽이 안전하다.
+                 그 사실은 바로 위 빨간 줄이 이미 말하고 있다. */}
           {quote.status === "수주" && (
-            <button
-              className="btn"
-              style={{ marginLeft: 12, fontSize: 12.5, padding: "6px 12px" }}
-              onClick={() =>
-                router.push(`/admin/orders?from_quote=${quote.id}`)
-              }
-            >
-              + 운송오더 생성
-            </button>
+            <span style={{ marginLeft: 12, display: "inline-flex", gap: 8, flexWrap: "wrap" }}>
+              {hasOrder && !linkedOrdersError ? (
+                <>
+                  {linkedOrders.map((o) => (
+                    <button
+                      key={o.id}
+                      className="btn"
+                      style={{ fontSize: 12.5, padding: "6px 12px" }}
+                      onClick={() => router.push(`/admin/orders/${o.id}`)}
+                    >
+                      {linkedOrders.length > 1
+                        ? `${o.order_no || "운송오더"} 이동`
+                        : "해당 운송오더 이동"}
+                    </button>
+                  ))}
+                  <button
+                    className="btn btn-ghost"
+                    style={{ fontSize: 12.5, padding: "6px 12px" }}
+                    onClick={() => router.push(`/admin/orders?from_quote=${quote.id}`)}
+                  >
+                    + 추가 운송오더 생성
+                  </button>
+                </>
+              ) : (
+                <button
+                  className="btn"
+                  style={{ fontSize: 12.5, padding: "6px 12px" }}
+                  onClick={() => router.push(`/admin/orders?from_quote=${quote.id}`)}
+                >
+                  + 운송오더 생성
+                </button>
+              )}
+            </span>
           )}
           {/* 🔴 화주가 포털에서 직접 승인한 건임을 표시한다(2026-08-29). 이 줄이 없으면
               담당자가 손으로 `수주` 로 바꾼 건과 구분되지 않는다 — 28차 §5-1 이 찾아낸
@@ -1447,6 +1532,10 @@ export default function QuoteDetailPage() {
         </p>
         {quoteSmsError && <div className="error-box" style={{ marginTop: 8 }}>{quoteSmsError}</div>}
       </div>
+
+      {/* 🔴 **문자 이력 바로 위**에 둔다 — 둘 다 「되짚어 보는 기록」이라 같이 모아야
+          담당자가 한 자리에서 본다. 🔴 기본 접힘이다(상세가 이미 길다). */}
+      <RecordChangeLogPanel target="quotes" recordId={quote.id} refreshKey={changeLogKey} />
 
       <SmsLogPanel relatedType="quote" relatedId={quote.id} />
 

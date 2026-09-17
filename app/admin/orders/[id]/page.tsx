@@ -14,7 +14,9 @@ import PickupDropoffContactFields, {
 } from "@/components/PickupDropoffContactFields";
 import SettlementFieldsChangeModal from "@/components/SettlementFieldsChangeModal";
 import CollectionMethodInput, { CollectionMethodValue } from "@/components/CollectionMethodInput";
-import { getCurrentStaffId, getCurrentStaffRole } from "@/lib/currentStaff";
+import { getCurrentStaffId, getCurrentStaffName, getCurrentStaffRole } from "@/lib/currentStaff";
+import { diffRecordFields, logRecordChange } from "@/lib/recordChangeLog";
+import RecordChangeLogPanel from "@/components/RecordChangeLogPanel";
 import ProcessedByFooter from "@/components/ProcessedByFooter";
 import ConflictWarning from "@/components/ConflictWarning";
 import { optimisticUpdate } from "@/lib/optimisticUpdate";
@@ -130,6 +132,8 @@ export default function OrderDetailPage() {
    * 이 파일에는 남아 있었다(2026-09-15에 발견해 같이 고침).
    */
   const [actionError, setActionError] = useState<string | null>(null);
+  /** 저장이 끝나면 올려서 수정 이력 패널을 다시 읽게 한다(펼쳐 둔 채로 저장했을 때) */
+  const [changeLogKey, setChangeLogKey] = useState(0);
   /** 「지금 상차」 칩 — 저장하는 순간의 시각으로 맞춘다(등록 화면·견적 폼과 같은 처리) */
   const [pickupNow, setPickupNow] = useState(false);
   /**
@@ -366,6 +370,13 @@ export default function OrderDetailPage() {
       updated_by: await getCurrentStaffId(),
     };
 
+    /* 🔴 **수정 이력은 저장 전에 미리 뽑는다** — 저장이 끝나면 `load()` 가 `order` 를
+       새 값으로 갈아치워 「전」을 알 수 없게 된다.
+       ⚠️ 정산방식 3필드는 여기 payload 에 **없다**(전용 모달이 사유와 함께
+          `settlement_field_change_logs` 에 따로 남긴다 — 원칙 39번). 겹치지 않는다. */
+    const changes = diffRecordFields("orders", order, payload);
+    const staffName = await getCurrentStaffName();
+
     if (force) {
       const { error } = await supabase.from("orders").update(payload).eq("id", id);
       setSaving(false);
@@ -373,6 +384,7 @@ export default function OrderDetailPage() {
         setActionError(error.message);
         return;
       }
+      await writeChangeLog(changes, payload.updated_by, staffName);
       setEditing(false);
       load();
       return;
@@ -393,8 +405,34 @@ export default function OrderDetailPage() {
       setConflict(true);
       return;
     }
+    await writeChangeLog(changes, payload.updated_by, staffName);
     setEditing(false);
     load();
+  }
+
+  /**
+   * 🔴 **저장이 성공한 뒤에만 부른다.** 실패해도 저장을 되돌리지 않지만 **조용히
+   *    넘어가지도 않는다**(원칙 55번).
+   * 🔴 오류는 저장 버튼 옆(`actionError`)에 뜬다 — 맨 위에만 그리면 버튼에서 멀다
+   *    (원칙 33번 · PR #153·#154·#167 이 같은 자리에서 겪었다).
+   */
+  async function writeChangeLog(
+    changes: Parameters<typeof logRecordChange>[1]["changes"],
+    staffId: string | null,
+    staffName: string | null
+  ) {
+    const { logged, error } = await logRecordChange(supabase, {
+      target: "orders",
+      recordId: id,
+      staffId,
+      staffName,
+      changes,
+    });
+    if (error) {
+      setActionError(`오더는 저장했지만 수정 이력을 남기지 못했습니다: ${error}`);
+      return;
+    }
+    if (logged) setChangeLogKey((k) => k + 1);
   }
 
   // "접수" 단계에서는 자유롭게 변경, 그 이후(배차완료~운송완료)는 이미 진행 중인
@@ -1265,6 +1303,10 @@ export default function OrderDetailPage() {
           내역이 이 자리에 표시됩니다.
         </p>
       </div>
+
+      {/* 🔴 기본 접힘 — 오더 상세도 이미 길다. 「누가·언제」한 줄(`ProcessedByFooter`)
+          바로 위에 두어 같이 읽히게 한다. */}
+      <RecordChangeLogPanel target="orders" recordId={id} refreshKey={changeLogKey} />
 
       <ProcessedByFooter
         createdBy={order.created_by}
