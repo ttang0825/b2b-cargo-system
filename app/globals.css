@@ -8996,9 +8996,13 @@ tbody tr:hover {
 }
 /* 미리보기 — 🔴 **화주 화면과 같은 폭으로 가둔다.** 관리자 카드가 넓어서 그냥
    그리면 줄바꿈 위치가 달라진다(포털 본문 폭 기준). */
+/* 🔴 폭은 **화주 화면 실측값**이다 — `--pv2-main-max` 1160px 에서 공지 카드의
+   좌우 여백 20px 씩을 뺀 값. 관리자 카드가 더 넓어서(1272px) 그냥 그리면
+   줄바꿈 위치가 달라져 미리보기가 거짓말이 된다.
+   🔴 `--pv2-main-max` 를 바꾸면 이 값도 같이 볼 것. */
 .ann-preview {
   min-height: 360px;
-  max-width: 720px;
+  max-width: 1120px;
   padding: 18px 20px;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -9023,5 +9027,5 @@ tbody tr:hover {
   font-size: 15.5px;
   font-weight: 800;
   margin: 0 0 12px;
-  max-width: 720px;
+  max-width: 1120px;
 }

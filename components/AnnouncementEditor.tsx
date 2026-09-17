@@ -76,15 +76,20 @@ export default function AnnouncementEditor({
     setMenu(null);
   }
 
-  /** 커서 자리에 그대로 끼워 넣는다(이모지·구분선). */
+  /**
+   * 커서 자리에 그대로 끼워 넣는다(이모지·목록·구분선).
+   * 🔴 **고른 글자를 지우지 않는다** — 선택 **끝**에 끼운다. 위 `wrap()` 이 서식을
+   *    건 뒤 그 글자를 다시 선택 상태로 두기 때문에, 선택을 지우는 방식이면
+   *    「굵게 → 이모지」를 이어서 누를 때 방금 굵게 한 글자가 이모지로 바뀐다
+   *    (렌더링 확인에서 실제로 그랬다).
+   */
   function insert(text: string) {
     const el = areaRef.current;
     if (!el) return;
-    const start = el.selectionStart ?? value.length;
     const end = el.selectionEnd ?? value.length;
-    const next = value.slice(0, start) + text + value.slice(end);
+    const next = value.slice(0, end) + text + value.slice(end);
     onChange(next);
-    const to = start + text.length;
+    const to = end + text.length;
     requestAnimationFrame(() => {
       el.focus();
       el.setSelectionRange(to, to);

@@ -251,4 +251,4 @@ export function isBlankAnnouncementContent(content: string | null | undefined): 
 /** 담당자에게 보여줄 표기 도움말 — 🔴 화면에 문자열을 다시 적지 말 것. */
 export const ANNOUNCEMENT_MARKUP_HELP =
   "글자를 선택하고 위 버튼을 누르면 서식이 붙습니다. " +
-  "줄 앞에 «- »를 적으면 목록, «---»만 있는 줄은 구분선이 됩니다. 이모지는 그대로 붙여넣으면 됩니다.";
+  "줄 앞에 「- 」를 적으면 목록, 「---」만 있는 줄은 구분선이 됩니다. 이모지는 그대로 붙여넣어도 됩니다.";
