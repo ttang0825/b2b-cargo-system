@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
+import { WON_QUOTE_STATUS } from "@/lib/quoteStatusLabels";
 
 // 「수주인데 아직 운송오더가 없는 견적」의 유일한 정의처 (34차 리뷰 1라운드).
 //
@@ -17,8 +18,13 @@ import { supabase } from "@/lib/supabaseClient";
 //
 // 🔴 **`status` 문자열 `'수주'` 를 다른 곳에서 다시 적지 말 것** — 아래 상수를 쓴다.
 
-/** 견적이 「오더를 만들어야 하는 상태」임을 뜻하는 값. DB 에 저장되는 문자열이다. */
-export const WON_QUOTE_STATUS = "수주";
+/**
+ * 견적이 「오더를 만들어야 하는 상태」임을 뜻하는 값. DB 에 저장되는 문자열이다.
+ * 🔴 **정의처는 `lib/quoteStatusLabels.ts` 로 옮겼다**(2026-09-18) — 화주포털이
+ *    같은 값을 쓰는데 이 파일은 관리자 클라이언트를 import 하고 있어서다(원칙 1번).
+ *    여기서 계속 가져다 쓸 수 있도록 재수출만 남긴다.
+ */
+export { WON_QUOTE_STATUS } from "@/lib/quoteStatusLabels";
 
 /** 한 번에 훑는 수주 견적 수 상한 — `TopNav` 배지와 같은 값이어야 한다. */
 const WON_QUOTE_SCAN_LIMIT = 300;

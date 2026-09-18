@@ -63,12 +63,22 @@ export function LandingConsentCard({
   onChange,
   title,
   desc,
+  descWideOnly,
   doc,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
   title: string;
   desc?: string;
+  /**
+   * 🔴 **좁은 화면(≤700px)에서는 이 설명을 감춘다**(사용자 지시 2026-09-18 —
+   *    *「운송관리 모바일 버전에서 이용약관과 개인정보수집동의는 회색 설명글은 빼고
+   *    간략하게 표현하자」*).
+   * 🔴 **약관 요약에만 켤 것.** 개인정보 카드의 설명은 **수집·이용 목적 고지**라
+   *    개인정보보호법 제15조 2항이 요구하는 문장이고, 감추면 좁은 화면에서만 법정
+   *    고지가 사라진다. 아래 `refusal`(거부권) 도 같은 이유로 그대로 둔다.
+   */
+  descWideOnly?: boolean;
   doc: "terms" | "privacy";
 }) {
   return (
@@ -114,7 +124,18 @@ export function LandingConsentCard({
                 `[필수]` 접두사를 화면에 그대로 찍지 말 것. */}
             <span style={{ marginLeft: 6, fontSize: 12, fontWeight: 600, color: "#8B8A85" }}>필수</span>
           </span>
-          {desc && <span style={{ display: "block", marginTop: 4, fontSize: 13, lineHeight: 1.6, color: "#8B8A85" }}>{desc}</span>}
+          {/* 🔴 감추는 일은 CSS 가 한다 — 화면 폭을 JS 로 재면 첫 그림에서 잘못된
+              쪽이 한 번 번쩍인다(29차가 이용가이드에서 세운 규칙과 같은 결).
+              🔴 인라인 `display: block` 을 이기려면 CSS 쪽이 `!important` 여야 한다 —
+              선언 순서로 맞추려 들지 말 것(원칙 58번). */}
+          {desc && (
+            <span
+              className={descWideOnly ? "landing-consent-desc landing-consent-desc-wide" : "landing-consent-desc"}
+              style={{ display: "block", marginTop: 4, fontSize: 13, lineHeight: 1.6, color: "#8B8A85" }}
+            >
+              {desc}
+            </span>
+          )}
         </span>
         {/* 🔴 「전문 보기」는 30차 `LegalLinks` 모달이다 — 시안은 약관 초안을 화면 코드에
             통째로 들고 있었다. 조문은 `lib/legal/` 하나만 본다. */}
@@ -146,6 +167,10 @@ export default function PublicConsentFields({
           onChange={onTermsChange}
           title={TERMS_CONSENT.label}
           desc={TERMS_CONSENT.summary}
+          // 🔴 **약관 요약만 좁은 화면에서 감춘다** — 이 문장은 조문을 간추린 안내일
+          //    뿐이고 「전문 보기」가 바로 옆에 있다. 🔴 아래 개인정보 카드에는 켜지 말 것
+          //    (그쪽 설명은 수집·이용 목적 고지다 — prop 주석에 사유가 있다).
+          descWideOnly
           doc="terms"
         />
         <LandingConsentCard

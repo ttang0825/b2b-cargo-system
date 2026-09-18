@@ -257,10 +257,12 @@ export default function ApplyPage() {
             style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 24, margin: "40px 0 56px", padding: "36px 40px", borderRadius: 22, background: "#0E0F12", color: "#FFFFFF" }}
           >
             <div>
-              <div style={{ fontSize: 26, lineHeight: 1.35, fontWeight: 700, letterSpacing: "-0.03em", wordBreak: "keep-all" }}>간편하게 전화로 신청하세요</div>
+              {/* 🔴 문구는 사용자 확정이다(2026-09-18) — 「간편하게 전화로 신청하세요」를
+                  **「전화로 신청도 가능합니다」**로 낮췄고 「통화 한 번으로 신청이 끝납니다.」는
+                  **지웠다**. 아래 신청서가 주 경로이고 전화는 보조라는 뜻이다.
+                  🔴 권유형으로 되돌리지 말 것. */}
+              <div style={{ fontSize: 26, lineHeight: 1.35, fontWeight: 700, letterSpacing: "-0.03em", wordBreak: "keep-all" }}>전화로 신청도 가능합니다</div>
               <div style={{ marginTop: 10, fontSize: 16, lineHeight: 1.75, color: "rgba(255,255,255,0.68)", wordBreak: "keep-all" }}>
-                통화 한 번으로 신청이 끝납니다.
-                <br />
                 {COMPANY_SUPPORT_HOURS} · 아래 신청서 작성도 가능합니다.
               </div>
             </div>
@@ -338,12 +340,14 @@ export default function ApplyPage() {
                   </div>
                   <div>
                     <label style={fieldLabel}>담당자 이메일 {optionalMark}</label>
-                    {/* ⚠️ 이메일은 22차에 선택 입력이 됐다 — 필수로 되돌리지 말 것. */}
+                    {/* ⚠️ 이메일은 22차에 선택 입력이 됐다 — 필수로 되돌리지 말 것.
+                        🔴 **안내문 placeholder 를 되살리지 말 것**(사용자 지시 2026-09-18) —
+                        「처리 결과를 메일로도 받으실 경우」가 있었는데, 라벨이 이미
+                        「(선택)」이라 같은 말을 두 번 하는 자리였다. */}
                     <input
                       type="email"
                       value={form.contact_email}
                       onChange={(e) => setField("contact_email", e.target.value)}
-                      placeholder="처리 결과를 메일로도 받으실 경우"
                       style={{ ...fieldStyle, marginTop: 8 }}
                     />
                   </div>
