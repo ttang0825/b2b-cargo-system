@@ -14,9 +14,7 @@ import {
   getAcknowledgedRequestIds,
   acknowledgeRequestIds,
 } from "@/lib/portalNotifications";
-// 🔴 **포털 전용 시간 상수다**(2026-09-18) — 공개 화면용 `COMPANY_SUPPORT_HOURS`(18시)
-//    로 되돌리지 말 것. 두 값이 다른 이유는 `lib/contactInfo.ts` 주석에 있다.
-import { COMPANY_SUPPORT_PHONE, COMPANY_SUPPORT_HOURS_PORTAL } from "@/lib/contactInfo";
+import { COMPANY_SUPPORT_PHONE, COMPANY_SUPPORT_HOURS } from "@/lib/contactInfo";
 import AlertToast, { type AlertToastItem } from "@/components/AlertToast";
 import AlertSoundMenu from "@/components/AlertSoundMenu";
 import PortalPushSubscribeButton from "@/components/PortalPushSubscribeButton";
@@ -571,7 +569,7 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/portal/wecarry-eng-cropped.svg" alt="WeCarry" className="pv2-eng-logo" />
             <div>
-              <div className="pv2-foot-label">고객센터 · {COMPANY_SUPPORT_HOURS_PORTAL}</div>
+              <div className="pv2-foot-label">고객센터 · {COMPANY_SUPPORT_HOURS}</div>
               <a href={`tel:${COMPANY_SUPPORT_PHONE}`} className="pv2-foot-phone">
                 {COMPANY_SUPPORT_PHONE}
               </a>

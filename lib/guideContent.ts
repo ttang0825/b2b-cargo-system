@@ -1,8 +1,4 @@
-import {
-  COMPANY_SUPPORT_HOURS,
-  COMPANY_SUPPORT_HOURS_PORTAL,
-  COMPANY_SUPPORT_PHONE,
-} from "@/lib/contactInfo";
+import { COMPANY_SUPPORT_HOURS, COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
 
 // 이용가이드 본문의 **유일한 정의처**.
 //
@@ -85,16 +81,13 @@ export type GuideScope = "public" | "portal" | "both";
 /** 「라벨 — 설명」 한 줄. 정의목록(dl)과 표(table)가 같이 쓴다 */
 export type GuideRow = { label: string; desc: string };
 
-/**
- * 🔴 **한 항목 안에서 화면에 따라 갈리는 줄**에만 쓴다(`guideItemsFor` 가 걸러낸다).
- *    지금 쓰는 곳은 **고객센터 시간 한 줄**뿐이다 — 공개는 18시, 포털은 19시다
- *    (`lib/contactInfo.ts` 참고). 🔴 이것으로 항목 전체를 가르지 말 것 — 그것은
- *    `scope` 가 할 일이고, 여기까지 쓰기 시작하면 두 화면이 무엇을 보는지 알 수 없어진다.
- */
-export type GuideBlockOnly = { only?: "public" | "portal" };
-
-export type GuideBlock = GuideBlockOnly &
-  ({ type: "p"; text: string }
+// ⚠️ 2026-09-18 에 잠깐 블록마다 `only?: "public" | "portal"` 을 두어 **한 항목 안에서
+//    화면에 따라 줄을 갈랐다가 같은 날 되돌렸다** — 고객센터 시간이 공개 18시 / 포털
+//    19시로 갈렸던 그 하루뿐이었고, 사용자가 **19시로 통일**하면서 쓸 자리가 없어졌다.
+//    🔴 **다시 만들지 말 것** — 화면을 가르는 일은 항목의 `scope` 가 한다. 블록 단위로
+//    가르기 시작하면 두 화면이 각각 무엇을 보고 있는지 코드만 읽어서는 알 수 없어진다.
+export type GuideBlock =
+  | { type: "p"; text: string }
   /** 번호가 붙는 절차 */
   | { type: "ol"; items: string[] }
   /**
@@ -133,7 +126,7 @@ export type GuideBlock = GuideBlockOnly &
   /** 설치 버튼 자리를 보여주는 CSS 도식(캡처 이미지가 아니다) */
   | { type: "mock"; buttonLabel: string }
   /** 전화 걸기 링크 */
-  | { type: "tel"; label: string; number: string });
+  | { type: "tel"; label: string; number: string };
 
 export type GuideItem = {
   /** 🔴 **URL 에 그대로 나간다**(`/customer/guide?topic=<id>`) — 바꾸면 밖에서 보낸
@@ -1006,37 +999,13 @@ export const GUIDE_ITEMS: GuideItem[] = [
         label: `고객센터 ${COMPANY_SUPPORT_PHONE}`,
         number: COMPANY_SUPPORT_PHONE.replace(/-/g, ""),
       },
-      // 🔴 **두 줄이고 화면마다 하나만 나간다**(2026-09-18 사용자 지시 — 「화주포털내에
-      //    표시되는 부분만」 19시로). 🔴 한 줄로 합치지 말 것 — 합치는 순간 공개
-      //    화면과 포털 중 한쪽이 틀린 시간을 보여준다.
-      {
-        type: "note",
-        plain: true,
-        only: "public",
-        text: `${COMPANY_SUPPORT_HOURS} (주말·공휴일 휴무)`,
-      },
-      {
-        type: "note",
-        plain: true,
-        only: "portal",
-        text: `${COMPANY_SUPPORT_HOURS_PORTAL} (주말·공휴일 휴무)`,
-      },
+      // ⚠️ 한 줄이다 — 공개 화면과 포털이 **같은 시간**을 보여준다(2026-09-18 확정).
+      { type: "note", plain: true, text: `${COMPANY_SUPPORT_HOURS} (주말·공휴일 휴무)` },
     ],
   },
 ];
 
-/**
- * 그 화면에 나갈 항목만 고른다. 배열 순서가 곧 화면 순서다.
- *
- * 🔴 **블록의 `only` 도 여기서 함께 걸러낸다** — 화면 쪽에서 거르게 두면 두 렌더러가
- *    각자 판단하게 되어, 한쪽만 고쳤을 때 **공개 화면과 포털이 서로 다른 시간을**
- *    보여주는 상태가 조용히 생긴다.
- * ⚠️ `only` 가 붙은 블록이 없는 항목은 **새 배열을 만들지 않고 원본을 그대로** 돌려준다 —
- *    매번 새 객체를 만들면 렌더러의 `key` 가 바뀌어 헛되이 다시 그려진다.
- */
+/** 그 화면에 나갈 항목만 고른다. 배열 순서가 곧 화면 순서다. */
 export function guideItemsFor(target: "public" | "portal"): GuideItem[] {
-  return GUIDE_ITEMS.filter((i) => i.scope === "both" || i.scope === target).map((item) => {
-    if (!item.blocks.some((b) => b.only)) return item;
-    return { ...item, blocks: item.blocks.filter((b) => !b.only || b.only === target) };
-  });
+  return GUIDE_ITEMS.filter((i) => i.scope === "both" || i.scope === target);
 }
