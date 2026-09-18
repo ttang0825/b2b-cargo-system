@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { SMS_BYTE_LIMIT, byteLength } from "@/lib/sms/byteLength";
 import { COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
+import { getSmsTemplateLabel, getSmsRecipientTypeLabel } from "@/lib/smsLogLabels";
 
 export interface SmsPreview {
   relatedType: "dispatch" | "application" | "portal_account" | "quote";
@@ -30,10 +31,25 @@ export default function SmsConfirmModal({
   preview,
   onSent,
   onSkip,
+  step,
 }: {
   preview: SmsPreview;
   onSent: () => void;
   onSkip: () => void;
+  /**
+   * 한 액션에서 문자가 **여러 통** 나갈 때의 「n/총」 표시(2026-09-18 · 배차확정).
+   *
+   * 🔴 **선택 prop 이다 — 안 주면 지금까지와 한 글자도 다르지 않다.** 이 모달을
+   *    쓰는 다른 다섯 곳(화주신청 승인·거절 · 계정발급 · 비밀번호 재발급 · 견적)은
+   *    한 통뿐이라 그대로 둔다.
+   * 🔴 **두 통을 한 창에서 같이 편집하는 구조로 뜯어고치지 말 것** — 그 다섯 곳이
+   *    같이 흔들린다. 큐는 **호출부**가 들고 이 창은 한 통만 안다.
+   *
+   * ⚠️ **호출부는 `key={preview.templateType}` 를 같이 주어야 한다.** 아래 `message`·
+   *    `phone` 이 `useState` 초기값이라, 같은 인스턴스를 재사용하면 두 번째 통에
+   *    **첫 번째 통의 본문이 그대로 남는다.**
+   */
+  step?: { index: number; total: number };
 }) {
   const [message, setMessage] = useState(preview.message);
   const [phone, setPhone] = useState(preview.recipientPhone || "");
@@ -92,9 +108,22 @@ export default function SmsConfirmModal({
         className="card"
         style={{ padding: 20, width: "100%", maxWidth: 420 }}
       >
-        <h3 style={{ fontSize: 15, margin: "0 0 4px" }}>문자 발송 확인</h3>
+        <h3 style={{ fontSize: 15, margin: "0 0 4px" }}>
+          문자 발송 확인
+          {step && step.total > 1 ? (
+            <span style={{ fontSize: 12.5, fontWeight: 400, color: "var(--text-muted)", marginLeft: 6 }}>
+              ({step.index}/{step.total})
+            </span>
+          ) : null}
+        </h3>
         <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 14px" }}>
-          아래 수신번호·문구를 확인하고 필요하면 수정한 뒤 발송해주세요.
+          {/* 🔴 두 통이 연달아 뜨는 배차확정에서는 「지금 누구에게 보내는 창인가」가
+              보여야 한다 — 문구만 보고는 차주용과 고객용을 헷갈린다. */}
+          {step && step.total > 1
+            ? `${getSmsTemplateLabel(preview.templateType)} · 받는 사람 ${getSmsRecipientTypeLabel(
+                preview.recipientType
+              )}`
+            : "아래 수신번호·문구를 확인하고 필요하면 수정한 뒤 발송해주세요."}
         </p>
 
         {/* 발신번호는 읽기 전용 — 어느 번호로 나가는지 모르고 보내는 상황을 없앤다 */}

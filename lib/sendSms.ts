@@ -16,7 +16,8 @@ export type SmsRecipientType = "driver" | "customer" | "applicant";
 //    ⚠️ DB 의 `sms_logs_template_type_check` 에도 두 값이 그대로 남아 있다
 //       (`migrations/2026-09-18_sms_dispatch_customer.sql`).
 export type SmsTemplateType =
-  | "dispatch_confirmed"
+  | "dispatch_confirmed" // 차주 「화물정보 안내」 — 🔴 키를 바꾸지 말 것(옛 이력과 끊긴다)
+  | "dispatch_confirmed_customer" // 고객 「배차확정 안내」 (2026-09-18 신설)
   | "pickup_completed" // 🔴 2026-09 폐지 · 옛 이력 재발송용
   | "delivery_completed" // 🔴 2026-09 폐지 · 옛 이력 재발송용
   | "application_approved"
