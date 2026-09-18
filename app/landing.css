@@ -671,7 +671,17 @@
      🔴 `!important` 를 빼지 말 것 — 인라인 `display: block` 을 이겨야 한다(원칙 58번). */
   .landing-consent-desc-wide { display: none !important; }
   .landing-page .landing-consent-doc-link { padding: 6px 12px !important; font-size: 12.5px !important; }
-  .landing-apply-tel { font-size: 34px !important; }
+  /* 🔴 전화 신청 카드는 좁은 화면에서 **통째로 줄인다**(사용자 지시 2026-09-18 PR 리뷰 —
+        *「계정신청 모바일에서 전화신청 가능 블랙박스가 너무 크다. 안의 내용 레이아웃
+        정리해서 좀더 작게 들어가자」*). 실측 390px 기준 **271px → 약 168px**.
+     🔴 **문구는 한 글자도 안 지웠다** — 줄인 것은 글자 크기·여백·간격뿐이다.
+        (운영시간 줄을 지우면 전화가 언제 되는지 알 수 없어진다.)
+     🔴 `!important` 를 빼지 말 것 — 값이 전부 인라인 style 이라 그냥은 안 이긴다(원칙 58번).
+     ⚠️ **데스크탑은 한 픽셀도 안 바뀐다**(이 블록 밖에 규칙이 없다). */
+  .landing-apply-paths { padding: 22px !important; margin: 28px 0 36px !important; gap: 12px !important; }
+  .landing-apply-paths-title { font-size: 20px !important; }
+  .landing-apply-paths-sub { margin-top: 6px !important; font-size: 13.5px !important; line-height: 1.55 !important; }
+  .landing-apply-tel { font-size: 30px !important; }
 }
 
 /* ── 31차 리뷰: 모바일 헤더 ─────────────────────────────────────────────────

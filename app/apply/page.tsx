@@ -273,8 +273,11 @@ export default function ApplyPage() {
                   🔴 권유형으로 되돌리지 말 것. ⚠️ 같은 날 PR 리뷰에서 「전화로 신청도
                   가능합니다」를 **「전화로도 신청 가능합니다」로 한 번 더 고쳤다** —
                   앞엣것으로 되돌리지 말 것. */}
-              <div style={{ fontSize: 26, lineHeight: 1.35, fontWeight: 700, letterSpacing: "-0.03em", wordBreak: "keep-all" }}>전화로도 신청 가능합니다</div>
-              <div style={{ marginTop: 10, fontSize: 16, lineHeight: 1.75, color: "rgba(255,255,255,0.68)", wordBreak: "keep-all" }}>
+              {/* 🔴 클래스 둘은 **모바일에서 줄이기 위한 손잡이**다(리뷰 2라운드) —
+                  `div > div` 순서로 겨누면 안쪽 구조를 조금만 바꿔도 조용히 빗나간다.
+                  값은 `app/landing.css` 의 ≤700px 블록에 있다. */}
+              <div className="landing-apply-paths-title" style={{ fontSize: 26, lineHeight: 1.35, fontWeight: 700, letterSpacing: "-0.03em", wordBreak: "keep-all" }}>전화로도 신청 가능합니다</div>
+              <div className="landing-apply-paths-sub" style={{ marginTop: 10, fontSize: 16, lineHeight: 1.75, color: "rgba(255,255,255,0.68)", wordBreak: "keep-all" }}>
                 {COMPANY_SUPPORT_HOURS} · 아래 신청서 작성도 가능합니다.
               </div>
             </div>
