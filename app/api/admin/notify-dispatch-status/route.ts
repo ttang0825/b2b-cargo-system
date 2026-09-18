@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
-import {
-  dispatchConfirmedMessage,
-  pickupCompletedMessage,
-  deliveryCompletedMessage,
-} from "@/lib/sms/templates";
+import { dispatchConfirmedMessage } from "@/lib/sms/templates";
 import { resolveSmsSender, contactPhoneForBody } from "@/lib/smsSenderPhone";
 
-// 배차확정/상차완료/하차완료는 client가 anon 키로 dispatches를 직접 update하는
-// 4곳(배차 상세의 확정 버튼·상태 드롭다운·체크박스, 배차 목록의 상태 드롭다운)에서
-// 일어나서 SMS(비밀키 필요)를 그 자리에 바로 못 끼워넣는다(사전조사 1-3 결과).
+// 배차확정은 client가 anon 키로 dispatches를 직접 update하는 4곳(배차 상세의
+// 확정 버튼·상태 드롭다운·체크박스, 배차 목록의 상태 드롭다운)에서 일어나서
+// SMS(비밀키 필요)를 그 자리에 바로 못 끼워넣는다(사전조사 1-3 결과).
+//
+// 🔴 **상차완료·하차완료 문자는 2026-09-18 에 폐지했다** — 그 두 event 는 이제
+//    400 이다(사용자 확정: *「알림으로만 충분하다」*). 화주는 운송관리 알림
+//    (화면 배너 + 웹 푸시)으로 받는다(HANDOFF §5-17). 🔴 **되살리지 말 것.**
 // 대신 그 update가 성공한 직후 client가 이 API를 호출해서 수신자·문구
 // 미리보기만 받고(**여기선 발송하지 않음**), components/SmsConfirmModal.tsx로
 // 확인·수정 후 "발송"을 눌러야만 /api/admin/send-sms가 실제로 호출됨
@@ -34,7 +34,9 @@ export async function POST(req: Request) {
   });
 
   const { dispatch_id, event } = await req.json();
-  if (!dispatch_id || !["dispatch_confirmed", "pickup_completed", "delivery_completed"].includes(event)) {
+  // 🔴 **상차완료·하차완료는 2026-09-18 에 빠졌다** — 지금 여기 오면 400 이다
+  //    (사용자 확정: *「알림으로만 충분하다」*). 화주는 운송관리 알림으로 받는다.
+  if (!dispatch_id || !["dispatch_confirmed"].includes(event)) {
     return NextResponse.json({ error: "dispatch_id와 올바른 event가 필요합니다." }, { status: 400 });
   }
 
@@ -50,10 +52,6 @@ export async function POST(req: Request) {
   }
 
   const order = (dispatch as any).orders as any;
-  // 화주(고객) 연락처 — 상차완료/하차완료 안내(화주 대상) 수신번호로 씀.
-  // 배차확정 안내(차주 대상)에는 넣지 않음(아래 dispatchConfirmedMessage 주석 참고).
-  const companyPhone: string | null =
-    order?.companies?.contact_mobile || order?.individual_customers?.phone || order?.guest_phone || null;
 
   // 발신번호·본문 안내번호는 반드시 서버에서 세션으로 결정한다(클라이언트 입력값 신뢰 금지)
   const sender = await resolveSmsSender();
@@ -86,25 +84,6 @@ export async function POST(req: Request) {
     });
   }
 
-  // 상차완료/하차완료는 화주(고객) 대상 — companyPhone(화주 연락처)을 그대로 재사용
-  if (event === "pickup_completed") {
-    return NextResponse.json({
-      relatedType: "dispatch",
-      relatedId: dispatch_id,
-      templateType: "pickup_completed",
-      recipientType: "customer",
-      recipientPhone: companyPhone,
-      message: pickupCompletedMessage({ origin: order?.origin || null, ...contact }),
-      ...senderFields,
-    });
-  }
-  return NextResponse.json({
-    relatedType: "dispatch",
-    relatedId: dispatch_id,
-    templateType: "delivery_completed",
-    recipientType: "customer",
-    recipientPhone: companyPhone,
-    message: deliveryCompletedMessage({ destination: order?.destination || null, ...contact }),
-    ...senderFields,
-  });
+  // 🔴 여기까지 오면 위 가드가 이미 거절했어야 한다(허용 event 가 하나뿐이다).
+  return NextResponse.json({ error: "지원하지 않는 event 입니다." }, { status: 400 });
 }

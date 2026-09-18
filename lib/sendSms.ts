@@ -8,10 +8,17 @@ const provider: SmsProvider = solapiProvider;
 
 export type SmsRelatedType = "dispatch" | "application" | "portal_account" | "quote";
 export type SmsRecipientType = "driver" | "customer" | "applicant";
+// 🔴 **`pickup_completed`·`delivery_completed` 를 지우지 말 것**(2026-09-18 폐지).
+//    문구·발송 경로는 없앴지만 **이 두 값은 유니언에 남는다** — `sms-logs/resend` 가
+//    옛 실패 건의 `template_type` 을 그대로 다시 넘기기 때문이고, 지우면 그 경로가
+//    타입에서 막힌다. 🔴 **재발송은 일부러 막지 않았다** — 원문을 그대로 다시 보내는
+//    것이라 틀린 문자가 아니다(새로 만들어지는 경로가 없을 뿐이다).
+//    ⚠️ DB 의 `sms_logs_template_type_check` 에도 두 값이 그대로 남아 있다
+//       (`migrations/2026-09-18_sms_dispatch_customer.sql`).
 export type SmsTemplateType =
   | "dispatch_confirmed"
-  | "pickup_completed"
-  | "delivery_completed"
+  | "pickup_completed" // 🔴 2026-09 폐지 · 옛 이력 재발송용
+  | "delivery_completed" // 🔴 2026-09 폐지 · 옛 이력 재발송용
   | "application_approved"
   | "application_rejected"
   | "portal_account_issued"

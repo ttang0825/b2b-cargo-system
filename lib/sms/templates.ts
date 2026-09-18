@@ -1,4 +1,3 @@
-import { shortAddress } from "@/lib/shortAddress";
 import { COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
 
 // SMS 문구 유일 정의처. 전부 "[WeCarry]" 문두 표기(발신번호가 개인 휴대폰이라
@@ -84,27 +83,13 @@ export function dispatchConfirmedMessage(
     .join("\n");
 }
 
-export function pickupCompletedMessage(
-  params: WithContact & { origin: string | null; staffName?: string | null }
-): string {
-  return [
-    "[WeCarry] 상차완료 안내",
-    `${shortAddress(params.origin)}에서 상차가 완료되었습니다.`,
-    "진행상황은 운송관리에서 확인하실 수 있습니다.",
-    contactLine(params),
-  ].join("\n");
-}
-
-export function deliveryCompletedMessage(
-  params: WithContact & { destination: string | null; staffName?: string | null }
-): string {
-  return [
-    "[WeCarry] 운송완료 안내",
-    `${shortAddress(params.destination)}에 하차 완료되었습니다.`,
-    "이용해주셔서 감사합니다.",
-    contactLine(params),
-  ].join("\n");
-}
+// 🔴 **상차완료·하차완료 문자는 2026-09-18 에 폐지했다** — `pickupCompletedMessage`·
+//    `deliveryCompletedMessage` 두 함수가 여기 있었다. 사용자 확정: *「상차완료안내(고객),
+//    하차완료안내(고객)은 문자 발송이 필요없다. 알림으로만 충분하다. 삭제하자.」*
+//    화주는 이제 운송관리 알림(화면 배너 + 웹 푸시)으로 받는다(HANDOFF §5-17).
+//    🔴 **되살리지 말 것** — 되살리려면 「알림으로 충분하다」는 확정부터 뒤집어야 한다.
+//    ⚠️ `pickup_completed`·`delivery_completed` **키는 살아 있다**(옛 이력 표시·재발송).
+//       `lib/smsLogLabels.ts` · `lib/sendSms.ts` 의 주석을 볼 것.
 
 // /apply 승인은 회사 등록+포털계정 발급이 같은 요청 안에서 동시에 일어나므로,
 // "승인" 안내와 "계정발급" 안내를 따로 두 통 보내지 않고 하나로 합침
