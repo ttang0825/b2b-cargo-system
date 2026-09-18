@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
 import { sendSmsWithLog } from "@/lib/sendSms";
 import { resolveSmsSender } from "@/lib/smsSenderPhone";
-import { QUOTE_SMS_SUBJECT } from "@/lib/sms/templates";
-import { SMS_BYTE_LIMIT, byteLength } from "@/lib/sms/byteLength";
+import { smsSubjectFor } from "@/lib/sms/templates";
 import type { SmsRelatedType, SmsRecipientType, SmsTemplateType } from "@/lib/sendSms";
 
 const RELATED_TYPES: SmsRelatedType[] = ["dispatch", "application", "portal_account", "quote"];
@@ -45,16 +44,9 @@ export async function POST(req: Request) {
     message,
     sentBy: staff.id,
     senderPhone: sender.phone,
-    // 🔴 **제목은 「LMS 일 때만」 준다** — 단문에 제목을 주면 솔라피가 그것만으로
-    //    **LMS 로 올려버린다**(`lib/sms/solapiProvider.ts`). 2026-09-15 부터 견적안내가
-    //    링크 문자(87byte SMS)로 바뀌어서, 예전처럼 `templateType` 만 보고 주면
-    //    **SMS 로 만든 문자가 요금만 LMS 가 된다.**
-    //    ⚠️ 담당자가 모달에서 본문을 길게 고치면 그때는 LMS 가 맞으므로 제목이 붙는다.
-    //    🔴 `templateType === "quote_summary"` 로 되돌리지 말 것.
-    subject:
-      templateType === "quote_summary" && byteLength(message) > SMS_BYTE_LIMIT
-        ? QUOTE_SMS_SUBJECT
-        : null,
+    // 🔴 **제목 판정은 `smsSubjectFor()` 하나다** — 여기와 `sms-logs/resend` 두 곳에
+    //    따로 적었던 것이 결함의 원인이었다(그쪽은 길이를 안 봤다). 사유는 그 함수 주석.
+    subject: smsSubjectFor(templateType, message),
   });
 
   if (!recipientPhone) {

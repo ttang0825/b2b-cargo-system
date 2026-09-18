@@ -21,7 +21,7 @@ import MoneyInput from "@/components/MoneyInput";
 import VatBasisSelect from "@/components/VatBasisSelect";
 import MixableBadge from "@/components/MixableBadge";
 import { shortAddress } from "@/lib/shortAddress";
-import { fetchDispatchSmsPreview } from "@/lib/notifyDispatchSms";
+import { fetchDispatchSmsPreview, dispatchSmsEventCount } from "@/lib/notifyDispatchSms";
 import { notifyPortalPushForDispatchStatus } from "@/lib/notifyPortalPush";
 import {
   DISPATCH_STATUS_CANCELLED,
@@ -127,7 +127,13 @@ function DispatchesPageInner() {
   const searchParams = useSearchParams();
   const fromOrderId = searchParams.get("from_order");
   const [dispatches, setDispatches] = useState<DispatchRow[]>([]);
-  const [smsPreview, setSmsPreview] = useState<SmsPreview | null>(null);
+  /**
+   * 🔴 **문자 확인창 큐**(2026-09-18) — 배차확정은 **두 통**(차주 → 고객)이라 앞에서
+   *    하나씩 꺼내 띄운다. 배차 상세와 **같은 구조**다 — 한쪽만 고치면 「목록에서
+   *    바꾸면 한 통만 뜬다」가 된다.
+   */
+  const [smsQueue, setSmsQueue] = useState<SmsPreview[]>([]);
+  const smsTotalRef = useRef(0);
   const [availableOrders, setAvailableOrders] = useState<OrderLite[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -538,8 +544,19 @@ function DispatchesPageInner() {
     // 피드백(PR #73)으로 자동 팝업을 배차확정에만 한정 — 상차완료/하차완료는
     // 배차 상세의 "문자 발송" 섹션 수동 버튼으로만 보냄
     if (status !== prevStatus && status === "배차확정") {
-      const smsPreviewResult = await fetchDispatchSmsPreview(dispatchId, status);
-      if (smsPreviewResult) setSmsPreview(smsPreviewResult);
+      const expected = dispatchSmsEventCount(status);
+      const previews = await fetchDispatchSmsPreview(dispatchId, status);
+      smsTotalRef.current = previews.length;
+      setSmsQueue(previews);
+      // 🔴 준비 실패를 조용히 넘기지 않는다(원칙 33·55번) — 그전에는 `if (preview)` 로
+      //    걸러 아무 일도 안 일어난 것처럼 보였다.
+      if (previews.length < expected) {
+        setError(
+          previews.length === 0
+            ? "문자 발송 확인창을 준비하지 못했습니다. 배차 상세의 「문자 발송」에서 다시 보낼 수 있습니다."
+            : `문자 ${expected}통 중 ${previews.length}통만 준비됐습니다. 배차 상세의 「문자 발송」에서 나머지를 보낼 수 있습니다.`
+        );
+      }
     }
 
     // 🔴 화주포털 푸시 — 상세와 **같은 함수**를 부른다(원칙 53번).
@@ -1213,11 +1230,15 @@ function DispatchesPageInner() {
         )}
       </div>
 
-      {smsPreview && (
+      {smsQueue.length > 0 && (
+        /* 🔴 `key` 가 없으면 두 번째 통에 **첫 번째 통의 본문이 그대로 남는다**
+              (모달이 `useState(preview.message)` 로 초기값을 잡는다). */
         <SmsConfirmModal
-          preview={smsPreview}
-          onSent={() => setSmsPreview(null)}
-          onSkip={() => setSmsPreview(null)}
+          key={smsQueue[0].templateType}
+          preview={smsQueue[0]}
+          step={{ index: smsTotalRef.current - smsQueue.length + 1, total: smsTotalRef.current }}
+          onSent={() => setSmsQueue((q) => q.slice(1))}
+          onSkip={() => setSmsQueue((q) => q.slice(1))}
         />
       )}
     </main>

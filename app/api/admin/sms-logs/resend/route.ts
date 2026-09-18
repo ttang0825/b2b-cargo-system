@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
 import { sendSmsWithLog } from "@/lib/sendSms";
 import { resolveSmsSender } from "@/lib/smsSenderPhone";
-import { QUOTE_SMS_SUBJECT } from "@/lib/sms/templates";
+import { smsSubjectFor } from "@/lib/sms/templates";
 import type { SmsRelatedType, SmsRecipientType, SmsTemplateType } from "@/lib/sendSms";
 
 function getAdminClient() {
@@ -60,7 +60,10 @@ export async function POST(req: Request) {
     message: original.message_content,
     sentBy: staff.id,
     senderPhone: sender.phone,
-    subject: original.template_type === "quote_summary" ? QUOTE_SMS_SUBJECT : null,
+    // 🚨 **여기가 길이를 안 보고 제목을 붙이고 있었다**(2026-09-18 수정) — 87byte 짜리
+    //    견적 링크 문자를 재발송하면 제목이 붙어 **LMS 로 나갔다.** 이제 `send-sms` 와
+    //    **같은 함수**를 쓴다. 🔴 `template_type` 만 보는 쪽으로 되돌리지 말 것.
+    subject: smsSubjectFor(original.template_type, original.message_content),
   });
 
   return NextResponse.json({ ok: true });

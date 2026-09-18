@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
@@ -60,7 +60,12 @@ import {
   getClaimStatusColor,
 } from "@/lib/claims";
 import { localInputToISOString } from "@/lib/localDateTime";
-import { fetchDispatchSmsPreview } from "@/lib/notifyDispatchSms";
+import {
+  fetchDispatchSmsPreview,
+  fetchDispatchSmsPreviewByEvent,
+  dispatchSmsEventCount,
+  type DispatchSmsEvent,
+} from "@/lib/notifyDispatchSms";
 import { notifyPortalPushForDispatchStatus } from "@/lib/notifyPortalPush";
 import { DISPATCH_ISSUE_REASONS, dispatchIssueNeedsGuide } from "@/lib/dispatchIssue";
 import { getIncidentGuide, INCIDENT_PHOTO_NOTE } from "@/lib/incidentGuide";
@@ -99,7 +104,14 @@ export default function DispatchDetailPage() {
   const id = params?.id as string;
 
   const [dispatch, setDispatch] = useState<any>(null);
-  const [smsPreview, setSmsPreview] = useState<SmsPreview | null>(null);
+  /**
+   * 🔴 **문자 확인창 큐**(2026-09-18) — 배차확정은 **두 통**(차주 → 고객)이라 앞에서
+   *    하나씩 꺼내 띄운다. 발송이든 건너뛰기든 **다음 창**으로 간다.
+   *    🔴 공용 확인창을 두 통 동시 편집으로 뜯어고치지 않기 위한 구조다(다른 다섯
+   *       호출부가 같이 흔들린다).
+   */
+  const [smsQueue, setSmsQueue] = useState<SmsPreview[]>([]);
+  const smsTotalRef = useRef(0);
   const [loading, setLoading] = useState(true);
   /**
    * 🔴 **화면 로딩 실패 전용이다**(원칙 33번). 아래 가드가 이 값 하나로 화면 전체를
@@ -119,7 +131,7 @@ export default function DispatchDetailPage() {
    * 🔴 **`scope` 를 하나로 되돌리지 말 것** — 맨 위 한 곳에만 그리면 배차확정
    *    버튼에서 1,000px 넘게 떨어져 「아무 일도 안 일어난다」로 읽힌다.
    */
-  type ActionErrorScope = "page" | "confirm" | "save" | "cancel";
+  type ActionErrorScope = "page" | "confirm" | "save" | "cancel" | "sms";
   const [actionError, setActionErrorState] = useState<
     { scope: ActionErrorScope; message: string } | null
   >(null);
@@ -143,6 +155,15 @@ export default function DispatchDetailPage() {
   const [externalDriverName, setExternalDriverName] = useState("");
   const [externalDriverPhone, setExternalDriverPhone] = useState("");
   const [externalVehiclePlate, setExternalVehiclePlate] = useState("");
+  /**
+   * 🔴 **외부 배정 차주의 「실제로 온 차」의 차종**(2026-09-18 신설).
+   *    고객 배차확정 문자가 이 값을 쓴다 — 비면 오더의 **요청 차종**으로 떨어지는데,
+   *    그러면 그 문자가 *「잘못된 차량배차를 사전에 발견」*(사용자 원문)한다는 목적을
+   *    스스로 무너뜨린다(요청대로 왔다고 항상 말하게 된다).
+   *    ⚠️ 운영 배차는 전부 외부 배정이라(`_verify.sql` ㉚-f) 이 칸이 기본 경로다.
+   *    🔴 내부 배정은 이 칸을 쓰지 않는다 — `drivers → vehicles(vehicle_type)` 가 있다.
+   */
+  const [externalVehicleType, setExternalVehicleType] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [settlementModalOpen, setSettlementModalOpen] = useState(false);
   const [settlementSaving, setSettlementSaving] = useState(false);
@@ -322,6 +343,7 @@ export default function DispatchDetailPage() {
     setExternalDriverName(data.external_driver_name || "");
     setExternalDriverPhone(data.external_driver_phone || "");
     setExternalVehiclePlate(data.external_vehicle_plate || "");
+    setExternalVehicleType(data.external_vehicle_type || "");
 
     if (data.driver_base_fare != null) {
       // 이미 한 번 저장된 적 있는 배차 — 저장된 값 그대로 표시
@@ -672,6 +694,8 @@ export default function DispatchDetailPage() {
       external_driver_phone: editForm.assignment_type === "external" ? externalDriverPhone.trim() : null,
       external_vehicle_plate:
         editForm.assignment_type === "external" ? externalVehiclePlate.trim() || null : null,
+      external_vehicle_type:
+        editForm.assignment_type === "external" ? externalVehicleType.trim() || null : null,
       customer_charge: editForm.customer_charge ? Number(editForm.customer_charge) : null,
       customer_charge_vat_included: editForm.customer_charge_vat_included,
       driver_payout: editForm.driver_payout ? Number(editForm.driver_payout) : null,
@@ -691,13 +715,47 @@ export default function DispatchDetailPage() {
         .update({ status: DISPATCH_TO_ORDER_STATUS["배차확정"] })
         .eq("id", dispatch.orders.id);
     }
-    const smsPreviewResult = await fetchDispatchSmsPreview(id, "배차확정");
-    if (smsPreviewResult) setSmsPreview(smsPreviewResult);
+    await openDispatchSmsQueue("배차확정", "confirm");
     // 🔴 화주포털 푸시 — **`await` 하지 않는다**(원칙 53번). 이 문자 미리보기와
     //    별개다 — 그쪽은 **차주**에게 가는 문자다.
     notifyPortalPushForDispatchStatus(id, "배차확정");
     setConfirming(false);
     load();
+  }
+
+  /** 수동 버튼 — **한 통만** 띄운다 */
+  async function openSingleDispatchSms(event: DispatchSmsEvent) {
+    setActionError(null, "sms");
+    const preview = await fetchDispatchSmsPreviewByEvent(id, event);
+    if (!preview) {
+      setActionError("문자 내용을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.", "sms");
+      return;
+    }
+    smsTotalRef.current = 1;
+    setSmsQueue([preview]);
+  }
+
+  /**
+   * 그 상태에서 나갈 문자들을 받아 확인창 큐에 담는다.
+   *
+   * 🔴 **미리보기를 하나도 못 받으면 조용히 넘어가지 않는다**(원칙 33번 · 55번) —
+   *    그전에는 `if (preview)` 로 걸러 **아무 일도 안 일어난 것처럼** 보였다.
+   *    오류는 **누른 자리**에 띄운다(`scope`).
+   */
+  async function openDispatchSmsQueue(status: string, scope: ActionErrorScope) {
+    const expected = dispatchSmsEventCount(status);
+    if (expected === 0) return;
+    const previews = await fetchDispatchSmsPreview(id, status);
+    smsTotalRef.current = previews.length;
+    setSmsQueue(previews);
+    if (previews.length < expected) {
+      setActionError(
+        previews.length === 0
+          ? "문자 발송 확인창을 준비하지 못했습니다. 아래 「문자 발송」에서 다시 보낼 수 있습니다."
+          : `문자 ${expected}통 중 ${previews.length}통만 준비됐습니다. 아래 「문자 발송」에서 나머지를 보낼 수 있습니다.`,
+        scope
+      );
+    }
   }
 
   async function handleStatusChange(status: string) {
@@ -741,8 +799,7 @@ export default function DispatchDetailPage() {
     // 피드백(PR #73)으로 자동 팝업을 배차확정에만 한정 — 상차완료/하차완료는
     // 아래 "문자 발송" 섹션의 수동 버튼으로만 보냄
     if (status !== prevStatus && status === "배차확정") {
-      const smsPreviewResult = await fetchDispatchSmsPreview(id, status);
-      if (smsPreviewResult) setSmsPreview(smsPreviewResult);
+      await openDispatchSmsQueue(status, "page");
     }
 
     // 🔴 화주포털 푸시 — 문자와 달리 **상차·하차완료도** 보낸다.
@@ -1701,6 +1758,16 @@ export default function DispatchDetailPage() {
                     <label>차량번호</label>
                     <input value={externalVehiclePlate} onChange={(e) => setExternalVehiclePlate(e.target.value)} />
                   </div>
+                  <div className="field">
+                    {/* 🔴 자유 입력이다 — 외부 정보망 차주는 내부 `vehicles` 표에 없어서
+                        드롭다운으로 묶을 수 없다(`external_driver_name` 과 같은 이유). */}
+                    <label>차종</label>
+                    <input
+                      value={externalVehicleType}
+                      onChange={(e) => setExternalVehicleType(e.target.value)}
+                      placeholder="예: 5톤 윙바디"
+                    />
+                  </div>
                   <div style={{ gridColumn: "1 / -1" }}>
                     {/* 🔴 신고 ⑧ 이 가리킨 자리가 정확히 여기다 — 정보망을 안 고르거나
                         차주 정보를 안 채우고 누르면 화면이 통째로 오류로 바뀌었다. */}
@@ -1745,6 +1812,10 @@ export default function DispatchDetailPage() {
                 <div>
                   <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>차량번호</div>
                   <div style={{ fontSize: 13.5 }}>{dispatch.external_vehicle_plate || "-"}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>차종</div>
+                  <div style={{ fontSize: 13.5 }}>{dispatch.external_vehicle_type || "-"}</div>
                 </div>
               </>
             ) : (
@@ -2930,51 +3001,50 @@ export default function DispatchDetailPage() {
         <div className="card" style={{ padding: 20, marginBottom: 20 }}>
           <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 6 }}>문자 발송</h3>
           <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginBottom: 12 }}>
-            상태 변경 시 자동으로 뜨는 발송 확인창을 "건너뛰기"했거나 다시 보내야 할 때
+            배차확정 시 자동으로 뜨는 발송 확인창을 "건너뛰기"했거나 다시 보내야 할 때
             여기서 수동으로 다시 보낼 수 있습니다.
           </p>
+          {/* 🔴 **한 버튼이 한 통만 띄운다** — 담당자가 「차주에게만 다시」를 고른
+              것이라, 두 통이 줄줄이 뜨면 안 보내려던 쪽까지 확인창을 지나가게 된다.
+              🔴 **여기서 화주포털 푸시를 부르지 말 것** — 며칠 뒤 문자를 다시 보낼 때
+                 화주 폰에 알림이 또 간다(HANDOFF §5-17). */}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button
               className="btn-ghost"
               style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12.5, cursor: "pointer" }}
-              onClick={async () => {
-                const preview = await fetchDispatchSmsPreview(id, "배차확정");
-                if (preview) setSmsPreview(preview);
-              }}
+              onClick={() => openSingleDispatchSms("dispatch_confirmed")}
             >
-              배차확정 안내 발송
+              화물정보 안내 발송(차주)
             </button>
             <button
               className="btn-ghost"
               style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12.5, cursor: "pointer" }}
-              onClick={async () => {
-                const preview = await fetchDispatchSmsPreview(id, "상차완료");
-                if (preview) setSmsPreview(preview);
-              }}
+              onClick={() => openSingleDispatchSms("dispatch_confirmed_customer")}
             >
-              상차완료 안내 발송
-            </button>
-            <button
-              className="btn-ghost"
-              style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12.5, cursor: "pointer" }}
-              onClick={async () => {
-                const preview = await fetchDispatchSmsPreview(id, "하차완료");
-                if (preview) setSmsPreview(preview);
-              }}
-            >
-              하차완료 안내 발송
+              배차확정 안내 발송(고객)
             </button>
           </div>
+          {/* 🔴 준비 실패를 **누른 자리**에 띄운다(원칙 33번) — 그전에는 `if (preview)`
+              로 걸러 「눌렀는데 아무 일도 안 일어난다」로 읽혔다. */}
+          {actionError?.scope === "sms" && (
+            <div className="error-box" style={{ marginTop: 10 }}>
+              {actionError.message}
+            </div>
+          )}
         </div>
       )}
 
       <SmsLogPanel relatedType="dispatch" relatedId={id} />
 
-      {smsPreview && (
+      {smsQueue.length > 0 && (
+        /* 🔴 `key` 가 없으면 두 번째 통에 **첫 번째 통의 본문이 그대로 남는다**
+              (모달이 `useState(preview.message)` 로 초기값을 잡는다). */
         <SmsConfirmModal
-          preview={smsPreview}
-          onSent={() => setSmsPreview(null)}
-          onSkip={() => setSmsPreview(null)}
+          key={smsQueue[0].templateType}
+          preview={smsQueue[0]}
+          step={{ index: smsTotalRef.current - smsQueue.length + 1, total: smsTotalRef.current }}
+          onSent={() => setSmsQueue((q) => q.slice(1))}
+          onSkip={() => setSmsQueue((q) => q.slice(1))}
         />
       )}
 

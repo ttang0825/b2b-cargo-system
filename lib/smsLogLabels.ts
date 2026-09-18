@@ -1,9 +1,17 @@
 // sms_logs 표시용 라벨·색상 유일 정의처(dispatchStatusColors.ts 등과 동일 패턴)
 
+// 🔴 **`pickup_completed`·`delivery_completed` 를 지우지 말 것**(2026-09-18 폐지).
+//    문자 자체는 없앴지만 이 표는 **이미 나간 문자의 이력**을 그리는 곳이라, 지우면
+//    `/admin/sms-logs` 와 각 상세의 이력 칸에 **영문 코드가 그대로 노출**되고
+//    종류 필터에서도 옛 건을 못 찾게 된다(이 상수를 그대로 순회해 필터를 그린다).
+//    실패 건 **재발송**(`sms-logs/resend`)도 같은 키로 새 행을 남긴다.
 export const SMS_TEMPLATE_LABELS: Record<string, string> = {
-  dispatch_confirmed: "배차확정 안내",
-  pickup_completed: "상차완료 안내",
-  delivery_completed: "하차완료 안내",
+  // 🔴 배차확정은 **두 통**이다 — 차주와 고객이 서로 다른 내용을 받는다(2026-09-18).
+  //    `dispatch_confirmed` 의 키를 바꾸지 말 것(옛 이력과 끊긴다) — 라벨만 바뀌었다.
+  dispatch_confirmed: "화물정보 안내",
+  dispatch_confirmed_customer: "배차확정 안내",
+  pickup_completed: "상차완료 안내", // 🔴 2026-09 폐지 · 옛 이력 표시용
+  delivery_completed: "하차완료 안내", // 🔴 2026-09 폐지 · 옛 이력 표시용
   application_approved: "승인 안내",
   application_rejected: "거절 안내",
   portal_account_issued: "계정발급 안내",
@@ -15,8 +23,8 @@ export function getSmsTemplateLabel(type: string): string {
   return SMS_TEMPLATE_LABELS[type] || type;
 }
 
-// 받는 사람이 화주(고객)인지 차주인지 — 같은 배차 건에서도 배차확정은 차주에게,
-// 상차·하차완료는 고객에게 나가므로 이름만 보면 헷갈린다
+// 받는 사람이 화주(고객)인지 차주인지 — 같은 배차 건에서 배차확정이 **차주와 고객
+// 두 통**으로 나가므로(2026-09-18) 이 칸이 둘을 가르는 표시다
 export const SMS_RECIPIENT_TYPE_LABELS: Record<string, string> = {
   driver: "차주",
   customer: "고객",

@@ -1,8 +1,13 @@
-import { shortAddress } from "@/lib/shortAddress";
 import { COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
+import { ARRIVAL_FILLER_TIME } from "@/lib/arrivalType";
+import { SMS_BYTE_LIMIT, byteLength } from "@/lib/sms/byteLength";
 
-// SMS 문구 유일 정의처. 전부 "[WeCarry]" 문두 표기(발신번호가 개인 휴대폰이라
-// 스팸으로 오인되지 않도록).
+// SMS 문구 유일 정의처.
+//
+// ⚠️ **머리말은 2026-09-18 에 한글로 통일됐다**(사용자 확정: *「머리말은 [위캐리운송]으로
+// 통일.」*). 그전에는 영문 표기였고, 발신번호가 개인 휴대폰이라 스팸으로 오인되지 않게
+// 문두에 이름을 붙이는 것이 목적이었다 — **그 목적은 그대로이고 표기만 바뀌었다.**
+// 🔴 정의처는 아래 `SMS_HEADER` 하나다. 화면·라우트에 문자열로 다시 적지 말 것.
 //
 // ⚠️ **안내번호는 이제 상수가 아니라 인자로 받는다(35차, 10차 지시서)** —
 // 고객이 회신할 때 **보낸 담당자에게 직접 닿게** 하려고, 발신번호와 본문 안내번호를
@@ -16,39 +21,107 @@ import { COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
 // 주석은 내부 문서라 정확성 우선으로 "화주" 표현을 그대로 둔다(혼동 방지).
 // **"차주"는 고객 접점에서도 그대로 쓴다** — 바꾸지 말 것.
 //
-// ⚠️ **byte 관리(35차에 방침이 바뀜)**: 이제 **8종이 전부 LMS**다. 견적안내를
-// 90byte(SMS 단문 상한)에 맞추던 압축을 폐기했기 때문이며, 그 이유는
-// `quoteSummaryMessage` 위 주석에 적어뒀다. 상한 관리는 사라졌지만 **문자는 스크롤
-// 없이 한 화면에 들어오는 게 좋으므로 400~500byte를 넘기지 말 것.**
+// ⚠️ **byte 관리** — 🔴 **「8종이 전부 LMS」는 낡았다.** 지금은 **7종이고 견적만 SMS**다.
+// 견적안내가 2026-09-15 에 **견적서 링크 문자(87byte SMS)**로 대체됐고
+// (`quoteShareLinkMessage`), 나머지 여섯은 설계상 LMS 다.
+// 🔴 **견적 링크 문자는 여유가 3byte 다(87/90)** — 문구를 고치면 반드시 다시 재십시오.
+//    넘으면 에러가 아니라 **요금과 제목만 조용히 달라진다.**
+// ⚠️ 35차의 「90byte 압축을 되살리지 말 것」은 **`quoteSummaryMessage`(링크를 못 만든
+//    견적의 폴백 LMS)에 대한 것**이라 링크 문자와 부딪히지 않는다.
+// 나머지 여섯은 상한이 없지만 **스크롤 없이 한 화면에 들어오도록 400~500byte를 넘기지 말 것.**
 
-/** 기본 인자 — 8종 모두 안내번호(하이픈 표기)를 받는다 */
+/** 기본 인자 — 견적 링크 문자를 뺀 나머지가 안내번호(하이픈 표기)를 받는다 */
 type WithContact = { contactPhone?: string | null };
+
+/**
+ * 문자 머리말 — 🔴 **정의처는 여기 하나다.** 화면·라우트에 문자열로 다시 적지 말 것.
+ *
+ * 사용자 확정(2026-09-17): *「머리말은 [위캐리운송]으로 통일.」*
+ * 🟢 **문자 7종이 전부 이 상수를 쓴다**(2026-09-18 · 견적 LMS 제목 포함).
+ * 🔴 **이메일 제목의 `[WeCarry]` 는 이 범위가 아니다**(Resend 미가동).
+ */
+export const SMS_HEADER = "[위캐리운송]";
 
 /** 안내번호가 비어 있으면 대표번호로 되돌린다(호출부 실수 방어) */
 function contact(p: string | null | undefined): string {
   return (p || "").trim() || COMPANY_SUPPORT_PHONE;
 }
 
-function shortDateTime(value: string | null | undefined): string {
-  if (!value) return "일정 미정";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "일정 미정";
-  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(
-    d.getMinutes()
-  ).padStart(2, "0")}`;
-}
+const WEEKDAY_KO: Record<string, string> = {
+  Sun: "일", Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토",
+};
 
-const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
-
-/** "8/21(목) 09:00" — 견적안내처럼 고객이 일정을 확인해야 하는 문자에 씀 */
-function dateTimeWithWeekday(value: string | null | undefined): string | null {
+/**
+ * 🚨 **한국 시각으로 뽑는다 — `getHours()`·`getDate()` 를 쓰지 말 것.**
+ *
+ * 이 함수들은 **서버 라우트**에서 돌고 Vercel 함수의 시간대는 **UTC** 다.
+ * 그래서 `d.getHours()` 는 KST 를 그대로 못 읽는다(실측 2026-09-18):
+ *
+ *     KST 2026-09-18 00:00  →  getHours() 15  (9시간 어긋남)
+ *     KST 2026-09-18 09:00  →  getHours()  0  · **날짜까지 하루 앞으로 밀린다**
+ *
+ * 문자는 고객·차주가 **그 시각에 현장에 가는 값**이라 한 시간도 틀리면 안 된다.
+ * 🔴 **`Intl` 에 `timeZone: "Asia/Seoul"` 을 주는 이 방식을 되돌리지 말 것.**
+ * ⚠️ 이것은 배차확정 두 통을 만들면서 **같이 고친 기존 결함**이다 — 배차확정 문자
+ *    발송 이력이 0건이라 실피해는 없었다(`_verify.sql` ㉚-c). `quoteSummaryMessage`
+ *    (견적 링크를 못 만들었을 때의 폴백 LMS)도 이 함수를 써서 함께 맞아졌다.
+ * ⚠️ `hourCycle: "h23"` 이 필요하다 — `hour12: false` 만 주면 자정이 `24` 로 나오는
+ *    ICU 판본이 있다.
+ */
+function kstParts(value: string | null | undefined) {
   if (!value) return null;
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return null;
-  return `${d.getMonth() + 1}/${d.getDate()}(${WEEKDAYS[d.getDay()]}) ${String(d.getHours()).padStart(
-    2,
-    "0"
-  )}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Seoul",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    weekday: "short",
+  }).formatToParts(d);
+  const get = (t: string) => parts.find((x) => x.type === t)?.value ?? "";
+  return {
+    month: get("month"),
+    day: get("day"),
+    hour: get("hour"),
+    minute: get("minute"),
+    weekday: WEEKDAY_KO[get("weekday")] ?? "",
+  };
+}
+
+/** "8/21(목) 09:00" — 고객·차주가 일정을 확인해야 하는 문자에 씀 */
+function dateTimeWithWeekday(value: string | null | undefined): string | null {
+  const p = kstParts(value);
+  if (!p) return null;
+  return `${p.month}/${p.day}(${p.weekday}) ${p.hour}:${p.minute}`;
+}
+
+/** "8/21(목)" — 당착·내착이라 시각이 자리 채움일 때 */
+function dateOnlyWithWeekday(value: string | null | undefined): string | null {
+  const p = kstParts(value);
+  if (!p) return null;
+  return `${p.month}/${p.day}(${p.weekday})`;
+}
+
+/**
+ * 🔴 **하차 일시의 `23:59` 는 시각이 아니라 자리 채움이다**(`lib/arrivalType.ts`) —
+ *    화주가 「당착/내착」을 골라 시각을 지정하지 않은 건이고, 실제로 운영에 **3건**
+ *    있다(`_verify.sql` ㉚-g). 문자에 「23:59」가 찍히면 차주와 고객이 **밤 12시 직전
+ *    도착**으로 읽는다. 그래서 그런 건은 **날짜만** 찍는다.
+ * 🔴 **그 시각을 여기 문자열로 다시 적지 말 것** — 정의처는 `ARRIVAL_FILLER_TIME` 하나다.
+ * ⚠️ `orders` 에는 도착구분 컬럼이 **없다**(28차·PR #153 결정) — 그래서 값으로만 가른다.
+ */
+function isArrivalFillerTime(value: string | null | undefined): boolean {
+  const p = kstParts(value);
+  if (!p) return false;
+  return `${p.hour}:${p.minute}` === ARRIVAL_FILLER_TIME;
+}
+
+/** 자리 채움이면 날짜만, 아니면 날짜+시각 */
+function scheduleText(value: string | null | undefined): string | null {
+  return isArrivalFillerTime(value) ? dateOnlyWithWeekday(value) : dateTimeWithWeekday(value);
 }
 
 /** 담당자 이름이 있으면 "(담당 홍길동)"을 붙인 안내번호 줄을 만든다 */
@@ -57,26 +130,115 @@ function contactLine(params: WithContact & { staffName?: string | null }): strin
   return `문의 ${contact(params.contactPhone)}${who}`;
 }
 
-// 차주(배차확정 안내 수신자)가 실제 운행에 필요한 정보 위주로 구성(PR #73 리뷰
-// 반영 — 오더번호 대신 상하차지 상세정보·주의사항·인사말 요청). **주의**: 화주명·
-// 연락처는 의도적으로 뺌 — 오더 1건에 화주(고객) 연락처가 하나뿐인데 실제로는
-// 상차지·하차지 담당자가 서로 다른 경우가 많다는 피드백(PR #73)에 따라, 정확하지
-// 않은 연락처를 잘못 안내하느니 아예 빼는 쪽으로 결정.
+/**
+ * 상·하차 현장의 「담당 …」 한 줄. 🔴 **입력된 것만 적는다.**
+ *
+ * 사용자 원문(2026-09-17): *「기입되어 있는 선안에서 상하차지 담당자 이름과
+ * 전화번호가 있어야 한다.」* 🔴 **빈 칸을 「미정」·「-」로 채우지 말 것** — 차주가
+ * 그 글자를 보고 전화를 걸 수는 없고, 없는 정보를 있는 것처럼 적는 줄이 된다.
+ * 둘 다 비면 **줄째 없앤다**(`null` 반환).
+ */
+function contactPersonLine(name: string | null | undefined, phone: string | null | undefined): string | null {
+  const parts = [(name || "").trim(), (phone || "").trim()].filter(Boolean);
+  return parts.length ? `담당 ${parts.join(" ")}` : null;
+}
+
+/**
+ * 품목·특이사항은 자유 입력이라 길이가 들쭉날쭉하다. LMS 상한(2,000byte)에는 한참
+ * 못 미치지만 **문자가 한 화면에 들어오는 것**이 목표라 넉넉한 상한을 둔다
+ * (견적 문자의 `QUOTE_ITEM_MAX_CHARS` 와 같은 결이되, 쓰는 자리가 달라 따로 둔다).
+ */
+const DISPATCH_FREE_TEXT_MAX_CHARS = 100;
+
+function clip(v: string | null | undefined): string | null {
+  const t = (v || "").trim();
+  if (!t) return null;
+  return t.length > DISPATCH_FREE_TEXT_MAX_CHARS ? `${t.slice(0, DISPATCH_FREE_TEXT_MAX_CHARS)}…` : t;
+}
+
+/** 상·하차 한 구간(머리 줄 + 상호 + 주소 + 담당 + 조건) — 빈 줄은 전부 빠진다 */
+function siteBlock(params: {
+  label: "상차" | "하차";
+  at: string | null;
+  companyName: string | null;
+  address: string | null;
+  contactName: string | null;
+  contactPhone: string | null;
+  condition: string | null;
+}): (string | null)[] {
+  const when = scheduleText(params.at);
+  return [
+    when ? `■ ${params.label} ${when}` : `■ ${params.label}`,
+    (params.companyName || "").trim() || null,
+    (params.address || "").trim() || null,
+    contactPersonLine(params.contactName, params.contactPhone),
+    (params.condition || "").trim() ? `${params.label}조건 ${params.condition!.trim()}` : null,
+  ];
+}
+
+/**
+ * 차주용 **「화물정보 안내」**(키는 `dispatch_confirmed` 그대로).
+ *
+ * 사용자 확정(2026-09-17): *「배차확정안내(차주): "배차확정 안내"->"화물정보 안내" 로
+ * 바꾸자. 상하차지 정보는 상세히 보내주자.」*
+ *
+ * 🔴 **키(`dispatch_confirmed`)를 바꾸지 말 것** — 바꾸면 옛 발송 이력과 끊긴다.
+ *    바뀐 것은 **라벨과 본문**뿐이다(`lib/smsLogLabels.ts`).
+ *
+ * 🔴 **화주 대표 연락처를 넣지 말 것.** PR #73 이 뺀 이유는 *「오더 1건에 화주 연락처가
+ *    하나뿐인데 실제로는 상차지·하차지 담당자가 서로 다르다」* 였고, 그 이유는 34차가
+ *    **상·하차지 담당자 칸을 따로 만들면서 해소됐다.** 여기 들어가는 것은 **그 칸**이다.
+ *
+ * 🔴 **운임·수수료를 넣지 말 것** — 차주 운임은 정보망·통화로 합의한 값이고, 문자에
+ *    남으면 분쟁 때 그 숫자가 기준이 된다.
+ *
+ * 🔴 **이모지를 쓰지 말 것** — 솔라피 단문·장문은 EUC-KR(KS X 1001) 범위다.
+ *    구분 기호는 그 안에 있는 `■` 만 쓴다.
+ *
+ * 🟡 상·하차 조건과 품목은 **차를 대기 전에 알아야 하는 정보**라 넣었다. 리뷰에서 뺄 수
+ *    있게 **줄 단위**로 만들어 뒀다(한 줄을 지우면 그 항목만 빠진다).
+ */
 export function dispatchConfirmedMessage(
   params: WithContact & {
     origin: string | null;
     destination: string | null;
     pickupAt: string | null;
+    deliveryAt: string | null;
+    originCompanyName: string | null;
+    originContactName: string | null;
+    originContactPhone: string | null;
+    destinationCompanyName: string | null;
+    destinationContactName: string | null;
+    destinationContactPhone: string | null;
+    loadCondition: string | null;
+    unloadCondition: string | null;
+    item: string | null;
     specialNotes: string | null;
     staffName?: string | null;
   }
 ): string {
   return [
-    "[WeCarry] 배차확정 안내",
-    `상차지: ${params.origin || "주소 미정"}`,
-    params.pickupAt ? `상차일시: ${shortDateTime(params.pickupAt)}` : null,
-    `하차지: ${params.destination || "주소 미정"}`,
-    params.specialNotes ? `요청사항: ${params.specialNotes}` : null,
+    `${SMS_HEADER} 화물정보 안내`,
+    ...siteBlock({
+      label: "상차",
+      at: params.pickupAt,
+      companyName: params.originCompanyName,
+      address: params.origin,
+      contactName: params.originContactName,
+      contactPhone: params.originContactPhone,
+      condition: params.loadCondition,
+    }),
+    ...siteBlock({
+      label: "하차",
+      at: params.deliveryAt,
+      companyName: params.destinationCompanyName,
+      address: params.destination,
+      contactName: params.destinationContactName,
+      contactPhone: params.destinationContactPhone,
+      condition: params.unloadCondition,
+    }),
+    clip(params.item) ? `■ 화물 ${clip(params.item)}` : null,
+    clip(params.specialNotes) ? `요청사항: ${clip(params.specialNotes)}` : null,
     "건강 조심하시고 안전운전하세요.",
     contactLine(params),
   ]
@@ -84,27 +246,69 @@ export function dispatchConfirmedMessage(
     .join("\n");
 }
 
-export function pickupCompletedMessage(
-  params: WithContact & { origin: string | null; staffName?: string | null }
+/**
+ * 고객용 **「배차확정 안내」**(신설 · `dispatch_confirmed_customer`).
+ *
+ * 사용자 원문(2026-09-17): *「배차확정안내는 차주뿐만 아니라 고객에도 필요하다. …
+ * 이는 고객에게 배차내용을 다시 확인할수 있고 잘못된 상하차지나 차량배차를 사전에
+ * 발견할수 있으며 기사와 화주간 연락 착오를 줄일 수 있다.」*
+ *
+ * 🚨 **HANDOFF §5-4·§5-23 의 「차주 성명·연락처·차량번호는 화주에게 노출하지 않는다」는
+ *    화면 기준이다** — 이 문자로는 **보낸다**(사용자 확정). 처리방침 제4조가 이미
+ *    *「운송을 의뢰한 고객 — 배차 확정 정보 안내 — 차주 성명, 연락처, 차량번호, 차량
+ *    종류」* 를 적고 있어서 **그 조가 이제 사실과 맞게 된다.**
+ *    🔴 **「비노출이라고 적혀 있다」를 근거로 기사 정보를 빼지 말 것.**
+ *    🔴 **반대로 화주포털 화면에 기사 정보를 띄우지도 말 것** — 그쪽은 그대로다.
+ *
+ * 🔴 **기사 정보가 비면 「미등록」으로 찍는다 — 차주용과 반대다.** 이 문자의 목적이
+ *    **기사 정보 확인**이라, 줄째 빠지면 담당자가 빠진 줄 모르고 보낸다. 확인창에서
+ *    「미등록」이 보여야 채우고 보낸다.
+ *
+ * 🔴 **운임·품목·특이사항을 넣지 말 것** — 확인용 정보만 둔다(특이사항에는 내부 메모가
+ *    섞이고, 금액은 분쟁 때 기준이 된다).
+ */
+export function dispatchConfirmedCustomerMessage(
+  params: WithContact & {
+    origin: string | null;
+    destination: string | null;
+    pickupAt: string | null;
+    deliveryAt: string | null;
+    driverName: string | null;
+    driverPhone: string | null;
+    vehicleNumber: string | null;
+    vehicleType: string | null;
+    staffName?: string | null;
+  }
 ): string {
+  const NOT_SET = "미등록";
+  const pickup = scheduleText(params.pickupAt);
+  const delivery = scheduleText(params.deliveryAt);
+  const vehicle = [(params.vehicleType || "").trim(), (params.vehicleNumber || "").trim()].filter(Boolean);
+  const driver = [(params.driverName || "").trim(), (params.driverPhone || "").trim()].filter(Boolean);
+
   return [
-    "[WeCarry] 상차완료 안내",
-    `${shortAddress(params.origin)}에서 상차가 완료되었습니다.`,
-    "진행상황은 운송관리에서 확인하실 수 있습니다.",
+    `${SMS_HEADER} 배차확정 안내`,
+    "요청하신 운송 건의 배차가 확정되었습니다.",
+    pickup ? `■ 상차 ${pickup}` : "■ 상차",
+    (params.origin || "").trim() || null,
+    delivery ? `■ 하차 ${delivery}` : "■ 하차",
+    (params.destination || "").trim() || null,
+    `■ 차량 ${vehicle.length ? vehicle.join(" ") : NOT_SET}`,
+    `■ 기사 ${driver.length ? driver.join(" ") : NOT_SET}`,
+    "내용이 요청과 다르면 바로 연락 주세요.",
     contactLine(params),
-  ].join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
-export function deliveryCompletedMessage(
-  params: WithContact & { destination: string | null; staffName?: string | null }
-): string {
-  return [
-    "[WeCarry] 운송완료 안내",
-    `${shortAddress(params.destination)}에 하차 완료되었습니다.`,
-    "이용해주셔서 감사합니다.",
-    contactLine(params),
-  ].join("\n");
-}
+// 🔴 **상차완료·하차완료 문자는 2026-09-18 에 폐지했다** — `pickupCompletedMessage`·
+//    `deliveryCompletedMessage` 두 함수가 여기 있었다. 사용자 확정: *「상차완료안내(고객),
+//    하차완료안내(고객)은 문자 발송이 필요없다. 알림으로만 충분하다. 삭제하자.」*
+//    화주는 이제 운송관리 알림(화면 배너 + 웹 푸시)으로 받는다(HANDOFF §5-17).
+//    🔴 **되살리지 말 것** — 되살리려면 「알림으로 충분하다」는 확정부터 뒤집어야 한다.
+//    ⚠️ `pickup_completed`·`delivery_completed` **키는 살아 있다**(옛 이력 표시·재발송).
+//       `lib/smsLogLabels.ts` · `lib/sendSms.ts` 의 주석을 볼 것.
 
 // /apply 승인은 회사 등록+포털계정 발급이 같은 요청 안에서 동시에 일어나므로,
 // "승인" 안내와 "계정발급" 안내를 따로 두 통 보내지 않고 하나로 합침
@@ -118,7 +322,7 @@ export function applicationApprovedWithAccountMessage(
   }
 ): string {
   return [
-    "[WeCarry] 고객등록 승인 및 계정발급 안내",
+    `${SMS_HEADER} 고객등록 승인 및 계정발급 안내`,
     `${params.companyName || "귀사"}의 고객등록 신청이 승인되었습니다.`,
     `아이디: ${params.loginId} / 임시비밀번호: ${params.password}`,
     `운송관리: ${params.portalUrl}`,
@@ -131,7 +335,7 @@ export function applicationRejectedMessage(
   params: WithContact & { companyName: string | null; reason: string | null; staffName?: string | null }
 ): string {
   return [
-    "[WeCarry] 고객등록 신청 결과 안내",
+    `${SMS_HEADER} 고객등록 신청 결과 안내`,
     `${params.companyName || "귀사"}의 고객등록 신청이 반려되었습니다.`,
     params.reason ? `사유: ${params.reason}` : null,
     contactLine(params),
@@ -146,7 +350,7 @@ export function portalAccountIssuedMessage(
   params: WithContact & { loginId: string; password: string; portalUrl: string; staffName?: string | null }
 ): string {
   return [
-    "[WeCarry] 운송관리 계정발급 안내",
+    `${SMS_HEADER} 운송관리 계정발급 안내`,
     `아이디: ${params.loginId} / 임시비밀번호: ${params.password}`,
     `운송관리: ${params.portalUrl}`,
     "최초 로그인 시 비밀번호를 변경해주세요.",
@@ -158,7 +362,7 @@ export function portalPasswordReissuedMessage(
   params: WithContact & { loginId: string; password: string; portalUrl: string; staffName?: string | null }
 ): string {
   return [
-    "[WeCarry] 운송관리 비밀번호 재발급 안내",
+    `${SMS_HEADER} 운송관리 비밀번호 재발급 안내`,
     `아이디: ${params.loginId} / 새 임시비밀번호: ${params.password}`,
     `운송관리: ${params.portalUrl}`,
     "로그인 시 비밀번호를 다시 설정해주세요.",
@@ -184,11 +388,31 @@ export function truncateToBytes(text: string, maxBytes: number): string {
  * LMS 제목 — 알림창에서 바로 구분되도록(지시서 4-4).
  *
  * ⚠️ **2026-09-15 부터 견적안내는 SMS 라 이 제목이 붙지 않는다**(`quoteShareLinkMessage`).
+ *    ⚠️ **머리말이 2026-09-18 에 바뀌었다** — 그전에는 띄어쓰기가 있는 표기였다.
+ *    이미 나간 LMS 의 제목은 그대로다(`sms_logs` 를 고치지 않는다).
  *    단문에는 제목이 없어서 주면 솔라피가 **LMS 로 올려버린다**(`lib/sms/solapiProvider.ts`).
  *    🔴 그래서 `app/api/admin/send-sms/route.ts` 가 **본문이 90byte 를 넘을 때만** 준다.
  *    상수 자체는 남겨 둔다 — 링크를 못 만든 견적은 옛 LMS 본문으로 나가고 그때 쓴다.
  */
-export const QUOTE_SMS_SUBJECT = "[위캐리 운송] 견적 안내";
+export const QUOTE_SMS_SUBJECT = `${SMS_HEADER} 견적 안내`;
+
+/**
+ * 이 문자에 **LMS 제목을 붙일 것인가** — 🔴 **정의처는 여기 하나다.**
+ *
+ * 🚨 **두 곳에 따로 적은 것이 결함의 원인이었다.** `send-sms` 는 길이를 봤는데
+ *    `sms-logs/resend` 는 `template_type` 만 보고 붙여서, **87byte 짜리 견적 링크
+ *    문자를 재발송하면 제목이 붙어 LMS 로 나갔다**(솔라피는 제목이 있으면 단문을
+ *    장문으로 올린다 — `lib/sms/solapiProvider.ts`). 에러가 아니라 **요금과 알림창
+ *    표기만 달라져서** 눈치채기 어려운 자리다.
+ *
+ * 🔴 **`templateType` 만 보고 붙이던 쪽으로 되돌리지 말 것.**
+ * ⚠️ 담당자가 확인창에서 본문을 길게 고치면 그때는 LMS 가 맞으므로 제목이 붙는다 —
+ *    그래서 판정 기준이 **종류가 아니라 본문 길이**다.
+ */
+export function smsSubjectFor(templateType: string, message: string): string | null {
+  if (templateType !== "quote_summary") return null;
+  return byteLength(message) > SMS_BYTE_LIMIT ? QUOTE_SMS_SUBJECT : null;
+}
 
 // 시·도 축약. 견적안내의 "구간" 한 줄을 짧게 유지하기 위한 것으로,
 // 목록 화면이 쓰는 `lib/shortAddress.ts`(도로명까지 남김)와는 목적이 달라 별도로 둔다.
@@ -328,5 +552,5 @@ export function quoteSummaryMessage(
  *    그 서비스가 죽으면 이미 보낸 문자가 통째로 죽는다. `/q/` 가 짧은 이유가 이것이다.
  */
 export function quoteShareLinkMessage(params: { shareUrl: string }): string {
-  return ["[위캐리운송] 견적서를 보내드립니다.", params.shareUrl].join("\n");
+  return [`${SMS_HEADER} 견적서를 보내드립니다.`, params.shareUrl].join("\n");
 }
