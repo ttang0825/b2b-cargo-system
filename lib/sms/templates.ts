@@ -1,8 +1,13 @@
 import { COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
 import { ARRIVAL_FILLER_TIME } from "@/lib/arrivalType";
+import { SMS_BYTE_LIMIT, byteLength } from "@/lib/sms/byteLength";
 
-// SMS 문구 유일 정의처. 전부 "[WeCarry]" 문두 표기(발신번호가 개인 휴대폰이라
-// 스팸으로 오인되지 않도록).
+// SMS 문구 유일 정의처.
+//
+// ⚠️ **머리말은 2026-09-18 에 한글로 통일됐다**(사용자 확정: *「머리말은 [위캐리운송]으로
+// 통일.」*). 그전에는 영문 표기였고, 발신번호가 개인 휴대폰이라 스팸으로 오인되지 않게
+// 문두에 이름을 붙이는 것이 목적이었다 — **그 목적은 그대로이고 표기만 바뀌었다.**
+// 🔴 정의처는 아래 `SMS_HEADER` 하나다. 화면·라우트에 문자열로 다시 적지 말 것.
 //
 // ⚠️ **안내번호는 이제 상수가 아니라 인자로 받는다(35차, 10차 지시서)** —
 // 고객이 회신할 때 **보낸 담당자에게 직접 닿게** 하려고, 발신번호와 본문 안내번호를
@@ -16,20 +21,23 @@ import { ARRIVAL_FILLER_TIME } from "@/lib/arrivalType";
 // 주석은 내부 문서라 정확성 우선으로 "화주" 표현을 그대로 둔다(혼동 방지).
 // **"차주"는 고객 접점에서도 그대로 쓴다** — 바꾸지 말 것.
 //
-// ⚠️ **byte 관리(35차에 방침이 바뀜)**: 이제 **8종이 전부 LMS**다. 견적안내를
-// 90byte(SMS 단문 상한)에 맞추던 압축을 폐기했기 때문이며, 그 이유는
-// `quoteSummaryMessage` 위 주석에 적어뒀다. 상한 관리는 사라졌지만 **문자는 스크롤
-// 없이 한 화면에 들어오는 게 좋으므로 400~500byte를 넘기지 말 것.**
+// ⚠️ **byte 관리** — 🔴 **「8종이 전부 LMS」는 낡았다.** 지금은 **7종이고 견적만 SMS**다.
+// 견적안내가 2026-09-15 에 **견적서 링크 문자(87byte SMS)**로 대체됐고
+// (`quoteShareLinkMessage`), 나머지 여섯은 설계상 LMS 다.
+// 🔴 **견적 링크 문자는 여유가 3byte 다(87/90)** — 문구를 고치면 반드시 다시 재십시오.
+//    넘으면 에러가 아니라 **요금과 제목만 조용히 달라진다.**
+// ⚠️ 35차의 「90byte 압축을 되살리지 말 것」은 **`quoteSummaryMessage`(링크를 못 만든
+//    견적의 폴백 LMS)에 대한 것**이라 링크 문자와 부딪히지 않는다.
+// 나머지 여섯은 상한이 없지만 **스크롤 없이 한 화면에 들어오도록 400~500byte를 넘기지 말 것.**
 
-/** 기본 인자 — 8종 모두 안내번호(하이픈 표기)를 받는다 */
+/** 기본 인자 — 견적 링크 문자를 뺀 나머지가 안내번호(하이픈 표기)를 받는다 */
 type WithContact = { contactPhone?: string | null };
 
 /**
  * 문자 머리말 — 🔴 **정의처는 여기 하나다.** 화면·라우트에 문자열로 다시 적지 말 것.
  *
  * 사용자 확정(2026-09-17): *「머리말은 [위캐리운송]으로 통일.」*
- * ⚠️ **아직 배차확정 두 통만 이 상수를 쓴다** — 나머지 다섯 종의 `[WeCarry]` 교체와
- *    견적 LMS 제목(`QUOTE_SMS_SUBJECT`)은 C장 몫이다.
+ * 🟢 **문자 7종이 전부 이 상수를 쓴다**(2026-09-18 · 견적 LMS 제목 포함).
  * 🔴 **이메일 제목의 `[WeCarry]` 는 이 범위가 아니다**(Resend 미가동).
  */
 export const SMS_HEADER = "[위캐리운송]";
@@ -314,7 +322,7 @@ export function applicationApprovedWithAccountMessage(
   }
 ): string {
   return [
-    "[WeCarry] 고객등록 승인 및 계정발급 안내",
+    `${SMS_HEADER} 고객등록 승인 및 계정발급 안내`,
     `${params.companyName || "귀사"}의 고객등록 신청이 승인되었습니다.`,
     `아이디: ${params.loginId} / 임시비밀번호: ${params.password}`,
     `운송관리: ${params.portalUrl}`,
@@ -327,7 +335,7 @@ export function applicationRejectedMessage(
   params: WithContact & { companyName: string | null; reason: string | null; staffName?: string | null }
 ): string {
   return [
-    "[WeCarry] 고객등록 신청 결과 안내",
+    `${SMS_HEADER} 고객등록 신청 결과 안내`,
     `${params.companyName || "귀사"}의 고객등록 신청이 반려되었습니다.`,
     params.reason ? `사유: ${params.reason}` : null,
     contactLine(params),
@@ -342,7 +350,7 @@ export function portalAccountIssuedMessage(
   params: WithContact & { loginId: string; password: string; portalUrl: string; staffName?: string | null }
 ): string {
   return [
-    "[WeCarry] 운송관리 계정발급 안내",
+    `${SMS_HEADER} 운송관리 계정발급 안내`,
     `아이디: ${params.loginId} / 임시비밀번호: ${params.password}`,
     `운송관리: ${params.portalUrl}`,
     "최초 로그인 시 비밀번호를 변경해주세요.",
@@ -354,7 +362,7 @@ export function portalPasswordReissuedMessage(
   params: WithContact & { loginId: string; password: string; portalUrl: string; staffName?: string | null }
 ): string {
   return [
-    "[WeCarry] 운송관리 비밀번호 재발급 안내",
+    `${SMS_HEADER} 운송관리 비밀번호 재발급 안내`,
     `아이디: ${params.loginId} / 새 임시비밀번호: ${params.password}`,
     `운송관리: ${params.portalUrl}`,
     "로그인 시 비밀번호를 다시 설정해주세요.",
@@ -380,11 +388,31 @@ export function truncateToBytes(text: string, maxBytes: number): string {
  * LMS 제목 — 알림창에서 바로 구분되도록(지시서 4-4).
  *
  * ⚠️ **2026-09-15 부터 견적안내는 SMS 라 이 제목이 붙지 않는다**(`quoteShareLinkMessage`).
+ *    ⚠️ **머리말이 2026-09-18 에 바뀌었다** — 그전에는 띄어쓰기가 있는 표기였다.
+ *    이미 나간 LMS 의 제목은 그대로다(`sms_logs` 를 고치지 않는다).
  *    단문에는 제목이 없어서 주면 솔라피가 **LMS 로 올려버린다**(`lib/sms/solapiProvider.ts`).
  *    🔴 그래서 `app/api/admin/send-sms/route.ts` 가 **본문이 90byte 를 넘을 때만** 준다.
  *    상수 자체는 남겨 둔다 — 링크를 못 만든 견적은 옛 LMS 본문으로 나가고 그때 쓴다.
  */
-export const QUOTE_SMS_SUBJECT = "[위캐리 운송] 견적 안내";
+export const QUOTE_SMS_SUBJECT = `${SMS_HEADER} 견적 안내`;
+
+/**
+ * 이 문자에 **LMS 제목을 붙일 것인가** — 🔴 **정의처는 여기 하나다.**
+ *
+ * 🚨 **두 곳에 따로 적은 것이 결함의 원인이었다.** `send-sms` 는 길이를 봤는데
+ *    `sms-logs/resend` 는 `template_type` 만 보고 붙여서, **87byte 짜리 견적 링크
+ *    문자를 재발송하면 제목이 붙어 LMS 로 나갔다**(솔라피는 제목이 있으면 단문을
+ *    장문으로 올린다 — `lib/sms/solapiProvider.ts`). 에러가 아니라 **요금과 알림창
+ *    표기만 달라져서** 눈치채기 어려운 자리다.
+ *
+ * 🔴 **`templateType` 만 보고 붙이던 쪽으로 되돌리지 말 것.**
+ * ⚠️ 담당자가 확인창에서 본문을 길게 고치면 그때는 LMS 가 맞으므로 제목이 붙는다 —
+ *    그래서 판정 기준이 **종류가 아니라 본문 길이**다.
+ */
+export function smsSubjectFor(templateType: string, message: string): string | null {
+  if (templateType !== "quote_summary") return null;
+  return byteLength(message) > SMS_BYTE_LIMIT ? QUOTE_SMS_SUBJECT : null;
+}
 
 // 시·도 축약. 견적안내의 "구간" 한 줄을 짧게 유지하기 위한 것으로,
 // 목록 화면이 쓰는 `lib/shortAddress.ts`(도로명까지 남김)와는 목적이 달라 별도로 둔다.
@@ -524,5 +552,5 @@ export function quoteSummaryMessage(
  *    그 서비스가 죽으면 이미 보낸 문자가 통째로 죽는다. `/q/` 가 짧은 이유가 이것이다.
  */
 export function quoteShareLinkMessage(params: { shareUrl: string }): string {
-  return ["[위캐리운송] 견적서를 보내드립니다.", params.shareUrl].join("\n");
+  return [`${SMS_HEADER} 견적서를 보내드립니다.`, params.shareUrl].join("\n");
 }

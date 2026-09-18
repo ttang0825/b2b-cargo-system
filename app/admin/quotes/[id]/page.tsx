@@ -1581,8 +1581,11 @@ export default function QuoteDetailPage() {
           견적서 출력
         </h3>
         <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginBottom: 14 }}>
+          {/* 🔴 「공유 기능은 나중에 만든다」던 괄호 한 문장을 지웠다(2026-09-18) —
+              공유 링크는 PR #151 에 이미 생겼고(`/q/[token]`), 아래 「견적서 문자 발송」이
+              바로 그 링크를 보낸다. 되살리지 말 것. */}
           화주에게 전달할 정식 견적서를 <strong>이 화면 위에 띄워</strong> 인쇄하거나
-          PDF로 저장할 수 있습니다. (화주포털을 통한 공유 기능은 추후 추가될 예정입니다.)
+          PDF로 저장할 수 있습니다.
         </p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           {/* 🔴 **새 탭으로 열지 않는다**(34차 지적 3번) — 화면을 떠났다가 탭을 닫고
@@ -1598,11 +1601,17 @@ export default function QuoteDetailPage() {
             {excelBusy ? "생성 중..." : "견적서 출력 (Excel)"}
           </button>
           <button className="btn btn-ghost" onClick={handleSendQuoteSms} disabled={sendingQuoteSms}>
-            {sendingQuoteSms ? "발송 중..." : quoteSmsSent ? "문자 발송 완료 ✓" : "문자로 요약 발송"}
+            {/* 🔴 이 버튼 이름이 2026-09-18 에 바뀌었다(그전에는 요약을 보낸다는 말이었다).
+                옆 두 버튼이
+                「견적서 출력 (PDF)」·「견적서 출력 (Excel)」이라 **무엇을 어떻게 보내는지**가
+                한 형식으로 읽혀야 하고, 「문자 발송」만으로는 무엇이 가는지 알 수 없다.
+                🔴 「링크 문자 발송」으로 바꾸지 말 것 — 링크 생성이 실패하면 **옛 요약
+                   LMS 로 내려가서**(`send-quote-sms`) 그때는 틀린 이름이 된다. */}
+            {sendingQuoteSms ? "발송 중..." : quoteSmsSent ? "문자 발송 완료 ✓" : "견적서 문자 발송"}
           </button>
         </div>
         <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 8 }}>
-          차량/운임/상차일만 요약해서 문자로 보냅니다(상세 견적서는 화주포털 안내).
+          견적서 링크를 단문 문자로 보냅니다. 받는 분은 로그인 없이 바로 열어볼 수 있습니다.
         </p>
         {quoteSmsError && <div className="error-box" style={{ marginTop: 8 }}>{quoteSmsError}</div>}
       </div>
