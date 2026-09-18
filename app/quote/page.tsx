@@ -496,6 +496,16 @@ export default function PublicQuotePage() {
                     onChange={setAgreed}
                     title={QUOTE_CONSENT.label}
                     desc={QUOTE_CONSENT.detail}
+                    // 🔴 **좁은 화면(≤700px)에서는 이 설명을 감춘다**(사용자 지시
+                    //    2026-09-18 PR #177 리뷰 — *「모바일 견적문의에서도 개인정보
+                    //    동의는 같은 방식으로 처리하자」*). `/apply` 와 같은 prop 이고
+                    //    사유·남겨야 할 것은 `PublicConsentFields` 의 `descWideOnly`
+                    //    주석에 있다 — 읽지 않고 되돌리지 말 것.
+                    // ⚠️ **이 화면에는 거부권 문단이 원래 없다**(`QUOTE_CONSENT` 에
+                    //    `refusal` 이 없다 · `/apply` 와 다른 점). 그래서 좁은 화면에
+                    //    남는 것은 제목과 **「전문 보기」뿐**이고, 그 링크를 빼면 고지가
+                    //    통째로 사라진다. 🔴 **「전문 보기」를 지우지 말 것.**
+                    descWideOnly
                     doc="privacy"
                   />
                 </div>
