@@ -34,9 +34,12 @@ export default function LandingFooter() {
             </a>
           </div>
           {/* 🔴 운영시간 줄을 뺐다(사용자 지시 2026-09-01 — "고객센터에서 시간 내용도
-              빼자"). 되살리지 말 것. ⚠️ 운영시간 자체는 없어진 값이 아니다 —
-              `COMPANY_SUPPORT_HOURS` 는 /about 푸터(`SiteFooter`)·화주포털·로그인 화면이
-              계속 쓴다. 랜딩 푸터에서만 감춘 것이다. */}
+              빼자"). 🔴 **되살리지 말 것** — 2026-09-18 에 사용자가 *「랜딩페이지는
+              없는 채로 유지하자」* 로 다시 확정했다.
+              ⚠️ 운영시간 자체는 없어진 값이 아니다. 다만 **상수가 둘로 갈렸다**(같은 날) —
+              `COMPANY_SUPPORT_HOURS`(18시)는 공용 푸터(`SiteFooter`)·`/apply`·JSON-LD 가,
+              `COMPANY_SUPPORT_HOURS_PORTAL`(19시)은 화주포털 셸·로그인 화면·포털
+              이용가이드가 쓴다. 랜딩 푸터는 **둘 다 안 쓴다.** */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 16 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 16.8 }}>
               <svg width="26" height="26" viewBox="0 0 20 20" fill="none" style={{ flex: "0 0 auto", display: "block" }}>

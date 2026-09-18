@@ -9,7 +9,13 @@ import BrandLogo from "@/components/BrandLogo";
 import { syntheticLoginEmail } from "@/lib/portalAccountCredentials";
 import BackToHomeLink from "@/components/BackToHomeLink";
 import InstallAppButton from "@/components/InstallAppButton";
-import { COMPANY_SUPPORT_HOURS, COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
+// 🔴 **포털 전용 시간 상수다**(2026-09-18) — 이 화면은 화주포털의 입구라 포털 쪽
+//    시간(19시)을 쓴다. 공개 화면용(18시)으로 되돌리지 말 것.
+import {
+  COMPANY_SUPPORT_HOURS,
+  COMPANY_SUPPORT_HOURS_PORTAL,
+  COMPANY_SUPPORT_PHONE,
+} from "@/lib/contactInfo";
 import CompanyNameMark from "@/components/CompanyNameMark";
 import "@/app/landing.css";
 
@@ -199,6 +205,10 @@ export default function CustomerLoginPage() {
                 ⚠️ 시안은 「신청 접수 후 2~3시간 이내 발급」이었는데 **랜딩 FAQ 와 어긋나서**
                    FAQ 문구(평일 09:00~18:00 접수 기준 당일 안)로 맞췄다 — 두 화면이 다른
                    시간을 약속하면 지키지 못하는 쪽이 생긴다.
+                   🔴 **2026-09-18 에 고객센터 문의 시간이 19시로 바뀌었지만 이 줄은 18시
+                      그대로다** — 이것은 문의 시간이 아니라 **발급 약속**이고 랜딩 FAQ
+                      (`components/landing/data.ts` 의 `account`)가 여전히 18시다.
+                      🔴 올리려면 **그 FAQ 도 같이** 올릴 것.
                 🔴 라벨은 12차에 화면 6곳을 통일한 「운송관리 계정 신청」 그대로다. */}
             {/* 🔴 `flexWrap: "nowrap"` 이다 — `wrap` 이면 왼쪽 글줄과 버튼의 **기본 폭 합이
                 카드 폭(352px)을 넘는 순간 버튼이 아래 줄로 떨어진다**(flex 는 줄을 나눈 뒤에
@@ -221,6 +231,13 @@ export default function CustomerLoginPage() {
               <div style={{ flex: "1 1 auto", minWidth: 0 }}>
                 <div style={{ fontSize: 14.5, fontWeight: 600 }}>계정이 없으신가요?</div>
                 <div style={{ marginTop: 5, fontSize: 12.8, lineHeight: 1.5, color: "#8B8A85", wordBreak: "keep-all" }}>
+                  {/* 🔴 **여기는 `COMPANY_SUPPORT_HOURS`(18시)다 — 포털용(19시)으로
+                      바꾸지 말 것.** 이 줄은 고객센터 **문의 시간이 아니라 「계정 발급
+                      접수 기준」**이고, 랜딩 FAQ(「평일 09:00~18:00 접수 기준 당일 안」)와
+                      **일부러 맞춰 둔 값**이다(위 주석). 여기만 19시로 올리면 랜딩에는
+                      18시까지라고 적혀 있는데 이 화면은 19시까지 받는다고 약속하게 되어
+                      지키지 못하는 쪽이 생긴다. 2026-09-18 지시는 **고객센터 문의 시간**
+                      건이었고, 그 줄은 이 화면 아래쪽(푸터)에 따로 있다. */}
                   <span style={{ display: "block" }}>{COMPANY_SUPPORT_HOURS}</span>
                   <span style={{ display: "block" }}>접수 기준 당일 발급</span>
                 </div>
@@ -263,7 +280,7 @@ export default function CustomerLoginPage() {
 
       <footer className="landing-login-footer" style={{ padding: "28px 56px 40px", textAlign: "center", fontSize: 12.5, lineHeight: 2, color: "#9C9B95" }}>
         <div>
-          고객센터 {COMPANY_SUPPORT_PHONE} · {COMPANY_SUPPORT_HOURS} (주말·공휴일 휴무)
+          고객센터 {COMPANY_SUPPORT_PHONE} · {COMPANY_SUPPORT_HOURS_PORTAL} (주말·공휴일 휴무)
         </div>
         <div>© {new Date().getFullYear()} <CompanyNameMark separatorColor="currentColor" separatorGap={7} />. All rights reserved.</div>
       </footer>
