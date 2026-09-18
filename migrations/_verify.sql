@@ -1670,3 +1670,41 @@ select
   count(*) filter (where to_char(requested_delivery_at at time zone 'Asia/Seoul', 'HH24:MI') = '23:59')
                                                                 as "하차 23:59(자리 채움)"
 from public.orders;
+
+-- ㉛  화주포털 「승인했는데 조회에 안 뜬다」 착수 전 조사 (2026-09-18)
+--     🔴 읽기 전용. 화주가 견적을 승인하면 견적이 `수주` 가 되는데, 배차·운송 조회는
+--        `dispatches` 만 읽으므로 **담당자가 배차를 걸기 전까지 화면이 비어 있다.**
+--        그 공백이 실제로 몇 건인지 잰다.
+
+-- ㉛-a  견적 상태 분포 — `수주` 가 몇 건인가
+select status as "견적 상태", count(*) as "건수"
+from public.quotes group by 1 order by 2 desc;
+
+-- ㉛-b  🔴 공백의 크기 — 「수주인데 오더가 없다」 / 「오더는 있는데 배차가 없다」
+select
+  (select count(*) from public.quotes q
+     where q.status = '수주'
+       and not exists (select 1 from public.orders o where o.quote_id = q.id))
+                                                        as "수주인데 오더 없음",
+  (select count(*) from public.orders o
+     where not exists (select 1 from public.dispatches d where d.order_id = o.id))
+                                                        as "오더인데 배차 없음",
+  (select count(*) from public.quotes where status = '수주')     as "수주 전체",
+  (select count(*) from public.orders)                           as "오더 전체",
+  (select count(*) from public.dispatches)                       as "배차 전체";
+
+-- ㉛-c  화주 소속 여부 — 포털은 **로그인한 화주의 건만** 보므로 `company_id` 가 없는
+--       건(게스트)은 애초에 안 보인다. 가상 카드를 만들 때 같은 조건이 걸린다.
+select
+  count(*)                                              as "수주 견적",
+  count(*) filter (where company_id is not null)        as "화주 소속",
+  count(*) filter (where company_id is null)            as "게스트(포털 비노출)"
+from public.quotes where status = '수주';
+
+-- ㉛-d  🔴 `orders` 에 화주를 잇는 컬럼이 무엇인가 — 가상 카드가 RLS 로 걸러지려면
+--       그 컬럼이 있어야 한다
+select column_name as "컬럼", data_type as "타입"
+from information_schema.columns
+where table_schema = 'public' and table_name = 'orders'
+  and column_name in ('company_id','quote_id','individual_customer_id','status','order_no')
+order by 1;

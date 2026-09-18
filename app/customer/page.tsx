@@ -10,6 +10,10 @@ import {
   getPortalCancelNotice,
   type PortalRedispatchMap,
 } from "@/lib/portalCancelledDispatches";
+import {
+  fetchPortalPendingDispatches,
+  mergePortalPendingRows,
+} from "@/lib/portalPendingDispatches";
 import { usePortalRefresh } from "@/lib/portalRefresh";
 import Link from "next/link";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
@@ -85,9 +89,11 @@ type InvoiceRow = {
 type DispatchRow = {
   id: string;
   order_id: string | null;
-  dispatch_status: string;
+  dispatch_status: string | null;
   cancel_reason: string | null;
-  created_at: string;
+  created_at: string | null;
+  /** 🔴 아직 배차가 없는 가상 카드에만 있다 — `lib/portalPendingDispatches.ts` 참고. */
+  quote_no?: string | null;
   orders: {
     order_no: string | null;
     origin: string | null;
@@ -137,7 +143,7 @@ export default function CustomerHomePage() {
     //    한 번이 홈 화면 전체를 그만큼 늦춘다(「로그인 뒤 로딩이 길다」, 2026-09-08).
     //    🔴 다시 위로 빼서 먼저 기다리게 만들지 말 것 — 나머지 질의가 이 결과를
     //    쓰지 않으므로 순서를 지킬 이유가 없다.
-    const [accountRes, quotesRes, invoicesRes, dispatchesRes, announcementRes, unreadRes] = await Promise.all([
+    const [accountRes, quotesRes, invoicesRes, dispatchesRes, announcementRes, pendingRes, unreadRes] = await Promise.all([
       session
         ? supabase
             .from("customer_accounts")
@@ -184,6 +190,10 @@ export default function CustomerHomePage() {
         .select(`id,title,content,created_at,${ANNOUNCEMENT_NOTICE_FIELD}`)
         .order("created_at", { ascending: false })
         .limit(5),
+      // 🔴 **아직 배차가 없는 건**(화주가 승인한 수주 견적 · 배차 전 오더)도 같이
+      //    받아온다 — 규칙은 배차·운송 조회와 **같은 함수**다(2026-09-18).
+      //    🔴 한쪽에만 넣으면 「조회에는 뜨는데 홈에는 없는」 상태가 된다.
+      fetchPortalPendingDispatches(supabase),
       // 안 읽은 공지 수는 목록 5건과 따로 센다 — 6건 이상 밀려 있을 수 있어서
       // 불러온 5건으로 세면 실제보다 적게 나온다.
       supabase
@@ -203,7 +213,16 @@ export default function CustomerHomePage() {
       supabase,
       ((dispatchesRes.data as unknown as DispatchRow[]) || []) as any[]
     );
-    setActiveDispatches(dispatchView.rows.slice(0, 5) as unknown as DispatchRow[]);
+    // 🔴 합치는 일도 `lib/portalPendingDispatches.ts` 가 한다 — 여기서 각자 정렬하면
+    //    「홈에 뜨는 5건」과 「조회 맨 위 5건」이 서로 다른 건이 된다.
+    //    ⚠️ 가상 카드 조회가 실패해도 배너를 띄우지 않는다 — 홈은 원래 조회 실패를
+    //    조용히 넘기고(배차·정산 다섯 건 전부 그렇다) 배차·운송 조회 화면이 말한다.
+    setActiveDispatches(
+      mergePortalPendingRows(dispatchView.rows, pendingRes.rows).slice(
+        0,
+        5
+      ) as unknown as DispatchRow[]
+    );
     setRedispatch(dispatchView.redispatch);
     setAnnouncements((announcementRes.data as AnnouncementRow[]) || []);
     setUnreadNotices(unreadRes.count || 0);
@@ -393,7 +412,13 @@ export default function CustomerHomePage() {
                     {d.orders?.origin} <span className="pv2-arrow-glyph">→</span> {d.orders?.destination}
                   </div>
                   <div className="pv2-active-meta">
-                    {[d.orders?.order_no, d.orders?.item, d.orders?.vehicle_type]
+                    {/* 🔴 오더가 아직 없는 건은 **견적번호로 말한다**(2026-09-18) —
+                        배차·운송 조회와 같은 표기여야 한다. 접두어를 빼지 말 것. */}
+                    {[
+                      d.orders?.order_no || (d.quote_no ? `견적 ${d.quote_no}` : null),
+                      d.orders?.item,
+                      d.orders?.vehicle_type,
+                    ]
                       .filter(Boolean)
                       .join(" · ")}
                   </div>

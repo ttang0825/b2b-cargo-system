@@ -11,6 +11,10 @@ import {
   getPortalCancelNotice,
   type PortalRedispatchMap,
 } from "@/lib/portalCancelledDispatches";
+import {
+  fetchPortalPendingDispatches,
+  mergePortalPendingRows,
+} from "@/lib/portalPendingDispatches";
 import { usePortalRefresh } from "@/lib/portalRefresh";
 import { dispatchIssueCustomerLabel } from "@/lib/dispatchIssue";
 import { supabaseCustomer as supabase } from "@/lib/supabaseCustomerClient";
@@ -116,6 +120,8 @@ export default function CustomerDispatchesPage() {
     periodFiltered,
     (d) => [
       d.orders?.order_no,
+      // 🔴 오더가 아직 없는 카드는 화면에 견적번호가 떠 있다 — 검색으로도 걸려야 한다.
+      d.quote_no,
       d.orders?.origin,
       d.orders?.destination,
       d.orders?.item,
@@ -145,6 +151,13 @@ export default function CustomerDispatchesPage() {
   //    다시 받아온다」(`lib/portalRefresh.ts`)에서 부를 수 없다. setState 만 쓰므로
   //    렌더마다 새로 만들어져도 문제가 없다.
   async function load() {
+      // 🔴 **아직 배차가 없는 건을 같이 받아온다**(2026-09-18) — 화주가 견적을 승인하면
+      //    내부에서 견적이 `수주` 가 되지만 배차 행은 담당자가 오더·배차를 만들어야
+      //    비로소 생긴다. 그 사이 이 화면이 통째로 비어 있던 것을 메운다.
+      //    🔴 규칙은 화면이 아니라 `lib/portalPendingDispatches.ts` 에 있다(홈과 같은 함수).
+      //    🔴 **오더를 자동으로 만들어 메우지 말 것**(27차 확정 · 그 사유는
+      //    `app/api/customer/approve-quote/route.ts` 가 적고 있다).
+      const pendingPromise = fetchPortalPendingDispatches(supabase);
       // 🔴 `pickup_confirmed`·`delivery_confirmed` 를 빼지 말 것 — 「문제발생」은
       //    상태값을 덮어써서 단계를 알 수 없고, 이 두 boolean 으로만 복원된다.
       // 🔴 `driver_payout_amount` 등 차주 지급 정보는 조회하지 않는다(DB GRANT 가
@@ -169,14 +182,18 @@ export default function CustomerDispatchesPage() {
         .limit(100);
       // 🔴 조회 실패를 삼키면 "저장은 됐는데 목록이 빈" 상태가 되고 원인을 짚을
       //    단서가 없다(원칙 55번).
-      if (error) setPageError(error.message);
-      else setPageError(null);
+      const pending = await pendingPromise;
+      // 🔴 두 조회 중 **하나만 실패해도 나머지는 그대로 그린다** — 가상 카드를 못 만든
+      //    것 때문에 진짜 배차 목록까지 가리면 안 된다(원칙 33번과 같은 결).
+      setPageError(error?.message || pending.error || null);
       // 🔴 재배차가 끝난 오더의 취소 카드만 걷어낸다 — 규칙은 화면이 아니라
       //    `lib/portalCancelledDispatches.ts` 에 있다(홈과 같은 규칙을 써야 한다).
       // 🔴 취소 카드를 걷어내는 것과 **재배차 카드에 취소 이력을 이어 붙이는 것**이
       //    한 함수에서 나온다 — 화면에서 조건을 다시 적지 말 것.
       const view = await filterCancelledForCustomer(supabase, (data || []) as any[]);
-      setDispatches(view.rows);
+      // 🔴 합치는 일도 정의처가 한다 — 홈이 상위 5건만 자르므로 정렬이 갈리면
+      //    「홈에 뜨는 5건」과 「조회 맨 위 5건」이 서로 다른 건이 된다.
+      setDispatches(mergePortalPendingRows(view.rows, pending.rows) as any[]);
       setRedispatch(view.redispatch);
       setLoading(false);
   }
@@ -293,7 +310,13 @@ export default function CustomerDispatchesPage() {
               <article key={d.id} className="pv2-dcard">
                 <div className="pv2-dhead">
                   <div className="pv2-dno-line">
-                    <span className="pv2-dno num">{o.order_no || "-"}</span>
+                    {/* 🔴 오더가 아직 만들어지지 않은 건은 **견적번호로 말한다**
+                        (2026-09-18) — 「-」로 두면 화주가 방금 승인한 건인지 알 수 없다.
+                        🔴 **접두어 「견적」을 빼지 말 것** — 두 번호가 같은 `YYYYMMDD+
+                        일련번호` 모양이라 접두어가 없으면 오더번호로 오해한다. */}
+                    <span className="pv2-dno num">
+                      {o.order_no || (d.quote_no ? `견적 ${d.quote_no}` : "-")}
+                    </span>
                     {/* 🔴 **배너와 별개다**(2026-09-16 사용자 지시) — 배너는 배차확정·
                         운송완료에만 뜨고, 이 표시는 상차완료처럼 **중간에 바뀐 것**도
                         알려준다. 그래서 「상차완료 알림은 빼되 화면에서는 보이게」가

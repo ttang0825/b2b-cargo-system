@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import LegalLinks from "@/components/LegalLinks";
-import { APPLY_CONSENT, TERMS_CONSENT } from "@/lib/legalInfo";
+import { APPLY_CONSENT, CONSENT_REFUSAL_NOTICE, TERMS_CONSENT } from "@/lib/legalInfo";
 
 // 이용약관 + 개인정보 동의 블록 (18차).
 //
@@ -63,12 +63,29 @@ export function LandingConsentCard({
   onChange,
   title,
   desc,
+  descWideOnly,
   doc,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
   title: string;
   desc?: string;
+  /**
+   * 🔴 **좁은 화면(≤700px)에서는 이 설명을 감춘다**(사용자 지시 2026-09-18 —
+   *    *「운송관리 모바일 버전에서 이용약관과 개인정보수집동의는 회색 설명글은 빼고
+   *    간략하게 표현하자」* · 같은 날 PR 리뷰에서 *「모바일 버전에서 개인정보에도
+   *    회색 설명글은 빼자」*로 **두 카드 모두**로 확정).
+   * ⚠️ **처음에는 약관 요약에만 켰다** — 개인정보 카드의 설명이 **수집·이용 목적
+   *    고지**(개인정보보호법 제15조 2항 1호)라서다. 사용자에게 그 사유를 보고했고
+   *    **다시 빼라는 결정을 받아** 두 카드 모두 켰다. 🔴 **그 옛 판단을 근거로
+   *    개인정보 쪽을 되살리지 말 것.**
+   * 🔴 **대신 두 가지를 반드시 남긴다** — ① 카드마다 **「전문 보기」**(처리방침 전문이
+   *    목적·항목·보유기간을 담고 있다) ② 카드 아래 **`refusal`(거부권) 문단**.
+   *    좁은 화면에서도 이 둘은 늘 보인다. 둘 중 하나라도 감추면 그때는 정말로
+   *    법정 고지가 사라진다.
+   * ⚠️ 데스크탑에서는 두 설명이 그대로 보인다(사용자 지시가 「모바일 버전에서」다).
+   */
+  descWideOnly?: boolean;
   doc: "terms" | "privacy";
 }) {
   return (
@@ -114,7 +131,18 @@ export function LandingConsentCard({
                 `[필수]` 접두사를 화면에 그대로 찍지 말 것. */}
             <span style={{ marginLeft: 6, fontSize: 12, fontWeight: 600, color: "#8B8A85" }}>필수</span>
           </span>
-          {desc && <span style={{ display: "block", marginTop: 4, fontSize: 13, lineHeight: 1.6, color: "#8B8A85" }}>{desc}</span>}
+          {/* 🔴 감추는 일은 CSS 가 한다 — 화면 폭을 JS 로 재면 첫 그림에서 잘못된
+              쪽이 한 번 번쩍인다(29차가 이용가이드에서 세운 규칙과 같은 결).
+              🔴 인라인 `display: block` 을 이기려면 CSS 쪽이 `!important` 여야 한다 —
+              선언 순서로 맞추려 들지 말 것(원칙 58번). */}
+          {desc && (
+            <span
+              className={descWideOnly ? "landing-consent-desc landing-consent-desc-wide" : "landing-consent-desc"}
+              style={{ display: "block", marginTop: 4, fontSize: 13, lineHeight: 1.6, color: "#8B8A85" }}
+            >
+              {desc}
+            </span>
+          )}
         </span>
         {/* 🔴 「전문 보기」는 30차 `LegalLinks` 모달이다 — 시안은 약관 초안을 화면 코드에
             통째로 들고 있었다. 조문은 `lib/legal/` 하나만 본다. */}
@@ -123,6 +151,25 @@ export function LandingConsentCard({
         </span>
       </label>
     </div>
+  );
+}
+
+/**
+ * 동의 거부권 안내 한 줄.
+ *
+ * 🔴 **부품으로 뽑은 이유** — `/quote` 는 `PublicConsentFields` 를 쓰지 않고
+ *    `LandingConsentCard` 만 직접 그려서, 이 줄이 **그 화면에 통째로 없었다**
+ *    (2026-09-18 PR #177 리뷰). 화면에 `<p>` 를 복사해 넣으면 여백·색이 곧 갈린다.
+ * 🔴 **두 화면이 같은 모양·같은 문장이어야 한다** — 문구 정의처는 `lib/legalInfo.ts` 의
+ *    `CONSENT_REFUSAL_NOTICE` 하나다.
+ * 🔴 **좁은 화면에서도 감추지 말 것** — 동의 카드의 회색 설명글은 감추지만 이 줄은
+ *    남긴다(그래서 `landing-consent-desc` 클래스를 달지 않는다).
+ */
+export function ConsentRefusalNote() {
+  return (
+    <p style={{ margin: "2px 0 0", paddingLeft: 2, fontSize: 12.5, lineHeight: 1.6, color: "#8B8A85" }}>
+      {CONSENT_REFUSAL_NOTICE}
+    </p>
   );
 }
 
@@ -146,6 +193,8 @@ export default function PublicConsentFields({
           onChange={onTermsChange}
           title={TERMS_CONSENT.label}
           desc={TERMS_CONSENT.summary}
+          // 🔴 좁은 화면에서 감춘다 — 조문을 간추린 안내일 뿐이고 「전문 보기」가 옆에 있다.
+          descWideOnly
           doc="terms"
         />
         <LandingConsentCard
@@ -153,13 +202,15 @@ export default function PublicConsentFields({
           onChange={onPrivacyChange}
           title={APPLY_CONSENT.label}
           desc={APPLY_CONSENT.detail}
+          // 🔴 **개인정보 설명도 좁은 화면에서 감춘다**(사용자 지시 2026-09-18, PR 리뷰).
+          //    prop 주석에 사유와 「대신 남기는 둘」이 있다 — 읽지 않고 되돌리지 말 것.
+          descWideOnly
           doc="privacy"
         />
-        {/* 🔴 거부권 안내(`refusal`)를 빼지 말 것 — 개인정보보호법 제15조 2항이 요구한다.
-            두 동의에 함께 걸리는 문장이라 카드 아래에 한 번만 둔다. */}
-        <p style={{ margin: "2px 0 0", paddingLeft: 2, fontSize: 12.5, lineHeight: 1.6, color: "#8B8A85" }}>
-          {TERMS_CONSENT.refusal}
-        </p>
+        {/* 🔴 거부권 안내를 빼지 말 것 — 개인정보보호법 제15조 2항이 요구한다.
+            두 동의에 함께 걸리는 문장이라 카드 아래에 한 번만 둔다.
+            🔴 `/quote` 도 같은 부품을 쓴다 — `<p>` 를 화면에 복사해 넣지 말 것. */}
+        <ConsentRefusalNote />
       </div>
     );
   }

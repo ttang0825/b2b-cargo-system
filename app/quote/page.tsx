@@ -6,7 +6,7 @@ import LandingHeader from "@/components/landing/LandingHeader";
 import LandingFooter from "@/components/landing/LandingFooter";
 import SubmitDone from "@/components/landing/SubmitDone";
 import AddressSearch from "@/components/AddressSearch";
-import { LandingConsentCard } from "@/components/PublicConsentFields";
+import { ConsentRefusalNote, LandingConsentCard } from "@/components/PublicConsentFields";
 import {
   DatePicker,
   Dropdown,
@@ -395,7 +395,7 @@ export default function PublicQuotePage() {
               {/* ── 필수 입력 ─────────────────────────── */}
               <div style={cardStyle}>
                 <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 8 }}>
-                  <label style={fieldLabel}>출발지 {requiredMark}</label>
+                  <label className="landing-field-label" style={fieldLabel}>출발지 {requiredMark}</label>
                   <button
                     type="button"
                     onClick={() =>
@@ -434,7 +434,7 @@ export default function PublicQuotePage() {
                   />
                 </div>
 
-                <label style={{ ...fieldLabel, marginTop: 20 }}>도착지 {requiredMark}</label>
+                <label className="landing-field-label" style={{ ...fieldLabel, marginTop: 20 }}>도착지 {requiredMark}</label>
                 <div style={{ marginTop: 8 }}>
                   <AddressSearch
                     label=""
@@ -455,7 +455,7 @@ export default function PublicQuotePage() {
                   {dd("form", "차종", QUOTE_BODY_TYPES, "선택 안 함")}
                 </div>
 
-                <label style={{ ...fieldLabel, marginTop: 20 }}>운송물건</label>
+                <label className="landing-field-label" style={{ ...fieldLabel, marginTop: 20 }}>운송물건</label>
                 <input
                   type="text"
                   value={form.item}
@@ -464,7 +464,7 @@ export default function PublicQuotePage() {
                   style={{ ...fieldStyle, marginTop: 8 }}
                 />
 
-                <label style={{ ...fieldLabel, marginTop: 20 }}>성함 / 업체명 {requiredMark}</label>
+                <label className="landing-field-label" style={{ ...fieldLabel, marginTop: 20 }}>성함 / 업체명 {requiredMark}</label>
                 <input
                   type="text"
                   value={form.name}
@@ -473,7 +473,7 @@ export default function PublicQuotePage() {
                   style={{ ...fieldStyle, marginTop: 8 }}
                 />
 
-                <label style={{ ...fieldLabel, marginTop: 20 }}>연락처 {requiredMark}</label>
+                <label className="landing-field-label" style={{ ...fieldLabel, marginTop: 20 }}>연락처 {requiredMark}</label>
                 <input
                   type="tel"
                   inputMode="numeric"
@@ -496,8 +496,25 @@ export default function PublicQuotePage() {
                     onChange={setAgreed}
                     title={QUOTE_CONSENT.label}
                     desc={QUOTE_CONSENT.detail}
+                    // 🔴 **좁은 화면(≤700px)에서는 이 설명을 감춘다**(사용자 지시
+                    //    2026-09-18 PR #177 리뷰 — *「모바일 견적문의에서도 개인정보
+                    //    동의는 같은 방식으로 처리하자」*). `/apply` 와 같은 prop 이고
+                    //    사유·남겨야 할 것은 `PublicConsentFields` 의 `descWideOnly`
+                    //    주석에 있다 — 읽지 않고 되돌리지 말 것.
+                    // ⚠️ **이 화면에는 거부권 문단이 원래 없다**(`QUOTE_CONSENT` 에
+                    //    `refusal` 이 없다 · `/apply` 와 다른 점). 그래서 좁은 화면에
+                    //    남는 것은 제목과 **「전문 보기」뿐**이고, 그 링크를 빼면 고지가
+                    //    통째로 사라진다. 🔴 **「전문 보기」를 지우지 말 것.**
+                    descWideOnly
                     doc="privacy"
                   />
+                  {/* 🔴 거부권 안내 — 개인정보보호법 제15조 2항 4호가 요구한다.
+                      ⚠️ **이 화면에는 원래 없었다**(2026-09-18 PR #177 리뷰에서 드러나
+                      사용자 지시로 넣었다). `/apply` 와 **같은 부품·같은 문장**이고
+                      정의처는 `lib/legalInfo.ts` 의 `CONSENT_REFUSAL_NOTICE` 다.
+                      🔴 좁은 화면에서도 감추지 말 것 — 설명글을 감춘 뒤 이 줄과
+                      「전문 보기」가 남는 전부다. */}
+                  <ConsentRefusalNote />
                 </div>
               </div>
 
@@ -539,7 +556,7 @@ export default function PublicQuotePage() {
                       {dd("load", "상차조건", LOADING_METHODS.map((m) => m.label), "기본운송", "14px 15px")}
                       {dd("unload", "하차조건", LOADING_METHODS.map((m) => m.label), "기본운송", "14px 15px")}
                       <div>
-                        <label style={fieldLabel}>대기시간(분)</label>
+                        <label className="landing-field-label" style={fieldLabel}>대기시간(분)</label>
                         {/* 🔴 무료 대기시간은 **20분**이다(25차에 30 → 20분으로 바뀐 가격 변경) —
                             시안 문구의 「무료 30분」을 그대로 쓰지 말 것. */}
                         <input
@@ -552,7 +569,7 @@ export default function PublicQuotePage() {
                         />
                       </div>
                       <div>
-                        <label style={fieldLabel}>경유지 수</label>
+                        <label className="landing-field-label" style={fieldLabel}>경유지 수</label>
                         <input
                           type="text"
                           inputMode="numeric"
@@ -584,7 +601,7 @@ export default function PublicQuotePage() {
                         담지 않으므로 손으로 고친 값이 남으면 무엇이 요청인지 갈린다. */}
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px,1fr))", gap: "20px 24px", marginTop: 20, alignItems: "start" }}>
                       <div>
-                        <label style={fieldLabel}>희망 상차 일시</label>
+                        <label className="landing-field-label" style={fieldLabel}>희망 상차 일시</label>
                         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                           <DatePicker
                             ddKey="calLoad"
@@ -608,7 +625,7 @@ export default function PublicQuotePage() {
                         {scheduleHint(pickupNow ? "지금 바로 상차 — 시간은 접수 시각으로 들어갑니다" : null)}
                       </div>
                       <div>
-                        <label style={fieldLabel}>희망 하차 일시</label>
+                        <label className="landing-field-label" style={fieldLabel}>희망 하차 일시</label>
                         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                           <DatePicker
                             ddKey="calUnload"
