@@ -44,6 +44,37 @@ import { COMPANY_SUPPORT_HOURS, COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo"
 //    원문 그대로 그려서 별표가 글자로 보인다. 강조가 되는 곳은 `p`·`ol`·`note`·`dl` 의
 //    설명뿐이다.
 
+/**
+ * 항목·카드에 붙는 아이콘 이름.
+ *
+ * 🔴 **그림은 `components/GuideIcon.tsx` 가 그린다** — 이 파일에는 **이름만** 둔다
+ *    (JSX 금지 규칙 그대로). 🔴 **방향을 뒤집지 말 것** — 이 타입을 컴포넌트 쪽에
+ *    두면 정의처가 화면 부품을 import 하게 된다.
+ * 🔴 이름을 더하면 **그 컴포넌트의 `PATHS` 에도 같이 더할 것** — 빠뜨리면 그 자리만
+ *    조용히 비어 그려진다(원칙 50번과 같은 결).
+ */
+export type GuideIconName =
+  | "apply"
+  | "key"
+  | "install"
+  | "flow"
+  | "grid"
+  | "send"
+  | "quote"
+  | "truck"
+  | "receipt"
+  | "pin"
+  | "chart"
+  | "calendar"
+  | "bell"
+  | "megaphone"
+  | "tag"
+  | "sparkle"
+  | "won"
+  | "user"
+  | "question"
+  | "phone";
+
 /** 어느 화면에 나가는 항목인가 */
 export type GuideScope = "public" | "portal" | "both";
 
@@ -54,8 +85,32 @@ export type GuideBlock =
   | { type: "p"; text: string }
   /** 번호가 붙는 절차 */
   | { type: "ol"; items: string[] }
-  /** 주의·보충 상자. `plain` 이면 상자 없이 작은 글씨로만 */
-  | { type: "note"; text: string; plain?: boolean }
+  /**
+   * 주의·보충 상자. `plain` 이면 상자 없이 작은 글씨로만.
+   * `tone` 은 상자의 성격 — `warn`(기본, 앰버)은 「모르면 막힌다」, `tip`(옐로)은
+   * 「알면 편하다」다. 🔴 **색을 더 늘리지 말 것** — 안내문에 색이 셋을 넘으면
+   * 무엇이 급한지가 흐려진다(PR #155 가 묶음 목록에서 겪은 자리).
+   */
+  | { type: "note"; text: string; plain?: boolean; tone?: "warn" | "tip" }
+  /**
+   * 번호가 붙은 **단계 카드**. `ol` 과 달리 제목과 설명이 갈려 있어 훑어보기 좋다.
+   * 🔴 **절차가 아닌 것에 쓰지 말 것** — 번호가 순서를 약속한다.
+   */
+  | { type: "steps"; items: { title: string; desc: string }[] }
+  /**
+   * 아이콘이 붙은 **타일 묶음**. `dl` 이 「라벨 — 설명」 목록이라면 이쪽은 격자다.
+   * 🔴 항목이 **셋 이상**일 때만 쓸 것(둘이면 격자가 허전하다).
+   */
+  | { type: "cards"; rows: { icon: GuideIconName; label: string; desc: string }[] }
+  /**
+   * 화면 캡처·도식 그림.
+   *
+   * 🔴 **`src` 는 `public/guide/` 안의 파일이고 실계정 화면이 아니다** — 이 저장소는
+   *    public 이라 실제 화주 상호·연락처가 담긴 그림을 넣으면 **git 이력에서 지워지지
+   *    않는다.** 캡처는 `scripts/guide-shots.mjs` 가 **가짜 데이터**로 띄워 찍는다.
+   * 🔴 **`width`·`height` 를 반드시 적을 것** — 없으면 그림이 도착할 때 글이 밀린다.
+   */
+  | { type: "figure"; src: string; alt: string; caption: string; width: number; height: number }
   | { type: "dl"; rows: GuideRow[] }
   | { type: "table"; head: [string, string]; rows: GuideRow[] }
   | { type: "faq"; rows: { q: string; a: string }[] }
@@ -76,6 +131,8 @@ export type GuideItem = {
   title: string;
   /** 제목 옆 작은 글씨(공개 화면 전용) */
   titleSub?: string;
+  /** 제목 앞에 붙는 아이콘. 포털은 항목 목록에도 같은 것을 그린다 */
+  icon?: GuideIconName;
   scope: GuideScope;
   /** 공개 화면에서 묶이는 자리. 없으면 자기 이름의 섹션 하나를 통째로 쓴다 */
   group?: GuideGroupKey;
@@ -90,6 +147,15 @@ export type GuideGroupKey = "start" | "status";
 export const GUIDE_GROUPS: Record<GuideGroupKey, string> = {
   start: "시작하기 · 네 단계",
   status: "화면 읽는 법",
+};
+
+/**
+ * 묶음 섹션의 아이콘. 🔴 **묶음의 첫 항목 아이콘을 빌려 쓰지 말 것** — 「시작하기」
+ * 섹션이 「계정 신청」 아이콘을 달게 되어 섹션 전체를 잘못 가리킨다.
+ */
+export const GUIDE_GROUP_ICONS: Record<GuideGroupKey, GuideIconName> = {
+  start: "flow",
+  status: "tag",
 };
 
 /** 공개 화면 머리글 */
@@ -113,16 +179,20 @@ export const GUIDE_ITEMS: GuideItem[] = [
   {
     id: "apply",
     title: "계정 신청",
+    icon: "apply",
     scope: "public",
     group: "start",
     step: "01",
     blocks: [
       {
-        type: "ol",
+        type: "steps",
         items: [
-          "이 홈페이지에서 **「운송관리 계정 신청」**을 작성하시거나, 담당자에게 말씀만 주셔도 저희가 대신 등록해 드립니다",
-          "상호·사업자등록번호·주소, 담당자 이름·연락처를 입력합니다",
-          "확인 후 위캐리가 **아이디와 임시비밀번호**를 전달해 드립니다",
+          {
+            title: "신청서 작성",
+            desc: "이 홈페이지의 **「운송관리 계정 신청」**을 작성하시거나, 담당자에게 말씀만 주셔도 저희가 대신 등록해 드립니다",
+          },
+          { title: "회사 정보 입력", desc: "상호·사업자등록번호·주소와 담당자 이름·연락처를 적습니다" },
+          { title: "계정 받기", desc: "확인 후 위캐리가 **아이디와 임시비밀번호**를 전달해 드립니다" },
         ],
       },
       {
@@ -143,16 +213,20 @@ export const GUIDE_ITEMS: GuideItem[] = [
   {
     id: "first-login",
     title: "첫 로그인",
+    icon: "key",
     scope: "public",
     group: "start",
     step: "02",
     blocks: [
       {
-        type: "ol",
+        type: "steps",
         items: [
-          "전달받은 **아이디와 임시비밀번호**로 로그인합니다",
-          "비밀번호 변경 화면이 **자동으로 뜹니다.** 새 비밀번호를 정해야 다음으로 넘어갑니다",
-          "변경이 끝나면 바로 홈 화면이 열립니다",
+          { title: "로그인", desc: "전달받은 **아이디와 임시비밀번호**를 그대로 입력합니다" },
+          {
+            title: "비밀번호 바꾸기",
+            desc: "변경 화면이 **자동으로 뜹니다.** 새 비밀번호를 정해야 다음으로 넘어갑니다",
+          },
+          { title: "끝", desc: "변경이 끝나면 바로 홈 화면이 열립니다" },
         ],
       },
       {
@@ -170,6 +244,7 @@ export const GUIDE_ITEMS: GuideItem[] = [
   {
     id: "install",
     title: "앱으로 설치하기",
+    icon: "install",
     titleSub: "선택 · 권장",
     scope: "both",
     group: "start",
@@ -185,11 +260,12 @@ export const GUIDE_ITEMS: GuideItem[] = [
       },
       { type: "mock", buttonLabel: "앱으로 설치" },
       {
-        type: "dl",
+        type: "cards",
         rows: [
-          { label: "PC", desc: "크롬·엣지에서 **「앱으로 설치」** 버튼을 누르면 바로 설치됩니다" },
-          { label: "안드로이드", desc: "같은 자리의 **「홈 화면에 추가」** 버튼을 누릅니다" },
+          { icon: "install", label: "PC", desc: "크롬·엣지에서 **「앱으로 설치」** 버튼을 누르면 바로 설치됩니다" },
+          { icon: "install", label: "안드로이드", desc: "같은 자리의 **「홈 화면에 추가」** 버튼을 누릅니다" },
           {
+            icon: "install",
             label: "아이폰",
             desc: "버튼으로는 설치되지 않습니다. **사파리로 연 다음** 아래쪽 공유 버튼(↑) → 목록을 내려 **「홈 화면에 추가」**를 누르시면 됩니다. 버튼을 누르면 이 절차를 그림으로 안내해 드립니다",
           },
@@ -211,34 +287,32 @@ export const GUIDE_ITEMS: GuideItem[] = [
   {
     id: "usage",
     title: "발주부터 정산까지",
+    icon: "flow",
     // 🔴 **`public` 이다** — 포털 쪽은 이 항목을 쪼갠 `order`·`quote`·`dispatch`·
     //    `invoice`·`stats` 전용 항목을 본다. 양쪽에 다 내보내면 포털에서 두 번 나온다.
     scope: "public",
     group: "start",
     step: "04",
     blocks: [
-      { type: "p", text: "한 건의 운송이 아래 순서로 흘러갑니다. 화주께서 직접 하실 일은 **①과 ②** 두 가지뿐입니다." },
+      { type: "p", text: "한 건의 운송이 아래 순서로 흘러갑니다. 화주께서 직접 하실 일은 **처음 두 가지**뿐입니다." },
       {
-        type: "dl",
-        rows: [
+        type: "steps",
+        items: [
           {
-            label: "① 발주 요청",
+            title: "발주 요청",
             desc: "상차지·하차지, 품목, 톤수, 차량형태, 희망 상·하차 일시를 입력하고 보냅니다. 자주 쓰는 주소와 화물은 미리 저장해 두면 다음부터는 **골라서 불러쓰기**만 하면 됩니다",
           },
           {
-            label: "② 견적 확인·승인",
+            title: "견적 확인·승인",
             desc: "위캐리가 운임을 넣으면 상태가 **「견적 도착」**으로 바뀌고 알림을 보내 드립니다. 금액을 확인하고 **「견적 승인」**을 누르시면 그때부터 배차가 시작됩니다. 견적서는 PDF·엑셀로 받으실 수 있습니다",
           },
           {
-            label: "③ 배차·운송 조회",
+            title: "배차·운송 조회",
             desc: "**접수 → 배차완료 → 운송완료** 세 단계로 지금 어디쯤인지 보입니다. 차량이 잡히거나 운송이 끝나면 알림이 갑니다",
           },
+          { title: "정산·결제내역", desc: "건별 청구금액과 세금계산서 발행일, 입금 상태를 확인합니다" },
           {
-            label: "④ 정산·결제내역",
-            desc: "건별 청구금액과 세금계산서 발행일, 입금 상태를 확인합니다",
-          },
-          {
-            label: "⑤ 월별 통계",
+            title: "월별 통계",
             desc: "월별 건수와 금액, 지역별 운송비, 자주 쓰는 하차지를 보고 **운송·정산 내역을 엑셀로** 내려받을 수 있습니다",
           },
         ],
@@ -253,11 +327,20 @@ export const GUIDE_ITEMS: GuideItem[] = [
   {
     id: "menus",
     title: "메뉴 한눈에 보기",
+    icon: "grid",
     scope: "both",
     blocks: [
       {
         type: "p",
         text: "로그인하면 **왼쪽**(휴대폰은 아래쪽 탭과 「전체」 메뉴)에 아래 메뉴가 보입니다. 메뉴 이름 옆의 **숫자 배지**는 「마지막으로 보신 뒤에 바뀐 건이 몇 건인지」를 뜻합니다 — 그 화면에 들어가시면 사라집니다.",
+      },
+      {
+        type: "figure",
+        src: "/guide/menu.png",
+        alt: "화주포털 왼쪽 메뉴 — 홈부터 이용가이드까지 아홉 개 항목",
+        caption: "왼쪽 메뉴 (예시 화면입니다). 휴대폰에서는 아래쪽 탭과 「전체」 메뉴에 같은 항목이 들어 있습니다.",
+        width: 248,
+        height: 620,
       },
       // 🔴 라벨은 `app/customer/CustomerPortalShell.tsx` 의 `NAV_GROUPS` 와 **한 글자도
       //    달라서는 안 된다.** 메뉴를 더하거나 이름을 바꾸면 이 표도 같이 고칠 것.
@@ -295,6 +378,7 @@ export const GUIDE_ITEMS: GuideItem[] = [
   {
     id: "order",
     title: "발주 요청하기",
+    icon: "send",
     scope: "portal",
     blocks: [
       {
@@ -302,25 +386,33 @@ export const GUIDE_ITEMS: GuideItem[] = [
         text: "**「발주 요청」**에서 네 단계를 채워 보내시면 담당자가 확인 후 운임을 확정해 정식 운송오더로 접수해 드립니다. 한 화면 안에 번호가 붙은 네 덩어리로 되어 있습니다.",
       },
       {
-        type: "dl",
-        rows: [
+        type: "steps",
+        items: [
           {
-            label: "1 운송 구간 · 현장 정보",
+            title: "운송 구간 · 현장 정보",
             desc: "상차지·하차지 주소, 그 현장의 **상호와 담당자 이름·연락처**를 입력합니다. **「저장된 상차지 불러오기」**로 미리 저장해 둔 배송지를 한 번에 채울 수 있고, **「출발지·도착지 바꾸기」**를 누르면 주소·상호·담당자까지 여섯 칸이 통째로 맞바뀝니다(회차 건에 편리합니다)",
           },
           {
-            label: "2 일정",
+            title: "일정",
             desc: "희망 상차·하차 일시를 고릅니다. **「지금」**을 누르면 상차 시각이 보내는 그 순간으로 들어가고, **「당착」**은 상차 당일 도착·**「내착」**은 다음 날 도착이라는 뜻으로 **시각은 무관**합니다. 시각을 직접 고르실 때 하차는 상차보다 **30분 이상 뒤**여야 합니다",
           },
           {
-            label: "3 화물 · 차량",
+            title: "화물 · 차량",
             desc: "품목·중량·톤수·차량형태와 상하차 조건을 고릅니다. **품목은 반드시 적어 주셔야 합니다** — 무엇을 싣는지 알아야 차량을 정할 수 있습니다. **「자주 쓰는 화물 불러오기」**로 저장해 둔 화물을 채우거나, 지금 입력한 것을 **「자주 쓰는 화물로 저장」**할 수 있습니다",
           },
           {
-            label: "4 요청사항",
+            title: "요청사항",
             desc: "「지게차 필요」·「야간 하차」처럼 현장에서 미리 알아야 할 것을 적습니다. **「현재 요청 저장」**을 누르면 이름을 붙여 두었다가 다음 발주에서 그대로 불러쓸 수 있습니다",
           },
         ],
+      },
+      {
+        type: "figure",
+        src: "/guide/order-form.png",
+        alt: "발주 요청 화면의 1 운송 구간·현장 정보와 2 일정 블록",
+        caption: "발주 요청 화면 (예시 화면입니다). 번호가 붙은 네 덩어리를 위에서부터 채우시면 됩니다.",
+        width: 840,
+        height: 640,
       },
       // 🔴 `/customer/request` 는 `/apply` 와 달리 **조건 없이 항상** 동의를 받는다
       //    (`handleSubmit` 의 `if (!thirdPartyAgreed)` 게이트). 「연락처를 적었을 때만」
@@ -343,11 +435,20 @@ export const GUIDE_ITEMS: GuideItem[] = [
   {
     id: "quote",
     title: "견적 확인하고 승인하기",
+    icon: "quote",
     scope: "portal",
     blocks: [
       {
         type: "p",
         text: "**「견적 확인」**에는 보내신 발주 요청과 위캐리가 낸 견적이 **한 목록에 섞여** 시간순으로 쌓입니다. 카드를 누르면 접히고 펼쳐지며, **한 번에 하나만** 펼쳐집니다.",
+      },
+      {
+        type: "figure",
+        src: "/guide/quote-card.png",
+        alt: "견적 확인 목록 — 「견적 도착」 상태의 견적 카드와 견적 승인 버튼",
+        caption: "견적 확인 화면 (예시 화면입니다). 왼쪽이 상태, 오른쪽이 금액과 버튼입니다.",
+        width: 840,
+        height: 407,
       },
       {
         type: "dl",
@@ -373,6 +474,7 @@ export const GUIDE_ITEMS: GuideItem[] = [
       {
         type: "note",
         text: "**운임 내역의 「공급가액 (부가세 별도)」 아래에 부가세와 총 견적금액이 따로 나옵니다.** 세금계산서는 공급가액 기준으로 발행됩니다.",
+        tone: "tip",
       },
       {
         type: "p",
@@ -388,11 +490,20 @@ export const GUIDE_ITEMS: GuideItem[] = [
   {
     id: "dispatch",
     title: "배차·운송 진행 보기",
+    icon: "truck",
     scope: "portal",
     blocks: [
       {
         type: "p",
         text: "**「배차·운송 조회」**는 승인된 건이 지금 어디쯤인지 보는 화면입니다. 단계는 **접수 → 배차완료 → 운송완료** 셋이고, 카드마다 구간·품목·일정이 함께 나옵니다.",
+      },
+      {
+        type: "figure",
+        src: "/guide/dispatch-card.png",
+        alt: "배차·운송 조회 — 접수·배차완료·운송완료 세 단계가 가로로 놓인 카드",
+        caption: "배차·운송 조회 화면 (예시 화면입니다). 지금 단계가 노랗게 칠해집니다.",
+        width: 840,
+        height: 460,
       },
       {
         type: "dl",
@@ -428,6 +539,7 @@ export const GUIDE_ITEMS: GuideItem[] = [
   {
     id: "invoice",
     title: "정산·결제내역 보기",
+    icon: "receipt",
     scope: "portal",
     blocks: [
       {
@@ -448,6 +560,7 @@ export const GUIDE_ITEMS: GuideItem[] = [
       {
         type: "note",
         text: "**정산 관련해서는 알림(소리·팝업)을 보내지 않습니다.** 세금계산서 발행이나 입금 확인처럼 조용히 처리되는 일이라, 메뉴 옆 **숫자 배지**로만 「볼 것이 생겼다」고 알려드립니다.",
+        tone: "tip",
       },
       {
         type: "note",
@@ -459,6 +572,7 @@ export const GUIDE_ITEMS: GuideItem[] = [
   {
     id: "address",
     title: "배송지·화물 저장해 쓰기",
+    icon: "pin",
     scope: "portal",
     blocks: [
       {
@@ -487,6 +601,7 @@ export const GUIDE_ITEMS: GuideItem[] = [
       {
         type: "note",
         text: "**별칭과 상호는 다른 칸입니다.** 상호에는 **「(주)○○물류 가산공장」**처럼 실제 업체명을, 별칭에는 **「본사 창고」**처럼 우리끼리 부르는 이름을 적습니다. 목록 카드의 제목은 **별칭 → 상호 → 주소** 순으로 있는 것을 씁니다.",
+        tone: "tip",
       },
       // 🔴 PR #104 리뷰 3라운드 확정 — 프리셋 추가·수정·삭제는 이 화면 한 곳이다.
       {
@@ -499,6 +614,7 @@ export const GUIDE_ITEMS: GuideItem[] = [
   {
     id: "stats",
     title: "월별 통계와 엑셀",
+    icon: "chart",
     scope: "portal",
     blocks: [
       {
@@ -535,11 +651,20 @@ export const GUIDE_ITEMS: GuideItem[] = [
   {
     id: "period",
     title: "기간 골라 보기",
+    icon: "calendar",
     scope: "portal",
     blocks: [
       {
         type: "p",
         text: "**견적 확인 · 배차·운송 조회 · 정산·결제내역** 세 화면은 위쪽에 같은 모양의 기간 고르개가 있습니다. 건수가 쌓이면 여기서 먼저 좁히시는 편이 찾기 쉽습니다.",
+      },
+      {
+        type: "figure",
+        src: "/guide/period.png",
+        alt: "기간 고르개 — 오늘·이번주·이번달·전체·직접 지정 칩과 날짜 두 칸",
+        caption: "「직접 지정」을 고르면 날짜 칸 두 개가 아래에 펼쳐집니다 (예시 화면입니다).",
+        width: 856,
+        height: 161,
       },
       {
         type: "dl",
@@ -564,6 +689,7 @@ export const GUIDE_ITEMS: GuideItem[] = [
   {
     id: "notify",
     title: "알림 받기",
+    icon: "bell",
     // ⚠️ `titleSub` 를 달지 말 것 — 공개 화면은 **묶음에 든 항목에만** 부제를 그린다
     //    (`Heading` 이 그 안에서만 쓰인다). 묶음 밖 항목에 달면 조용히 사라진다.
     scope: "both",
@@ -573,18 +699,21 @@ export const GUIDE_ITEMS: GuideItem[] = [
         text: "견적이 도착하거나 배차가 잡히면 **알려드립니다.** 알림은 **세 겹**으로 되어 있고, 필요한 만큼만 쓰시면 됩니다.",
       },
       {
-        type: "dl",
+        type: "cards",
         rows: [
           {
-            label: "① 숫자 배지",
+            icon: "grid",
+            label: "숫자 배지",
             desc: "**항상 켜져 있습니다.** 메뉴 이름 옆의 작은 숫자로, 마지막으로 그 화면을 보신 뒤에 바뀐 건이 몇 건인지 알려줍니다. 견적 확인 · 배차·운송 조회 · 정산·결제내역 세 메뉴에 붙고, 읽지 않은 공지는 홈 화면에 **「안 읽음 N」**으로 나옵니다",
           },
           {
-            label: "② 화면 안 알림",
+            icon: "bell",
+            label: "화면 안 알림",
             desc: "**운송관리를 열어 두신 동안**에만 동작합니다. 새 소식이 오면 화면 구석에 **「견적 업데이트」·「배차·운송 업데이트」** 띠가 뜨고 짧은 소리가 납니다. 띠를 누르면 그 화면으로 바로 넘어가고 띠는 사라집니다",
           },
           {
-            label: "③ 기기 알림(권장)",
+            icon: "install",
+            label: "기기 알림 (권장)",
             desc: "**브라우저를 닫아 두어도** 휴대폰·PC 알림으로 받습니다. 왼쪽 메뉴 맨 아래(휴대폰은 「전체」 메뉴)의 **「이 기기로 알림 받기」**를 한 번 눌러 허용해 주시면 됩니다",
           },
         ],
@@ -592,6 +721,14 @@ export const GUIDE_ITEMS: GuideItem[] = [
       {
         type: "p",
         text: "기기 알림으로 오는 것은 **네 가지**입니다 — **새 견적서 도착 · 배차 확정 · 운송 완료 · 배차 변경**. 알림에는 「무슨 일이 있었는지」만 적히고 **거래처·금액·구간 같은 내용은 담기지 않습니다**(잠금화면에 그대로 보이기 때문입니다).",
+      },
+      {
+        type: "figure",
+        src: "/guide/notify-buttons.png",
+        alt: "왼쪽 메뉴 맨 아래의 종 모양과 「이 기기로 알림 받기」 버튼",
+        caption: "왼쪽 메뉴 맨 아래 (예시 화면입니다). 종 모양은 화면 안 알림음, 그 아래가 기기 알림입니다.",
+        width: 219,
+        height: 138,
       },
       {
         type: "ol",
@@ -632,6 +769,7 @@ export const GUIDE_ITEMS: GuideItem[] = [
   {
     id: "notice",
     title: "공지사항 보기",
+    icon: "megaphone",
     scope: "portal",
     blocks: [
       {
@@ -652,6 +790,7 @@ export const GUIDE_ITEMS: GuideItem[] = [
   {
     id: "quote-status",
     title: "견적 상태",
+    icon: "tag",
     scope: "both",
     group: "status",
     blocks: [
@@ -677,6 +816,7 @@ export const GUIDE_ITEMS: GuideItem[] = [
   {
     id: "dispatch-status",
     title: "배차·운송 상태",
+    icon: "truck",
     scope: "both",
     group: "status",
     blocks: [
@@ -700,24 +840,27 @@ export const GUIDE_ITEMS: GuideItem[] = [
   {
     id: "marks",
     title: "화면에 붙는 작은 표시들",
+    icon: "sparkle",
     scope: "both",
     group: "status",
     blocks: [
       { type: "p", text: "목록을 훑을 때 **무엇이 달라졌는지** 알려주는 표시입니다. 상태 알약과는 다른 뜻이니 한 번만 봐 두시면 편합니다." },
       {
-        type: "dl",
+        type: "cards",
         rows: [
           {
+            icon: "sparkle",
             label: "업데이트",
             desc: "**마지막으로 그 화면을 보신 뒤에 바뀐 건**입니다. 금액이든 일정이든 메모든 무엇이 바뀌어도 붙고, 그 화면에 들어가셨다 나오면 사라집니다",
           },
           {
+            icon: "won",
             label: "수정견적",
             desc: "**승인하신 뒤에 견적 금액이 조정된 건**입니다. 금액이 달라졌다는 뜻이라 한 번 열어 확인해 주시는 것이 좋습니다. 운송이 끝나면 사라집니다",
           },
-          { label: "NEW", desc: "아직 안 읽으신 **공지사항**입니다" },
-          { label: "접수 반려", desc: "접수되지 않은 발주 요청입니다. 사유가 함께 나옵니다" },
-          { label: "숫자 배지", desc: "메뉴 이름 옆의 숫자 — 그 화면에 **새로 볼 것이 몇 건인지**입니다" },
+          { icon: "megaphone", label: "NEW", desc: "아직 안 읽으신 **공지사항**입니다" },
+          { icon: "tag", label: "접수 반려", desc: "접수되지 않은 발주 요청입니다. **사유가 함께** 나옵니다" },
+          { icon: "grid", label: "숫자 배지", desc: "메뉴 이름 옆의 숫자 — 그 화면에 **새로 볼 것이 몇 건인지**입니다" },
         ],
       },
       {
@@ -730,6 +873,7 @@ export const GUIDE_ITEMS: GuideItem[] = [
   {
     id: "amount",
     title: "금액 표시",
+    icon: "won",
     scope: "both",
     group: "status",
     blocks: [
@@ -755,6 +899,7 @@ export const GUIDE_ITEMS: GuideItem[] = [
   {
     id: "profile",
     title: "담당자 정보와 비밀번호",
+    icon: "user",
     scope: "portal",
     blocks: [
       {
@@ -784,6 +929,7 @@ export const GUIDE_ITEMS: GuideItem[] = [
   {
     id: "faq",
     title: "자주 묻는 질문",
+    icon: "question",
     scope: "both",
     blocks: [
       // ⚠️ 답(`a`)은 두 화면 모두 **원문 그대로** 그린다 — `**` 강조를 쓰지 말 것.
@@ -837,6 +983,7 @@ export const GUIDE_ITEMS: GuideItem[] = [
   {
     id: "contact",
     title: "문의",
+    icon: "phone",
     scope: "both",
     blocks: [
       { type: "p", text: "운송관리 이용 중 막히시는 부분이 있으면 언제든 연락 주세요. 화면 조작이든 운송 건이든 같은 번호로 받습니다." },
