@@ -1602,3 +1602,69 @@ select policyname, cmd, roles::text
 from pg_policies
 where schemaname = 'storage' and tablename = 'objects'
 order by policyname;
+
+-- ㉚  문자 발송 정리 착수 전 조사 (2026-09-18)
+--     🔴 **`sms_logs` 는 마이그레이션 체계 이전에 손으로 만든 표라 저장소에 정의가
+--        없다.** `template_type`·`recipient_type` 에 CHECK 가 걸려 있으면 새 종류
+--        (`dispatch_confirmed_customer`)를 넣는 순간 **이력 저장이 조용히 실패한다**
+--        (`sendSmsWithLog` 는 던지지 않는다) — 그러면 DB 변경이 먼저다.
+--     ⚠️ **본문·수신번호는 찍지 않는다**(Actions 로그는 누구나 본다).
+
+-- ㉚-a  컬럼 구성
+select column_name, data_type, is_nullable, column_default
+from information_schema.columns
+where table_schema = 'public' and table_name = 'sms_logs'
+order by ordinal_position;
+
+-- ㉚-b  🚨 제약조건 — CHECK 가 있으면 허용값 전수가 여기 나온다
+select conname, contype, pg_get_constraintdef(oid) as "정의"
+from pg_constraint
+where conrelid = 'public.sms_logs'::regclass
+order by contype, conname;
+
+-- ㉚-c  실제로 쌓인 종류·수신자 구분 — 코드가 아는 값과 같은가
+select template_type as "종류", recipient_type as "받는 사람",
+       count(*) as "건수",
+       count(*) filter (where status = 'failed') as "실패",
+       min(created_at)::date as "처음", max(created_at)::date as "마지막"
+from public.sms_logs
+group by 1, 2
+order by 3 desc;
+
+-- ㉚-d  상차완료·하차완료 이력이 실재하는가 — 있으면 **라벨·타입을 지우면 안 된다**
+select count(*) filter (where template_type = 'pickup_completed')   as "상차완료 건수",
+       count(*) filter (where template_type = 'delivery_completed') as "하차완료 건수",
+       count(*) filter (where template_type in ('pickup_completed','delivery_completed')
+                          and status = 'failed')                    as "그중 실패(재발송 대상)"
+from public.sms_logs;
+
+-- ㉚-e  배차 담당자 칸이 실제로 채워져 있는가 — 차주 문자에 「기입된 선 안에서」를
+--       적용했을 때 **줄이 몇 개나 살아남는지**를 가늠한다. 🔴 값은 찍지 않는다.
+select
+  count(*)                                                       as "배차 전체",
+  count(*) filter (where coalesce(origin_company_name,'')      <> '') as "상차 상호",
+  count(*) filter (where coalesce(origin_contact_name,'')      <> '') as "상차 담당자명",
+  count(*) filter (where coalesce(origin_contact_phone,'')     <> '') as "상차 연락처",
+  count(*) filter (where coalesce(destination_company_name,'') <> '') as "하차 상호",
+  count(*) filter (where coalesce(destination_contact_name,'') <> '') as "하차 담당자명",
+  count(*) filter (where coalesce(destination_contact_phone,'')<> '') as "하차 연락처"
+from public.dispatches;
+
+-- ㉚-f  차주 정보 — 🔴 **운영이 전부 외부 배정인가**(고객 문자의 기본 경로가 정해진다)
+select assignment_type as "배정방식", count(*) as "건수",
+       count(*) filter (where driver_id is not null)                       as "내부 차주 연결",
+       count(*) filter (where coalesce(external_driver_name,'')  <> '')    as "외부 차주명",
+       count(*) filter (where coalesce(external_driver_phone,'') <> '')    as "외부 연락처",
+       count(*) filter (where coalesce(external_vehicle_plate,'')<> '')    as "외부 차량번호"
+from public.dispatches
+group by 1 order by 2 desc;
+
+-- ㉚-g  🔴 하차 일시가 `23:59`(당착·내착 자리 채움)인 오더가 실재하는가 —
+--       실재하면 문자에 「23:59」가 찍히면 안 된다(2-B-3).
+select
+  count(*)                                                      as "오더 전체",
+  count(*) filter (where requested_pickup_at   is null)         as "상차 일시 없음",
+  count(*) filter (where requested_delivery_at is null)         as "하차 일시 없음",
+  count(*) filter (where to_char(requested_delivery_at at time zone 'Asia/Seoul', 'HH24:MI') = '23:59')
+                                                                as "하차 23:59(자리 채움)"
+from public.orders;
