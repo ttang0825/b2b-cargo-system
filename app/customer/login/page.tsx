@@ -9,6 +9,8 @@ import BrandLogo from "@/components/BrandLogo";
 import { syntheticLoginEmail } from "@/lib/portalAccountCredentials";
 import BackToHomeLink from "@/components/BackToHomeLink";
 import InstallAppButton from "@/components/InstallAppButton";
+// 🔴 **포털 전용 시간 상수다**(2026-09-18) — 이 화면은 화주포털의 입구라 포털 쪽
+//    시간(19시)을 쓴다. 공개 화면용(18시)으로 되돌리지 말 것.
 import { COMPANY_SUPPORT_HOURS, COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
 import CompanyNameMark from "@/components/CompanyNameMark";
 import "@/app/landing.css";
@@ -197,8 +199,11 @@ export default function CustomerLoginPage() {
 
             {/* 계정이 없는 사람에게 그 자리에서 경로를 준다(41차).
                 ⚠️ 시안은 「신청 접수 후 2~3시간 이내 발급」이었는데 **랜딩 FAQ 와 어긋나서**
-                   FAQ 문구(평일 09:00~18:00 접수 기준 당일 안)로 맞췄다 — 두 화면이 다른
-                   시간을 약속하면 지키지 못하는 쪽이 생긴다.
+                   FAQ 문구(그때는 「평일 09:00~18:00 접수 기준 당일 안」)로 맞췄다 —
+                   두 화면이 다른 시간을 약속하면 지키지 못하는 쪽이 생긴다.
+                   🔴 **2026-09-18 에 셋을 함께 19시로 올렸다**(고객센터 시간 · 이 발급
+                      약속 · 랜딩 FAQ). 이 줄은 문의 시간이 아니라 **발급 약속**이라
+                      상수가 같아도 뜻이 다르다 — 🔴 **고치려면 랜딩 FAQ 도 같이** 볼 것.
                 🔴 라벨은 12차에 화면 6곳을 통일한 「운송관리 계정 신청」 그대로다. */}
             {/* 🔴 `flexWrap: "nowrap"` 이다 — `wrap` 이면 왼쪽 글줄과 버튼의 **기본 폭 합이
                 카드 폭(352px)을 넘는 순간 버튼이 아래 줄로 떨어진다**(flex 는 줄을 나눈 뒤에
@@ -209,7 +214,7 @@ export default function CustomerLoginPage() {
                    ⚠️ 짧게 줄이려고 운영시간을 빼지 말 것: 그러면 주말 접수 건에도 「당일
                    발급」을 약속하는 문장이 된다(31차 ⑨(a) 가 FAQ 와 맞춘 이유).
                 🔴 **운영시간 / 발급 안내를 두 줄로 나눠 그린다**(사용자 지시 2026-09-01).
-                   자동 줄바꿈에 맡기면 폭에 따라 「평일 09:00 ~ 18:00 접수 / 기준 당일 발급」
+                   자동 줄바꿈에 맡기면 폭에 따라 「평일 09:00 ~ 19:00 접수 / 기준 당일 발급」
                    처럼 **뜻이 끊기는 자리에서** 잘린다. 폰트를 CDN 에서 받아와 폭이 달라질 수
                    있으므로(37차) 이 자리는 **의미 단위로 고정**하는 것이 맞다 — 두 개의 블록
                    요소로 나눴고 `<br />` 로 붙이지 않았다.
@@ -221,6 +226,10 @@ export default function CustomerLoginPage() {
               <div style={{ flex: "1 1 auto", minWidth: 0 }}>
                 <div style={{ fontSize: 14.5, fontWeight: 600 }}>계정이 없으신가요?</div>
                 <div style={{ marginTop: 5, fontSize: 12.8, lineHeight: 1.5, color: "#8B8A85", wordBreak: "keep-all" }}>
+                  {/* ⚠️ 이 줄은 고객센터 **문의 시간이 아니라 「계정 발급 접수 기준」**이고,
+                      31차가 랜딩 FAQ(`components/landing/data.ts` 의 `account`)와 **일부러
+                      맞춰 둔 값**이다(위 주석). 🔴 **한쪽만 고치지 말 것** — 2026-09-18 에
+                      19시로 올릴 때도 그 FAQ 를 같이 올렸다. */}
                   <span style={{ display: "block" }}>{COMPANY_SUPPORT_HOURS}</span>
                   <span style={{ display: "block" }}>접수 기준 당일 발급</span>
                 </div>

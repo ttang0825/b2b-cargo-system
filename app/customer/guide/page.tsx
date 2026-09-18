@@ -3,6 +3,7 @@
 import { Fragment, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import GuideIcon from "@/components/GuideIcon";
 import { quoteStatusStyle } from "@/lib/quoteStatusLabels";
 import { DISPATCH_ISSUE_STYLE, getDispatchStageStyle } from "@/lib/dispatchStage";
 import {
@@ -97,11 +98,63 @@ function Blocks({ blocks }: { blocks: GuideBlock[] }) {
                 ))}
               </ol>
             );
-          case "note":
+          case "note": {
+            // 🔴 `plain` 은 상자 없는 작은 글씨라 `tone` 을 무시한다(공개 화면과 같은 규칙).
+            const cls = b.plain
+              ? "pv2-guide-note pv2-guide-note-plain"
+              : b.tone === "tip"
+                ? "pv2-guide-note pv2-guide-note-tip"
+                : "pv2-guide-note";
             return (
-              <p key={i} className={b.plain ? "pv2-guide-note pv2-guide-note-plain" : "pv2-guide-note"}>
+              <p key={i} className={cls}>
                 {inline(b.text)}
               </p>
+            );
+          }
+          case "steps":
+            return (
+              <ol key={i} className="pv2-guide-steps">
+                {b.items.map((it, j) => (
+                  <li className="pv2-guide-step" key={it.title}>
+                    <span className="pv2-guide-step-badge" aria-hidden="true">
+                      {j + 1}
+                    </span>
+                    <span className="pv2-guide-step-body">
+                      <span className="pv2-guide-step-title">{it.title}</span>
+                      <span className="pv2-guide-step-desc">{inline(it.desc)}</span>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            );
+          case "cards":
+            return (
+              <div key={i} className="pv2-guide-tiles">
+                {b.rows.map((r) => (
+                  <div className="pv2-guide-tile" key={r.label}>
+                    <span className="pv2-guide-tile-icon">
+                      <GuideIcon name={r.icon} size={18} />
+                    </span>
+                    <span className="pv2-guide-tile-label">{r.label}</span>
+                    <span className="pv2-guide-tile-desc">{inline(r.desc)}</span>
+                  </div>
+                ))}
+              </div>
+            );
+          case "figure":
+            return (
+              <figure key={i} className="pv2-guide-figure">
+                <img
+                  src={b.src}
+                  alt={b.alt}
+                  width={b.width}
+                  height={b.height}
+                  loading="lazy"
+                  decoding="async"
+                  className="pv2-guide-figure-img"
+                />
+                <figcaption className="pv2-guide-figcaption">{b.caption}</figcaption>
+              </figure>
             );
           case "dl":
             return (
@@ -213,7 +266,10 @@ function GuidePageInner() {
               }
               aria-current={it.id === current.id ? "page" : undefined}
             >
-              <span>{it.title}</span>
+              <span className="pv2-guide-toc-icon">
+                {it.icon && <GuideIcon name={it.icon} size={17} />}
+              </span>
+              <span className="pv2-guide-toc-text">{it.title}</span>
               <span className="pv2-guide-toc-arrow" aria-hidden="true">
                 ›
               </span>
@@ -223,6 +279,11 @@ function GuidePageInner() {
 
         <article className="pv2-guide-body" aria-labelledby="pv2-guide-title">
           <h2 className="pv2-guide-title" id="pv2-guide-title">
+            {current.icon && (
+              <span className="pv2-guide-title-icon">
+                <GuideIcon name={current.icon} size={20} />
+              </span>
+            )}
             {current.title}
           </h2>
           <Blocks blocks={current.blocks} />

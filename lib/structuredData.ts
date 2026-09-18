@@ -74,7 +74,7 @@ export function buildOrganizationJsonLd() {
         email: COMPANY_CONTACT_EMAIL,
         areaServed: "KR",
         availableLanguage: ["ko"],
-        // 사람이 읽는 문자열이다(`평일 09:00 ~ 18:00`). 기계용 openingHours 형식이
+        // 사람이 읽는 문자열이다(`평일 09:00 ~ 19:00`). 기계용 openingHours 형식이
         // 아니라 여기 두었다 — 상수 하나만 바꾸면 화면과 함께 갱신된다.
         description: COMPANY_SUPPORT_HOURS,
       },

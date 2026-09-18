@@ -1,16 +1,19 @@
 import { Fragment } from "react";
 import Link from "next/link";
 import PublicPageHeader from "@/components/PublicPageHeader";
+import GuideIcon from "@/components/GuideIcon";
 import SiteFooter from "@/components/SiteFooter";
 import { quoteStatusStyle } from "@/lib/quoteStatusLabels";
 import { DISPATCH_ISSUE_STYLE, getDispatchStageStyle } from "@/lib/dispatchStage";
 import {
   GUIDE_GROUPS,
+  GUIDE_GROUP_ICONS,
   GUIDE_PUBLIC_LEAD,
   GUIDE_PUBLIC_TITLE,
   guideItemsFor,
   type GuideBlock,
   type GuideGroupKey,
+  type GuideIconName,
   type GuideItem,
 } from "@/lib/guideContent";
 
@@ -105,11 +108,69 @@ function Blocks({ blocks }: { blocks: GuideBlock[] }) {
                 ))}
               </ol>
             );
-          case "note":
+          case "note": {
+            // 🔴 `plain` 은 상자 없는 작은 글씨라 `tone` 을 무시한다 — 둘을 같이 주면
+            //    「상자 없는 앰버 글씨」가 되어 무엇을 강조하는지 알 수 없다.
+            const cls = b.plain
+              ? "guide-note guide-note-plain"
+              : b.tone === "tip"
+                ? "guide-note guide-note-tip"
+                : "guide-note";
             return (
-              <p key={i} className={b.plain ? "guide-note guide-note-plain" : "guide-note"}>
+              <p key={i} className={cls}>
                 {inline(b.text)}
               </p>
+            );
+          }
+          case "steps":
+            return (
+              <ol key={i} className="guide-steps">
+                {b.items.map((it, j) => (
+                  <li className="guide-step" key={it.title}>
+                    {/* 🔴 번호는 CSS 카운터가 아니라 값으로 그린다 — 카운터로 두면
+                        인쇄·번역 확장에서 번호가 사라진 채로 남는다. */}
+                    <span className="guide-step-badge" aria-hidden="true">
+                      {j + 1}
+                    </span>
+                    <span className="guide-step-body">
+                      <span className="guide-step-title">{it.title}</span>
+                      <span className="guide-step-desc">{inline(it.desc)}</span>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            );
+          case "cards":
+            return (
+              <div key={i} className="guide-tiles">
+                {b.rows.map((r) => (
+                  <div className="guide-tile" key={r.label}>
+                    <span className="guide-tile-icon">
+                      <GuideIcon name={r.icon} size={19} />
+                    </span>
+                    <span className="guide-tile-label">{r.label}</span>
+                    <span className="guide-tile-desc">{inline(r.desc)}</span>
+                  </div>
+                ))}
+              </div>
+            );
+          case "figure":
+            // 🔴 `next/image` 를 쓰지 않는다 — 이 화면은 정적이고 그림이 이미 표시
+            //    크기에 맞춰 저장돼 있다. `width`·`height` 를 반드시 넘겨 글이 밀리지
+            //    않게 한다(PR #119 가 랜딩에서 겪은 자리).
+            return (
+              <figure key={i} className="guide-figure">
+                <img
+                  src={b.src}
+                  alt={b.alt}
+                  width={b.width}
+                  height={b.height}
+                  loading="lazy"
+                  decoding="async"
+                  className="guide-figure-img"
+                />
+                <figcaption className="guide-figcaption">{b.caption}</figcaption>
+              </figure>
             );
           case "dl":
             return (
@@ -166,6 +227,20 @@ function Blocks({ blocks }: { blocks: GuideBlock[] }) {
   );
 }
 
+/** 섹션 제목 왼쪽의 동그란 아이콘 칩. 아이콘이 없는 항목은 칩도 없다. */
+function H2({ item, anchor, title }: { item: GuideItem; anchor: string; title: string }) {
+  return (
+    <h2 className="guide-h2" id={anchor}>
+      {item.icon && (
+        <span className="guide-h2-icon">
+          <GuideIcon name={item.icon} size={19} />
+        </span>
+      )}
+      {title}
+    </h2>
+  );
+}
+
 function Heading({ item }: { item: GuideItem }) {
   return (
     <h3 className="guide-h3">
@@ -188,6 +263,20 @@ export default function GuidePage() {
   // 그리고, 나머지는 건너뛴다. 그래서 `lib/guideContent.ts` 의 배열 순서가 곧 이 화면의
   // 순서다 — 🔴 **항목을 더하면 순서만 맞추면 되고 이 파일은 손댈 필요가 없다.**
   const drawn = new Set<GuideGroupKey>();
+
+  // 머리의 바로가기 칩 — **아래 렌더 순서와 같은 규칙으로** 뽑는다(묶음은 첫 항목
+  // 자리에 한 번). 🔴 손으로 적은 목록을 두지 말 것 — 항목을 더할 때 반드시 어긋난다.
+  const seen = new Set<GuideGroupKey>();
+  const jumps: { anchor: string; label: string; icon: GuideIconName }[] = [];
+  for (const it of items) {
+    if (it.group) {
+      if (seen.has(it.group)) continue;
+      seen.add(it.group);
+      jumps.push({ anchor: GROUP_ANCHOR[it.group], label: GUIDE_GROUPS[it.group], icon: GUIDE_GROUP_ICONS[it.group] });
+    } else {
+      jumps.push({ anchor: `guide-${it.id}`, label: it.title, icon: it.icon || "tag" });
+    }
+  }
 
   return (
     <div className="portal-theme guide-page">
@@ -221,6 +310,17 @@ export default function GuidePage() {
           </Link>
         </div>
 
+        {/* 🔴 같은 페이지 안의 `#해시` 앵커라 `<a href>` 가 맞다(원칙 31번의 명시된
+            예외). `next/link` 로 바꾸면 스크롤이 아니라 라우팅으로 처리된다. */}
+        <nav className="guide-jump" aria-label="바로가기">
+          {jumps.map((j) => (
+            <a className="guide-jump-chip" href={`#${j.anchor}`} key={j.anchor}>
+              <GuideIcon name={j.icon} size={15} />
+              <span>{j.label}</span>
+            </a>
+          ))}
+        </nav>
+
         {items.map((item) => {
           // ── 묶음 섹션(시작하기 네 단계 · 진행 상태 보는 법) ──────────────
           if (item.group) {
@@ -232,6 +332,9 @@ export default function GuidePage() {
             return (
               <section className="guide-section" aria-labelledby={anchor} key={anchor}>
                 <h2 className="guide-h2" id={anchor}>
+                  <span className="guide-h2-icon">
+                    <GuideIcon name={GUIDE_GROUP_ICONS[group]} size={19} />
+                  </span>
                   {GUIDE_GROUPS[group]}
                 </h2>
                 {members.map((m) => (
@@ -254,9 +357,7 @@ export default function GuidePage() {
 
           return (
             <section className="guide-section" aria-labelledby={anchor} key={item.id}>
-              <h2 className="guide-h2" id={anchor}>
-                {item.title}
-              </h2>
+              <H2 item={item} anchor={anchor} title={item.title} />
 
               {table ? (
                 <>

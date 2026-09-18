@@ -34,9 +34,13 @@ export default function LandingFooter() {
             </a>
           </div>
           {/* 🔴 운영시간 줄을 뺐다(사용자 지시 2026-09-01 — "고객센터에서 시간 내용도
-              빼자"). 되살리지 말 것. ⚠️ 운영시간 자체는 없어진 값이 아니다 —
-              `COMPANY_SUPPORT_HOURS` 는 /about 푸터(`SiteFooter`)·화주포털·로그인 화면이
-              계속 쓴다. 랜딩 푸터에서만 감춘 것이다. */}
+              빼자"). 🔴 **되살리지 말 것** — 2026-09-18 에 사용자가 *「랜딩페이지는
+              없는 채로 유지하자」* 로 다시 확정했다.
+              ⚠️ 운영시간 자체는 없어진 값이 아니다 — `COMPANY_SUPPORT_HOURS` 를 공용
+              푸터(`SiteFooter`)·`/apply`·JSON-LD·화주포털·로그인 화면이 계속 쓰고,
+              같은 날 **18시 → 19시**로 올랐다. **랜딩 푸터에서만 감춘 것이다.**
+              ⚠️ 바로 아래 FAQ 의 「계정 발급 접수 기준」 시간은 이 상수가 아니라
+              `components/landing/data.ts` 에 따로 적혀 있다(같이 19시로 올렸다). */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 16 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 16.8 }}>
               <svg width="26" height="26" viewBox="0 0 20 20" fill="none" style={{ flex: "0 0 auto", display: "block" }}>
