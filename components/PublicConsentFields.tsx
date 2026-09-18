@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import LegalLinks from "@/components/LegalLinks";
-import { APPLY_CONSENT, TERMS_CONSENT } from "@/lib/legalInfo";
+import { APPLY_CONSENT, CONSENT_REFUSAL_NOTICE, TERMS_CONSENT } from "@/lib/legalInfo";
 
 // 이용약관 + 개인정보 동의 블록 (18차).
 //
@@ -154,6 +154,25 @@ export function LandingConsentCard({
   );
 }
 
+/**
+ * 동의 거부권 안내 한 줄.
+ *
+ * 🔴 **부품으로 뽑은 이유** — `/quote` 는 `PublicConsentFields` 를 쓰지 않고
+ *    `LandingConsentCard` 만 직접 그려서, 이 줄이 **그 화면에 통째로 없었다**
+ *    (2026-09-18 PR #177 리뷰). 화면에 `<p>` 를 복사해 넣으면 여백·색이 곧 갈린다.
+ * 🔴 **두 화면이 같은 모양·같은 문장이어야 한다** — 문구 정의처는 `lib/legalInfo.ts` 의
+ *    `CONSENT_REFUSAL_NOTICE` 하나다.
+ * 🔴 **좁은 화면에서도 감추지 말 것** — 동의 카드의 회색 설명글은 감추지만 이 줄은
+ *    남긴다(그래서 `landing-consent-desc` 클래스를 달지 않는다).
+ */
+export function ConsentRefusalNote() {
+  return (
+    <p style={{ margin: "2px 0 0", paddingLeft: 2, fontSize: 12.5, lineHeight: 1.6, color: "#8B8A85" }}>
+      {CONSENT_REFUSAL_NOTICE}
+    </p>
+  );
+}
+
 export default function PublicConsentFields({
   termsLabel,
   termsAgreed,
@@ -188,11 +207,10 @@ export default function PublicConsentFields({
           descWideOnly
           doc="privacy"
         />
-        {/* 🔴 거부권 안내(`refusal`)를 빼지 말 것 — 개인정보보호법 제15조 2항이 요구한다.
-            두 동의에 함께 걸리는 문장이라 카드 아래에 한 번만 둔다. */}
-        <p style={{ margin: "2px 0 0", paddingLeft: 2, fontSize: 12.5, lineHeight: 1.6, color: "#8B8A85" }}>
-          {TERMS_CONSENT.refusal}
-        </p>
+        {/* 🔴 거부권 안내를 빼지 말 것 — 개인정보보호법 제15조 2항이 요구한다.
+            두 동의에 함께 걸리는 문장이라 카드 아래에 한 번만 둔다.
+            🔴 `/quote` 도 같은 부품을 쓴다 — `<p>` 를 화면에 복사해 넣지 말 것. */}
+        <ConsentRefusalNote />
       </div>
     );
   }

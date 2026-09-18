@@ -241,6 +241,21 @@ export const APPLY_SITE_CONTACT_CONSENT = {
 // 두 문서는 개정 주기가 달라서 5차에 분리했다.
 //
 // ⚠️ **이 문구는 초안이며 변호사 검토 대상이다.**
+/**
+ * 동의 거부권 + 불이익 안내 — **공개 폼 두 화면이 같이 쓰는 한 문장**.
+ *
+ * 🔴 **개인정보보호법 제15조 2항 4호**가 요구하는 고지다(동의를 거부할 권리 + 거부에
+ *    따른 불이익). 화면에서 지우지 말 것 — 좁은 화면에서 설명글을 감출 때도 이 줄은
+ *    남긴다(`components/PublicConsentFields.tsx` 의 `descWideOnly` 주석).
+ * ⚠️ **원래 `TERMS_CONSENT.refusal` 안에만 있었다.** `/quote` 는 약관 동의를 받지 않아
+ *    그 상수를 쓸 일이 없었고, 그래서 **그 화면에는 거부권 고지가 통째로 없었다**
+ *    (2026-09-18 PR #177 리뷰에서 드러나 사용자 지시로 넣었다).
+ * 🔴 **화면마다 문장을 새로 적지 말 것** — 두 화면이 같은 말을 해야 한다.
+ *    `TERMS_CONSENT.refusal` 은 이 값을 가리키는 별명이고, 값을 여기서만 고친다.
+ */
+export const CONSENT_REFUSAL_NOTICE =
+  "동의를 거부하실 수 있으나, 거부 시 서비스 이용이 제한됩니다.";
+
 export const TERMS_CONSENT = {
   /**
    * `/apply` — 운송관리 계정 신청. **약관 동의를 받는 화면은 지금 여기 하나뿐이다.**
@@ -266,5 +281,6 @@ export const TERMS_CONSENT = {
    *    🔴 상·하차·인도(제15·17조)는 이번에 요약에서 빠졌다 — 조문은 그대로다.
    */
   summary: "운송계약 성립, 운임 산정과 추가비, 손해배상과 면책에 관한 내용입니다.",
-  refusal: "동의를 거부하실 수 있으나, 거부 시 서비스 이용이 제한됩니다.",
+  /** 🔴 값의 정의처는 위 `CONSENT_REFUSAL_NOTICE` 다 — 여기에 문장을 다시 적지 말 것. */
+  refusal: CONSENT_REFUSAL_NOTICE,
 } as const;

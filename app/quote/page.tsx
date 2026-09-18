@@ -6,7 +6,7 @@ import LandingHeader from "@/components/landing/LandingHeader";
 import LandingFooter from "@/components/landing/LandingFooter";
 import SubmitDone from "@/components/landing/SubmitDone";
 import AddressSearch from "@/components/AddressSearch";
-import { LandingConsentCard } from "@/components/PublicConsentFields";
+import { ConsentRefusalNote, LandingConsentCard } from "@/components/PublicConsentFields";
 import {
   DatePicker,
   Dropdown,
@@ -508,6 +508,13 @@ export default function PublicQuotePage() {
                     descWideOnly
                     doc="privacy"
                   />
+                  {/* 🔴 거부권 안내 — 개인정보보호법 제15조 2항 4호가 요구한다.
+                      ⚠️ **이 화면에는 원래 없었다**(2026-09-18 PR #177 리뷰에서 드러나
+                      사용자 지시로 넣었다). `/apply` 와 **같은 부품·같은 문장**이고
+                      정의처는 `lib/legalInfo.ts` 의 `CONSENT_REFUSAL_NOTICE` 다.
+                      🔴 좁은 화면에서도 감추지 말 것 — 설명글을 감춘 뒤 이 줄과
+                      「전문 보기」가 남는 전부다. */}
+                  <ConsentRefusalNote />
                 </div>
               </div>
 
