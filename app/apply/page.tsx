@@ -307,7 +307,7 @@ export default function ApplyPage() {
                     `app/landing.css` 의 `.landing-apply-grid` 가 1열로 되돌린다. */}
                 <div className="landing-apply-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0,1fr))", gap: 16, marginTop: 20 }}>
                   <div>
-                    <label style={fieldLabel}>회사명 {requiredMark}</label>
+                    <label className="landing-field-label" style={fieldLabel}>회사명 {requiredMark}</label>
                     <input
                       type="text"
                       value={form.company_name}
@@ -317,7 +317,7 @@ export default function ApplyPage() {
                     />
                   </div>
                   <div>
-                    <label style={fieldLabel}>사업자등록번호 {optionalMark}</label>
+                    <label className="landing-field-label" style={fieldLabel}>사업자등록번호 {optionalMark}</label>
                     <input
                       type="text"
                       inputMode="numeric"
@@ -332,7 +332,7 @@ export default function ApplyPage() {
 
                 <div className="landing-apply-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 16, marginTop: 20, paddingTop: 22, borderTop: "1px solid #EEEDE9" }}>
                   <div>
-                    <label style={fieldLabel}>담당자명 {requiredMark}</label>
+                    <label className="landing-field-label" style={fieldLabel}>담당자명 {requiredMark}</label>
                     <input
                       type="text"
                       value={form.contact_name}
@@ -342,7 +342,7 @@ export default function ApplyPage() {
                     />
                   </div>
                   <div>
-                    <label style={fieldLabel}>담당자 연락처 {requiredMark}</label>
+                    <label className="landing-field-label" style={fieldLabel}>담당자 연락처 {requiredMark}</label>
                     <input
                       type="tel"
                       inputMode="numeric"
@@ -354,7 +354,7 @@ export default function ApplyPage() {
                     />
                   </div>
                   <div>
-                    <label style={fieldLabel}>담당자 이메일 {optionalMark}</label>
+                    <label className="landing-field-label" style={fieldLabel}>담당자 이메일 {optionalMark}</label>
                     {/* ⚠️ 이메일은 22차에 선택 입력이 됐다 — 필수로 되돌리지 말 것.
                         🔴 **안내문 placeholder 를 되살리지 말 것**(사용자 지시 2026-09-18) —
                         「처리 결과를 메일로도 받으실 경우」가 있었는데, 라벨이 이미
@@ -559,7 +559,7 @@ export default function ApplyPage() {
                         톤수·형태를 각각 한 칸씩 쓴다. */}
                     <div className="landing-scale-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 16 }}>
                       <div>
-                        <label style={fieldLabel}>월 예상 운송건수</label>
+                        <label className="landing-field-label" style={fieldLabel}>월 예상 운송건수</label>
                         <input
                           type="text"
                           value={form.monthly_volume_estimate}
@@ -569,7 +569,7 @@ export default function ApplyPage() {
                         />
                       </div>
                       <div>
-                        <label style={fieldLabel}>업종</label>
+                        <label className="landing-field-label" style={fieldLabel}>업종</label>
                         {/* ⚠️ 예시는 placeholder 가 아니라 캡션에 둔다 — 21차에 입력창 폭에
                             잘려 뒷부분이 안 보인다는 지적이 있었다. */}
                         <input
@@ -619,7 +619,7 @@ export default function ApplyPage() {
                       </div>
                     </div>
                     <div style={{ marginTop: 20 }}>
-                      <label style={fieldLabel}>이용 지역 (중복 선택 가능)</label>
+                      <label className="landing-field-label" style={fieldLabel}>이용 지역 (중복 선택 가능)</label>
                       {/* 🔴 `MultiSelectTags` 를 그대로 쓴다 — 저장 형식이 "서울, 경기" 콤마
                           문자열이라 화면이 따로 그리면 형식이 갈린다. `variant` 는 색만
                           바꾼다(관리자 4개 화면은 기본값 그대로다). */}

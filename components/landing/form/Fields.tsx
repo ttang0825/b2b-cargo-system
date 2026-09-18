@@ -64,7 +64,17 @@ const menuItem = (active: boolean, selected: boolean): CSSProperties => ({
   fontFamily: "inherit",
 });
 
-/** 폼 라벨. 시안 값 그대로다. */
+/**
+ * 폼 라벨. 시안 값 그대로다(데스크탑 14px · 600 · `#6B6759`).
+ *
+ * 🔴 **쓸 때 `className="landing-field-label"` 를 같이 달 것.** 값이 인라인 style 이라
+ *    CSS 로는 못 이기는데, 좁은 화면에서 이 라벨만 키우려면 손잡이가 필요하다
+ *    (사용자 지시 2026-09-18 PR #177 리뷰 — *「모바일버전에서 계정신청이나 견적문의에서
+ *    적어야 하는 항목 제목들은 좀더 잘보이게 글자톤을 좀더 진하게 하고 글자크기를
+ *    살짝 더 키우자」*). 값은 `app/landing.css` 의 ≤700px 블록에 있다.
+ * 🔴 **동의 카드(`.landing-consent`)는 이 손잡이를 달지 않는다** — 그쪽은 제목이
+ *    별도 크기(14.5px · 600)이고 이 규칙이 걸리면 두 배로 커진다.
+ */
 export const fieldLabel: CSSProperties = { display: "block", fontSize: 14, fontWeight: 600, color: "#6B6759" };
 
 /** 필수 항목 표시. 라벨 뒤에 `{" "}` 와 함께 놓는다 — `<label>회사명 {requiredMark}</label>`
@@ -232,7 +242,7 @@ export function Dropdown({
 
   return (
     <div data-dd={ddKey} style={{ position: "relative" }}>
-      {label && <label style={fieldLabel}>{label}</label>}
+      {label && <label className="landing-field-label" style={fieldLabel}>{label}</label>}
       <button
         type="button"
         aria-haspopup="listbox"

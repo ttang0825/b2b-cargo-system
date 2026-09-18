@@ -682,6 +682,15 @@
   .landing-apply-paths-title { font-size: 20px !important; }
   .landing-apply-paths-sub { margin-top: 6px !important; font-size: 13.5px !important; line-height: 1.55 !important; }
   .landing-apply-tel { font-size: 30px !important; }
+  /* 🔴 폼 항목 제목을 좁은 화면에서만 키우고 진하게 한다(사용자 지시 2026-09-18 PR 리뷰 —
+        *「적어야 하는 항목 제목들(회사명, 사업자등록번호,,등등)은 좀더 잘보이게 글자톤을
+        좀더 진하게 하고 글자크기를 살짝 더 키우자」*). 14 → 15px · 600 → 700 ·
+        `#6B6759` → `#4A4945`(흰 카드 위 대비 9.2:1).
+     🔴 **16px 로 올리지 말 것** — 입력값 글자와 같아져 라벨과 값이 구분되지 않는다.
+     🔴 손잡이를 안 단 라벨에는 안 걸린다 — 동의 카드 제목·선택 칩이 그대로여야 한다.
+     🔴 `!important` 를 빼지 말 것(값이 인라인 style 이다 · 원칙 58번).
+     ⚠️ **데스크탑은 한 픽셀도 안 바뀐다**(이 블록 밖에 규칙이 없다). */
+  .landing-field-label { font-size: 15px !important; font-weight: 700 !important; color: #4A4945 !important; }
 }
 
 /* ── 31차 리뷰: 모바일 헤더 ─────────────────────────────────────────────────

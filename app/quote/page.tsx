@@ -395,7 +395,7 @@ export default function PublicQuotePage() {
               {/* ── 필수 입력 ─────────────────────────── */}
               <div style={cardStyle}>
                 <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 8 }}>
-                  <label style={fieldLabel}>출발지 {requiredMark}</label>
+                  <label className="landing-field-label" style={fieldLabel}>출발지 {requiredMark}</label>
                   <button
                     type="button"
                     onClick={() =>
@@ -434,7 +434,7 @@ export default function PublicQuotePage() {
                   />
                 </div>
 
-                <label style={{ ...fieldLabel, marginTop: 20 }}>도착지 {requiredMark}</label>
+                <label className="landing-field-label" style={{ ...fieldLabel, marginTop: 20 }}>도착지 {requiredMark}</label>
                 <div style={{ marginTop: 8 }}>
                   <AddressSearch
                     label=""
@@ -455,7 +455,7 @@ export default function PublicQuotePage() {
                   {dd("form", "차종", QUOTE_BODY_TYPES, "선택 안 함")}
                 </div>
 
-                <label style={{ ...fieldLabel, marginTop: 20 }}>운송물건</label>
+                <label className="landing-field-label" style={{ ...fieldLabel, marginTop: 20 }}>운송물건</label>
                 <input
                   type="text"
                   value={form.item}
@@ -464,7 +464,7 @@ export default function PublicQuotePage() {
                   style={{ ...fieldStyle, marginTop: 8 }}
                 />
 
-                <label style={{ ...fieldLabel, marginTop: 20 }}>성함 / 업체명 {requiredMark}</label>
+                <label className="landing-field-label" style={{ ...fieldLabel, marginTop: 20 }}>성함 / 업체명 {requiredMark}</label>
                 <input
                   type="text"
                   value={form.name}
@@ -473,7 +473,7 @@ export default function PublicQuotePage() {
                   style={{ ...fieldStyle, marginTop: 8 }}
                 />
 
-                <label style={{ ...fieldLabel, marginTop: 20 }}>연락처 {requiredMark}</label>
+                <label className="landing-field-label" style={{ ...fieldLabel, marginTop: 20 }}>연락처 {requiredMark}</label>
                 <input
                   type="tel"
                   inputMode="numeric"
@@ -556,7 +556,7 @@ export default function PublicQuotePage() {
                       {dd("load", "상차조건", LOADING_METHODS.map((m) => m.label), "기본운송", "14px 15px")}
                       {dd("unload", "하차조건", LOADING_METHODS.map((m) => m.label), "기본운송", "14px 15px")}
                       <div>
-                        <label style={fieldLabel}>대기시간(분)</label>
+                        <label className="landing-field-label" style={fieldLabel}>대기시간(분)</label>
                         {/* 🔴 무료 대기시간은 **20분**이다(25차에 30 → 20분으로 바뀐 가격 변경) —
                             시안 문구의 「무료 30분」을 그대로 쓰지 말 것. */}
                         <input
@@ -569,7 +569,7 @@ export default function PublicQuotePage() {
                         />
                       </div>
                       <div>
-                        <label style={fieldLabel}>경유지 수</label>
+                        <label className="landing-field-label" style={fieldLabel}>경유지 수</label>
                         <input
                           type="text"
                           inputMode="numeric"
@@ -601,7 +601,7 @@ export default function PublicQuotePage() {
                         담지 않으므로 손으로 고친 값이 남으면 무엇이 요청인지 갈린다. */}
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px,1fr))", gap: "20px 24px", marginTop: 20, alignItems: "start" }}>
                       <div>
-                        <label style={fieldLabel}>희망 상차 일시</label>
+                        <label className="landing-field-label" style={fieldLabel}>희망 상차 일시</label>
                         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                           <DatePicker
                             ddKey="calLoad"
@@ -625,7 +625,7 @@ export default function PublicQuotePage() {
                         {scheduleHint(pickupNow ? "지금 바로 상차 — 시간은 접수 시각으로 들어갑니다" : null)}
                       </div>
                       <div>
-                        <label style={fieldLabel}>희망 하차 일시</label>
+                        <label className="landing-field-label" style={fieldLabel}>희망 하차 일시</label>
                         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                           <DatePicker
                             ddKey="calUnload"
