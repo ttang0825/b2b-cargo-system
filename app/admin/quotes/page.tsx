@@ -44,6 +44,7 @@ import RecurringContractBadge from "@/components/RecurringContractBadge";
 import { fetchUnlinkedWonQuoteIds } from "@/lib/unlinkedWonQuotes";
 import AdminMobileList from "@/components/AdminMobileList";
 import DraggablePanel from "@/components/DraggablePanel";
+import CallScriptPanel from "@/components/CallScriptPanel";
 import RequiredMark from "@/components/RequiredMark";
 import {
   minDropoffDateTime as minDropoffDateTimeOf,
@@ -2076,25 +2077,39 @@ function QuotesPageInner() {
           </form>
         </div>
 
-        {/* 실시간 계산 결과 */}
-        {/* 🔴 **모바일에서는 끌어 옮길 수 있는 떠 있는 창**이 된다(리뷰 3라운드 —
-            *"모바일에서 「자동계산결과」창은 팝업으로 기본 아래에 배치되는데 끌어다
-            자유롭게 위치조정을 할수 있게"*).
-            🔴 **데스크탑은 한 겹도 안 씌운다** — `DraggablePanel` 이 모바일이 아니면
-               children 을 그대로 돌려준다. 감싸개를 끼우면 아래 `position: sticky` 의
-               기준이 바뀌어 **따라다니기가 조용히 멈춘다.** */}
-        <DraggablePanel title="자동 계산 결과">
-        {/* 🔴 `top` 에 **상단바 높이를 더한다** — PR #150 이 상단바를 `sticky` 로 만든 뒤로
-            `top: 20` 이면 데스크탑에서 **59px 이 헤더 뒤로 들어간다**(리뷰 2라운드 신고).
-            🔴 숫자를 여기 적지 말 것 — 정의처는 `--admin-topnav-h`(globals.css)다. */}
+        {/* 오른쪽 칸 — 계산 결과 + 전화응대 매뉴얼 */}
+        {/* 🔴 **스크롤을 따라다니는 것은 이 감싸개다**(2026-09-18). 전에는 계산 카드
+            자신이 `position: sticky` 였는데, 그 아래에 매뉴얼 창이 하나 더 생기면서
+            **둘을 각각 sticky 로 두면 서로 겹친다** — 둘을 함께 묶어 통째로 따라가게
+            바꿨다. 🔴 계산 카드에 `position: sticky` 를 되살리지 말 것.
+            🔴 `alignSelf: "start"` 를 빼지 말 것 — 그리드 칸은 행 높이만큼 늘어나는데
+               감싸개까지 같이 늘어나면 sticky 가 움직일 자리가 없어져 **따라다니기가
+               조용히 멈춘다.**
+            🔴 `top` 에 **상단바 높이를 더한다** — PR #150 이 상단바를 `sticky` 로 만든
+               뒤로 `top: 20` 이면 데스크탑에서 **59px 이 헤더 뒤로 들어간다**(36차 PR 2
+               리뷰 2라운드 신고). 숫자를 여기 적지 말 것 — 정의처는
+               `--admin-topnav-h`(globals.css)다.
+            🔴 높이 상한 + 안쪽 스크롤은 `.quote-side`(globals.css)에 있다 — 매뉴얼이
+               길어지면 화면보다 커져서 아래쪽이 영영 안 보이게 된다. */}
         <div
-          className="card"
+          className="quote-side"
           style={{
-            padding: 20,
             position: "sticky",
             top: "calc(var(--admin-topnav-h, 79px) + 20px)",
             alignSelf: "start",
           }}
+        >
+        {/* 실시간 계산 결과 */}
+        {/* 🔴 **모바일에서는 끌어 옮길 수 있는 떠 있는 창**이 된다(리뷰 3라운드 —
+            *"모바일에서 「자동계산결과」창은 팝업으로 기본 아래에 배치되는데 끌어다
+            자유롭게 위치조정을 할수 있게"*).
+            🔴 **데스크탑에서 계산 카드를 따로 감싸지 말 것** — `DraggablePanel` 이
+               모바일이 아니면 children 을 그대로 돌려준다. 위 `.quote-side` 말고 겹을
+               하나 더 끼우면 sticky 의 기준이 또 바뀐다. */}
+        <DraggablePanel title="자동 계산 결과">
+        <div
+          className="card"
+          style={{ padding: 20 }}
         >
           <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
             자동 계산 결과
@@ -2200,6 +2215,12 @@ function QuotesPageInner() {
           )}
         </div>
         </DraggablePanel>
+
+        {/* 🔴 **모바일에는 안 나온다**(사용자 지시 — *"모바일버전은 생략"*).
+            감추는 일은 CSS 가 한다(`.call-script-panel`, ≤700px) — 화면 폭을 JS 로
+            재서 가르면 첫 그림에서 잘못된 쪽이 한 번 번쩍인다. */}
+        <CallScriptPanel />
+        </div>
       </div>
 
       <div

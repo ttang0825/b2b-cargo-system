@@ -9420,3 +9420,234 @@ tbody tr:hover {
     height: 29px;
   }
 }
+
+/* ── 견적관리 오른쪽 칸 — 계산 결과 + 전화응대 매뉴얼 (2026-09-18) ─────────────
+ *
+ * 사용자 요청: *"견적관리에서 전화응대 메뉴얼 창이 있으면 좋겠다. 자동계산결과 창아래
+ * 따로 창이 있어서 마찬가지로 스크롤 따라 가게(모바일버전은 생략)"*
+ *
+ * 🔴 **스크롤을 따라다니는 것은 감싸개(`.quote-side`)다** — 카드 둘을 각각
+ *    `position: sticky` 로 두면 같은 `top` 에서 **서로 겹친다.** `position: sticky` 와
+ *    `top` 은 화면 파일(`app/admin/quotes/page.tsx`)의 인라인 style 에 있다
+ *    (`--admin-topnav-h` 를 더해야 해서 거기 뒀다). 여기서 또 주지 말 것.
+ * 🔴 **높이 상한 + 안쪽 스크롤을 빼지 말 것** — 매뉴얼 줄이 늘어나면 오른쪽 칸이
+ *    화면보다 길어져서 **아래쪽(저장 버튼까지)이 영영 안 보인다.** 34차가 모바일
+ *    떠 있는 계산창에서 겪은 것과 같은 자리다.
+ * ───────────────────────────────────────────────────────────────────────────── */
+.quote-side {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-height: calc(100vh - var(--admin-topnav-h, 79px) - 40px);
+  /* 계산 카드가 유난히 길 때를 대비한 안전망 — 평소에는 매뉴얼 쪽이 먼저 줄어든다 */
+  overflow-y: auto;
+  /* 안쪽 스크롤이 생겼을 때 카드 테두리가 스크롤바에 붙지 않게 */
+  padding-right: 2px;
+}
+/* 🔴 **계산 결과는 줄어들지 않는다 · 줄어드는 것은 매뉴얼이다.**
+ *    둘을 그냥 쌓아 두고 칸 전체를 스크롤하게 두면, 매뉴얼을 읽으려고 내리는 순간
+ *    **계산 결과가 위로 사라진다** — 전화를 받으며 둘을 같이 보려고 만든 창이라
+ *    그러면 만든 뜻이 없어진다(실제로 그려서 확인했다).
+ *    그래서 계산 카드는 `flex-shrink: 0`, 매뉴얼은 안쪽에서 스크롤한다. */
+.quote-side > .card {
+  flex-shrink: 0;
+}
+
+/* 🔴 모바일에서는 2열이 1열로 접히고(≤700px) 계산창은 **떠 있는 창**이 된다 —
+ *    그때 감싸개가 sticky 인 채로 높이 상한까지 갖고 있으면 내용이 잘린다.
+ * 🔴 `!important` 를 빼지 말 것 — `position` 은 화면 파일의 **인라인 style** 이라
+ *    이 규칙(0,0,1,0)이 그냥 진다. */
+@media (max-width: 700px) {
+  .quote-side {
+    position: static !important;
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+}
+
+/* ── 전화응대 매뉴얼 창 ──────────────────────────────────────────────────────
+ *
+ * 🔴 **모바일에는 안 나온다**(사용자 지시 — *"모바일버전은 생략"*).
+ *    분기점은 `.desktop-only`(760px)가 아니라 **위 2열 → 1열 분기점(700px)**에 맞춘다 —
+ *    오른쪽 칸이 있을 때만 이 창이 있어야 말이 된다.
+ * 🔴 **번호는 CSS 카운터가 그린다**(`counter(cs)`) — 글에 「1.」을 적어 저장하면
+ *    줄 하나를 지울 때마다 아래 번호를 사람이 전부 고쳐야 한다.
+ * ───────────────────────────────────────────────────────────────────────────── */
+.call-script-panel {
+  padding: 20px;
+  /* 🔴 `min-height: 0` 을 빼지 말 것 — flex 자식의 기본 최소높이가 `auto` 라
+   *    안쪽 목록이 아무리 `overflow` 를 가져도 **줄어들지 않는다**(칸 밖으로 넘친다). */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.quote-side > .card.call-script-panel {
+  /* 남는 높이를 이 창이 가져간다(계산 카드는 제 높이 그대로) */
+  flex: 1 1 auto;
+}
+
+@media (max-width: 700px) {
+  .call-script-panel {
+    display: none;
+  }
+}
+
+.call-script-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+/* 계산 결과 카드의 `<h3>`(14px)과 같은 무게로 — 두 창이 한 덩어리로 읽혀야 한다 */
+.call-script-panel h3 {
+  font-size: 14px;
+  margin: 0;
+}
+.call-script-edit {
+  margin-left: auto;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.call-script-edit:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.call-script-empty {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.call-script-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: cs;
+  font-size: 13px;
+  line-height: 1.55;
+  /* 🔴 줄이 늘어나면 **이 목록만** 스크롤한다 — 「+ 줄 추가」·저장·취소 버튼이
+   *    목록 아래에 있어서, 칸 전체가 스크롤되면 줄이 많을 때 그 버튼들이 화면 밖으로
+   *    밀려 「눌렀는데 아무 일도 없다」가 된다(원칙 33번의 결 · PR #154 가 겪은 자리). */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+.call-script-list > li {
+  counter-increment: cs;
+  display: flex;
+  gap: 8px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+  /* 한글이 어절 중간에서 끊기지 않게 — 좁은 칸이라 특히 눈에 띈다 */
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+.call-script-list > li:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+.call-script-list > li::before {
+  content: counter(cs);
+  flex-shrink: 0;
+  width: 17px;
+  text-align: right;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.75;
+}
+
+/* ── 편집 모드 ──────────────────────────────────────────────────────────────
+ * 🔴 칸 높이는 JS 가 글자 수에 맞춰 늘린다(`grow()`) — `resize: none` 과
+ *    `overflow: hidden` 은 그 한 벌이다. 빼면 칸에 자체 스크롤이 생겨 긴 문장의
+ *    뒷부분을 보면서 고칠 수 없다. */
+.call-script-list-edit > li {
+  align-items: flex-start;
+  border-top: none;
+  padding: 3px 0;
+  gap: 6px;
+}
+.call-script-list-edit > li::before {
+  line-height: 1;
+  padding-top: 11px;
+}
+.call-script-list-edit textarea {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  overflow: hidden;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #f9fafb;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.call-script-list-edit textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.call-script-del {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  margin-top: 5px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.call-script-del:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.call-script-add {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.call-script-add:hover {
+  border-color: var(--text-muted);
+  color: var(--text);
+}
+
+.call-script-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+/* 좁은 칸(340px)이라 저장 버튼이 글자 폭이면 너무 작아 보인다 — 칸을 채운다 */
+.call-script-actions .btn {
+  flex: 1;
+}
