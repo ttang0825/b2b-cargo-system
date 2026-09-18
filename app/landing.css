@@ -661,10 +661,13 @@
 @media (max-width: 700px) {
   /* 동의 카드의 「전문 보기」는 세 번째 자식이다(시안은 button, 우리는 링크 래퍼) */
   .landing-consent > .landing-consent-doc { grid-column: 2 !important; grid-row: 2 !important; justify-self: start !important; }
-  /* 🔴 좁은 화면에서는 **약관 요약만** 감춘다(사용자 지시 2026-09-18).
-     🔴 `.landing-consent-desc` 전체에 걸지 말 것 — 개인정보 카드의 설명은 **수집·이용
-        목적 고지**(개인정보보호법 제15조 2항)라 감추면 모바일에서만 법정 고지가
-        사라진다. 그래서 켜는 카드만 `-wide` 를 더 달게 했다.
+  /* 🔴 좁은 화면에서는 동의 카드의 회색 설명글을 감춘다(사용자 지시 2026-09-18 ·
+        같은 날 PR 리뷰에서 **약관·개인정보 두 카드 모두**로 확정).
+     🔴 **「전문 보기」와 카드 아래 거부권 문단은 감추지 말 것** — 감추는 순간 좁은
+        화면에서 법정 고지가 정말로 사라진다(사유는 `PublicConsentFields` 의
+        `descWideOnly` 주석).
+     🔴 선택자를 `.landing-consent-desc` 전체로 바꾸지 말 것 — 지금은 두 카드가 다
+        `-wide` 를 달고 있지만, **감출지 말지는 카드가 정한다**는 구조를 유지한다.
      🔴 `!important` 를 빼지 말 것 — 인라인 `display: block` 을 이겨야 한다(원칙 58번). */
   .landing-consent-desc-wide { display: none !important; }
   .landing-page .landing-consent-doc-link { padding: 6px 12px !important; font-size: 12.5px !important; }

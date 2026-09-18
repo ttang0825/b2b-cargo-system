@@ -11,6 +11,8 @@ import AddressSearch from "@/components/AddressSearch";
 import MultiSelectTags from "@/components/MultiSelectTags";
 import {
   Dropdown,
+  EmailField,
+  isEmailShapeOk,
   cardStyle,
   cardTitleStyle,
   fieldLabel,
@@ -182,6 +184,14 @@ export default function ApplyPage() {
       setError("회사명, 담당자명, 담당자 연락처는 필수입니다.");
       return;
     }
+    // 🔴 **반쪽짜리 이메일을 막는다** — 아이디만 적고 도메인을 비우면 `hong` 이 그대로
+    //    저장돼 발송도 안 되고 담당자가 원인을 모른다. 폼이 `noValidate` 라 브라우저
+    //    `type="email"` 검사는 걸리지 않으므로(그 검사가 걸리면 우리 오류 문구가 안 뜬다)
+    //    여기서 본다. 🔴 **비어 있는 것은 통과다**(22차에 선택 입력이 됐다).
+    if (!isEmailShapeOk(form.contact_email)) {
+      setError("담당자 이메일 형식을 확인해주세요. (예: hong@naver.com)");
+      return;
+    }
     if (!termsAgreed) {
       setError("이용약관에 동의해주셔야 신청을 접수할 수 있습니다.");
       return;
@@ -258,10 +268,12 @@ export default function ApplyPage() {
           >
             <div>
               {/* 🔴 문구는 사용자 확정이다(2026-09-18) — 「간편하게 전화로 신청하세요」를
-                  **「전화로 신청도 가능합니다」**로 낮췄고 「통화 한 번으로 신청이 끝납니다.」는
+                  **「전화로도 신청 가능합니다」**로 낮췄고 「통화 한 번으로 신청이 끝납니다.」는
                   **지웠다**. 아래 신청서가 주 경로이고 전화는 보조라는 뜻이다.
-                  🔴 권유형으로 되돌리지 말 것. */}
-              <div style={{ fontSize: 26, lineHeight: 1.35, fontWeight: 700, letterSpacing: "-0.03em", wordBreak: "keep-all" }}>전화로 신청도 가능합니다</div>
+                  🔴 권유형으로 되돌리지 말 것. ⚠️ 같은 날 PR 리뷰에서 「전화로 신청도
+                  가능합니다」를 **「전화로도 신청 가능합니다」로 한 번 더 고쳤다** —
+                  앞엣것으로 되돌리지 말 것. */}
+              <div style={{ fontSize: 26, lineHeight: 1.35, fontWeight: 700, letterSpacing: "-0.03em", wordBreak: "keep-all" }}>전화로도 신청 가능합니다</div>
               <div style={{ marginTop: 10, fontSize: 16, lineHeight: 1.75, color: "rgba(255,255,255,0.68)", wordBreak: "keep-all" }}>
                 {COMPANY_SUPPORT_HOURS} · 아래 신청서 작성도 가능합니다.
               </div>
@@ -343,12 +355,15 @@ export default function ApplyPage() {
                     {/* ⚠️ 이메일은 22차에 선택 입력이 됐다 — 필수로 되돌리지 말 것.
                         🔴 **안내문 placeholder 를 되살리지 말 것**(사용자 지시 2026-09-18) —
                         「처리 결과를 메일로도 받으실 경우」가 있었는데, 라벨이 이미
-                        「(선택)」이라 같은 말을 두 번 하는 자리였다. */}
-                    <input
-                      type="email"
+                        「(선택)」이라 같은 말을 두 번 하는 자리였다.
+                        🔴 **칸이 셋으로 나뉘어 보이지만 저장값은 문자열 하나다**
+                        (`contact_email`) — 규칙은 `EmailField` 한 곳이고 화면에서 다시
+                        가르지 말 것. 반쪽짜리 값은 아래 제출 직전 검사가 막는다. */}
+                    <EmailField
                       value={form.contact_email}
-                      onChange={(e) => setField("contact_email", e.target.value)}
-                      style={{ ...fieldStyle, marginTop: 8 }}
+                      onChange={(v) => setField("contact_email", v)}
+                      openKey={openKey}
+                      setOpenKey={setOpenKey}
                     />
                   </div>
                 </div>

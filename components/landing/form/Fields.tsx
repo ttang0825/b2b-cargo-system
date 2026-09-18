@@ -277,6 +277,118 @@ export function Dropdown({
   );
 }
 
+/**
+ * 이메일 입력 — **아이디 @ 도메인 + 도메인 고르기**(사용자 지시 2026-09-18 —
+ * *「이메일 적는 곳에 다른 타사이트들 처럼 일반 도메인 주소를 선택하거나 직접입력 할수
+ * 있게하자」*). 한국 사이트에서 흔한 모양 그대로다.
+ *
+ * 🔴 **저장값은 여전히 문자열 하나다**(`contact_email`) — 컬럼을 둘로 쪼개지 말 것.
+ *    아이디·도메인을 따로 state 로 들지도 않는다. **값에서 매번 갈라 읽는다**(마지막
+ *    `@` 기준). 별도 state 를 두면 프리필·초기화 때 두 값이 조용히 어긋난다.
+ * 🔴 **도메인 칸을 읽기 전용으로 잠그지 말 것.** 잠그면 `naver.com` 을 고른 뒤
+ *    회사 도메인으로 바꾸려면 「직접 입력」을 먼저 골라야 한다 — 고르는 것은 **바로
+ *    가기일 뿐**이고 손으로 치는 길이 언제나 열려 있어야 한다.
+ * 🔴 **고른 값을 따로 기억하지 않는다** — 드롭다운에 보이는 것은 **지금 도메인 값**이
+ *    목록에 있으면 그것, 없으면 「직접 입력」이다. 그래서 손으로 고쳐도 표시가 맞는다.
+ * ⚠️ 도메인을 비우면 저장값에 `@` 를 붙이지 않는다(`hong` 이지 `hong@` 가 아니다) —
+ *    반쪽짜리 값은 화면이 아니라 **제출 직전 검사**가 막는다(`requiredMark` 주석과 같은 결).
+ */
+export const EMAIL_DIRECT_INPUT = "직접 입력";
+
+/** 🔴 국내 주요 사이트(네이버·쿠팡·11번가 등)가 공통으로 두는 목록이다. 임의로 늘리지 말 것 —
+ *  길어지면 고르는 것이 치는 것보다 느려진다. */
+export const EMAIL_DOMAINS = [
+  EMAIL_DIRECT_INPUT,
+  "naver.com",
+  "gmail.com",
+  "daum.net",
+  "hanmail.net",
+  "nate.com",
+  "kakao.com",
+  "outlook.com",
+  "hotmail.com",
+  "icloud.com",
+  "yahoo.com",
+] as const;
+
+/** 저장값 → `{ local, domain }`. 🔴 **마지막 `@` 로 가른다**(로컬파트에 `@` 가 올 수 있다). */
+export function splitEmail(value: string): { local: string; domain: string } {
+  const at = value.lastIndexOf("@");
+  if (at < 0) return { local: value, domain: "" };
+  return { local: value.slice(0, at), domain: value.slice(at + 1) };
+}
+
+/** `{ local, domain }` → 저장값. 🔴 **도메인이 비면 `@` 를 붙이지 않는다.** */
+export function joinEmail(local: string, domain: string): string {
+  return domain ? `${local}@${domain}` : local;
+}
+
+/** 이메일이 **비었거나** `a@b.c` 꼴인가. 제출 직전 검사가 쓴다. */
+export function isEmailShapeOk(value: string): boolean {
+  const v = value.trim();
+  if (!v) return true;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+}
+
+export function EmailField({
+  value,
+  onChange,
+  openKey,
+  setOpenKey,
+  ddKey = "email-domain",
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  openKey: string | null;
+  setOpenKey: (k: string | null) => void;
+  ddKey?: string;
+}) {
+  const { local, domain } = splitEmail(value);
+  const picked = (EMAIL_DOMAINS as readonly string[]).includes(domain) ? domain : "";
+
+  return (
+    <>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+        <input
+          type="text"
+          inputMode="email"
+          autoComplete="email"
+          value={local}
+          onChange={(e) => onChange(joinEmail(e.target.value, domain))}
+          placeholder="아이디"
+          aria-label="이메일 아이디"
+          style={{ ...fieldStyle, minWidth: 0 }}
+        />
+        <span aria-hidden style={{ flex: "0 0 auto", fontSize: 15, color: "#8B8A85" }}>
+          @
+        </span>
+        <input
+          type="text"
+          inputMode="url"
+          value={domain}
+          onChange={(e) => onChange(joinEmail(local, e.target.value))}
+          placeholder="도메인"
+          aria-label="이메일 도메인"
+          style={{ ...fieldStyle, minWidth: 0 }}
+        />
+      </div>
+      {/* 🔴 고르기는 **아랫줄**이다 — 칸 셋을 한 줄에 놓으면 3열 격자(한 칸 약 380px)와
+          360px 화면에서 둘 다 눌린다. 실측해서 정한 배치다. */}
+      <div style={{ marginTop: 8 }}>
+        <Dropdown
+          placeholder={EMAIL_DIRECT_INPUT}
+          value={picked}
+          options={EMAIL_DOMAINS}
+          onPick={(v) => onChange(joinEmail(local, v === EMAIL_DIRECT_INPUT ? "" : v))}
+          openKey={openKey}
+          setOpenKey={setOpenKey}
+          ddKey={ddKey}
+        />
+      </div>
+    </>
+  );
+}
+
 const pad2 = (n: number) => String(n).padStart(2, "0");
 export const dateKey = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 const dateLabel = (k: string) => {
