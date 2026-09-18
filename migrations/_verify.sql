@@ -1623,10 +1623,12 @@ where conrelid = 'public.sms_logs'::regclass
 order by contype, conname;
 
 -- ㉚-c  실제로 쌓인 종류·수신자 구분 — 코드가 아는 값과 같은가
+--       🔴 **이 표에는 `created_at` 이 없다 — 시각 컬럼은 `sent_at` 이다**(㉚-a 실측).
+--          처음 돌릴 때 `created_at` 으로 적었다가 `42703` 으로 멈췄다(원칙 55번과 같은 자리).
 select template_type as "종류", recipient_type as "받는 사람",
        count(*) as "건수",
        count(*) filter (where status = 'failed') as "실패",
-       min(created_at)::date as "처음", max(created_at)::date as "마지막"
+       min(sent_at)::date as "처음", max(sent_at)::date as "마지막"
 from public.sms_logs
 group by 1, 2
 order by 3 desc;
