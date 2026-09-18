@@ -72,11 +72,16 @@ with ord(vt, rk) as (values
   ('1톤',3),('1.4톤',4),('2.5톤',5),('3.5톤',6),('5톤',7),('5톤 플러스/축',8),
   ('8톤',9),('11톤',10),('15톤',11),('18톤',12),('25톤',13)
 )
+--    🔴 **다마스↔라보 한 쌍만 동가를 허용한다**(2026-09-18 — 사용자 지시로 라보를
+--       다마스 값으로 통일했다). 나머지 11쌍은 엄격 증가 그대로다 —
+--       `<=` 를 전부 `<` 로 바꾸면 다른 쌍의 동가까지 통과해 검사가 헐거워진다.
 select count(*) as 차급역전_건수
   from rate_distance_tiers a join ord oa on oa.vt = a.vehicle_type
   join rate_distance_tiers b on b.distance_label = a.distance_label
   join ord ob on ob.vt = b.vehicle_type
- where ob.rk = oa.rk + 1 and b.base_fare <= a.base_fare;
+ where ob.rk = oa.rk + 1
+   and case when oa.vt = '다마스' then b.base_fare <  a.base_fare
+                                 else b.base_fare <= a.base_fare end;
 
 \echo ''
 \echo '=== ⑦ 가산기준 전체 (2026-09-11 이후 13행) ==============='
