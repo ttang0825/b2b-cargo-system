@@ -1713,3 +1713,75 @@ from information_schema.columns
 where table_schema = 'public' and table_name = 'orders'
   and column_name in ('company_id','quote_id','individual_customer_id','status','order_no')
 order by 1;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- ㉜  기업고객 리워드 1차 착수 전 조사 (2026-09-20)
+--
+-- 🚨 **적립 기준이 성립하는지**를 재는 절이다. 리워드는 「운임 **공급가액**의 5%」를
+--    「화주 **입금 확인**」 시점에 적립하는데, 그 두 가지가 실제 데이터에 있어야 한다.
+--    🔴 읽기 전용 — 아무것도 바꾸지 않는다.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- ㉜-a  🚨 `invoices` 컬럼 전수 — 부가세 구분이 정산까지 승계되는가
+--       (있어야 `customer_charge_total` 이 공급가액인지 포함가인지 가릴 수 있다)
+select column_name as "컬럼", data_type as "타입",
+       coalesce(column_default,'') as "기본값", is_nullable as "널"
+from information_schema.columns
+where table_schema = 'public' and table_name = 'invoices'
+order by ordinal_position;
+
+-- ㉜-b  🚨 부가세 구분이 실제로 갈려 있는가 — 전부 false 면 전 건이 공급가액이다
+select
+  (select count(*) from public.invoices)                                        as "정산 전체",
+  (select count(*) from public.invoices where customer_charge_vat_included)      as "정산 포함가",
+  (select count(*) from public.invoices where not customer_charge_vat_included)  as "정산 공급가액",
+  (select count(*) from public.dispatches where customer_charge_vat_included)    as "배차 포함가",
+  (select count(*) from public.dispatches where not customer_charge_vat_included) as "배차 공급가액";
+
+-- ㉜-c  🚨 현장 추가비가 정산 스냅샷에 **이미 섞여 있는가**
+--       `autoCreateInvoice` 가 생성 시점의 active 추가비를 `customer_charge_total` 에
+--       더해서 얼린다. 그런 건이 실재하면 「기본 운임만」을 그 칸으로는 못 만든다.
+select
+  (select count(*) from public.dispatch_extra_charges)                    as "추가비 전체",
+  (select count(*) from public.dispatch_extra_charges where status='active') as "활성",
+  (select count(*) from public.dispatch_extra_charges
+     where status='active' and correction_invoice_id is not null)          as "정정청구로 빠진 것",
+  (select count(*) from public.invoices i
+     where exists (
+       select 1 from public.dispatch_extra_charges e
+       join public.dispatches d on d.id = e.dispatch_id
+       where d.order_id = i.order_id
+         and e.status = 'active'
+         and e.correction_invoice_id is null
+         and e.created_at <= i.created_at))                                as "스냅샷에 섞인 정산 건";
+
+-- ㉜-d  🔴 월정산 묶음 입금 함수 본문 — 라우트가 RPC 로 부른다.
+--       🚨 **함수를 고쳐야 하는지**를 여기서 가른다(고쳐야 하면 멈추고 보고).
+select p.proname as "함수", pg_get_functiondef(p.oid) as "본문"
+from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public' and p.proname = 'mark_billing_batch_payment_received';
+
+-- ㉜-e  🔴 수금방식 값 전수 — 선착불 판정의 실제 분포
+select coalesce(collection_method,'(null)') as "수금방식",
+       coalesce(billing_cycle,'(null)')     as "청구주기",
+       count(*)                              as "건수"
+from public.invoices group by 1,2 order by 3 desc;
+
+-- ㉜-f  🔴 운영 실측 — 「무거워 보인다」로 최적화하지 않기 위한 기준선
+select
+  (select count(*) from public.invoices)                                   as "정산 전체",
+  (select count(*) from public.invoices where payment_received)            as "입금확인됨",
+  (select count(*) from public.invoices where collection_method='driver_direct') as "선착불",
+  (select count(*) from public.companies)                                   as "화주 전체",
+  (select count(*) from public.companies where status='활성')               as "활성 화주",
+  (select count(*) from public.customer_billing_batches)                    as "월정산 묶음",
+  (select count(*) from public.customer_billing_batches where payment_status='paid') as "묶음 입금완료";
+
+-- ㉜-g  🔴 원칙 27번 — 만들려는 이름이 이미 있는가 (있으면 멈춘다)
+select table_name as "이미 있는 표"
+from information_schema.tables
+where table_schema = 'public' and table_name like 'reward%'
+order by 1;
+
+-- ㉜-h  🔴 기준선 — `_migrations` 행 수(45여야 한다)
+select count(*) as "_migrations 행 수" from public._migrations;
