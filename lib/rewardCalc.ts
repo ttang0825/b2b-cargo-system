@@ -1,0 +1,177 @@
+// 기업고객 리워드 — **계산 정의처 하나** (A장, 2026-09-20)
+//
+// 🔴 **이 파일의 의존성은 `lib/vat.ts` 하나뿐이다**(그쪽도 순수 함수만 있다).
+//    supabase 클라이언트를 들이지 말 것 — 서버 라우트가 이 파일을 import 하는데,
+//    `lib/supabaseClient` 는 **읽는 순간** 브라우저 클라이언트를 만들어서
+//    `next build` 가 *"Failed to collect page data"* 로 멈춘다
+//    (PR #151 `lib/quoteValidity.ts` · PR #179 `lib/callScript.ts` 와 같은 자리).
+//    조회는 부르는 쪽이 하고, 여기는 **받은 값으로 계산만** 한다.
+//
+// ── 🔴 적립 기준 (사용자 확정 2026-09-18) ──────────────────────────────────
+//
+//   적립률      운임 **공급가액**(부가세 제외)의 5% · **1원 미만 절사**
+//   적립 시점   🔴 **화주 입금 확인** — 운송완료가 아니다
+//   대상 금액   🔴 **기본 운임 공급가액만** — 현장 추가비 제외
+//   선착불      🔴 **제외**
+//
+// ── 🚨 왜 선착불을 빼는가 — 「부담이 크다」가 아니다 ─────────────────────────
+//
+//   선착불(`driver_direct`)은 **화주가 위캐리에 입금하지 않는다.** 운임은 차주가
+//   직접 받고 위캐리가 받는 것은 주선수수료뿐이며 화주 미수금은 **0**이다
+//   (HANDOFF §5-12 · `lib/receivableCalc.ts`). 그래서 —
+//
+//     ① 「화주 입금 확인」이라는 **사건 자체가 일어나지 않는다**  → 적립 트리거가 없다
+//     ② `customer_charge_total` 은 **화주가 우리에게 낸 돈이 아니다** → 적립 기준이 없다
+//
+//   🔴 **「부담이 크다」로 적으면 다음 세션이 「그럼 요율을 낮춰서 넣자」로 간다.**
+//      기준이 될 **금액과 시점이 존재하지 않는** 것이다.
+//
+// ── ⚠️ 현장 추가비가 스냅샷에 섞여 있을 수 있다 (실측 2026-09-20) ───────────
+//
+//   `lib/autoCreateInvoice.ts` 가 정산 건을 만들 때 **그 시점의 활성 추가비를
+//   `customer_charge_total` 에 더해서 얼린다**(`charge = customerCharge + extraCharge`).
+//   🟢 지금 운영에는 추가비가 **0행**이라 섞인 건이 없지만 **구조상 섞인다.**
+//   → 그래서 `includedExtraChargeTotal` 을 받아서 **빼고** 공급가액을 낸다.
+//      🔴 부르는 쪽이 넘기는 값은 **그 정산 건 생성 시점에 이미 포함된 것만**이다
+//         (`created_at <= invoice.created_at` · `status='active'` ·
+//          `correction_invoice_id is null` — 35차 A-7 과 같은 규칙).
+//      🔴 **그 뒤에 등록된 추가비는 애초에 스냅샷에 없으므로 빼면 안 된다** —
+//         빼면 기본 운임에서 두 번 깎인다.
+
+import { splitVat } from "./vat";
+
+/** 🔴 원장 유형 — DB CHECK 와 같아야 한다. 3차에 늘릴 때 제약도 같이 고칠 것. */
+export type RewardTransactionType = "transport_earn" | "reversal" | "adjustment";
+/** 🔴 원본 종류 — DB CHECK 와 같아야 한다. */
+export type RewardSourceType = "invoice" | "billing_batch" | "manual";
+/** 🔴 혜택 제공 방식 — DB CHECK 와 같아야 한다. */
+export type RewardMethod = "freight_discount" | "giftcard" | "manual";
+
+export const REWARD_METHOD_OPTIONS: { value: RewardMethod; label: string }[] = [
+  { value: "freight_discount", label: "운임 할인" },
+  { value: "giftcard", label: "상품권" },
+  { value: "manual", label: "담당자 협의" },
+];
+
+export function rewardMethodLabel(v: string | null | undefined): string {
+  return REWARD_METHOD_OPTIONS.find((o) => o.value === v)?.label ?? "담당자 협의";
+}
+
+export type RewardBaseInput = {
+  /** `invoices.customer_charge_total` — 🔴 생성 시점 스냅샷이다 */
+  customerChargeTotal: number | null | undefined;
+  /** `invoices.customer_charge_vat_included` — 🔴 실측상 포함가 건이 실재한다 */
+  customerChargeVatIncluded: boolean | null | undefined;
+  /** 🔴 그 스냅샷에 **이미 섞여 들어간** 현장 추가비 합계(화주 청구분) */
+  includedExtraChargeTotal?: number | null;
+};
+
+/**
+ * 적립 기준이 되는 **공급가액**을 뽑는다 — 부가세 제외 · 현장 추가비 제외.
+ *
+ * 🔴 **부가세를 1.1 로 직접 나누지 말 것.** `splitVat` 이 정의처다 — 되돌리면
+ *    **11,000원마다 1원**이 어긋난다(35차 리뷰 8라운드 · HANDOFF §5-12).
+ * 🔴 **추가비를 부가세보다 먼저 뺀다** — 추가비도 같은 기준(포함/별도)으로 적힌
+ *    금액이라 합계에서 빼고 나서 가르는 것이 맞다. 순서를 바꾸면 포함가 건에서
+ *    추가비의 부가세만큼 어긋난다.
+ */
+export function rewardBaseAmount(input: RewardBaseInput): number {
+  const total = Math.round(input.customerChargeTotal || 0);
+  const extra = Math.round(input.includedExtraChargeTotal || 0);
+  const freightOnly = total - extra;
+  if (freightOnly <= 0) return 0;
+  return splitVat(freightOnly, input.customerChargeVatIncluded).supply;
+}
+
+/**
+ * 공급가액 × 요율 → 적립액. 🔴 **1원 미만 절사**(`Math.round` 가 아니다).
+ *
+ *   100,000 × 5% = 5,000
+ *    99,999 × 5% = 4,999.95 → **4,999**
+ *
+ * ⚠️ `toFixed(6)` 을 거치는 이유 — 요율 5% 는 이진수로 정확히 담기지 않아
+ *    `base * rate` 가 정확값보다 **아주 조금 큰** 값이 되는 일이 있다
+ *    (1,000,000 × 5% 가 50000.00000000001 로 나온다). 그대로 `floor` 해도 답은 같지만,
+ *    요율이 바뀌었을 때 **아주 조금 작아지는** 쪽이 나오면 1원을 잃는다.
+ *    소수 여섯째 자리에서 정리한 뒤 절사하면 두 경우가 다 맞는다.
+ * 🔴 **`Math.round` 로 바꾸지 말 것** — 확정값이 「1원 미만 절사」다.
+ */
+export function rewardEarnAmount(
+  baseAmount: number,
+  earnRate: number | null | undefined
+): number {
+  const rate = Number(earnRate || 0);
+  if (!(baseAmount > 0) || !(rate > 0)) return 0;
+  return Math.floor(Number((baseAmount * rate).toFixed(6)));
+}
+
+export type RewardEligibilityInput = {
+  /** `invoices.collection_method` — 🔴 `driver_direct` 는 제외 */
+  collectionMethod: string | null | undefined;
+  /** 화주가 없는 건(게스트 오더)은 적립할 대상이 없다 */
+  companyId: string | null | undefined;
+  /** `rewardBaseAmount()` 결과 */
+  baseAmount: number;
+};
+
+export type RewardIneligibleReason =
+  | "direct_collection"
+  | "no_company"
+  | "zero_amount";
+
+/**
+ * 이 정산 건이 **금액·시점 기준으로** 적립 대상인가.
+ *
+ * 🔴 **멤버십·캠페인 기간 판정은 여기서 하지 않는다** — 그것은 DB 를 읽어야 알 수
+ *    있어서 서버 라우트가 한다. 이 함수는 **정산 건 자체의 성질**만 본다.
+ * 🔴 **선착불 판정을 새로 쓰지 말 것** — `lib/receivableCalc.ts` 가 쓰는 것과
+ *    같은 값(`collection_method === "driver_direct"`)이다.
+ */
+export function rewardIneligibleReason(
+  input: RewardEligibilityInput
+): RewardIneligibleReason | null {
+  if (input.collectionMethod === "driver_direct") return "direct_collection";
+  if (!input.companyId) return "no_company";
+  if (!(input.baseAmount > 0)) return "zero_amount";
+  return null;
+}
+
+export function isRewardEligible(input: RewardEligibilityInput): boolean {
+  return rewardIneligibleReason(input) === null;
+}
+
+export const REWARD_INELIGIBLE_LABEL: Record<RewardIneligibleReason, string> = {
+  direct_collection: "대상 아님 — 선착불",
+  no_company: "대상 아님 — 화주가 연결되지 않은 건",
+  zero_amount: "대상 아님 — 적립 기준 금액이 0원",
+};
+
+export type RewardLedgerAmountRow = {
+  transaction_type?: string | null;
+  amount: number | null;
+};
+
+export type RewardBalance = {
+  /** 원장 합계 — 적립 + 회수 + 조정 */
+  balance: number;
+  /** 누적 적립(+) 만 */
+  earned: number;
+  /** 누적 사용·회수(−) 의 절대값 */
+  used: number;
+};
+
+/**
+ * 🔴 **잔액은 원장 합계의 표시 시점 계산이다.** `companies` 에 잔액 컬럼을 만들지 말 것 —
+ *    `outstanding_amount` 가 저장 스냅샷이라 **선착불 화주는 영영 안 고쳐졌던** 사고가
+ *    이 저장소에 있다(36차 C장). 표시 시점 계산이면 **옛 건도 자동으로 맞는다.**
+ */
+export function rewardBalance(rows: RewardLedgerAmountRow[]): RewardBalance {
+  let earned = 0;
+  let used = 0;
+  for (const r of rows || []) {
+    const n = Math.round(r.amount || 0);
+    if (n > 0) earned += n;
+    else used += -n;
+  }
+  return { balance: earned - used, earned, used };
+}
