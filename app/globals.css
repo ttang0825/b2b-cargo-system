@@ -9768,3 +9768,30 @@ tbody tr:hover {
   color: var(--text-muted);
   margin-top: 3px;
 }
+
+/* 정산 상세의 리워드 한 줄 (C장 4-3) — 🔴 읽기 전용이다. 버튼을 만들지 말 것. */
+.reward-invoice-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 9px 12px;
+  margin-top: 12px;
+  border-radius: 6px;
+  background: #fafaf8;
+  font-size: 12.5px;
+}
+.reward-invoice-line > span {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.reward-invoice-line > b {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.reward-line-ok {
+  color: #1f7a4d;
+}
+/* 🔴 적립 실패는 눈에 띄어야 한다 — 담당자가 알 길이 이 줄뿐이다 */
+.reward-line-warn {
+  color: #b4423a;
+}

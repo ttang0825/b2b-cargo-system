@@ -26,6 +26,7 @@ import { vatBasisLabel } from "@/components/VatBasisSelect";
 import MixableBadge from "@/components/MixableBadge";
 import LockedBadge from "@/components/LockedBadge";
 import AmendmentReasonModal from "@/components/AmendmentReasonModal";
+import InvoiceRewardLine from "@/components/InvoiceRewardLine";
 import { getDispatchExtraChargeCategoryLabel } from "@/lib/dispatchExtraCharges";
 import {
   customerOutstandingOf,
@@ -47,6 +48,8 @@ export default function InvoiceDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // 🔴 저장 직후 서버가 돌려준 적립 결과 — 조용히 넘어간 실패를 화면에 알리는 유일한 길이다
+  const [rewardResult, setRewardResult] = useState<any>(undefined);
   const [deleting, setDeleting] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -319,6 +322,7 @@ export default function InvoiceDetailPage() {
       setConflict(true);
       return;
     }
+    setRewardResult(result.reward);
 
     // 입금 확인 상태가 바뀌면, 연결된 화주의 미수금을 전체 재계산합니다
     // (증분 방식 대신, 그 화주의 모든 미입금 정산건을 다시 합산 - 삭제된
@@ -349,7 +353,25 @@ export default function InvoiceDetailPage() {
 
     setSaving(false);
     setAmendmentReasonOpen(false);
+
+    // 🔴 **적립이 실패했으면 목록으로 나가지 않는다.** 입금확인은 이미 저장됐고
+    //    (적립이 본업을 막지 않는다) 담당자에게 알릴 자리가 **이 화면뿐**이다 —
+    //    그대로 나가면 조용히 넘어간 실패를 아무도 모른다.
+    //    ⚠️ 이 화면은 저장하면 목록으로 나가는 구조라, 머물지 않으면 아래 리워드
+    //       한 줄이 그려질 기회 자체가 없다.
+    if (rewardFailed(result.reward)) {
+      await load();
+      return;
+    }
     router.push("/admin/invoices");
+  }
+
+  /** 🔴 적립이 「안 됐다」가 아니라 「실패했다」인 경우만 참이다 — 대상이 아니어서
+   *  건너뛴 것(`skipped`)은 정상이므로 여기서 걸리면 안 된다. */
+  function rewardFailed(reward: any): boolean {
+    if (!reward) return false;
+    if (reward.error || reward.timedOut) return true;
+    return (reward.results || []).some((r: any) => r.status === "error");
   }
 
   // driver_direct(선착불) 건은 "정산확정 가능 조건"(작업지시서 4-5)을 실제로
@@ -841,6 +863,15 @@ export default function InvoiceDetailPage() {
             )
           )}
         </div>
+
+        {/* 🔴 리워드는 **읽기 전용 한 줄**이다(C장 4-3) — 버튼을 만들지 말 것.
+            수동으로 넣어야 하면 화주 상세의 「수동 조정」이다.
+            🔴 리워드를 안 쓰는 화주에게는 컴포넌트가 아무것도 안 그린다. */}
+        <InvoiceRewardLine
+          invoiceId={id}
+          companyId={invoice.companies?.id}
+          lastResult={rewardResult}
+        />
 
         {/* 35차 A-7 — 배차 기준 재동기화. 🔴 **금액 칸을 직접 편집하게 만들지 말 것** —
             정본은 배차이고, 직접 입력을 열면 배차와 정산이 서로 다른 값을 갖게 된다.

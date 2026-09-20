@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
+import { accrueRewardSafely } from "@/lib/rewardAccrue";
 
 // 정산관리 상세의 메인 저장(상태/세금계산서/입금/차주지급) — 이전에는
 // anon 클라이언트가 직접 update()했으나, 정산확정(잠금) 기능 도입으로
@@ -116,7 +117,8 @@ export async function POST(req: Request) {
     });
     if (logError) return NextResponse.json({ error: logError.message }, { status: 400 });
 
-    return NextResponse.json({ ok: true });
+    const reward = await runRewardForPaymentChange(admin, currentStaff.id, id, current, cleanPayload);
+    return NextResponse.json({ ok: true, reward });
   }
 
   // 잠기지 않은 일반 건 — 기존 lib/optimisticUpdate.ts와 동일한 낙관적 잠금 로직
@@ -132,5 +134,42 @@ export async function POST(req: Request) {
     return NextResponse.json({ conflict: true });
   }
 
-  return NextResponse.json({ ok: true });
+  const reward = await runRewardForPaymentChange(admin, currentStaff.id, id, current, cleanPayload);
+  return NextResponse.json({ ok: true, reward });
+}
+
+/**
+ * 🔴 **입금 확인이 바뀐 순간이 리워드 적립·회수의 트리거다**(사용자 확정 — 운송완료가
+ *    아니다. 미수금 상태에서 포인트가 먼저 나가면 안 된다).
+ *
+ * 🔴 **저장이 성공한 뒤에만 부른다** — 저장이 실패했는데 적립이 나가면 안 된다.
+ * 🔴 **적립 실패가 입금확인을 막지 않는다** — `accrueRewardSafely` 는 던지지 않고
+ *    3초 안에 못 끝나면 그냥 넘어간다. 무엇이 왜 안 됐는지는 응답의 `reward` 로
+ *    돌아가고 정산 상세가 그것을 그대로 보여준다(담당자가 알 길이 그것뿐이다).
+ * 🔴 **서버 안이라 `await` 한다** — 서버리스 함수는 응답 뒤 **얼어붙기** 때문에
+ *    fire-and-forget 으로 두면 적립이 아예 안 나간다(38차가 웹 푸시에서 겪은 자리).
+ * ⚠️ 값이 **안 바뀌었으면 아무것도 안 한다** — 다른 칸(세금계산서 등)만 고친 저장에
+ *    적립을 태우면 UNIQUE 덕에 원장은 한 줄이지만 매번 쓸데없는 질의가 나간다.
+ */
+async function runRewardForPaymentChange(
+  admin: any,
+  staffId: string,
+  invoiceId: string,
+  current: Record<string, any>,
+  cleanPayload: Record<string, any>
+) {
+  if (!("payment_received" in cleanPayload)) return undefined;
+  const was = current.payment_received === true;
+  const now = cleanPayload.payment_received === true;
+  if (was === now) return undefined;
+
+  const out = await accrueRewardSafely({
+    admin,
+    staffId,
+    sourceType: "invoice",
+    sourceId: invoiceId,
+    // 🚨 해제 = **회수**다. 원본 적립행을 지우지 않고 `reversal` 한 줄을 넣는다.
+    reverse: !now,
+  });
+  return out;
 }

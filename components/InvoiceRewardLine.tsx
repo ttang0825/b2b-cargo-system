@@ -1,0 +1,123 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { REWARD_INELIGIBLE_LABEL, type RewardIneligibleReason } from "@/lib/rewardCalc";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 정산 상세의 「리워드」 **읽기 전용 한 줄** (C장 4-3, 2026-09-20)
+//
+// 🔴 **버튼을 만들지 말 것**(1차는 자동만) — 수동으로 넣어야 하면 화주 상세의
+//    **「수동 조정」**이다. 여기에 「지금 적립」 버튼을 두면 원장이 자동·수동 두 경로로
+//    쌓여 무엇이 자동인지 구분되지 않는다.
+//
+// 🔴 **「적립 실패」도 보여야 한다** — 적립은 입금확인을 막지 않고 조용히 넘어가므로,
+//    담당자가 그 사실을 알 길이 **여기뿐**이다.
+//
+// 🔴 **리워드를 안 쓰는 화주에게는 아무것도 안 그린다**(`null`) — 「대상 아님」을
+//    모든 정산 건에 띄우면 쓰지 않는 담당자에게 잡음이다.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type LedgerRow = {
+  id: string;
+  transaction_type: string;
+  amount: number;
+  created_at: string;
+};
+
+type Props = {
+  invoiceId: string;
+  companyId: string | null | undefined;
+  /** 저장 직후 서버가 돌려준 적립 결과 — 있으면 그것을 먼저 보여준다 */
+  lastResult?: {
+    results?: { invoice_id: string; status: string; amount?: number; reason?: string; message?: string }[];
+    timedOut?: boolean;
+    error?: string;
+  };
+};
+
+const won = (n: number | null | undefined) => `${Math.round(n || 0).toLocaleString()}원`;
+const ymd = (s: string | null | undefined) => (s ? s.slice(0, 10).replace(/-/g, ".") : "");
+
+const SKIP_LABEL: Record<string, string> = {
+  ...REWARD_INELIGIBLE_LABEL,
+  not_member: "대상 아님 — 리워드 미적용 화주",
+  not_received: "대상 아님 — 입금이 확인되지 않음",
+  out_of_campaign: "대상 아님 — 캠페인 기간 밖",
+  before_start: "대상 아님 — 리워드 적용 시작일 이전",
+  after_end: "대상 아님 — 리워드 적용 종료일 이후",
+  no_accrual: "회수할 적립 내역이 없음",
+};
+
+export default function InvoiceRewardLine({ invoiceId, companyId, lastResult }: Props) {
+  const [rows, setRows] = useState<LedgerRow[] | null>(null);
+  const [member, setMember] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!companyId) return;
+    let alive = true;
+    (async () => {
+      try {
+        const [sumRes, ledRes] = await Promise.all([
+          fetch(`/api/admin/reward/summary?company_id=${encodeURIComponent(companyId)}`, { cache: "no-store" }),
+          fetch(`/api/admin/reward/ledger?company_id=${encodeURIComponent(companyId)}`, { cache: "no-store" }),
+        ]);
+        if (!alive) return;
+        if (sumRes.ok) {
+          const j = await sumRes.json();
+          setMember(!!j.membership);
+        } else {
+          setMember(false);
+        }
+        if (ledRes.ok) {
+          const j = await ledRes.json();
+          // 🔴 이 정산 건의 줄만 고른다 — 원장은 화주 단위로 쌓인다.
+          setRows((j.rows || []).filter((r: any) => r.source_id === invoiceId));
+        }
+      } catch {
+        if (alive) setMember(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [companyId, invoiceId, lastResult]);
+
+  // 🔴 리워드를 안 쓰는 화주면 아무것도 안 그린다.
+  if (!companyId || member === false) return null;
+  if (member === null) return null;
+
+  const mine = lastResult?.results?.find((r) => r.invoice_id === invoiceId);
+  const earned = (rows || []).filter((r) => r.transaction_type === "transport_earn");
+  const reversed = (rows || []).filter((r) => r.transaction_type === "reversal");
+
+  let text: string;
+  let tone: "ok" | "muted" | "warn" = "muted";
+
+  if (lastResult?.error || mine?.status === "error") {
+    // 🔴 조용히 넘어간 실패를 **여기서 알린다.**
+    text = `적립 실패 — ${mine?.message || lastResult?.error} (화주 상세의 「수동 조정」으로 넣을 수 있습니다)`;
+    tone = "warn";
+  } else if (lastResult?.timedOut) {
+    text = "적립 처리가 시간 안에 끝나지 않았습니다 — 잠시 뒤 새로고침해 확인해 주세요.";
+    tone = "warn";
+  } else if (earned.length > 0 && reversed.length > 0) {
+    text = `+${won(earned[0].amount)} 적립됨 (${ymd(earned[0].created_at)}) · 이후 회수됨 (${ymd(reversed[0].created_at)})`;
+    tone = "muted";
+  } else if (earned.length > 0) {
+    text = `+${won(earned[0].amount)} 적립됨 (${ymd(earned[0].created_at)})`;
+    tone = "ok";
+  } else if (mine && mine.status === "skipped") {
+    text = SKIP_LABEL[mine.reason || ""] || `대상 아님 — ${mine.reason}`;
+  } else {
+    text = "아직 적립되지 않았습니다 — 입금 확인 시 자동으로 쌓입니다.";
+  }
+
+  return (
+    <div className="reward-invoice-line">
+      <span>리워드</span>
+      <b className={tone === "ok" ? "reward-line-ok" : tone === "warn" ? "reward-line-warn" : undefined}>
+        {text}
+      </b>
+    </div>
+  );
+}
