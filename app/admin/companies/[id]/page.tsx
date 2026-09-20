@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
@@ -11,6 +11,7 @@ import { getSourceChips } from "@/lib/sourceColors";
 //    AddressSearch → 「저장된 주소」 섹션(customer_locations 추가)
 //    formatPhoneNumber → 화주포털 계정 발급 폼의 담당자 전화번호
 import AddressSearch from "@/components/AddressSearch";
+import CompanyRewardPanel from "@/components/CompanyRewardPanel";
 import { formatPhoneNumber } from "@/lib/constants";
 // 🔴 화주 항목 정의는 `lib/companyFields.ts` 한 곳이다(33차 A장) — 여기에 있던
 //    BASIC_FIELDS · SALES_REF_FIELDS · CRM_CONTACT_FIELDS · CRM_BIZ_FIELDS ·
@@ -27,6 +28,7 @@ import {
   emptyCompanyForm,
   isRecurringContractActive,
   parseRecommendedVehicle,
+  type CompanySection,
 } from "@/lib/companyFields";
 // 🔴 미수금은 저장값이 아니라 표시 시점 계산이다 — 정의처는 이 파일 하나다(36차 PR 2).
 import {
@@ -637,6 +639,17 @@ export default function CompanyDetailPage() {
     );
   }
 
+  // 🔴 한 구획에 값이 하나라도 있는가 — **아래 루프와 리워드 블록이 같은 식을 쓴다.**
+  //    두 곳에 따로 적으면 「거래 조건」이 비어 있는 화주에서 리워드가 사라지거나
+  //    둘이 그려진다.
+  function sectionHasAnyValue(section: CompanySection): boolean {
+    return companyFieldsOf(section).some((f) => {
+      const v = (company as any)[f.key];
+      return f.type === "checkbox" ? v === true : v !== null && v !== undefined && v !== "";
+    });
+  }
+  const showsTradeTerms = editing || sectionHasAnyValue("거래 조건");
+
   return (
     <main className="container">
       <div style={{ marginBottom: 16 }}>
@@ -800,7 +813,8 @@ export default function CompanyDetailPage() {
         });
         if (!editing && !hasAnyValue) return null;
         return (
-          <div key={section} className="card" style={{ padding: 20, marginBottom: 20 }}>
+          <React.Fragment key={section}>
+            <div className="card" style={{ padding: 20, marginBottom: 20 }}>
             <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 14 }}>
               {section}
               {section === "정기계약" && !editing && company.is_recurring_contract && (
@@ -887,11 +901,19 @@ export default function CompanyDetailPage() {
                 return <Field key={f.key} label={f.label} value={shown} />;
               })}
             </div>
-          </div>
+            </div>
+            {/* 🔴 「거래 조건」 **바로 아래**가 자리다(지시서 3-1). 구획 순서가 바뀌어도
+                따라오도록 인덱스가 아니라 구획 이름으로 겨눈다.
+                🔴 `lib/companyFields.ts` 에 넣지 않았다 — 별도 표이고 저장 경로가 다르다. */}
+            {section === "거래 조건" && !editing && <CompanyRewardPanel companyId={id} />}
+          </React.Fragment>
         );
       })}
 
-      
+      {/* 🔴 표시 모드에서 「거래 조건」 카드 자체가 안 그려지는 화주(값이 하나도 없는
+          경우)에도 리워드는 보여야 한다 — 위 루프가 그 구획을 통째로 건너뛰기 때문이다. */}
+      {!editing && !showsTradeTerms && <CompanyRewardPanel companyId={id} />}
+
       {/* 저장된 주소 (상차지/하차지) — 🔴 화주포털 「배송지·화물 관리」와 같은 구조다 */}
       <div className="card" style={{ padding: 20, marginBottom: 20 }}>
         <h3 style={{ fontSize: 14, marginTop: 0, marginBottom: 4 }}>저장된 배송지</h3>

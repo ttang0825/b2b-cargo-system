@@ -38,6 +38,9 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/admin/customers", label: "활성 화주 (CRM)" },
       { href: "/admin/portal-requests", label: "화주요청", key: "portalRequests" },
+      // 🔴 **원칙 14번과 `HANDOFF.md` §3 도 같이 고쳤다** — 메뉴는 **세 곳**에 적혀
+      //    있고, 코드만 고치면 다음 세션이 그 글을 근거로 되돌린다(35·36차 교훈).
+      { href: "/admin/reward", label: "리워드 관리" },
       { href: "/admin/account-cleanup", label: "포털 계정 정리" },
     ],
   },

@@ -95,6 +95,11 @@ export default function CustomersPage() {
   const [portalCompanyIds, setPortalCompanyIds] = useState<Set<string>>(new Set());
   /** 화주 id → 미수금 (표시 시점 계산) */
   const [outstandingByCompany, setOutstandingByCompany] = useState<Record<string, number>>({});
+  // 🔴 리워드는 **서버 라우트로만** 읽는다 — 세 표가 RLS on + 정책 0개라
+  //    `authenticated` 로는 아예 닿지 않는다(그게 설계다). 정책을 열지 말 것.
+  //    🔴 잔액도 서버가 원장을 합쳐서 준다 — 화면이 원장을 직접 합치지 않는다.
+  const [rewardMemberships, setRewardMemberships] = useState<Record<string, { enabled: boolean }>>({});
+  const [rewardBalances, setRewardBalances] = useState<Record<string, { balance: number }>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -153,6 +158,22 @@ export default function CustomersPage() {
       .select(CUSTOMER_RECEIVABLE_SELECT_BY_COMPANY);
     setOutstandingByCompany(customerOutstandingByCompany((invoiceRows || []) as any));
 
+    // 🔴 리워드 — **한 번의 조회**로 전체를 받는다(화주마다 부르면 목록이 느려진다).
+    //    🔴 **실패해도 목록은 그린다** — 리워드는 이 화면의 곁다리이고, 여기서 막으면
+    //       화주 목록 자체를 못 본다. 다만 두 칸이 「-」 로 보일 뿐이다.
+    try {
+      const res = await fetch("/api/admin/reward/summary", { cache: "no-store" });
+      if (res.ok) {
+        const json = await res.json();
+        const ms: Record<string, { enabled: boolean }> = {};
+        for (const m of json.memberships || []) ms[m.company_id] = { enabled: m.enabled === true };
+        setRewardMemberships(ms);
+        setRewardBalances(json.balances || {});
+      }
+    } catch {
+      /* 리워드는 곁다리다 — 목록을 막지 않는다 */
+    }
+
     setCustomers(
       list.map((c) => ({ ...c, latestDispatchStatus: latestByCompany[c.id] || null }))
     );
@@ -162,6 +183,11 @@ export default function CustomersPage() {
   useEffect(() => {
     loadCustomers();
   }, []);
+
+  /** 그 화주의 리워드 설정 — 없으면 `null`(목록에 `-` 로 그린다) */
+  function rewardOf(companyId: string): { enabled: boolean } | null {
+    return rewardMemberships[companyId] || null;
+  }
 
   // "삭제"가 아니라 활성 목록에서만 빠지도록 상태를 되돌립니다 (데이터는 보존됨)
   async function handleRemoveFromCRM(id: string, name: string) {
@@ -378,6 +404,10 @@ export default function CustomersPage() {
                 <th>청구주기</th>
                 <th>누적오더</th>
                 <th>미수금</th>
+                {/* 🔴 리워드 두 칸은 **서버 라우트에서 온 값**이다 — 화면이 리워드 표를
+                    직접 읽지 않는다(RLS on + 정책 0개). */}
+                <th>리워드</th>
+                <th>적립금</th>
                 <th>등급</th>
                 <th>거래상태</th>
                 <th>배차상태</th>
@@ -422,6 +452,24 @@ export default function CustomersPage() {
                   {/* 🔴 `c.outstanding_amount`(저장값)로 되돌리지 말 것 — 선착불 운임이 다시
                       미수금으로 보인다(36차 PR 2 리뷰 1라운드에 실제로 신고된 자리다). */}
                   <td className="cell-nowrap">{won(outstandingByCompany[c.id] || 0)}</td>
+                  {/* 🔴 리워드를 안 쓰는 화주는 **`-`** 다(빈칸이 아니다) — 빈칸이면
+                      「값을 못 불러왔다」와 구분되지 않는다(지시서 3-3). */}
+                  <td className="cell-nowrap">
+                    {rewardOf(c.id) ? (
+                      <span
+                        className={`reward-tag ${
+                          rewardOf(c.id)!.enabled ? "reward-tag-on" : "reward-tag-off"
+                        }`}
+                      >
+                        {rewardOf(c.id)!.enabled ? "적용" : "해제"}
+                      </span>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
+                  <td className="cell-nowrap">
+                    {rewardOf(c.id) ? won(rewardBalances[c.id]?.balance || 0) : "-"}
+                  </td>
                   <td className="cell-nowrap">
                     {c.grade ? (
                       <span className="badge">{c.grade}</span>
@@ -555,6 +603,14 @@ export default function CustomersPage() {
                 { label: "담당자", value: c.contact_name || "-" },
                 { label: "연락처", value: c.contact_mobile || c.phone || "-" },
                 { label: "누적오더", value: `${c.total_orders_count || 0}건` },
+                {
+                  label: "리워드",
+                  value: rewardOf(c.id)
+                    ? `${rewardOf(c.id)!.enabled ? "적용" : "해제"} · ${won(
+                        rewardBalances[c.id]?.balance || 0
+                      )}`
+                    : "-",
+                },
               ],
             }))}
           />
