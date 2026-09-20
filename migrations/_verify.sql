@@ -1768,14 +1768,29 @@ select coalesce(collection_method,'(null)') as "수금방식",
 from public.invoices group by 1,2 order by 3 desc;
 
 -- ㉜-f  🔴 운영 실측 — 「무거워 보인다」로 최적화하지 않기 위한 기준선
+--       ⚠️ **「활성」은 단일 값이 아니다** — `app/admin/customers/page.tsx` 의
+--          `ACTIVE_CUSTOMER_STATUSES` **여섯 값**의 집합이다(`status='활성'` 로 재면 0이 나온다).
 select
   (select count(*) from public.invoices)                                   as "정산 전체",
   (select count(*) from public.invoices where payment_received)            as "입금확인됨",
   (select count(*) from public.invoices where collection_method='driver_direct') as "선착불",
   (select count(*) from public.companies)                                   as "화주 전체",
-  (select count(*) from public.companies where status='활성')               as "활성 화주",
+  (select count(*) from public.companies
+     where status in ('견적요청','견적발송','첫거래완료','재거래발생','반복화주','월정산화주'))
+                                                                            as "활성 화주",
   (select count(*) from public.customer_billing_batches)                    as "월정산 묶음",
   (select count(*) from public.customer_billing_batches where payment_status='paid') as "묶음 입금완료";
+
+-- ㉜-f2  🔴 화주 영업상태 분포 — 어느 화주에게 리워드를 켤 수 있는지의 모수
+select coalesce(status,'(null)') as "영업상태", count(*) as "건수"
+from public.companies group by 1 order by 2 desc;
+
+-- ㉜-f3  🔴 월정산 묶음 항목 — **공급가액 스냅샷이 이미 있는가**
+--        있으면 월정산 적립을 그 값으로 건별로 남길 수 있다.
+select column_name as "컬럼", data_type as "타입", is_nullable as "널"
+from information_schema.columns
+where table_schema = 'public' and table_name = 'customer_billing_batch_items'
+order by ordinal_position;
 
 -- ㉜-g  🔴 원칙 27번 — 만들려는 이름이 이미 있는가 (있으면 멈춘다)
 select table_name as "이미 있는 표"
