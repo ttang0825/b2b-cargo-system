@@ -22,6 +22,7 @@ import VatBasisSelect from "@/components/VatBasisSelect";
 import MixableBadge from "@/components/MixableBadge";
 import { shortAddress } from "@/lib/shortAddress";
 import { fetchDispatchSmsPreview, dispatchSmsEventCount } from "@/lib/notifyDispatchSms";
+import { fetchRewardStatusSmsPreview } from "@/lib/notifyRewardSms";
 import { notifyPortalPushForDispatchStatus } from "@/lib/notifyPortalPush";
 import {
   DISPATCH_STATUS_CANCELLED,
@@ -538,6 +539,27 @@ function DispatchesPageInner() {
     // "운송완료"로 새로 바뀌면 정산이 없을 경우 자동 등록
     if (status === "운송완료" && prevStatus !== "운송완료" && target) {
       await autoCreateInvoiceIfNeeded(target);
+    }
+
+    // 🚨 **운송완료 → 「적립 현황 안내」 확인창**(리워드 3차 후속, 2026-09-21)
+    //
+    //    사용자 확정 — *"월정산건도 한건의 운송이 완료되면 예상 적립금을 알려주고
+    //    얼마가 쌓이고 있는지 확인이 문자메세지로 필요한거다."* 월정산 화주는 한 달치를
+    //    한 번에 입금하므로, 그 전까지 「얼마가 쌓이고 있는지」를 알 길이 이 문자뿐이다.
+    //
+    // 🔴 **2026-09-18 에 폐지한 상차·하차완료 문자와 다른 것이다** — 그것은 **운송
+    //    상태 안내**였고(「알림으로만 충분하다」), 이것은 **적립 안내**다. 리워드가
+    //    켜지고 문자 안내가 켜진 화주에게만 뜬다.
+    // 🔴 **`autoCreateInvoiceIfNeeded` 뒤여야 한다** — 그래야 이번 건의 정산이
+    //    이미 있어서 「이번 운송 예상 적립」을 셀 수 있다. 순서를 바꾸지 말 것.
+    // 🔴 **대상이 아니면 조용히 `null` 이다**(리워드 미참여·문자 안내 꺼짐 등) —
+    //    그때는 창을 띄우지 않고 **오류도 아니다.**
+    if (status === "운송완료" && prevStatus !== "운송완료") {
+      const rewardPreview = await fetchRewardStatusSmsPreview({ dispatchId });
+      if (rewardPreview) {
+        smsTotalRef.current = 1;
+        setSmsQueue([rewardPreview]);
+      }
     }
 
     // 상차완료/하차완료는 상태를 바꿀 때마다 팝업이 자동으로 뜨면 번거롭다는

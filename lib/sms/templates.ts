@@ -375,6 +375,67 @@ export function portalAccountIssuedMessage(
  * ⚠️ **LMS 다**(151byte · 실측). 나머지 여섯 종과 같고, 90byte 안에 넣으려면 머리말이나
  *    문의 줄을 빼야 한다 — 둘 다 뺄 수 없다(머리말은 7종 공통, 문의는 회신 경로).
  */
+/**
+ * 🚨 **「운송관리에서 적립 내역을 확인하실 수 있습니다」는 켜진 화주에게만 적는다**
+ *    (2026-09-21 · 사용자 *"기본적으로 화주포털에는 리워드 상황을 노출안하는 경우가
+ *    많을 것 같다"*).
+ *
+ * 🔴 `reward_memberships.portal_visible` 이 꺼져 있으면 화주 포털에 **적립금 메뉴가
+ *    아예 없다.** 그 화주에게 이 줄을 보내면 **없는 화면을 찾아가라고 하는 것**이고,
+ *    문자를 받은 사람이 로그인해서 메뉴를 뒤지다 담당자에게 전화하게 된다.
+ * 🔴 **기본값은 「안 붙인다」다** — 인자를 안 넘긴 호출부가 생겼을 때 거짓말을
+ *    하는 쪽이 아니라 **말을 아끼는 쪽**으로 떨어져야 한다.
+ */
+function portalLine(portalVisible?: boolean | null): string[] {
+  return portalVisible === true ? ["운송관리에서 적립 내역을 확인하실 수 있습니다."] : [];
+}
+
+/**
+ * 적립 **현황** 안내 (리워드 3차 후속, 2026-09-21).
+ *
+ * 🚨 **`rewardEarnedMessage` 와 다른 종류다 — 합치지 말 것.**
+ *    앞엣것은 **입금이 확인되어 실제로 쌓인 순간**이고, 이것은 **아직 안 쌓인
+ *    예상**을 알린다. 월정산 화주는 한 달치를 한 번에 입금하므로 그 전까지
+ *    「얼마가 쌓이고 있는지」를 알 길이 이 문자뿐이다(사용자 2026-09-21).
+ *
+ * 🔴 **「예정」·「예상」을 빼지 말 것** — 빼면 약속으로 읽힌다(표시광고법 결).
+ * 🔴 **지급 방식·사용 조건을 적지 말 것**(다른 리워드 문자와 같은 규칙) —
+ *    나간 문자는 회수되지 않고 세무·법무 검수가 아직이다.
+ */
+export function rewardStatusMessage(
+  params: WithContact & {
+    /** 이번 운송 한 건의 예상 적립 — 🔴 운송완료 안내일 때만. 없으면 줄을 안 쓴다 */
+    thisAmount?: number | null;
+    /** 아직 입금 전인 건 전부의 예상 적립 합계 */
+    pendingAmount?: number | null;
+    pendingCount?: number | null;
+    /** 이미 쌓인 적립금(원장 합계) */
+    balance: number;
+    portalVisible?: boolean | null;
+    staffName?: string | null;
+  }
+): string {
+  const won = (n: number) => n.toLocaleString("ko-KR");
+  const lines: string[] = [`${SMS_HEADER} 적립 현황 안내`];
+  if (params.thisAmount && params.thisAmount > 0) {
+    lines.push(`운송 건이 완료되어 ${won(params.thisAmount)}원이 적립될 예정입니다.`);
+  }
+  if (params.pendingAmount && params.pendingAmount > 0) {
+    lines.push(
+      `정산 후 적립 예정 ${won(params.pendingAmount)}원${
+        params.pendingCount ? ` (운송 ${params.pendingCount}건)` : ""
+      }`
+    );
+  }
+  // 🔴 **현재 적립금은 0원이어도 적는다** — 이 문자의 목적이 「얼마가 쌓이고
+  //    있는지」라, 확정분이 0이라는 것 자체가 알려야 하는 사실이다
+  //    (위 두 줄과 달리 「없으면 생략」이 아니다).
+  lines.push(`현재 적립금 ${won(params.balance)}원`);
+  lines.push(...portalLine(params.portalVisible));
+  lines.push(contactLine(params));
+  return lines.join("\n");
+}
+
 export function rewardEarnedMessage(
   params: WithContact & {
     /** 이번에 적립된 금액(여러 건이면 합계) */
@@ -390,6 +451,8 @@ export function rewardEarnedMessage(
      */
     pendingAmount?: number | null;
     pendingCount?: number | null;
+    /** 🚨 포털 노출 여부 — `portalLine()` 머리말 참고. 기본은 **안 붙인다** */
+    portalVisible?: boolean | null;
     staffName?: string | null;
   }
 ): string {
@@ -404,7 +467,7 @@ export function rewardEarnedMessage(
     `운송 정산이 확인되어 ${params.amount.toLocaleString("ko-KR")}원이 적립되었습니다.`,
     `누적 적립금 ${params.balance.toLocaleString("ko-KR")}원`,
     ...(pending ? [pending] : []),
-    "운송관리에서 적립 내역을 확인하실 수 있습니다.",
+    ...portalLine(params.portalVisible),
     contactLine(params),
   ].join("\n");
 }
@@ -429,6 +492,8 @@ export function rewardDeductedMessage(
     balance: number;
     /** 🔴 화주에게 보이는 한 줄(`customer_note`) — 없으면 줄을 안 쓴다 */
     note?: string | null;
+    /** 🚨 포털 노출 여부 — `portalLine()` 머리말 참고. 기본은 **안 붙인다** */
+    portalVisible?: boolean | null;
     staffName?: string | null;
   }
 ): string {
@@ -438,7 +503,7 @@ export function rewardDeductedMessage(
     `적립금 ${Math.abs(params.amount).toLocaleString("ko-KR")}원이 차감되었습니다.`,
     ...(note ? [note] : []),
     `남은 적립금 ${params.balance.toLocaleString("ko-KR")}원`,
-    "운송관리에서 적립 내역을 확인하실 수 있습니다.",
+    ...portalLine(params.portalVisible),
     contactLine(params),
   ].join("\n");
 }

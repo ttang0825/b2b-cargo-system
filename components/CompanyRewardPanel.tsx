@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getCurrentStaffRole } from "@/lib/currentStaff";
 import SmsConfirmModal, { type SmsPreview } from "@/components/SmsConfirmModal";
+import { fetchRewardStatusSmsPreview } from "@/lib/notifyRewardSms";
 import {
   REWARD_METHOD_OPTIONS,
   rewardMethodLabel,
@@ -99,8 +100,15 @@ export default function CompanyRewardPanel({ companyId }: { companyId: string })
   const [ledgerOpen, setLedgerOpen] = useState(false);
   const [ledger, setLedger] = useState<LedgerRow[] | null>(null);
   const [adjustOpen, setAdjustOpen] = useState(false);
-  /** 차감 안내 문자의 확인창 — 🔴 `null` 이면 안 뜬다(양수 조정·문자 안내 꺼짐) */
+  /** 차감·현황 안내 문자의 확인창 — 🔴 `null` 이면 안 뜬다 */
   const [smsPreview, setSmsPreview] = useState<SmsPreview | null>(null);
+  const [smsLoading, setSmsLoading] = useState(false);
+  /**
+   * 🔴 **액션 실패는 로딩 실패(`loadError`)·저장 실패(`saveError`)와 따로 둔다**
+   *    (원칙 33번) — 섞으면 문자 준비 실패가 이미 불러온 카드를 통째로 덮는다.
+   *    이 저장소에서 같은 버그를 네 번 겪은 자리다.
+   */
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -166,6 +174,28 @@ export default function CompanyRewardPanel({ companyId }: { companyId: string })
       setSaveError(e?.message || "저장하지 못했습니다.");
     }
     setSaving(false);
+  }
+
+  /**
+   * 「적립 안내 문자」 — 🔴 **여기서 보내지 않는다.** 미리보기를 받아 확인창을 띄우고,
+   * 담당자가 [발송]을 눌러야 나간다(리워드 문자 셋이 전부 같은 자세다).
+   *
+   * 🔴 **못 만든 이유를 말해준다**(원칙 55번) — 조용히 아무 일도 안 일어나면
+   *    담당자가 버튼이 고장난 것으로 읽는다. 사유는 셋이다:
+   *    리워드 꺼짐 · 문자 안내 꺼짐 · 아직 알릴 숫자가 없음.
+   */
+  async function sendStatusSms() {
+    setSmsLoading(true);
+    setActionError(null);
+    const preview = await fetchRewardStatusSmsPreview({ companyId });
+    setSmsLoading(false);
+    if (!preview) {
+      setActionError(
+        "안내할 내용이 없습니다. 「리워드 적용」과 「문자 적립 안내」가 켜져 있는지, 적립되었거나 적립 예정인 운송이 있는지 확인해 주세요."
+      );
+      return;
+    }
+    setSmsPreview(preview);
   }
 
   async function openLedger() {
@@ -362,9 +392,28 @@ export default function CompanyRewardPanel({ companyId }: { companyId: string })
               {saveError}
             </div>
           )}
+          {/* 🔴 **누른 자리 바로 위에 띄운다**(원칙 33번 · PR #154 의 교훈) —
+              카드 맨 위에만 그리면 버튼에서 멀어 「아무 일도 안 일어난다」가 된다. */}
+          {actionError && (
+            <div className="error-box" style={{ fontSize: 12, marginBottom: 8 }}>
+              {actionError}
+            </div>
+          )}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button className="btn btn-ghost" onClick={openLedger}>
               적립·사용 내역 보기
+            </button>
+            {/* 🚨 **이 버튼이 리워드의 주 채널이다**(2026-09-21 사용자 확정) —
+                포털은 대부분 꺼져 있고, 화주가 「얼마가 쌓이고 있는지」를 아는 길이
+                이 문자다. 🔴 관리자 전용 블록 **밖**에 둔다(재직 직원이면 누구나
+                안내할 수 있다 — 다른 문자 발송 버튼과 같은 기준이고, 설정·조정만
+                관리자다). 🔴 감추거나 지우지 말 것. */}
+            <button
+              className="btn btn-ghost"
+              onClick={sendStatusSms}
+              disabled={smsLoading}
+            >
+              {smsLoading ? "준비 중…" : "적립 안내 문자"}
             </button>
             {isAdmin && (
               <>

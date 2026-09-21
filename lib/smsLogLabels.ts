@@ -19,6 +19,7 @@ export const SMS_TEMPLATE_LABELS: Record<string, string> = {
   quote_summary: "견적 안내",
   reward_earned: "적립 안내", // 2026-09-21 신설
   reward_deducted: "적립금 사용 안내", // 2026-09-21 신설(3차)
+  reward_status: "적립 현황 안내", // 2026-09-21 신설(3차 후속)
 };
 
 export function getSmsTemplateLabel(type: string): string {
