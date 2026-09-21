@@ -17,6 +17,7 @@ export const SMS_TEMPLATE_LABELS: Record<string, string> = {
   portal_account_issued: "계정발급 안내",
   portal_password_reissued: "비밀번호 재발급 안내",
   quote_summary: "견적 안내",
+  reward_earned: "적립 안내", // 2026-09-21 신설
 };
 
 export function getSmsTemplateLabel(type: string): string {

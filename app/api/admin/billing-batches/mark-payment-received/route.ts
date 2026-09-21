@@ -61,6 +61,10 @@ export async function POST(req: Request) {
         staffId: currentStaff.id,
         sourceType: "billing_batch",
         sourceId: batch_id,
+        // 🔴 **입금이 방금 확인된 경로라 문자를 보낸다**(2026-09-21).
+        //    🔴 묶음이 13건이어도 **한 통이다** — 회사별로 합쳐 보낸다
+        //    (`lib/rewardAccrue.ts` 루프 뒤).
+        notify: true,
       })
     : undefined;
 
