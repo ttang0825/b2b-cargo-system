@@ -1984,12 +1984,16 @@ select left(company_id::text, 8) as 화주id,
  group by company_id
  order by 1;
 
-\echo '--- ㉞-d 🚨 sms_logs 종류 제약 — 새 종류를 더하려면 DB 가 먼저다 ---'
+\echo '--- ㉞-d 🚨 sms_logs 제약 전부 — 새 종류를 더하려면 DB 가 먼저다 ---'
+-- 🔴 `template_type` 뿐 아니라 **`related_type` 도 본다** — 적립 문자는 배차도
+--    신청도 아닌 새 갈래라, 그 칸에 CHECK 가 걸려 있으면 코드만 올렸을 때
+--    **문자는 나가는데 이력만 조용히 안 남는다**(2026-09-18 에 겪은 자리).
 select conname                        as 제약,
        pg_get_constraintdef(oid)      as 정의
   from pg_constraint
  where conrelid = 'public.sms_logs'::regclass
-   and conname like '%template_type%';
+   and contype = 'c'
+ order by conname;
 
 \echo '--- ㉞-e 기준선 — _migrations 행 수(47이어야 한다) ---'
 select count(*) as 적용된_마이그레이션 from public._migrations;
