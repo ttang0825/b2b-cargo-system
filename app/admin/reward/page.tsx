@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { rewardMethodLabel } from "@/lib/rewardCalc";
+import { getCurrentStaffRole } from "@/lib/currentStaff";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 리워드 관리 (B장 3-4, 2026-09-20) — 🔴 관리자 메뉴 「화주 관리」 그룹
@@ -79,6 +80,19 @@ export default function RewardAdminPage() {
   const [pending, setPending] = useState<Record<string, { amount: number; count: number }>>({});
   /** 상한(500건)에 닿았는가 — 닿았으면 합계가 「이상」이다 */
   const [pendingTruncated, setPendingTruncated] = useState(false);
+  /**
+   * 🚨 **소급 대상 — 이미 입금이 확인됐는데 원장에 없는 건.**
+   *    적립은 「입금 체크가 바뀌는 순간」에만 나므로, 리워드를 켜기 전에 이미 입금
+   *    처리된 건과 캠페인 시작일을 뒤로 옮겨 새로 범위에 든 건은 **영영 비어 있다.**
+   *    🔴 `pending`(미입금 예상)과 합치지 말 것 — 이쪽은 **누르면 바로 쌓이는** 돈이다.
+   */
+  const [backfill, setBackfill] = useState<{ count: number; total: number; truncated: boolean } | null>(
+    null
+  );
+  const [backfillBusy, setBackfillBusy] = useState(false);
+  const [backfillDone, setBackfillDone] = useState<string | null>(null);
+  /** 🔴 관리자만 누를 수 있다(원칙 25번) — 서버도 같은 것을 다시 본다 */
+  const [isAdmin, setIsAdmin] = useState(false);
   const [ledger, setLedger] = useState<LedgerRow[]>([]);
   const [loading, setLoading] = useState(true);
   // 🔴 로딩 실패와 액션 실패를 나눈다(원칙 33번). 이 화면은 아직 액션이 없어
@@ -89,10 +103,11 @@ export default function RewardAdminPage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const [sumRes, ledRes, preRes] = await Promise.all([
+      const [sumRes, ledRes, preRes, backRes] = await Promise.all([
         fetch("/api/admin/reward/summary", { cache: "no-store" }),
         fetch("/api/admin/reward/ledger", { cache: "no-store" }),
         fetch("/api/admin/reward/preview", { cache: "no-store" }),
+        fetch("/api/admin/reward/backfill", { cache: "no-store" }),
       ]);
       const sum = await sumRes.json().catch(() => ({}));
       // 🔴 `error` 를 삼키지 않는다(원칙 55번) — 실패를 「아직 아무도 안 쓴다」로
@@ -130,6 +145,16 @@ export default function RewardAdminPage() {
         setPending(pre.byCompany || {});
         setPendingTruncated(!!pre.truncated);
       }
+
+      // 🔴 소급 대상도 곁다리다 — 실패해도 본문은 그린다(줄이 안 나올 뿐).
+      const back = await backRes.json().catch(() => ({}));
+      if (backRes.ok) {
+        setBackfill({
+          count: back.count || 0,
+          total: back.total || 0,
+          truncated: !!back.truncated,
+        });
+      }
     } catch (e: any) {
       setLoadError(e?.message || "리워드 현황을 불러오지 못했습니다.");
     }
@@ -138,6 +163,37 @@ export default function RewardAdminPage() {
 
   useEffect(() => {
     load();
+    getCurrentStaffRole().then((role) => setIsAdmin(role === "admin"));
+  }, [load]);
+
+  /**
+   * 🚨 **누르면 원장에 굳는다.** 되돌리는 경로는 수동 조정(반대 부호)뿐이다.
+   * 🔴 **화면이 후보 id 를 보내지 않는다** — 서버가 지금 다시 찾는다.
+   */
+  const runBackfill = useCallback(async () => {
+    setBackfillBusy(true);
+    setBackfillDone(null);
+    setLoadError(null);
+    try {
+      const res = await fetch("/api/admin/reward/backfill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error || "소급 적립에 실패했습니다.");
+      const parts = [`${j.accrued || 0}건 적립`];
+      if (j.already) parts.push(`${j.already}건은 이미 적립됨`);
+      if (j.skipped) parts.push(`${j.skipped}건은 대상 아님`);
+      // 🔴 실패를 숨기지 말 것 — 성공 건수만 보여 주면 담당자가 「다 됐다」로 믿는다.
+      if (j.failed) parts.push(`⚠️ ${j.failed}건 실패`);
+      setBackfillDone(parts.join(" · "));
+      await load();
+    } catch (e: any) {
+      setBackfillDone(null);
+      setLoadError(e?.message || "소급 적립에 실패했습니다.");
+    }
+    setBackfillBusy(false);
   }, [load]);
 
   const nameOf = (id: string) => companyNames[id] || `화주 ${id.slice(0, 8)}`;
@@ -171,6 +227,49 @@ export default function RewardAdminPage() {
         <b>화주 입금</b>, 선착불 건은 <b>주선수수료 입금</b>이 기준입니다. 기업별 적용
         여부는 각 화주 상세의 「기업고객 리워드」에서 켜고 끕니다.
       </p>
+
+      {/* 🚨 **소급 적립 줄 — 탭 밖이다.** 적립은 「입금 체크가 바뀌는 순간」에만
+          나므로, 리워드를 켜기 전에 이미 입금 처리된 건과 캠페인 시작일을 뒤로
+          옮겨 새로 범위에 든 건은 **관문을 전부 통과하는데도 원장이 비어 있다.**
+          🔴 이 줄을 없애면 담당자가 그것을 알 길이 없다(화면에 아무 증상이 없다).
+          🔴 **대상이 0건이면 아예 안 그린다** — 평소에 안 보이는 것이 정상이다. */}
+      {backfill && backfill.count > 0 && (
+        <div
+          className="card"
+          style={{
+            padding: "12px 14px",
+            marginBottom: 16,
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ fontSize: 13, flex: "1 1 320px", minWidth: 0 }}>
+            입금이 확인됐는데 <b>아직 적립되지 않은 건 {backfill.count}건</b> (합계{" "}
+            {won(backfill.total)})
+            <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>
+              적립은 입금 체크가 <b>바뀌는 순간</b>에 쌓입니다 — 리워드를 켜기 전에 이미
+              입금 처리됐거나 적립 기간이 나중에 넓어진 건은 여기서 한 번에 채웁니다.
+              {backfill.truncated && ` 대상이 많아 이번에는 ${backfill.count}건까지만 처리합니다.`}
+            </div>
+          </div>
+          {/* 🔴 관리자만 — 화면이 감추는 것과 서버 검사가 한 벌이다(원칙 25번) */}
+          {isAdmin ? (
+            <button className="btn" onClick={runBackfill} disabled={backfillBusy} style={{ fontSize: 12.5 }}>
+              {backfillBusy ? "적립 중…" : `${backfill.count}건 적립하기`}
+            </button>
+          ) : (
+            // 🔴 **비활성 버튼을 두지 말 것** — 회색 버튼은 고장으로 읽힌다.
+            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>관리자만 처리할 수 있습니다</span>
+          )}
+        </div>
+      )}
+      {backfillDone && (
+        <div className="card" style={{ padding: "10px 14px", marginBottom: 16, fontSize: 12.5 }}>
+          {backfillDone}
+        </div>
+      )}
 
       {/* 🔴 탭은 `/admin/rates` 와 **같은 관례**다(`btn` / `btn btn-ghost` + 인라인 flex) —
           이 저장소에는 탭 전용 CSS 클래스가 없다. 새로 만들면 판본이 갈린다. */}

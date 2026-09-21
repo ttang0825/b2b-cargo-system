@@ -500,3 +500,125 @@ export async function previewRewards(opts: {
     }),
   };
 }
+
+// ── 소급 적립 (이미 입금이 확인된 건) ──────────────────────────────────────
+//
+// 🚨 **왜 필요한가** — 적립은 「입금 체크가 **바뀌는 순간**」에만 난다. 그래서
+//    ① 리워드를 켜기 **전에** 이미 입금 처리된 건
+//    ② 캠페인 시작일을 **뒤로 옮겨서**(2026-09-21 · 9/1 → 8/7) 새로 범위에 든 건
+//    ③ 멤버십을 나중에 켠 화주의 지난 건
+//    은 관문을 전부 통과하는데도 **원장이 영영 비어 있다**. 실제로 그 상태였고
+//    (`_verify.sql` ㉝ — 관문 일곱이 전부 t 인데 적립행수 0), 그것이 「이준배 건이
+//    적립되지 않는다」의 마지막 원인이었다.
+//
+// 🔴 **자동으로 돌지 않는다.** 관리자가 화면에서 눌러야 돈다 — 돈이 걸린 경로를
+//    화면 진입이나 배포가 마음대로 일으키게 두지 않는다.
+// 🔴 **여기서 원장에 직접 쓰지 않는다.** 후보만 찾고, 넣는 일은 `accrueReward` 가
+//    한다(관문 판정이 두 벌이 되면 소급분만 다른 기준으로 쌓인다).
+// 🚨 **중복은 UNIQUE 가 막는다** — 이 목록이 낡아도(그 사이 입금 트리거가 먼저
+//    돌아도) `already` 로 조용히 넘어간다. 🔴 목록 조회로만 막지 말 것.
+
+/** 🔴 한 번에 처리하는 상한 — 서버리스 함수가 얼어붙기 전에 끝나야 한다 */
+export const REWARD_BACKFILL_LIMIT = 100;
+
+export type RewardBackfillCandidate = {
+  invoice_id: string;
+  company_id: string | null;
+  label: string;
+  created_at: string;
+  amount: number;
+  is_direct: boolean;
+};
+
+/**
+ * 관문을 전부 통과하고 **입금까지 확인됐는데 원장에 없는** 정산 건.
+ *
+ * 🔴 판정·금액은 `evaluateReward` 하나가 한다(예상 적립·실제 적립과 같은 함수).
+ */
+export async function findUnaccruedPaid(opts: {
+  admin: any;
+  campaign: RewardCampaign;
+  companyId?: string | null;
+}): Promise<{ rows: RewardBackfillCandidate[]; truncated: boolean; error?: string }> {
+  const { admin, campaign, companyId } = opts;
+
+  // ⚠️ 캠페인 밖은 느슨하게 잘라 둔다(정확한 판정은 `evaluateReward`) — KST 로
+  //    하루 걸치는 건이 빠지지 않게 앞뒤로 넉넉히 잡는다(`previewRewards` 와 같다).
+  let q = admin
+    .from("invoices")
+    .select(INVOICE_SELECT)
+    .gte("created_at", `${campaign.start_date}T00:00:00Z`)
+    .lte("created_at", `${campaign.earn_end_date}T23:59:59.999Z`)
+    .order("created_at", { ascending: false })
+    .limit(PREVIEW_LIMIT + 1);
+  if (companyId) q = q.eq("company_id", companyId);
+
+  const { data, error } = await q;
+  if (error) return { rows: [], truncated: false, error: error.message };
+
+  let rows = (data || []) as unknown as InvoiceRow[];
+  const scanTruncated = rows.length > PREVIEW_LIMIT;
+  if (scanTruncated) rows = rows.slice(0, PREVIEW_LIMIT);
+  // 🔴 **입금이 확인된 것만**이다 — 미입금 건은 「예상 적립」이 맡는다.
+  rows = rows.filter((r) => rewardReceiptConfirmed(receiptInput(r)));
+  if (rows.length === 0) return { rows: [], truncated: false };
+
+  // 이미 쌓인 것 빼기 — 🔴 건마다 묻지 말 것(한 번에 읽어 집합으로 본다)
+  const { data: ledger, error: lErr } = await admin
+    .from("reward_ledger")
+    .select("source_id")
+    .eq("campaign_id", campaign.id)
+    .eq("transaction_type", "transport_earn")
+    .eq("source_type", "invoice")
+    .in(
+      "source_id",
+      rows.map((r) => r.id)
+    );
+  if (lErr) return { rows: [], truncated: false, error: lErr.message };
+  const accrued = new Set((ledger || []).map((r: any) => r.source_id));
+  rows = rows.filter((r) => !accrued.has(r.id));
+  if (rows.length === 0) return { rows: [], truncated: false };
+
+  const { data: memberships, error: mErr } = await admin
+    .from("reward_memberships")
+    .select("company_id,enabled,started_at,ended_at")
+    .eq("campaign_id", campaign.id);
+  if (mErr) return { rows: [], truncated: false, error: mErr.message };
+  const byCompany: Record<string, RewardMembershipLite> = {};
+  for (const m of (memberships || []) as any[]) byCompany[m.company_id] = m;
+
+  // 🔴 현장 추가비를 못 읽으면 **아무것도 내놓지 않는다** — 0 으로 때우면 적립액이
+  //    실제보다 크고, 그것이 그대로 원장에 굳는다(예상과 달리 되돌리기 어렵다).
+  let extraByInvoice: Record<string, number> = {};
+  try {
+    extraByInvoice = await fetchIncludedExtraChargeTotals(admin, rows);
+  } catch (e: any) {
+    return { rows: [], truncated: false, error: e?.message || "현장 추가비를 읽지 못했습니다" };
+  }
+
+  const out: RewardBackfillCandidate[] = [];
+  for (const inv of rows) {
+    const verdict = evaluateReward(
+      campaign,
+      inv,
+      extraByInvoice[inv.id] || 0,
+      inv.company_id ? byCompany[inv.company_id] : null
+    );
+    // 🔴 대상이 아닌 건은 **아예 담지 않는다** — 「소급 12건」이라 적어 놓고 실제로는
+    //    2건만 쌓이면 담당자가 그 차이를 적립 누락으로 읽는다.
+    if (verdict.status !== "eligible") continue;
+    out.push({
+      invoice_id: inv.id,
+      company_id: inv.company_id,
+      label: invoiceLabel(inv),
+      created_at: inv.created_at,
+      amount: verdict.amount,
+      is_direct: inv.collection_method === "driver_direct",
+    });
+  }
+
+  // 🔴 상한을 넘으면 **앞에서 자르고 알린다** — 조용히 일부만 하면 담당자가
+  //    「다 했다」로 믿는다(다시 누르면 이어서 된다).
+  const truncated = scanTruncated || out.length > REWARD_BACKFILL_LIMIT;
+  return { rows: out.slice(0, REWARD_BACKFILL_LIMIT), truncated };
+}
