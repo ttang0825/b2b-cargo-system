@@ -100,6 +100,16 @@ export default function CustomersPage() {
   //    🔴 잔액도 서버가 원장을 합쳐서 준다 — 화면이 원장을 직접 합치지 않는다.
   const [rewardMemberships, setRewardMemberships] = useState<Record<string, { enabled: boolean }>>({});
   const [rewardBalances, setRewardBalances] = useState<Record<string, { balance: number }>>({});
+  /**
+   * 화주 id → **예상 적립**(아직 입금 확인이 안 된 건의 합계).
+   *
+   * 🔴 **원장에는 한 줄도 들어가지 않는다** — 표시 시점 계산이고, 확정은 입금 확인이
+   *    일어나는 순간에만 만들어진다(원칙 47번과 같은 결). 🔴 `balance` 에 더하지 말 것 —
+   *    더하면 화주에게 아직 주지 않은 돈이 잔액으로 보인다.
+   * 🔴 실패하면 **`null`** 이다(0 이 아니다) — 0 으로 두면 「미입금 건이 없다」는
+   *    거짓말이 된다(화주 상세 `CompanyRewardPanel` 과 같은 규칙).
+   */
+  const [rewardPending, setRewardPending] = useState<Record<string, { amount: number; count: number }> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -162,7 +172,13 @@ export default function CustomersPage() {
     //    🔴 **실패해도 목록은 그린다** — 리워드는 이 화면의 곁다리이고, 여기서 막으면
     //       화주 목록 자체를 못 본다. 다만 두 칸이 「-」 로 보일 뿐이다.
     try {
-      const res = await fetch("/api/admin/reward/summary", { cache: "no-store" });
+      // 🔴 **예상 적립은 같은 라우트가 아니다** — 잔액은 원장 합계이고 예상은 미입금
+      //    정산 건을 훑어 `evaluateReward` 로 계산한 것이라 출처가 다르다.
+      //    🔴 둘을 한 응답으로 합치지 말 것 — 예상 계산이 무거워질 때 잔액까지 막힌다.
+      const [res, preRes] = await Promise.all([
+        fetch("/api/admin/reward/summary", { cache: "no-store" }),
+        fetch("/api/admin/reward/preview", { cache: "no-store" }),
+      ]);
       if (res.ok) {
         const json = await res.json();
         const ms: Record<string, { enabled: boolean }> = {};
@@ -170,6 +186,9 @@ export default function CustomersPage() {
         setRewardMemberships(ms);
         setRewardBalances(json.balances || {});
       }
+      // 🔴 예상이 실패해도 잔액은 그대로 그린다 — 곁다리의 곁다리다.
+      const pre = await preRes.json().catch(() => ({}));
+      setRewardPending(preRes.ok ? pre.byCompany || {} : null);
     } catch {
       /* 리워드는 곁다리다 — 목록을 막지 않는다 */
     }
@@ -187,6 +206,18 @@ export default function CustomersPage() {
   /** 그 화주의 리워드 설정 — 없으면 `null`(목록에 `-` 로 그린다) */
   function rewardOf(companyId: string): { enabled: boolean } | null {
     return rewardMemberships[companyId] || null;
+  }
+
+  /**
+   * 「9,000원 / 예상 +58,600원」의 뒷줄 — 없거나 0이면 `null`(줄을 아예 안 그린다).
+   *
+   * 🔴 **못 셌을 때(`rewardPending === null`)도 `null` 이다** — 「예상 0원」으로
+   *    그리면 담당자가 그 숫자를 「앞으로 쌓일 것이 없다」로 읽는다.
+   * ⚠️ 예상은 **입금이 확인되면 사라지고 잔액으로 옮겨간다** — 두 숫자를 더하지 말 것.
+   */
+  function rewardPendingOf(companyId: string): { amount: number; count: number } | null {
+    const p = rewardPending?.[companyId];
+    return p && p.amount > 0 ? p : null;
   }
 
   // "삭제"가 아니라 활성 목록에서만 빠지도록 상태를 되돌립니다 (데이터는 보존됨)
@@ -468,7 +499,20 @@ export default function CustomersPage() {
                     )}
                   </td>
                   <td className="cell-nowrap">
-                    {rewardOf(c.id) ? won(rewardBalances[c.id]?.balance || 0) : "-"}
+                    {rewardOf(c.id) ? (
+                      <>
+                        {won(rewardBalances[c.id]?.balance || 0)}
+                        {/* 🔴 **잔액과 같은 무게로 그리지 말 것** — 예상은 아직 화주의
+                            돈이 아니다(입금이 확인돼야 원장에 들어간다). */}
+                        {rewardPendingOf(c.id) && (
+                          <span className="reward-pending">
+                            예상 +{won(rewardPendingOf(c.id)!.amount)}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      "-"
+                    )}
                   </td>
                   <td className="cell-nowrap">
                     {c.grade ? (
@@ -605,10 +649,16 @@ export default function CustomersPage() {
                 { label: "누적오더", value: `${c.total_orders_count || 0}건` },
                 {
                   label: "리워드",
+                  // 🔴 모바일 카드에도 같이 적는다(원칙 13번) — 데스크탑 표와 모바일
+                  //    카드는 완전히 별개 JSX 라 한쪽만 고치면 조용히 갈린다.
                   value: rewardOf(c.id)
                     ? `${rewardOf(c.id)!.enabled ? "적용" : "해제"} · ${won(
                         rewardBalances[c.id]?.balance || 0
-                      )}`
+                      )}${
+                        rewardPendingOf(c.id)
+                          ? ` (예상 +${won(rewardPendingOf(c.id)!.amount)})`
+                          : ""
+                      }`
                     : "-",
                 },
               ],
