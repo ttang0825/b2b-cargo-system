@@ -1995,7 +1995,7 @@ select conname                        as 제약,
    and contype = 'c'
  order by conname;
 
-\echo '--- ㉞-e 기준선 — _migrations 행 수(47이어야 한다) ---'
+\echo '--- ㉞-e 기준선 — _migrations 행 수(48이어야 한다) ---'
 select count(*) as 적용된_마이그레이션 from public._migrations;
 
 -- ════════════════════════════════════════════════════════════════════════════
@@ -2067,9 +2067,11 @@ select left(m.company_id::text, 8) as 화주id,
  order by 1;
 
 \echo '--- ㉟-d 월정산 묶음 상태 — ② 가 「정산 전」이라 부르는 구간이 실재하는가 ---'
-select coalesce(payment_status,'(null)') as 입금상태,
-       coalesce(status,'(null)')         as 묶음상태,
-       count(*)                          as 건수
+-- ⚠️ 이 표에는 `status` 컬럼이 없다(2026-09-21 실측 — 넣었다가 42703 으로 멈췄다).
+--    묶음의 「확정됐는가」는 `confirmed_at` 이 채워졌는지로 본다.
+select coalesce(payment_status,'(null)')      as 입금상태,
+       (confirmed_at is not null)             as 확정됨,
+       count(*)                               as 건수
   from public.customer_billing_batches
  group by 1,2
  order by 3 desc;
