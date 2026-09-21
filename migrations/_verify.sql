@@ -1800,3 +1800,111 @@ order by 1;
 
 -- ㉜-h  🔴 기준선 — `_migrations` 행 수(45여야 한다)
 select count(*) as "_migrations 행 수" from public._migrations;
+
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- ㉝  🚨 리워드 미적립 진단 (2026-09-21 · 읽기 전용)
+--
+--   「어느 화주 건이 적립이 안 됐다」는 신고를 받았을 때 **여기부터** 본다.
+--   화면 코드를 먼저 열지 말 것 — PR #154·#177 이 세운 규칙이고, 이 표들은
+--   RLS on + 정책 0개라 화면으로는 무엇이 막혔는지 들여다볼 수가 없다.
+--
+-- 🔴 **이 저장소는 public 이고 Actions 로그는 로그인 없이 누구나 읽는다.**
+--    화주·고객 이름을 그대로 찍으면 그 순간 공개된다 — ⑪ 과 같은 규칙으로
+--    반드시 마스킹할 것. 누가 누구인지 아는 것은 이 로그가 아니라 사용자다.
+--
+-- 🔴 **판정의 정의처는 `lib/rewardAccrue.ts` 의 `evaluateReward` 하나다.**
+--    여기서는 그 판정에 들어가는 **입력값과 관문별 통과 여부만** 찍고
+--    공식을 다시 구현하지 않는다(두 벌이 되면 조용히 갈린다).
+-- ════════════════════════════════════════════════════════════════════════════
+\echo ''
+\echo '=== ㉝ 🚨 리워드 미적립 진단 (읽기 전용 · 이름은 마스킹) ==='
+
+\echo '--- ㉝-a 캠페인 (적립 판정의 기간·요율 기준) ---'
+select left(id::text, 8)  as 캠페인,
+       name              as 이름,
+       start_date        as 시작일,
+       earn_end_date     as 적립마감,
+       use_end_date      as 사용기한,
+       earn_rate         as 요율,
+       active            as 활성
+  from public.reward_campaigns
+ order by created_at;
+
+\echo '--- ㉝-b 멤버십 — 누구에게 켜져 있는가 (이름 마스킹) ---'
+select left(m.company_id::text, 8) as 화주id,
+       left(c.name, 1) || repeat('*', greatest(length(c.name) - 1, 0)) as 화주,
+       m.enabled                   as 적용,
+       m.started_at                as 적용시작일,
+       m.ended_at                  as 종료일,
+       m.reward_method             as 방식
+  from public.reward_memberships m
+  left join public.companies c on c.id = m.company_id
+ order by m.created_at;
+
+\echo '--- ㉝-c 🚨 정산 건별 관문 판정 — 왜 적립이 안 됐는지가 여기서 읽힌다 ---'
+-- ⚠️ **날짜 칸이 둘인 것은 의도다.** 코드는 `created_at` 을 **UTC 기준**으로
+--    잘라 쓰고(`.slice(0, 10)`), 담당자는 **KST** 로 본다. 둘이 다른 건
+--    (KST 00:00~08:59 에 만들어진 건)은 **담당자 눈에는 캠페인 안인데 코드는
+--    밖으로 판정**할 수 있다 — 그 어긋남이 이 표에서 바로 보이게 둔다.
+with cam as (
+  select * from public.reward_campaigns where active order by created_at limit 1
+)
+select left(i.id::text, 8)                                        as 정산건,
+       coalesce(o.order_no, '')                                   as 오더번호,
+       coalesce(
+         left(c.name, 1) || repeat('*', greatest(length(c.name) - 1, 0)),
+         left(o.guest_name, 1) || repeat('*', greatest(length(o.guest_name) - 1, 0)),
+         '(화주 미연결)')                                          as 화주,
+       (i.created_at at time zone 'UTC')::date                    as 생성일_UTC,
+       (i.created_at at time zone 'Asia/Seoul')::date             as 생성일_KST,
+       case when (i.created_at at time zone 'UTC')::date
+               <> (i.created_at at time zone 'Asia/Seoul')::date
+            then '🚨 날짜갈림' else '' end                         as 주의,
+       i.customer_charge_total                                    as 청구총액,
+       i.customer_charge_vat_included                             as 부가세포함,
+       coalesce(i.collection_method, '(없음)')                     as 수금방식,
+       -- ── 관문 (전부 true 여야 적립된다) ──────────────────────────────────
+       coalesce(i.payment_received, false)                        as "①입금확인",
+       (coalesce(i.collection_method, '') <> 'driver_direct')     as "②선착불아님",
+       (i.company_id is not null)                                 as "③화주연결",
+       coalesce(m.enabled, false)                                 as "④멤버십ON",
+       ((i.created_at at time zone 'UTC')::date
+          between cam.start_date and cam.earn_end_date)           as "⑤캠페인내",
+       (m.started_at is null
+          or (i.created_at at time zone 'UTC')::date >= m.started_at) as "⑥시작일이후",
+       (coalesce(i.customer_charge_total, 0) > 0)                 as "⑦금액있음",
+       -- ── 결과 ───────────────────────────────────────────────────────────
+       (select count(*) from public.reward_ledger l
+         where l.source_type = 'invoice' and l.source_id = i.id
+           and l.transaction_type = 'transport_earn')             as 적립행수
+  from public.invoices i
+  cross join cam
+  left join public.orders    o on o.id = i.order_id
+  left join public.companies c on c.id = i.company_id
+  left join public.reward_memberships m
+         on m.company_id = i.company_id and m.campaign_id = cam.id
+ order by i.created_at desc
+ limit 200;
+
+\echo '--- ㉝-d 원장 전수 (마스킹) — 실제로 쌓인 것 ---'
+select left(l.id::text, 8) as 원장,
+       left(l.company_id::text, 8) as 화주id,
+       left(c.name, 1) || repeat('*', greatest(length(c.name) - 1, 0)) as 화주,
+       l.transaction_type as 유형,
+       l.amount           as 금액,
+       l.earning_base_amount as 기준금액,
+       l.earn_rate_snapshot  as 요율스냅샷,
+       l.source_type      as 출처,
+       left(coalesce(l.source_id::text, ''), 8) as 출처id,
+       l.created_at       as 만든때
+  from public.reward_ledger l
+  left join public.companies c on c.id = l.company_id
+ order by l.created_at desc
+ limit 100;
+
+\echo '--- ㉝-e 기준선 — 표별 행 수 ---'
+select (select count(*) from public.reward_campaigns)   as 캠페인,
+       (select count(*) from public.reward_memberships) as 멤버십,
+       (select count(*) from public.reward_ledger)      as 원장,
+       (select count(*) from public.invoices)           as 정산건;
