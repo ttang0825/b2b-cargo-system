@@ -125,6 +125,12 @@ export default function CustomerHomePage() {
   //   `created_at > 마지막 확인 시각`(기록이 없으면 전부 안 읽음).
   //   두 곳이 어긋나면 "사이드바엔 2인데 홈엔 5" 같은 상태가 된다.
   const [unreadNotices, setUnreadNotices] = useState(0);
+  // 🔴 **적립금 카드** — `reward_memberships.portal_visible` 이 켜진 화주에게만 그린다.
+  //    🔴 화면에서 `reward_ledger` 를 직접 읽지 말 것(RLS on + 정책 0개라 **에러 없이
+  //       빈 배열**이 온다). 통로는 `/api/customer/reward` 하나다.
+  //    🔴 **참여하지 않은 화주에게는 카드 자체를 그리지 않는다** — 「0원」을 보여주면
+  //       받을 수 있는 것을 못 받고 있다고 읽는다(리워드는 선택된 기업만 참여한다).
+  const [reward, setReward] = useState<{ balance: number; earned: number } | null>(null);
   const [noticeLastSeen, setNoticeLastSeen] = useState<string | null>(null);
 
   async function load() {
@@ -227,6 +233,32 @@ export default function CustomerHomePage() {
     setAnnouncements((announcementRes.data as AnnouncementRow[]) || []);
     setUnreadNotices(unreadRes.count || 0);
     setLoading(false);
+
+    // 🔴 **위 `Promise.all` 에 넣지 않았다** — 이 한 건은 서버 라우트를 거쳐서 왕복이
+    //    더 길고, 홈의 나머지가 이것을 기다릴 이유가 없다(참여하지 않은 화주가 대부분이라
+    //    보통은 그릴 것도 없다). 🔴 `setLoading(false)` **뒤**라는 것이 핵심이다.
+    // 🔴 실패하면 **안 그린다** — 조회 실패를 0원으로 떨어뜨리지 말 것(원칙 55번).
+    if (session) {
+      const res = await fetch("/api/customer/reward?menu=1", {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      }).catch(() => null);
+      const menu = res?.ok ? await res.json().catch(() => null) : null;
+      if (menu?.visible !== true) {
+        setReward(null);
+      } else {
+        const full = await fetch("/api/customer/reward", {
+          cache: "no-store",
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        }).catch(() => null);
+        const body = full?.ok ? await full.json().catch(() => null) : null;
+        setReward(
+          body?.visible === true
+            ? { balance: body.balance || 0, earned: body.earned || 0 }
+            : null
+        );
+      }
+    }
   }
 
   // 🔴 Realtime 이 끊겼을 때의 그물(`lib/portalRefresh.ts`) — 배차·정산 화면과 같은 규칙.
@@ -337,6 +369,25 @@ export default function CustomerHomePage() {
           )}
         </section>
       </div>
+
+      {/* ②-2 적립금 — 🔴 **참여한 화주에게만 그린다.** 안 켜진 화주에게는 이 블록이
+          통째로 없다(「0원」도 아니고 「참여 안내」도 아니다 — 선택된 기업만 참여하는
+          프로모션이라, 안내를 띄우면 신청하면 되는 것으로 읽힌다. HANDOFF §5-27). */}
+      {reward && (
+        <section className="pv2-card pv2-block" aria-labelledby="pv2-rwhome-title">
+          <div className="pv2-rwhome">
+            <div className="pv2-rwhome-body">
+              <div className="pv2-rwhome-label" id="pv2-rwhome-title">
+                사용 가능 적립금
+              </div>
+              <div className="pv2-rwhome-value num">{won(reward.balance)}</div>
+            </div>
+            <Link href="/customer/reward" className="pv2-btn-ghost">
+              적립 내역 <ArrowRight size={15} />
+            </Link>
+          </div>
+        </section>
+      )}
 
       {/* ③ 진행 중인 운송 */}
       <section className="pv2-card pv2-block" aria-labelledby="pv2-active-title">

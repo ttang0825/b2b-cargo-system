@@ -91,6 +91,13 @@ export async function GET(req: Request) {
     return NextResponse.json({ visible: false });
   }
 
+  // 🔴 **메뉴는 「보이는가」만 묻는다**(`?menu=1`) — 포털 셸이 화면을 열 때마다 원장과
+  //    오더번호까지 읽으면 메뉴 한 줄을 그리려고 질의 셋이 더 돈다.
+  //    🔴 **이 분기를 지우고 셸이 전체 응답을 받게 하지 말 것.**
+  if (new URL(req.url).searchParams.get("menu") === "1") {
+    return NextResponse.json({ visible: true });
+  }
+
   // ── 원장 ──────────────────────────────────────────────────────────────────
   // 🚨 **`description`·`created_by` 를 select 에 넣지 말 것** — 수동 조정 사유가
   //    담당자의 내부 메모라 그대로 화주에게 간다(`lib/rewardPortal.ts` 머리말).
