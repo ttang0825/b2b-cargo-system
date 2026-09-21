@@ -29,8 +29,11 @@ export async function GET(req: Request) {
   let q = admin
     .from("reward_ledger")
     .select(
+      // 🔴 `description`(내부 사유)과 `customer_note`(화주에게 보인 한 줄)는 **다른 칸**
+      //    이다 — 관리자 화면은 **둘 다** 본다(무엇을 화주에게 말했는지 되짚어야 한다).
+      //    🔴 화주 라우트(`/api/customer/reward`)에는 앞엣것을 절대 넣지 말 것.
       "id,company_id,transaction_type,amount,earning_base_amount,earn_rate_snapshot," +
-        "source_type,source_id,description,created_at,companies(name)"
+        "source_type,source_id,description,customer_note,created_at,companies(name)"
     )
     .eq("campaign_id", campaign.id)
     .order("created_at", { ascending: false })

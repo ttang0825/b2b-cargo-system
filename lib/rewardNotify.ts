@@ -22,7 +22,7 @@
 //
 // 🔴 **던지지 않는다.** 미리보기를 못 만들어도 적립과 입금확인은 이미 끝난 일이다.
 
-import { rewardEarnedMessage } from "./sms/templates";
+import { rewardEarnedMessage, rewardDeductedMessage } from "./sms/templates";
 import { resolveSmsSender, contactPhoneForBody } from "./smsSenderPhone";
 import type { SmsPreview } from "@/components/SmsConfirmModal";
 
@@ -34,6 +34,16 @@ export type RewardNotifyInput = {
   amount: number;
   /** `sms_logs.related_id` 로 남을 원장 줄 하나 — 🔴 이력에서 되짚는 열쇠다 */
   ledgerId: string;
+  /**
+   * 아직 입금이 확인되지 않은 건의 **예상 적립** — 3차(2026-09-21).
+   *
+   * 🔴 **여기서 세지 않고 받아 온다.** `previewRewards` 는 `lib/rewardAccrue.ts` 에
+   *    있고 그 파일이 이 파일을 import 하므로, 여기서 가져오면 **순환 import** 가 된다.
+   *    부르는 쪽(`accrueReward`)이 캠페인을 이미 들고 있으니 거기서 세는 것이 맞다.
+   * 🔴 **못 셌으면 `null` 이고 그러면 문구에 줄이 안 붙는다** — 0 으로 때우지 말 것.
+   */
+  pendingAmount?: number | null;
+  pendingCount?: number | null;
 };
 
 /**
@@ -108,6 +118,10 @@ export async function buildRewardSmsPreview(
       message: rewardEarnedMessage({
         amount,
         balance,
+        // 🔴 **잔액에 더하지 않는다** — 문구가 두 줄로 나눠 적는다(입금이 확인돼야
+        //    적립되므로 「예정」과 「적립됨」은 다른 돈이다).
+        pendingAmount: input.pendingAmount ?? null,
+        pendingCount: input.pendingCount ?? null,
         // 🔴 안내번호가 없으면 문구가 스스로 대표번호로 떨어진다(`contact()`)
         contactPhone: sender ? contactPhoneForBody(sender) : null,
         staffName: sender?.staffName ?? null,
@@ -118,6 +132,103 @@ export async function buildRewardSmsPreview(
     };
   } catch {
     // 🔴 적립·입금확인은 이미 끝난 일이다 — 미리보기 때문에 그것을 되돌리지 않는다.
+    return null;
+  }
+}
+
+// ── 차감(적립금 사용) 안내 — 3차, 2026-09-21 ────────────────────────────────
+//
+// 사용자 요청 — *"적립금을 차감했을때도 문자가 발송되어야 한다. 얼마 차감됐고,
+// 어떻게 사용됐고 얼마 남았는지..."*
+//
+// 🔴 **적립과 같은 자세다 — 여기서 보내지 않는다.** 담당자가 수동 조정을 저장하면
+//    확인창이 뜨고 [발송]을 눌러야 나간다.
+// 🔴 **차감(음수)일 때만 만든다** — 양수 조정은 적립을 늘리는 것이라 이 문구가
+//    거짓이 된다(「차감되었습니다」).
+// 🚨 **「어떻게 사용됐는지」는 `customer_note` 다 — `description` 을 쓰지 말 것.**
+//    그 칸은 담당자의 내부 메모이고 2차에 화주 비공개로 못박았다.
+//
+// 🔴 **부르는 곳은 `/api/admin/reward/adjust` 하나다.** 지금 차감이 나는 경로가
+//    그것뿐이라 적립처럼 정의처를 따로 두지 않았다 — ⚠️ **경로가 늘면 그때는
+//    `accrueReward` 처럼 한 곳으로 모을 것**(원칙 53번).
+
+export type RewardDeductNotifyInput = {
+  admin: any;
+  campaignId: string;
+  companyId: string;
+  /** 차감액 — 부호는 상관없다(문구가 절대값을 쓴다) */
+  amount: number;
+  /** `sms_logs.related_id` 로 남을 원장 줄 */
+  ledgerId: string;
+  /** 🔴 화주에게 보이는 한 줄 — 없으면 문구에서 그 줄이 빠진다 */
+  customerNote?: string | null;
+};
+
+export async function buildRewardDeductedSmsPreview(
+  input: RewardDeductNotifyInput
+): Promise<SmsPreview | null> {
+  try {
+    const { admin, campaignId, companyId, amount, ledgerId } = input;
+    // 🔴 **차감이 아니면 안 만든다**(0원 조정도 마찬가지다)
+    if (!(amount < 0)) return null;
+
+    const { data: memberships, error: mErr } = await admin
+      .from("reward_memberships")
+      .select("sms_notification_enabled")
+      .eq("company_id", companyId)
+      .eq("campaign_id", campaignId)
+      .limit(1);
+    // 🔴 꺼 둔 화주에게 보낸 문자는 되돌릴 수 없다 — 조회 실패도 「안 만듦」이다.
+    if (mErr || !(memberships || [])[0]?.sms_notification_enabled) return null;
+
+    const { data: company, error: cErr } = await admin
+      .from("companies")
+      .select("contact_mobile")
+      .eq("id", companyId)
+      .maybeSingle();
+    if (cErr) return null;
+
+    // 🔴 **잔액은 지금 다시 센다** — 방금 넣은 차감 줄까지 포함된 값이라야
+    //    문자의 「남은 적립금」과 포털 화면이 같은 숫자를 말한다.
+    const { data: ledger, error: lErr } = await admin
+      .from("reward_ledger")
+      .select("amount")
+      .eq("company_id", companyId)
+      .eq("campaign_id", campaignId);
+    if (lErr) return null;
+    const balance = (ledger || []).reduce(
+      (sum: number, r: any) => sum + Math.round(r.amount || 0),
+      0
+    );
+
+    // 🔴 적립 미리보기와 **같은 이유**로 발신번호 실패를 따로 잡는다 — 여기서
+    //    던지면 창이 통째로 안 뜨고 담당자는 문자 차례였다는 것조차 모른다.
+    let sender: Awaited<ReturnType<typeof resolveSmsSender>> | null = null;
+    try {
+      sender = await resolveSmsSender();
+    } catch {
+      sender = null;
+    }
+
+    return {
+      relatedType: "reward",
+      relatedId: ledgerId,
+      templateType: "reward_deducted",
+      recipientType: "customer",
+      recipientPhone: company?.contact_mobile || null,
+      message: rewardDeductedMessage({
+        amount,
+        balance,
+        note: input.customerNote ?? null,
+        contactPhone: sender ? contactPhoneForBody(sender) : null,
+        staffName: sender?.staffName ?? null,
+      }),
+      senderDisplay: sender?.display ?? null,
+      senderStaffName: sender?.staffName ?? null,
+      senderIsStaffPhone: sender?.isStaffPhone ?? false,
+    };
+  } catch {
+    // 🔴 조정은 이미 저장됐다 — 미리보기 때문에 그것을 되돌리지 않는다.
     return null;
   }
 }

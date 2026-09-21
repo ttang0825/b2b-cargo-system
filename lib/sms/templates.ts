@@ -381,13 +381,63 @@ export function rewardEarnedMessage(
     amount: number;
     /** 적립 후 잔액 */
     balance: number;
+    /**
+     * 아직 입금이 확인되지 않은 건의 **예상 적립** — 3차(2026-09-21)에 추가.
+     *
+     * 🔴 **없거나 0이면 줄을 아예 안 쓴다** — 「예상 0원」은 「앞으로 쌓일 것이
+     *    없다」로 읽힌다. 🔴 **잔액에 더하지 말 것**(입금이 확인돼야 적립된다).
+     * 🔴 **「예정」을 빼지 말 것** — 빼면 약속으로 읽힌다(표시광고법 결).
+     */
+    pendingAmount?: number | null;
+    pendingCount?: number | null;
     staffName?: string | null;
   }
 ): string {
+  const pending =
+    params.pendingAmount && params.pendingAmount > 0
+      ? `정산 후 적립 예정 ${params.pendingAmount.toLocaleString("ko-KR")}원${
+          params.pendingCount ? ` (운송 ${params.pendingCount}건)` : ""
+        }`
+      : null;
   return [
     `${SMS_HEADER} 적립 안내`,
     `운송 정산이 확인되어 ${params.amount.toLocaleString("ko-KR")}원이 적립되었습니다.`,
     `누적 적립금 ${params.balance.toLocaleString("ko-KR")}원`,
+    ...(pending ? [pending] : []),
+    "운송관리에서 적립 내역을 확인하실 수 있습니다.",
+    contactLine(params),
+  ].join("\n");
+}
+
+/**
+ * 적립금 **차감** 안내 (리워드 3차, 2026-09-21 · 사용자 요청 *"얼마 차감됐고,
+ * 어떻게 사용됐고 얼마 남았는지"*).
+ *
+ * 🚨 **「어떻게 사용됐는지」는 `reward_ledger.customer_note` 다.**
+ *    🔴 **`description`(내부 사유)을 여기에 넣지 말 것** — 그 칸은 담당자의 내부
+ *       메모이고 2차에 「화주에게 절대 주지 않는다」고 못박은 자리다.
+ *    🔴 안내가 비어 있으면 **그 줄을 통째로 뺀다** — 「사용처: -」 는 아무 말도 아니다.
+ *
+ * 🔴 **지급 방식·사용 조건을 적지 말 것**(적립 안내와 같은 규칙) — 나간 문자는
+ *    회수되지 않는다. 조건은 포털 화면이 **그때의 값**으로 말한다.
+ */
+export function rewardDeductedMessage(
+  params: WithContact & {
+    /** 차감된 금액 — 🔴 **양수로 받는다**(부호는 문구가 말한다) */
+    amount: number;
+    /** 차감 후 잔액 */
+    balance: number;
+    /** 🔴 화주에게 보이는 한 줄(`customer_note`) — 없으면 줄을 안 쓴다 */
+    note?: string | null;
+    staffName?: string | null;
+  }
+): string {
+  const note = params.note && params.note.trim() ? params.note.trim() : null;
+  return [
+    `${SMS_HEADER} 적립금 사용 안내`,
+    `적립금 ${Math.abs(params.amount).toLocaleString("ko-KR")}원이 차감되었습니다.`,
+    ...(note ? [note] : []),
+    `남은 적립금 ${params.balance.toLocaleString("ko-KR")}원`,
     "운송관리에서 적립 내역을 확인하실 수 있습니다.",
     contactLine(params),
   ].join("\n");

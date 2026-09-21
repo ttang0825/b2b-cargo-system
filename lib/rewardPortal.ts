@@ -54,6 +54,15 @@ export type PortalRewardRow = {
   earn_rate: number | null;
   /** 적립 줄이면 오더번호. 없으면 null(게스트·삭제된 오더) */
   order_no: string | null;
+  /**
+   * 🚨 **화주에게 보이는 한 줄**(`reward_ledger.customer_note`) — 차감이 「어떻게
+   *    사용됐는지」를 말한다(3차, 2026-09-21 · 사용자 요청).
+   *
+   * 🔴 **`description` 이 아니다.** 그 칸은 담당자의 **내부 메모**라 서버가 화주
+   *    응답의 select 에서부터 뺀다 — 여기에 담지 말 것.
+   * 🔴 담당자가 안 적었으면 `null` 이고, 그때는 화면이 줄을 안 그린다.
+   */
+  note: string | null;
   created_at: string;
 };
 

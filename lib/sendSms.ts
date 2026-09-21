@@ -28,7 +28,8 @@ export type SmsTemplateType =
   | "portal_account_issued"
   | "portal_password_reissued"
   | "quote_summary"
-  | "reward_earned"; // 적립 안내 (2026-09-21 신설) — 🔴 DB CHECK 도 같이 늘렸다
+  | "reward_earned" // 적립 안내 (2026-09-21 신설) — 🔴 DB CHECK 도 같이 늘렸다
+  | "reward_deducted"; // 적립금 사용(차감) 안내 (2026-09-21 신설) — 🔴 DB CHECK 도 같이
 
 export interface SendSmsLogParams {
   relatedType: SmsRelatedType;
