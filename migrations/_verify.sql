@@ -1713,3 +1713,216 @@ from information_schema.columns
 where table_schema = 'public' and table_name = 'orders'
   and column_name in ('company_id','quote_id','individual_customer_id','status','order_no')
 order by 1;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- ㉜  기업고객 리워드 1차 착수 전 조사 (2026-09-20)
+--
+-- 🚨 **적립 기준이 성립하는지**를 재는 절이다. 리워드는 「운임 **공급가액**의 5%」를
+--    「화주 **입금 확인**」 시점에 적립하는데, 그 두 가지가 실제 데이터에 있어야 한다.
+--    🔴 읽기 전용 — 아무것도 바꾸지 않는다.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- ㉜-a  🚨 `invoices` 컬럼 전수 — 부가세 구분이 정산까지 승계되는가
+--       (있어야 `customer_charge_total` 이 공급가액인지 포함가인지 가릴 수 있다)
+select column_name as "컬럼", data_type as "타입",
+       coalesce(column_default,'') as "기본값", is_nullable as "널"
+from information_schema.columns
+where table_schema = 'public' and table_name = 'invoices'
+order by ordinal_position;
+
+-- ㉜-b  🚨 부가세 구분이 실제로 갈려 있는가 — 전부 false 면 전 건이 공급가액이다
+select
+  (select count(*) from public.invoices)                                        as "정산 전체",
+  (select count(*) from public.invoices where customer_charge_vat_included)      as "정산 포함가",
+  (select count(*) from public.invoices where not customer_charge_vat_included)  as "정산 공급가액",
+  (select count(*) from public.dispatches where customer_charge_vat_included)    as "배차 포함가",
+  (select count(*) from public.dispatches where not customer_charge_vat_included) as "배차 공급가액";
+
+-- ㉜-c  🚨 현장 추가비가 정산 스냅샷에 **이미 섞여 있는가**
+--       `autoCreateInvoice` 가 생성 시점의 active 추가비를 `customer_charge_total` 에
+--       더해서 얼린다. 그런 건이 실재하면 「기본 운임만」을 그 칸으로는 못 만든다.
+select
+  (select count(*) from public.dispatch_extra_charges)                    as "추가비 전체",
+  (select count(*) from public.dispatch_extra_charges where status='active') as "활성",
+  (select count(*) from public.dispatch_extra_charges
+     where status='active' and correction_invoice_id is not null)          as "정정청구로 빠진 것",
+  (select count(*) from public.invoices i
+     where exists (
+       select 1 from public.dispatch_extra_charges e
+       join public.dispatches d on d.id = e.dispatch_id
+       where d.order_id = i.order_id
+         and e.status = 'active'
+         and e.correction_invoice_id is null
+         and e.created_at <= i.created_at))                                as "스냅샷에 섞인 정산 건";
+
+-- ㉜-d  🔴 월정산 묶음 입금 함수 본문 — 라우트가 RPC 로 부른다.
+--       🚨 **함수를 고쳐야 하는지**를 여기서 가른다(고쳐야 하면 멈추고 보고).
+select p.proname as "함수", pg_get_functiondef(p.oid) as "본문"
+from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public' and p.proname = 'mark_billing_batch_payment_received';
+
+-- ㉜-e  🔴 수금방식 값 전수 — 선착불 판정의 실제 분포
+select coalesce(collection_method,'(null)') as "수금방식",
+       coalesce(billing_cycle,'(null)')     as "청구주기",
+       count(*)                              as "건수"
+from public.invoices group by 1,2 order by 3 desc;
+
+-- ㉜-f  🔴 운영 실측 — 「무거워 보인다」로 최적화하지 않기 위한 기준선
+--       ⚠️ **「활성」은 단일 값이 아니다** — `app/admin/customers/page.tsx` 의
+--          `ACTIVE_CUSTOMER_STATUSES` **여섯 값**의 집합이다(`status='활성'` 로 재면 0이 나온다).
+select
+  (select count(*) from public.invoices)                                   as "정산 전체",
+  (select count(*) from public.invoices where payment_received)            as "입금확인됨",
+  (select count(*) from public.invoices where collection_method='driver_direct') as "선착불",
+  (select count(*) from public.companies)                                   as "화주 전체",
+  (select count(*) from public.companies
+     where status in ('견적요청','견적발송','첫거래완료','재거래발생','반복화주','월정산화주'))
+                                                                            as "활성 화주",
+  (select count(*) from public.customer_billing_batches)                    as "월정산 묶음",
+  (select count(*) from public.customer_billing_batches where payment_status='paid') as "묶음 입금완료";
+
+-- ㉜-f2  🔴 화주 영업상태 분포 — 어느 화주에게 리워드를 켤 수 있는지의 모수
+select coalesce(status,'(null)') as "영업상태", count(*) as "건수"
+from public.companies group by 1 order by 2 desc;
+
+-- ㉜-f3  🔴 월정산 묶음 항목 — **공급가액 스냅샷이 이미 있는가**
+--        있으면 월정산 적립을 그 값으로 건별로 남길 수 있다.
+select column_name as "컬럼", data_type as "타입", is_nullable as "널"
+from information_schema.columns
+where table_schema = 'public' and table_name = 'customer_billing_batch_items'
+order by ordinal_position;
+
+-- ㉜-g  🔴 원칙 27번 — 만들려는 이름이 이미 있는가 (있으면 멈춘다)
+select table_name as "이미 있는 표"
+from information_schema.tables
+where table_schema = 'public' and table_name like 'reward%'
+order by 1;
+
+-- ㉜-h  🔴 기준선 — `_migrations` 행 수(45여야 한다)
+select count(*) as "_migrations 행 수" from public._migrations;
+
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- ㉝  🚨 리워드 미적립 진단 (2026-09-21 · 읽기 전용)
+--
+--   「어느 화주 건이 적립이 안 됐다」는 신고를 받았을 때 **여기부터** 본다.
+--   화면 코드를 먼저 열지 말 것 — PR #154·#177 이 세운 규칙이고, 이 표들은
+--   RLS on + 정책 0개라 화면으로는 무엇이 막혔는지 들여다볼 수가 없다.
+--
+-- 🔴 **이 저장소는 public 이고 Actions 로그는 로그인 없이 누구나 읽는다.**
+--    화주·고객 이름을 그대로 찍으면 그 순간 공개된다 — ⑪ 과 같은 규칙으로
+--    반드시 마스킹할 것. 누가 누구인지 아는 것은 이 로그가 아니라 사용자다.
+--
+-- 🔴 **판정의 정의처는 `lib/rewardAccrue.ts` 의 `evaluateReward` 하나다.**
+--    여기서는 그 판정에 들어가는 **입력값과 관문별 통과 여부만** 찍고
+--    공식을 다시 구현하지 않는다(두 벌이 되면 조용히 갈린다).
+-- ════════════════════════════════════════════════════════════════════════════
+\echo ''
+\echo '=== ㉝ 🚨 리워드 미적립 진단 (읽기 전용 · 이름은 마스킹) ==='
+
+\echo '--- ㉝-a 캠페인 (적립 판정의 기간·요율 기준) ---'
+select left(id::text, 8)  as 캠페인,
+       name              as 이름,
+       start_date        as 시작일,
+       earn_end_date     as 적립마감,
+       use_end_date      as 사용기한,
+       earn_rate         as 요율,
+       active            as 활성
+  from public.reward_campaigns
+ order by created_at;
+
+\echo '--- ㉝-b 멤버십 — 누구에게 켜져 있는가 (이름 마스킹) ---'
+select left(m.company_id::text, 8) as 화주id,
+       left(c.name, 1) || repeat('*', greatest(length(c.name) - 1, 0)) as 화주,
+       m.enabled                   as 적용,
+       m.started_at                as 적용시작일,
+       m.ended_at                  as 종료일,
+       m.reward_method             as 방식
+  from public.reward_memberships m
+  left join public.companies c on c.id = m.company_id
+ order by m.created_at;
+
+\echo '--- ㉝-c 🚨 정산 건별 관문 판정 — 왜 적립이 안 됐는지가 여기서 읽힌다 ---'
+-- ⚠️ **날짜 칸이 둘인 것은 의도다.** 🟢 2026-09-21 부터 **코드도 KST 로 판정한다**
+--    (`lib/rewardAccrue.ts` 의 `rewardRefDate`). 그전에는 UTC 로 잘라 써서
+--    KST 00:00~08:59 에 만들어진 건이 **담당자 눈에는 캠페인 안인데 코드는 밖**
+--    으로 판정됐다. 두 칸을 남겨 두는 것은 **그 어긋남이 다시 생기면 바로 보이게**
+--    하기 위해서다 — 🔴 한 칸으로 줄이지 말 것.
+with cam as (
+  select * from public.reward_campaigns where active order by created_at limit 1
+)
+select left(i.id::text, 8)                                        as 정산건,
+       coalesce(o.order_no, '')                                   as 오더번호,
+       coalesce(
+         left(c.name, 1) || repeat('*', greatest(length(c.name) - 1, 0)),
+         left(o.guest_name, 1) || repeat('*', greatest(length(o.guest_name) - 1, 0)),
+         '(화주 미연결)')                                          as 화주,
+       (i.created_at at time zone 'UTC')::date                    as 생성일_UTC,
+       (i.created_at at time zone 'Asia/Seoul')::date             as 생성일_KST,
+       case when (i.created_at at time zone 'UTC')::date
+               <> (i.created_at at time zone 'Asia/Seoul')::date
+            then '🚨 날짜갈림' else '' end                         as 주의,
+       i.customer_charge_total                                    as 청구총액,
+       -- ⚠️ **선착불 건에서는 이 칸이 적립 기준에 쓰이지 않는다**(2026-09-21 확정) —
+       --    선착불 운임은 저장된 구분과 무관하게 **부가세 별도**로 본다
+       --    (`lib/rewardCalc.ts` 의 `rewardBaseAmount`). 🔴 이 칸이 `t` 인 선착불
+       --    건을 보고 「적립이 1.1 로 갈렸겠구나」로 읽지 말 것.
+       i.customer_charge_vat_included                             as 부가세포함,
+       case when coalesce(i.collection_method, '') = 'driver_direct'
+            then '별도(선착불 고정)'
+            when i.customer_charge_vat_included then '포함' else '별도' end
+                                                                  as 적립기준_부가세,
+       coalesce(i.collection_method, '(없음)')                     as 수금방식,
+       -- ── 관문 (전부 true 여야 적립된다) ──────────────────────────────────
+       -- 🚨 **①은 수금방식마다 보는 칸이 다르다**(2026-09-21 · 선착불 포함 확정) —
+       --    broker 는 `payment_received`, 선착불은 `brokerage_fee_paid` 다.
+       --    🔴 한쪽으로 통일하지 말 것(`lib/rewardCalc.ts` 의 `rewardReceiptConfirmed`).
+       (case when coalesce(i.collection_method, '') = 'driver_direct'
+             then coalesce(i.brokerage_fee_paid, false)
+             else coalesce(i.payment_received, false) end)        as "①입금확인",
+       -- ⚠️ ②는 **관문이 아니라 참고 칸이 됐다**(선착불도 적립 대상이다).
+       --    🔴 「선착불아님」 관문으로 되돌리지 말 것.
+       (coalesce(i.collection_method, '') = 'driver_direct')      as "②선착불",
+       (i.company_id is not null)                                 as "③화주연결",
+       coalesce(m.enabled, false)                                 as "④멤버십ON",
+       -- 🔴 **KST 로 잰다**(2026-09-21 확정) — 코드도 `rewardRefDate` 로 KST 를 쓴다.
+       --    한쪽만 UTC 로 두면 다음 `verify` 가 멀쩡한 건을 빨간불로 띄운다.
+       ((i.created_at at time zone 'Asia/Seoul')::date
+          between cam.start_date and cam.earn_end_date)           as "⑤캠페인내",
+       (m.started_at is null
+          or (i.created_at at time zone 'Asia/Seoul')::date >= m.started_at) as "⑥시작일이후",
+       (coalesce(i.customer_charge_total, 0) > 0)                 as "⑦금액있음",
+       -- ── 결과 ───────────────────────────────────────────────────────────
+       (select count(*) from public.reward_ledger l
+         where l.source_type = 'invoice' and l.source_id = i.id
+           and l.transaction_type = 'transport_earn')             as 적립행수
+  from public.invoices i
+  cross join cam
+  left join public.orders    o on o.id = i.order_id
+  left join public.companies c on c.id = i.company_id
+  left join public.reward_memberships m
+         on m.company_id = i.company_id and m.campaign_id = cam.id
+ order by i.created_at desc
+ limit 200;
+
+\echo '--- ㉝-d 원장 전수 (마스킹) — 실제로 쌓인 것 ---'
+select left(l.id::text, 8) as 원장,
+       left(l.company_id::text, 8) as 화주id,
+       left(c.name, 1) || repeat('*', greatest(length(c.name) - 1, 0)) as 화주,
+       l.transaction_type as 유형,
+       l.amount           as 금액,
+       l.earning_base_amount as 기준금액,
+       l.earn_rate_snapshot  as 요율스냅샷,
+       l.source_type      as 출처,
+       left(coalesce(l.source_id::text, ''), 8) as 출처id,
+       l.created_at       as 만든때
+  from public.reward_ledger l
+  left join public.companies c on c.id = l.company_id
+ order by l.created_at desc
+ limit 100;
+
+\echo '--- ㉝-e 기준선 — 표별 행 수 ---'
+select (select count(*) from public.reward_campaigns)   as 캠페인,
+       (select count(*) from public.reward_memberships) as 멤버십,
+       (select count(*) from public.reward_ledger)      as 원장,
+       (select count(*) from public.invoices)           as 정산건;
