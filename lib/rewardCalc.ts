@@ -10,21 +10,35 @@
 // ── 🔴 적립 기준 (사용자 확정 2026-09-18) ──────────────────────────────────
 //
 //   적립률      운임 **공급가액**(부가세 제외)의 5% · **1원 미만 절사**
-//   적립 시점   🔴 **화주 입금 확인** — 운송완료가 아니다
 //   대상 금액   🔴 **기본 운임 공급가액만** — 현장 추가비 제외
-//   선착불      🔴 **제외**
+//   적립 시점   🔴 **수금방식마다 다르다**(아래)
+//   선착불      🟢 **포함**(2026-09-21 사용자 확정 — 그전에는 제외였다)
 //
-// ── 🚨 왜 선착불을 빼는가 — 「부담이 크다」가 아니다 ─────────────────────────
+// ── 🚨 선착불이 「제외」에서 「포함」으로 뒤집혔다 (2026-09-21) ───────────────
 //
-//   선착불(`driver_direct`)은 **화주가 위캐리에 입금하지 않는다.** 운임은 차주가
-//   직접 받고 위캐리가 받는 것은 주선수수료뿐이며 화주 미수금은 **0**이다
-//   (HANDOFF §5-12 · `lib/receivableCalc.ts`). 그래서 —
+//   🔴 **아래 옛 근거를 읽고 되돌리지 마십시오.** 1차 착수 시점(2026-09-18)에는
+//      선착불을 뺐고 사유는 이랬다 —
 //
-//     ① 「화주 입금 확인」이라는 **사건 자체가 일어나지 않는다**  → 적립 트리거가 없다
-//     ② `customer_charge_total` 은 **화주가 우리에게 낸 돈이 아니다** → 적립 기준이 없다
+//        선착불(`driver_direct`)은 **화주가 위캐리에 입금하지 않는다.** 운임은
+//        차주가 직접 받고 위캐리가 받는 것은 주선수수료뿐이며 화주 미수금은 0이다
+//        (HANDOFF §5-12 · `lib/receivableCalc.ts`). 그래서 ① 「화주 입금 확인」이라는
+//        사건이 일어나지 않고 ② `customer_charge_total` 은 화주가 우리에게 낸 돈이
+//        아니라, 기준이 될 **금액과 시점이 존재하지 않는다**고 봤다.
 //
-//   🔴 **「부담이 크다」로 적으면 다음 세션이 「그럼 요율을 낮춰서 넣자」로 간다.**
-//      기준이 될 **금액과 시점이 존재하지 않는** 것이다.
+//   🟢 **사용자가 「선착불도 적립 대상에 넣어줘」로 확정했고, 없다던 둘을 이렇게 정했다** —
+//
+//     시점   🔴 **주선수수료 입금**(`invoices.brokerage_fee_paid`)이다.
+//            선착불 건에는 `payment_received` 체크박스가 **화면에 아예 없고**
+//            (`collection_method === "broker"` 일 때만 그려진다) 수수료가 그 건의
+//            **유일한 수금 사건**이다(35차 확정). 🔴 화주 입금으로 되돌리지 말 것 —
+//            그 칸은 선착불에서 담당자가 만질 수 없어 **영영 적립되지 않는다.**
+//     금액   🔴 **운임 공급가액 그대로**(broker 와 같다). 화주가 낸 운임인 것은
+//            사실이고, 프로모션이 약속한 것도 「운임의 5%」다. 🔴 주선수수료의 5% 로
+//            바꾸지 말 것 — 화주에게 약속한 것과 다른 금액이 된다.
+//
+//   ⚠️ **보고한 대가** — 선착불에서 위캐리 매출은 주선수수료뿐인데 적립은 **운임**
+//      기준이라, 그 건의 매출 대비 적립 비중이 broker 보다 훨씬 크다(운임 80,000 ·
+//      수수료 15,000 이면 적립 3,636 원 = 매출의 약 24%). **사용자가 알고 고른 것이다.**
 //
 // ── ⚠️ 현장 추가비가 스냅샷에 섞여 있을 수 있다 (실측 2026-09-20) ───────────
 //
@@ -106,8 +120,13 @@ export function rewardEarnAmount(
 }
 
 export type RewardEligibilityInput = {
-  /** `invoices.collection_method` — 🔴 `driver_direct` 는 제외 */
-  collectionMethod: string | null | undefined;
+  /**
+   * `invoices.collection_method`
+   * ⚠️ **더 이상 적립 여부를 가르지 않는다**(2026-09-21 — 선착불도 대상이다).
+   *    가르는 것은 **적립 시점의 칸**뿐이다(`rewardReceiptConfirmed`).
+   * 🔴 여기에 `driver_direct` 제외를 되살리지 말 것.
+   */
+  collectionMethod?: string | null | undefined;
   /** 화주가 없는 건(게스트 오더)은 적립할 대상이 없다 */
   companyId: string | null | undefined;
   /** `rewardBaseAmount()` 결과 */
@@ -115,7 +134,8 @@ export type RewardEligibilityInput = {
 };
 
 export type RewardIneligibleReason =
-  | "direct_collection"
+  // ⚠️ `direct_collection` 은 2026-09-21 에 없어졌다 — 선착불도 적립 대상이다.
+  //    🔴 되살리지 말 것(위 머리말).
   | "no_company"
   | "zero_amount";
 
@@ -124,16 +144,42 @@ export type RewardIneligibleReason =
  *
  * 🔴 **멤버십·캠페인 기간 판정은 여기서 하지 않는다** — 그것은 DB 를 읽어야 알 수
  *    있어서 서버 라우트가 한다. 이 함수는 **정산 건 자체의 성질**만 본다.
- * 🔴 **선착불 판정을 새로 쓰지 말 것** — `lib/receivableCalc.ts` 가 쓰는 것과
- *    같은 값(`collection_method === "driver_direct"`)이다.
+ * ⚠️ **수금방식으로 거르지 않는다**(2026-09-21) — 선착불도 대상이고, 갈리는 것은
+ *    **어느 칸을 입금으로 볼 것인가**뿐이다(`rewardReceiptConfirmed`).
  */
 export function rewardIneligibleReason(
   input: RewardEligibilityInput
 ): RewardIneligibleReason | null {
-  if (input.collectionMethod === "driver_direct") return "direct_collection";
   if (!input.companyId) return "no_company";
   if (!(input.baseAmount > 0)) return "zero_amount";
   return null;
+}
+
+/**
+ * 🚨 **수금방식마다 「돈이 들어온 사건」이 다르다** (2026-09-21 · 선착불 포함 확정).
+ *
+ *   broker(주선사 수금)  → `payment_received`      화주가 위캐리에 입금
+ *   driver_direct(선착불) → `brokerage_fee_paid`   차주가 주선수수료를 입금
+ *
+ * 🔴 **선착불을 `payment_received` 로 재지 말 것** — 그 체크박스는 정산 상세에서
+ *    `collection_method === "broker"` 일 때만 그려진다. 선착불 건에서는 담당자가
+ *    켤 수가 없어서 **영영 적립되지 않는다**(실측: 선착불 3건 모두 `false`).
+ * 🔴 **반대로 broker 를 `brokerage_fee_paid` 로 재지도 말 것** — 그 칸은 선착불의
+ *    유일한 미수금을 쓰는 자리라 broker 건에서는 의미가 없다(35차 확정).
+ */
+export function rewardReceiptConfirmed(input: {
+  collectionMethod?: string | null;
+  paymentReceived?: boolean | null;
+  brokerageFeePaid?: boolean | null;
+}): boolean {
+  return input.collectionMethod === "driver_direct"
+    ? input.brokerageFeePaid === true
+    : input.paymentReceived === true;
+}
+
+/** 위 판정이 거짓일 때의 사유 — 화면이 수금방식에 맞는 말을 쓰게 한다 */
+export function rewardNotReceivedReason(collectionMethod?: string | null): string {
+  return collectionMethod === "driver_direct" ? "fee_not_received" : "not_received";
 }
 
 export function isRewardEligible(input: RewardEligibilityInput): boolean {
@@ -141,7 +187,6 @@ export function isRewardEligible(input: RewardEligibilityInput): boolean {
 }
 
 export const REWARD_INELIGIBLE_LABEL: Record<RewardIneligibleReason, string> = {
-  direct_collection: "대상 아님 — 선착불",
   no_company: "대상 아님 — 화주가 연결되지 않은 건",
   zero_amount: "대상 아님 — 적립 기준 금액이 0원",
 };

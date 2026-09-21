@@ -42,6 +42,9 @@ const SKIP_LABEL: Record<string, string> = {
   ...REWARD_INELIGIBLE_LABEL,
   not_member: "대상 아님 — 리워드 미적용 화주",
   not_received: "대상 아님 — 입금이 확인되지 않음",
+  // 🔴 선착불은 화주 입금이 아니라 **주선수수료 입금**이 적립 시점이다(2026-09-21).
+  //    말을 「입금 확인」으로 뭉개지 말 것 — 담당자가 없는 체크박스를 찾는다.
+  fee_not_received: "대상 아님 — 주선수수료 입금이 확인되지 않음",
   out_of_campaign: "대상 아님 — 캠페인 기간 밖",
   before_start: "대상 아님 — 리워드 적용 시작일 이전",
   after_end: "대상 아님 — 리워드 적용 종료일 이후",
@@ -52,7 +55,9 @@ export default function InvoiceRewardLine({ invoiceId, companyId, lastResult }: 
   const [rows, setRows] = useState<LedgerRow[] | null>(null);
   const [member, setMember] = useState<boolean | null>(null);
   /** 🔴 **예상 적립** — 아직 안 쌓인 건에만 쓴다. 원장에는 한 줄도 안 들어간다. */
-  const [preview, setPreview] = useState<{ amount: number; reason?: string } | null>(null);
+  const [preview, setPreview] = useState<
+    { amount: number; reason?: string; isDirect?: boolean } | null
+  >(null);
 
   useEffect(() => {
     if (!companyId) return;
@@ -84,7 +89,11 @@ export default function InvoiceRewardLine({ invoiceId, companyId, lastResult }: 
         if (preRes.ok) {
           const j = await preRes.json();
           const one = (j.rows || [])[0];
-          setPreview(one ? { amount: one.amount || 0, reason: one.reason } : null);
+          setPreview(
+            one
+              ? { amount: one.amount || 0, reason: one.reason, isDirect: !!one.is_direct }
+              : null
+          );
         }
       } catch {
         if (alive) setMember(false);
@@ -124,13 +133,18 @@ export default function InvoiceRewardLine({ invoiceId, companyId, lastResult }: 
   } else if (preview && !preview.reason && preview.amount > 0) {
     // 🔴 **「예상」이라고 분명히 적는다** — 쌓인 금액과 같은 말투로 쓰면 담당자가
     //    이미 적립된 것으로 읽는다.
-    text = `예상 적립 +${won(preview.amount)} — 입금 확인 시 쌓입니다.`;
+    // 🔴 **기다리는 것이 수금방식마다 다르다** — 선착불은 화주 입금이 아니라
+    //    주선수수료 입금이다(그 화면에 화주 입금 체크박스는 아예 없다).
+    text = preview.isDirect
+      ? `예상 적립 +${won(preview.amount)} — 주선수수료 입금 확인 시 쌓입니다.`
+      : `예상 적립 +${won(preview.amount)} — 입금 확인 시 쌓입니다.`;
   } else if (preview && preview.reason) {
     // 🔴 입금 전이라도 **대상이 아닌 이유**를 미리 알린다(선착불·캠페인 밖 등) —
     //    입금 확인을 누른 뒤에야 알면 그때는 되돌릴 것이 없다.
     text = SKIP_LABEL[preview.reason] || `대상 아님 — ${preview.reason}`;
   } else {
     text = "아직 적립되지 않았습니다 — 입금 확인 시 자동으로 쌓입니다.";
+
   }
 
   return (

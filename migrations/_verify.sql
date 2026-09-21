@@ -1843,10 +1843,11 @@ select left(m.company_id::text, 8) as 화주id,
  order by m.created_at;
 
 \echo '--- ㉝-c 🚨 정산 건별 관문 판정 — 왜 적립이 안 됐는지가 여기서 읽힌다 ---'
--- ⚠️ **날짜 칸이 둘인 것은 의도다.** 코드는 `created_at` 을 **UTC 기준**으로
---    잘라 쓰고(`.slice(0, 10)`), 담당자는 **KST** 로 본다. 둘이 다른 건
---    (KST 00:00~08:59 에 만들어진 건)은 **담당자 눈에는 캠페인 안인데 코드는
---    밖으로 판정**할 수 있다 — 그 어긋남이 이 표에서 바로 보이게 둔다.
+-- ⚠️ **날짜 칸이 둘인 것은 의도다.** 🟢 2026-09-21 부터 **코드도 KST 로 판정한다**
+--    (`lib/rewardAccrue.ts` 의 `rewardRefDate`). 그전에는 UTC 로 잘라 써서
+--    KST 00:00~08:59 에 만들어진 건이 **담당자 눈에는 캠페인 안인데 코드는 밖**
+--    으로 판정됐다. 두 칸을 남겨 두는 것은 **그 어긋남이 다시 생기면 바로 보이게**
+--    하기 위해서다 — 🔴 한 칸으로 줄이지 말 것.
 with cam as (
   select * from public.reward_campaigns where active order by created_at limit 1
 )
@@ -1865,14 +1866,23 @@ select left(i.id::text, 8)                                        as 정산건,
        i.customer_charge_vat_included                             as 부가세포함,
        coalesce(i.collection_method, '(없음)')                     as 수금방식,
        -- ── 관문 (전부 true 여야 적립된다) ──────────────────────────────────
-       coalesce(i.payment_received, false)                        as "①입금확인",
-       (coalesce(i.collection_method, '') <> 'driver_direct')     as "②선착불아님",
+       -- 🚨 **①은 수금방식마다 보는 칸이 다르다**(2026-09-21 · 선착불 포함 확정) —
+       --    broker 는 `payment_received`, 선착불은 `brokerage_fee_paid` 다.
+       --    🔴 한쪽으로 통일하지 말 것(`lib/rewardCalc.ts` 의 `rewardReceiptConfirmed`).
+       (case when coalesce(i.collection_method, '') = 'driver_direct'
+             then coalesce(i.brokerage_fee_paid, false)
+             else coalesce(i.payment_received, false) end)        as "①입금확인",
+       -- ⚠️ ②는 **관문이 아니라 참고 칸이 됐다**(선착불도 적립 대상이다).
+       --    🔴 「선착불아님」 관문으로 되돌리지 말 것.
+       (coalesce(i.collection_method, '') = 'driver_direct')      as "②선착불",
        (i.company_id is not null)                                 as "③화주연결",
        coalesce(m.enabled, false)                                 as "④멤버십ON",
-       ((i.created_at at time zone 'UTC')::date
+       -- 🔴 **KST 로 잰다**(2026-09-21 확정) — 코드도 `rewardRefDate` 로 KST 를 쓴다.
+       --    한쪽만 UTC 로 두면 다음 `verify` 가 멀쩡한 건을 빨간불로 띄운다.
+       ((i.created_at at time zone 'Asia/Seoul')::date
           between cam.start_date and cam.earn_end_date)           as "⑤캠페인내",
        (m.started_at is null
-          or (i.created_at at time zone 'UTC')::date >= m.started_at) as "⑥시작일이후",
+          or (i.created_at at time zone 'Asia/Seoul')::date >= m.started_at) as "⑥시작일이후",
        (coalesce(i.customer_charge_total, 0) > 0)                 as "⑦금액있음",
        -- ── 결과 ───────────────────────────────────────────────────────────
        (select count(*) from public.reward_ledger l

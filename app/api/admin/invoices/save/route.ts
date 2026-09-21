@@ -142,6 +142,14 @@ export async function POST(req: Request) {
  * 🔴 **입금 확인이 바뀐 순간이 리워드 적립·회수의 트리거다**(사용자 확정 — 운송완료가
  *    아니다. 미수금 상태에서 포인트가 먼저 나가면 안 된다).
  *
+ * 🚨 **그 「입금 확인」이 수금방식마다 다른 칸이다**(2026-09-21 · 선착불 포함 확정) —
+ *    broker 는 `payment_received`, 선착불(`driver_direct`)은 `brokerage_fee_paid`.
+ *    🔴 선착불을 `payment_received` 로 지켜보지 말 것 — 그 체크박스는 정산 상세에서
+ *    broker 일 때만 그려져서 담당자가 켤 수가 없고, 그러면 **영영 적립되지 않는다.**
+ * ⚠️ 수금방식을 **같은 저장에서 바꿀 수도** 있으므로(화이트리스트에 있다) 새 값이
+ *    있으면 그것을 먼저 본다 — 안 그러면 방식을 바꾸면서 입금을 함께 체크한 저장이
+ *    엉뚱한 칸을 보고 넘어간다.
+ *
  * 🔴 **저장이 성공한 뒤에만 부른다** — 저장이 실패했는데 적립이 나가면 안 된다.
  * 🔴 **적립 실패가 입금확인을 막지 않는다** — `accrueRewardSafely` 는 던지지 않고
  *    3초 안에 못 끝나면 그냥 넘어간다. 무엇이 왜 안 됐는지는 응답의 `reward` 로
@@ -158,9 +166,15 @@ async function runRewardForPaymentChange(
   current: Record<string, any>,
   cleanPayload: Record<string, any>
 ) {
-  if (!("payment_received" in cleanPayload)) return undefined;
-  const was = current.payment_received === true;
-  const now = cleanPayload.payment_received === true;
+  const method =
+    "collection_method" in cleanPayload
+      ? cleanPayload.collection_method
+      : current.collection_method;
+  const field = method === "driver_direct" ? "brokerage_fee_paid" : "payment_received";
+
+  if (!(field in cleanPayload)) return undefined;
+  const was = current[field] === true;
+  const now = cleanPayload[field] === true;
   if (was === now) return undefined;
 
   const out = await accrueRewardSafely({

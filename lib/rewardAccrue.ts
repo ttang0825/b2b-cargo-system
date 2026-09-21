@@ -31,6 +31,8 @@ import {
   rewardBaseAmount,
   rewardEarnAmount,
   rewardIneligibleReason,
+  rewardNotReceivedReason,
+  rewardReceiptConfirmed,
 } from "./rewardCalc";
 
 export type RewardAccrueInput = {
@@ -139,7 +141,9 @@ export async function accrueReward(
 /** 🔴 정산 건 하나를 적립하는 데 필요한 컬럼 — 화면이 아니라 여기서 다시 읽는다 */
 const INVOICE_SELECT =
   "id,order_id,company_id,customer_charge_total,customer_charge_vat_included," +
-  "collection_method,payment_received,created_at,orders(order_no)";
+  // 🔴 `brokerage_fee_paid` 는 **선착불의 입금 사건**이다(2026-09-21) — 빼면
+  //    선착불 건이 영영 적립되지 않는다(`rewardReceiptConfirmed`).
+  "collection_method,payment_received,brokerage_fee_paid,created_at,orders(order_no)";
 
 type InvoiceRow = {
   id: string;
@@ -149,6 +153,8 @@ type InvoiceRow = {
   customer_charge_vat_included: boolean | null;
   collection_method: string | null;
   payment_received: boolean | null;
+  /** 🔴 선착불(`driver_direct`)의 입금 사건 — 차주가 주선수수료를 냈는가 */
+  brokerage_fee_paid: boolean | null;
   created_at: string;
   orders?: { order_no?: string | null } | null;
 };
@@ -187,7 +193,11 @@ async function handleOne(
       amount: -Math.abs(Math.round(origin.amount || 0)),
       source_type: "invoice",
       source_id: inv.id,
-      description: `입금확인 해제 — ${invoiceLabel(inv)}`,
+      // 🔴 **말을 수금방식에 맞춘다** — 원장은 지워지지 않는 기록이고, 선착불 건에
+      //    「입금확인 해제」라고 적히면 나중에 누구도 무엇이 풀린 것인지 못 읽는다.
+      description: `${
+        inv.collection_method === "driver_direct" ? "주선수수료 입금 해제" : "입금확인 해제"
+      } — ${invoiceLabel(inv)}`,
       created_by: staffId,
     });
     // 🚨 이미 회수됐으면 오류가 아니다(UNIQUE 가 `transaction_type` 을 포함하는 이유).
@@ -202,7 +212,15 @@ async function handleOne(
   // 🔴 입금이 확인되지 않은 건은 적립하지 않는다(확정값 ② — 운송완료가 아니다).
   //    ⚠️ 부르는 쪽이 저장 직후에 부르므로 여기서 **DB 를 다시 읽은 값**으로 본다
   //       (클라이언트가 보낸 상태를 믿지 않는다 — 원칙 53번과 같은 결).
-  if (!inv.payment_received) return { invoice_id: inv.id, status: "skipped", reason: "not_received" };
+  // 🚨 **수금방식마다 보는 칸이 다르다**(2026-09-21 — 선착불 포함 확정).
+  //    broker 는 `payment_received`, 선착불은 `brokerage_fee_paid` 다.
+  if (!rewardReceiptConfirmed(receiptInput(inv))) {
+    return {
+      invoice_id: inv.id,
+      status: "skipped",
+      reason: rewardNotReceivedReason(inv.collection_method),
+    };
+  }
 
   // 멤버십 — 🔴 켜져 있고, 시작일 이후인가
   //
@@ -211,8 +229,9 @@ async function handleOne(
   //    `.eq("company_id", null)` 을 보내면 PostgREST 가 uuid 파싱 오류를 낸다.
   //    그러면 「대상 아님 — 화주가 연결되지 않은 건」이어야 할 것이 **「적립 실패」
   //    빨간 줄**로 정산 상세에 뜬다. 🔴 이 분기를 지우지 말 것.
-  // ⚠️ **사유는 여기서 정하지 않는다** — `evaluateReward` 가 선착불을 먼저 보므로
-  //    「선착불 + 게스트」 건은 예전처럼 `direct_collection` 으로 남는다.
+  // ⚠️ **사유는 여기서 정하지 않는다** — `evaluateReward` 가 판정한다.
+  //    ⚠️ 2026-09-21 에 선착불 제외가 없어져서, 게스트 건의 사유는 수금방식과
+  //       무관하게 `no_company` 다.
   const { data: memberships, error: mErr } = inv.company_id
     ? await admin
         .from("reward_memberships")
@@ -274,14 +293,53 @@ function isDuplicate(error: { code?: string; message?: string }): boolean {
 // 🔴 **판정은 실제 적립과 같은 `evaluateReward` 를 쓴다** — 갈라 적으면 화면이
 //    약속한 금액과 실제로 쌓이는 금액이 어긋난다(사용자가 그 숫자를 보고 영업한다).
 //
-// ⚠️ **입금 확인만이 둘을 가른다** — `evaluateReward` 가 `payment_received` 를
-//    보지 않는 이유다(그 조건은 부르는 쪽이 판단한다).
+// ⚠️ **입금 확인만이 둘을 가른다** — `evaluateReward` 가 입금 칸을 보지 않는
+//    이유다(그 조건은 부르는 쪽이 `rewardReceiptConfirmed` 로 판단한다).
+//    🔴 그 칸은 수금방식마다 다르다 — broker 는 `payment_received`,
+//    선착불은 `brokerage_fee_paid`.
 
 /**
  * 🔴 **판별자가 문자열인 것은 의도다** — 이 저장소는 `strict: false` 라
  *    참/거짓 판별자로는 타입이 좁혀지지 않는다(32차·37차가 같은 자리에서
  *    `tsc` 에 걸렸고 이번에도 걸렸다). boolean 으로 되돌리지 말 것.
  */
+/** `InvoiceRow` → `rewardReceiptConfirmed` 입력 (칸 이름을 한 곳에서만 옮긴다) */
+function receiptInput(inv: InvoiceRow) {
+  return {
+    collectionMethod: inv.collection_method,
+    paymentReceived: inv.payment_received,
+    brokerageFeePaid: inv.brokerage_fee_paid,
+  };
+}
+
+/**
+ * 🚨 **정산 건의 기준일은 KST 로 읽는다** (2026-09-21 사용자 확정).
+ *
+ * 🔴 **`created_at.slice(0, 10)` 로 되돌리지 말 것.** 그것은 ISO 문자열이라
+ *    **UTC 날짜**이고, Vercel 함수도 UTC 라 `getDate()` 도 마찬가지다.
+ *    KST 00:00~08:59 에 만들어진 정산 건은 **하루 앞 날짜**로 읽혀서,
+ *    담당자 눈에는 캠페인 안인데 코드는 「기간 밖」으로 판정한다
+ *    (운영에 실재하는 어긋남이다 — `_verify.sql` ㉝ 의 「🚨 날짜갈림」).
+ * 🔴 **`Intl` 에 `timeZone: "Asia/Seoul"` 을 주는 이 방식을 되돌리지 말 것** —
+ *    PR #176 이 문자 날짜에서 같은 버그를 고친 그 방법이다.
+ * ⚠️ 캠페인·적용 시작일은 `date` 라 애초에 시간대가 없다 — 맞춰야 하는 것은
+ *    **담당자가 화면에서 보는 날짜**이고 그것이 KST 다.
+ */
+export function rewardRefDate(createdAt: string | null | undefined): string {
+  if (!createdAt) return "";
+  const d = new Date(createdAt);
+  if (Number.isNaN(d.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(d);
+  const get = (t: string) => parts.find((x) => x.type === t)?.value ?? "";
+  const y = get("year"), m = get("month"), day = get("day");
+  return y && m && day ? `${y}-${m}-${day}` : "";
+}
+
 export type RewardEvaluation =
   | { status: "eligible"; base: number; amount: number }
   | { status: "skipped"; base: number; reason: string };
@@ -317,9 +375,10 @@ export function evaluateReward(
 
   if (!membership || !membership.enabled) return { status: "skipped", base, reason: "not_member" };
 
-  // 🔴 기준일은 **정산 건의 기준일**이다(`created_at` 의 날짜). 오늘로 재면
-  //    캠페인이 끝난 뒤에 뒤늦게 입금확인한 옛 건이 통째로 빠진다.
-  const refDate = (inv.created_at || "").slice(0, 10);
+  // 🔴 기준일은 **정산 건의 기준일**이다(생성일). 오늘로 재면 캠페인이 끝난 뒤에
+  //    뒤늦게 입금확인한 옛 건이 통째로 빠진다.
+  // 🔴 **KST 로 읽는다** — 위 `rewardRefDate` 주석 참고.
+  const refDate = rewardRefDate(inv.created_at);
   if (refDate && (refDate < campaign.start_date || refDate > campaign.earn_end_date)) {
     return { status: "skipped", base, reason: "out_of_campaign" };
   }
@@ -344,6 +403,11 @@ export type RewardPreviewRow = {
   amount: number;
   /** 대상이 아닌 사유(있으면 `amount` 는 0) */
   reason?: string;
+  /**
+   * 🔴 선착불인가 — 화면이 **무엇을 기다리는지**를 맞게 적으려면 필요하다
+   * (broker 는 「입금 확인」, 선착불은 「주선수수료 입금」).
+   */
+  is_direct?: boolean;
 };
 
 /**
@@ -372,13 +436,15 @@ export async function previewRewards(opts: {
   if (invoiceId) {
     q = q.eq("id", invoiceId);
   } else {
-    // 🔴 **`is not true` 다**(`eq false` 가 아니다) — `payment_received` 가 `null`
-    //    인 옛 행이 통째로 빠진다.
+    // 🔴 **「미입금」을 DB 조건으로 쓰지 않는다**(2026-09-21) — 보는 칸이 수금방식마다
+    //    달라서(`payment_received` / `brokerage_fee_paid`) 한 줄짜리 필터로 쓰면
+    //    **broker 는 입금됐는데 수수료 칸이 비어 있는 건**까지 끌려온다.
+    //    거르는 일은 아래에서 `rewardReceiptConfirmed` 한 곳이 한다.
+    // ⚠️ 캠페인 밖은 여기서 **느슨하게** 잘라 둔다(정확한 판정은 `evaluateReward`).
+    //    날짜 비교는 UTC 경계라 KST 로 하루 걸치는 건이 빠지지 않게 **앞뒤로 하루씩**
+    //    넉넉히 잡는다 — 좁히면 9시간 차이로 대상이 조용히 빠진다.
     q = q
-      .not("payment_received", "is", true)
-      // 캠페인 밖은 애초에 안 끌어온다 — 정확한 판정은 아래 `evaluateReward` 가 한다
-      // (여기서 거른 것과 어긋나지 않게 **느슨한 쪽**으로만 자른다).
-      .gte("created_at", campaign.start_date)
+      .gte("created_at", `${campaign.start_date}T00:00:00Z`)
       .lte("created_at", `${campaign.earn_end_date}T23:59:59.999Z`)
       .order("created_at", { ascending: false })
       .limit(PREVIEW_LIMIT + 1);
@@ -391,6 +457,10 @@ export async function previewRewards(opts: {
   let rows = (data || []) as unknown as InvoiceRow[];
   const truncated = !invoiceId && rows.length > PREVIEW_LIMIT;
   if (truncated) rows = rows.slice(0, PREVIEW_LIMIT);
+  // 🔴 **이미 입금된 건은 「예상」이 아니다** — 그것은 원장이 답한다.
+  //    한 건만 묻는 경우(`invoiceId`)는 거르지 않는다: 정산 상세가 입금 전에도
+  //    **얼마가 쌓일지** 미리 보여주는 자리이고, 입금 뒤에는 화면이 원장을 먼저 쓴다.
+  if (!invoiceId) rows = rows.filter((r) => !rewardReceiptConfirmed(receiptInput(r)));
   if (rows.length === 0) return { rows: [], truncated: false };
 
   // 멤버십 — 🔴 건마다 조회하지 말 것(미입금 건이 수백이면 질의도 수백이다)
@@ -424,6 +494,7 @@ export async function previewRewards(opts: {
         label: invoiceLabel(inv),
         created_at: inv.created_at,
         amount: verdict.status === "eligible" ? verdict.amount : 0,
+        is_direct: inv.collection_method === "driver_direct",
         ...(verdict.status === "eligible" ? {} : { reason: verdict.reason }),
       };
     }),
