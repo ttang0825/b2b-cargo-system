@@ -207,6 +207,12 @@ alter table public.reward_memberships enable row level security;
 alter table public.reward_ledger      enable row level security;
 
 -- ── ⑥ 캠페인 1행 (사용자 확정 2026-09-18) ─────────────────────────────────
+--
+-- ⚠️ **아래 `2026-09-01` 은 더 이상 현재 값이 아니다.** 2026-09-21 에
+--    `2026-09-21_reward_campaign_start.sql` 이 **2026-08-07** 로 옮겼다.
+--    🔴 **이 파일의 SQL 을 고치지 말 것**(적용이 끝난 파일이다 — README 규칙).
+--    🔴 **여기 적힌 날짜를 근거로 되돌리지도 말 것** — DB 가 정본이다
+--       (운임 혼적 할인에서 같은 일이 있었다 · CLAUDE.md 「문서 정합 정리 2차」).
 insert into public.reward_campaigns
   (name, start_date, earn_end_date, use_end_date, earn_rate, minimum_use_amount, active)
 values
