@@ -36,10 +36,13 @@
 //     금액   🔴 **운임 공급가액 그대로**(broker 와 같다). 화주가 낸 운임인 것은
 //            사실이고, 프로모션이 약속한 것도 「운임의 5%」다. 🔴 주선수수료의 5% 로
 //            바꾸지 말 것 — 화주에게 약속한 것과 다른 금액이 된다.
+//            🚨 **그리고 그 운임은 저장된 부가세 구분을 보지 않는다**(2026-09-21 확정 —
+//            *"선착불건의 전체 운송료는 기본적으로 부가세 별도 금액이다"*).
+//            자세한 것은 `rewardBaseAmount` 머리말.
 //
 //   ⚠️ **보고한 대가** — 선착불에서 위캐리 매출은 주선수수료뿐인데 적립은 **운임**
 //      기준이라, 그 건의 매출 대비 적립 비중이 broker 보다 훨씬 크다(운임 80,000 ·
-//      수수료 15,000 이면 적립 3,636 원 = 매출의 약 24%). **사용자가 알고 고른 것이다.**
+//      수수료 15,000 이면 적립 4,000 원 = 매출의 약 27%). **사용자가 알고 고른 것이다.**
 //
 // ── ⚠️ 현장 추가비가 스냅샷에 섞여 있을 수 있다 (실측 2026-09-20) ───────────
 //
@@ -79,6 +82,12 @@ export type RewardBaseInput = {
   customerChargeVatIncluded: boolean | null | undefined;
   /** 🔴 그 스냅샷에 **이미 섞여 들어간** 현장 추가비 합계(화주 청구분) */
   includedExtraChargeTotal?: number | null;
+  /**
+   * 🚨 **선착불(`driver_direct`)이면 저장된 부가세 구분을 쓰지 않는다**
+   *    (사용자 확정 2026-09-21 — *"선착불건의 전체 운송료는 기본적으로 부가세
+   *    별도 금액이다"*). 없으면 저장된 구분을 그대로 쓴다.
+   */
+  collectionMethod?: string | null;
 };
 
 /**
@@ -89,13 +98,30 @@ export type RewardBaseInput = {
  * 🔴 **추가비를 부가세보다 먼저 뺀다** — 추가비도 같은 기준(포함/별도)으로 적힌
  *    금액이라 합계에서 빼고 나서 가르는 것이 맞다. 순서를 바꾸면 포함가 건에서
  *    추가비의 부가세만큼 어긋난다.
+ *
+ * ── 🚨 선착불은 부가세 구분을 보지 않는다 (2026-09-21 사용자 확정) ──────────
+ *
+ * 선착불은 **화주가 차주에게 직접 내는 운임**이고 위캐리가 그 금액으로 세금계산서를
+ * 끊지 않는다. 그래서 `customer_charge_vat_included` 가 그 건에서는 **우리 장부의
+ * 뜻을 갖지 않고**(담당자가 무엇을 골라 뒀든) 적힌 금액이 곧 운임이다.
+ * 실제로 운영 3건 중 둘이 「포함」으로 저장돼 있었는데, 그대로 1.1 로 가르면
+ * **화주에게 약속한 「운임의 5%」보다 적게 적립**된다.
+ *
+ * 🔴 **이 분기를 지우지 말 것** — 지우면 80,000원 건이 72,727원 기준이 되어
+ *    적립이 3,600원으로 떨어진다(약속한 값은 4,000원이다).
+ * 🔴 **반대로 `broker` 에까지 넓히지 말 것** — 그쪽은 우리가 화주에게 청구하고
+ *    세금계산서를 끊는 금액이라 구분이 실제 뜻을 갖는다(포함가 건이 실재한다).
+ * ⚠️ **정산 화면의 부가세 표시는 그대로다** — 그 화면은 저장된 구분을 보여 준다.
+ *    선착불 건에서 적립 기준과 그 표시가 갈리는 것은 **의도된 것**이다.
  */
 export function rewardBaseAmount(input: RewardBaseInput): number {
   const total = Math.round(input.customerChargeTotal || 0);
   const extra = Math.round(input.includedExtraChargeTotal || 0);
   const freightOnly = total - extra;
   if (freightOnly <= 0) return 0;
-  return splitVat(freightOnly, input.customerChargeVatIncluded).supply;
+  const vatIncluded =
+    input.collectionMethod === "driver_direct" ? false : input.customerChargeVatIncluded;
+  return splitVat(freightOnly, vatIncluded).supply;
 }
 
 /**

@@ -1863,7 +1863,15 @@ select left(i.id::text, 8)                                        as 정산건,
                <> (i.created_at at time zone 'Asia/Seoul')::date
             then '🚨 날짜갈림' else '' end                         as 주의,
        i.customer_charge_total                                    as 청구총액,
+       -- ⚠️ **선착불 건에서는 이 칸이 적립 기준에 쓰이지 않는다**(2026-09-21 확정) —
+       --    선착불 운임은 저장된 구분과 무관하게 **부가세 별도**로 본다
+       --    (`lib/rewardCalc.ts` 의 `rewardBaseAmount`). 🔴 이 칸이 `t` 인 선착불
+       --    건을 보고 「적립이 1.1 로 갈렸겠구나」로 읽지 말 것.
        i.customer_charge_vat_included                             as 부가세포함,
+       case when coalesce(i.collection_method, '') = 'driver_direct'
+            then '별도(선착불 고정)'
+            when i.customer_charge_vat_included then '포함' else '별도' end
+                                                                  as 적립기준_부가세,
        coalesce(i.collection_method, '(없음)')                     as 수금방식,
        -- ── 관문 (전부 true 여야 적립된다) ──────────────────────────────────
        -- 🚨 **①은 수금방식마다 보는 칸이 다르다**(2026-09-21 · 선착불 포함 확정) —

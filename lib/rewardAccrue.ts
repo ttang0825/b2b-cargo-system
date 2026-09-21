@@ -364,6 +364,9 @@ export function evaluateReward(
     customerChargeTotal: inv.customer_charge_total,
     customerChargeVatIncluded: inv.customer_charge_vat_included,
     includedExtraChargeTotal: includedExtra,
+    // 🚨 **빼지 말 것** — 없으면 선착불 건이 저장된 「포함」 구분으로 갈려서
+    //    적립이 조용히 1/1.1 로 줄어든다(2026-09-21 확정 · `rewardBaseAmount` 머리말).
+    collectionMethod: inv.collection_method,
   });
 
   const ineligible = rewardIneligibleReason({
