@@ -2083,5 +2083,7 @@ select template_type as 종류, status as 상태, count(*) as 건수
  group by 1,2
  order by 1,2;
 
-\echo '--- ㉟-f 기준선 — _migrations 행 수(48이어야 한다) ---'
+-- ⚠️ 기준선은 차수마다 는다 — **적을 때마다 같이 고칠 것**(안 고치면 다음 세션이
+--    「줄었다」로 오해한다). 3차가 둘을 더해 48 → 50 이 됐다.
+\echo '--- ㉟-f 기준선 — _migrations 행 수(50이어야 한다) ---'
 select count(*) as 적용된_마이그레이션 from public._migrations;
