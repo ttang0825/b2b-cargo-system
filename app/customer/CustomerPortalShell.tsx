@@ -67,6 +67,12 @@ const NAV_GROUPS: NavItem[][] = [
   [
     { href: "/customer/invoices", label: "정산·결제내역", icon: "invoices", key: "invoices" },
     { href: "/customer/stats", label: "월별 통계", icon: "stats" },
+    // 🔴 **「적립금」은 조건부다**(2026-09-21) — `reward_memberships.portal_visible` 이
+    //    켜진 화주에게만 그린다. 켜지지 않은 화주에게 메뉴만 보이면 눌러도 빈 화면이고,
+    //    리워드는 **선택된 기업만** 참여하는 프로모션이라 「나는 왜 없나」가 된다.
+    //    판정은 `NavList` 가 `rewardVisible` 로 받는다 — 여기 배열은 **자리**만 정한다.
+    //    ⚠️ 그래서 이 그룹은 2~3항목이다(다른 그룹과 달리 개수가 고정이 아니다).
+    { href: "/customer/reward", label: "적립금", icon: "reward" },
   ],
   [
     { href: "/customer/locations", label: "배송지·화물 관리", icon: "locations" },
@@ -108,17 +114,22 @@ function isActive(pathname: string | null, href: string) {
 function NavList({
   pathname,
   counts,
+  rewardVisible,
   onNavigate,
 }: {
   pathname: string | null;
   counts: Record<string, number>;
+  /** 🔴 `reward_memberships.portal_visible` — 꺼져 있으면 「적립금」을 그리지 않는다 */
+  rewardVisible: boolean;
   onNavigate?: () => void;
 }) {
   return (
     <>
       {NAV_GROUPS.map((group, gi) => (
         <div key={gi} className="pv2-nav-group">
-          {group.map((item) => {
+          {/* 🔴 **거르는 일은 여기 한 곳이다** — 사이드바와 바텀시트가 같은 `NavList` 를
+              쓰므로, 화면마다 따로 거르면 「모바일에만 보이는 메뉴」가 생긴다. */}
+          {group.filter((item) => item.href !== "/customer/reward" || rewardVisible).map((item) => {
             const active = isActive(pathname, item.href);
             const count = item.key ? counts[item.key] || 0 : 0;
             return (
@@ -159,6 +170,10 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
     announcements: 0,
   });
   const [sheetOpen, setSheetOpen] = useState(false);
+  // 🔴 **「적립금」 메뉴를 그릴지** — `reward_memberships.portal_visible` 이다.
+  //    🔴 화면에서 리워드 표를 직접 읽지 말 것(RLS on + 정책 0개라 **에러 없이 빈 배열**이
+  //       온다 — 원칙 22번과 같은 증상). 통로는 `/api/customer/reward` 하나다.
+  const [rewardVisible, setRewardVisible] = useState(false);
   const sheetCloseRef = useRef<HTMLButtonElement>(null);
 
   // ── 새 소식 알림 (2026-09-16 · 사용자 요청 「화주포털에도 적용」) ─────────────
@@ -321,6 +336,40 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
     setSheetOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname, router]);
+
+  // ── 「적립금」 메뉴 (2차, 2026-09-21) ───────────────────────────────────────
+  //
+  // 🔴 **`companyId` 가 바뀔 때만 한 번 묻는다**(`[companyId]`) — 화면을 옮길 때마다
+  //    물으면 메뉴 한 줄 때문에 이동마다 질의가 는다. 멤버십은 담당자가 가끔 켜는
+  //    값이라 그 정도면 충분하고, 켠 직후에는 화주가 새로고침하면 바로 보인다.
+  // 🔴 **되풀이 타이머를 만들지 말 것**(38차 원칙과 같다).
+  // 🔴 **`?menu=1`** — 메뉴는 「보이는가」만 필요하다. 전체 응답을 받으면 원장·오더번호
+  //    질의까지 매번 돈다.
+  // 🔴 실패하면 **안 그린다**(기본값 `false`) — 없는 메뉴를 그려 빈 화면으로 보내는 것보다
+  //    낫다. 🔴 조회 실패를 「켜짐」으로 떨어뜨리지 말 것.
+  useEffect(() => {
+    if (!companyId) {
+      setRewardVisible(false);
+      return;
+    }
+    let alive = true;
+    (async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch("/api/customer/reward?menu=1", {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      }).catch(() => null);
+      if (!alive || !res?.ok) return;
+      const body = await res.json().catch(() => ({}));
+      if (alive) setRewardVisible(body?.visible === true);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [companyId]);
 
   // 바텀시트가 열리면 배경 스크롤을 잠그고 ESC 로 닫는다.
   useEffect(() => {
@@ -561,7 +610,7 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
           </div>
 
           <nav className="pv2-nav" aria-label="운송관리 메뉴">
-            <NavList pathname={pathname} counts={displayCounts} />
+            <NavList pathname={pathname} counts={displayCounts} rewardVisible={rewardVisible} />
           </nav>
 
           <div className="pv2-sidebar-foot">
@@ -674,6 +723,7 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
               <NavList
                 pathname={pathname}
                 counts={displayCounts}
+                rewardVisible={rewardVisible}
                 onNavigate={() => setSheetOpen(false)}
               />
               {/* 🔴 모바일에는 사이드바 하단이 없으므로 여기에 둘 다 넣는다 */}

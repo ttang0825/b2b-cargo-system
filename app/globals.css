@@ -9813,3 +9813,93 @@ tbody tr:hover {
 .reward-line-warn {
   color: #b4423a;
 }
+
+/* ── 화주포털 적립금 (2차, 2026-09-21) ──────────────────────────────────────
+   🔴 **순수 추가다** — 기존 줄을 한 줄도 고치지 않았다(관리자 31화면 무회귀의 근거).
+   🔴 색은 리터럴이 아니라 `--pv2-*` 토큰이다 — 이 화면은 `.portal-v2` 안이라 토큰이
+      살아 있다(관리자에서 쓰면 상속값이 나온다 · PR #145 실측). */
+.pv2-rwrow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 15px 24px;
+}
+.pv2-rwrow + .pv2-rwrow {
+  border-top: 1px solid var(--pv2-border-soft);
+}
+.pv2-rwbody {
+  flex: 1;
+  min-width: 0;
+}
+.pv2-rwtitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--pv2-text);
+}
+.pv2-rwmeta {
+  font-size: 13px;
+  color: var(--pv2-text-3);
+  margin-top: 3px;
+}
+/* 🔴 금액·날짜는 오른쪽 끝에 붙어 세로로 쌓인다 — `flex: none` 을 빼면 긴 오더번호가
+   금액을 밀어 「+4,00…」으로 잘린다. */
+.pv2-rwright {
+  flex: none;
+  text-align: right;
+}
+.pv2-rwamt {
+  font-size: 15.5px;
+  font-weight: 700;
+  color: var(--pv2-text);
+  white-space: nowrap;
+}
+.pv2-rwdate {
+  font-size: 12.5px;
+  color: var(--pv2-text-3);
+  margin-top: 2px;
+}
+/* 홈 카드 — 🔴 참여하지 않은 화주에게는 **아무것도 그리지 않는다**(화면 코드가 판단).
+   여기 규칙은 그릴 때의 모양만 정한다. */
+.pv2-rwhome {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 24px;
+}
+.pv2-rwhome-body {
+  flex: 1;
+  min-width: 0;
+}
+.pv2-rwhome-label {
+  font-size: 13.5px;
+  color: var(--pv2-text-3);
+}
+.pv2-rwhome-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--pv2-text);
+  line-height: 1.2;
+  margin-top: 3px;
+}
+@media (max-width: 700px) {
+  .pv2-rwrow {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 13px 16px;
+  }
+  .pv2-rwbody {
+    flex: 1 1 100%;
+    order: 2;
+  }
+  /* 🔴 모바일에서는 배지와 금액이 한 줄, 본문이 아랫줄이다 — `margin-left: auto` 를
+     빼면 금액이 배지에 붙어 읽기 어렵다. */
+  .pv2-rwright {
+    margin-left: auto;
+  }
+  .pv2-rwhome {
+    padding: 15px 16px;
+  }
+  .pv2-rwhome-value {
+    font-size: 19px;
+  }
+}

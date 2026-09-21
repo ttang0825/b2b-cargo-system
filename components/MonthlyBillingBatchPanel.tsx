@@ -14,6 +14,7 @@ import {
   isPastDue,
   type PaymentDueSetting,
 } from "@/lib/paymentDueDate";
+import SmsConfirmModal, { SmsPreview } from "@/components/SmsConfirmModal";
 
 // 로드맵 ②-B: 정산관리 "월정산 묶음" 탭(작업지시서 6-1). 화주+기간(월 단위)을
 // 고르면 그 조합의 묶음(draft/confirmed/cancelled)을 조회하고, draft면
@@ -197,6 +198,9 @@ export default function MonthlyBillingBatchPanel({
    *    (실사용 리뷰 3라운드 — *"새 묶음 만들기가 안되고 역시 담기도 안된다"*).
    * 🔴 `scope` 를 빼고 한 곳으로 되돌리지 말 것.
    */
+  // 🚨 적립 안내 문자 확인창 — 🔴 **서버가 바로 보내지 않는다**(2026-09-21 사용자 확정).
+  //    창이 다 끝나면 그냥 사라진다(이 화면은 떠나지 않으므로 뒤에 할 일이 없다).
+  const [smsQueue, setSmsQueue] = useState<SmsPreview[]>([]);
   const [actionError, setActionError] = useState<{
     scope: "top" | "batch" | "create";
     message: string;
@@ -1022,6 +1026,9 @@ export default function MonthlyBillingBatchPanel({
     await refreshOverview();
   }
 
+  // 🚨 **적립 안내 문자는 확인창을 거친다**(2026-09-21 · 사용자 확정) — 서버는 문구만
+  //    만들어 올려보내고 담당자가 [발송]을 눌러야 나간다.
+  //    🔴 **묶음이 13건이어도 창은 하나다**(회사별로 합쳐 만든다 — `lib/rewardAccrue.ts`).
   async function handleMarkPaymentReceived() {
     if (!batch) return;
     if (!confirm("이 묶음에 담긴 모든 정산 건을 입금완료 처리할까요?")) return;
@@ -1033,6 +1040,9 @@ export default function MonthlyBillingBatchPanel({
     }
     await reloadOpenBatch();
     await refreshOverview();
+    // 🔴 **목록을 먼저 새로 그린 뒤에 창을 띄운다** — 입금 처리는 이미 끝난 일이고
+    //    문자는 곁다리다. 🔴 꺼진 화주는 배열이 비어 있어 창이 안 뜬다.
+    setSmsQueue((result as any).reward?.sms || []);
   }
 
   async function handleSetDueDate() {
@@ -1874,6 +1884,17 @@ export default function MonthlyBillingBatchPanel({
           </p>
         </details>
       </details>
+
+      {smsQueue.length > 0 && (
+        /* 🔴 `key` 가 없으면 두 번째 창에 **첫 번째 창의 본문이 그대로 남는다.**
+              ⚠️ 전부 `reward_earned` 이라 열쇠는 원장 줄 id 다(회사마다 다르다). */
+        <SmsConfirmModal
+          key={smsQueue[0].relatedId}
+          preview={smsQueue[0]}
+          onSent={() => setSmsQueue((q) => q.slice(1))}
+          onSkip={() => setSmsQueue((q) => q.slice(1))}
+        />
+      )}
     </div>
   );
 }

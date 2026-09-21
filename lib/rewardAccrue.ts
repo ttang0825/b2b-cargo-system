@@ -26,6 +26,8 @@
 //      🔴 「적립이 한 번만」을 잴 때는 **호출 횟수가 아니라 원장 행 수로** 재라.
 
 import { loadActiveCampaign, type RewardCampaign } from "./rewardServer";
+import type { SmsPreview } from "@/components/SmsConfirmModal";
+import { buildRewardSmsPreview } from "./rewardNotify";
 import { fetchIncludedExtraChargeTotals } from "./rewardExtraCharges";
 import {
   rewardBaseAmount,
@@ -43,12 +45,29 @@ export type RewardAccrueInput = {
   sourceId: string;
   /** 🚨 입금확인 **해제** — 원본 적립을 지우지 않고 `reversal` 한 줄을 넣는다 */
   reverse?: boolean;
+  /**
+   * 적립 안내 문자의 **확인창을 띄울 것인가** — 🔴 **기본값은 「안 띄움」이다.**
+   *
+   * 🚨 **이 값은 「보낸다」가 아니라 「미리보기를 만든다」다**(2026-09-21 · 사용자 확정
+   *    「확인창을 붙인다」). 문자는 담당자가 `SmsConfirmModal` 에서 [발송]을 눌러야
+   *    나간다. 🔴 **여기서 바로 보내는 구조로 되돌리지 말 것.**
+   *
+   * 🔴 **소급 적립(`/api/admin/reward/backfill`)에서는 켜지 말 것** — 그 버튼은 한 번에
+   *    최대 100건을 적립하므로, 켜면 담당자가 **확인창을 100번** 눌러야 한다.
+   *    켜는 곳은 **입금이 방금 확인된 경로 둘**뿐이다
+   *    (`invoices/save` · `billing-batches/mark-payment-received`).
+   * 🔴 **회수(`reverse`)에서는 안 뜬다** — 「적립이 취소됐습니다」를 문자로 알리는 것은
+   *    사용자가 정한 적이 없다(담당자가 말할 일이다).
+   */
+  withSmsPreview?: boolean;
 };
 
 export type RewardAccrueOutcome = {
   invoice_id: string;
   status: "accrued" | "reversed" | "skipped" | "already" | "error";
   amount?: number;
+  /** 🔴 적립 안내 문자의 `sms_logs.related_id` 가 된다 — 이력에서 되짚는 열쇠다 */
+  ledger_id?: string;
   reason?: string;
   message?: string;
 };
@@ -62,7 +81,7 @@ export const REWARD_ACCRUE_TIMEOUT_MS = 3000;
  */
 export async function accrueRewardSafely(
   input: RewardAccrueInput
-): Promise<{ results: RewardAccrueOutcome[]; timedOut?: boolean; error?: string }> {
+): Promise<{ results: RewardAccrueOutcome[]; sms?: SmsPreview[]; timedOut?: boolean; error?: string }> {
   try {
     const raced = await Promise.race([
       accrueReward(input),
@@ -77,7 +96,7 @@ export async function accrueRewardSafely(
 
 export async function accrueReward(
   input: RewardAccrueInput
-): Promise<{ results: RewardAccrueOutcome[]; error?: string }> {
+): Promise<{ results: RewardAccrueOutcome[]; sms?: SmsPreview[]; error?: string }> {
   const { admin, staffId, sourceType, sourceId, reverse } = input;
 
   const { campaign, error: campaignError } = await loadActiveCampaign(admin);
@@ -135,7 +154,48 @@ export async function accrueReward(
       )
     );
   }
-  return { results };
+
+  // ── 적립 안내 문자의 **확인창 미리보기** (2차, 2026-09-21) ────────────────
+  //
+  // 🚨 **여기서 보내지 않는다.** 문구·수신번호만 만들어 호출부(라우트 → 화면)로
+  //    올려보내고, 담당자가 `SmsConfirmModal` 에서 [발송]을 눌러야 나간다.
+  //    🔴 **`sendSmsWithLog` 를 이 자리에 되돌리지 말 것**(사용자 확정 2026-09-21).
+  // 🔴 **여기서 한 번만 만든다**(원칙 53번) — 적립이 나는 경로가 셋이라 라우트마다
+  //    적으면 한쪽만 창이 뜬다.
+  // 🔴 **회사별로 창 하나다** — 묶음은 한 화주의 건들이지만 구조상 섞일 수 있어
+  //    `company_id` 로 묶는다. 건별로 만들면 13건짜리 묶음에 **창이 13번** 뜬다.
+  // 🔴 **`already`(이미 적립됨)는 세지 않는다** — 두 번째 클릭에 창이 또 뜬다.
+  // 🟢 **미리보기는 읽기만 해서 상한(3초) 걱정이 줄었다** — 자동 발송이던 때는
+  //    솔라피 왕복이 이 안에 들어 있었다.
+  const smsPreviews: SmsPreview[] = [];
+  if (input.withSmsPreview === true && reverse !== true) {
+    const byCompany = new Map<string, { amount: number; ledgerId: string }>();
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
+      if (r.status !== "accrued" || !r.amount || !r.ledger_id) continue;
+      const companyId = rows.find((x) => x.id === r.invoice_id)?.company_id;
+      if (!companyId) continue;
+      const prev = byCompany.get(companyId);
+      byCompany.set(companyId, {
+        amount: (prev?.amount || 0) + r.amount,
+        ledgerId: prev?.ledgerId || r.ledger_id,
+      });
+    }
+    for (const [companyId, v] of byCompany) {
+      const preview = await buildRewardSmsPreview({
+        admin,
+        campaignId: campaign.id,
+        companyId,
+        amount: v.amount,
+        ledgerId: v.ledgerId,
+      });
+      // 🔴 **못 만든 것은 조용히 빠진다** — 「문자 적립 안내」가 꺼진 화주가 그렇고,
+      //    그때는 건너뛸 것도 없으니 창을 띄우면 안 된다.
+      if (preview) smsPreviews.push(preview);
+    }
+  }
+
+  return { results, sms: smsPreviews };
 }
 
 /** 🔴 정산 건 하나를 적립하는 데 필요한 컬럼 — 화면이 아니라 여기서 다시 읽는다 */
@@ -249,7 +309,9 @@ async function handleOne(
   if (verdict.status !== "eligible") return { invoice_id: inv.id, status: "skipped", reason: verdict.reason };
   const { base, amount } = verdict;
 
-  const { error } = await admin.from("reward_ledger").insert({
+  // 🔴 `.select("id")` 는 **문자 이력의 열쇠를 얻기 위한 것이다**(2026-09-21) —
+  //    빼면 적립 문자의 `related_id` 를 채울 수 없어 이력에서 원장 줄로 못 돌아간다.
+  const { data: inserted, error } = await admin.from("reward_ledger").insert({
     company_id: inv.company_id,
     campaign_id: campaign.id,
     transaction_type: "transport_earn",
@@ -265,13 +327,13 @@ async function handleOne(
       sourceType === "billing_batch" ? ` (월정산 묶음 ${sourceId.slice(0, 8)})` : ""
     }`,
     created_by: staffId,
-  });
+  }).select("id").maybeSingle();
   if (error) {
     // 🚨 이미 적립됐다 — 오류가 아니다.
     if (isDuplicate(error)) return { invoice_id: inv.id, status: "already", reason: "already_accrued" };
     return { invoice_id: inv.id, status: "error", message: error.message };
   }
-  return { invoice_id: inv.id, status: "accrued", amount };
+  return { invoice_id: inv.id, status: "accrued", amount, ledger_id: (inserted as any)?.id };
 }
 
 function invoiceLabel(inv: InvoiceRow): string {

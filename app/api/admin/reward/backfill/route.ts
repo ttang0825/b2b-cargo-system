@@ -74,6 +74,9 @@ export async function POST(req: Request) {
   for (const r of rows) {
     // 🔴 넣는 일은 `accrueReward` 가 한다 — 관문을 **한 번 더** 보고 넣는다
     //    (목록을 만든 뒤 상태가 바뀌었을 수 있다).
+    // 🔴 **`withSmsPreview` 를 켜지 말 것**(2026-09-21) — 이 버튼은 한 번에 최대 100건을
+    //    적립하므로, 켜면 담당자가 버튼 한 번에 **확인창을 100번** 눌러야 한다.
+    //    확인창은 **입금이 방금 확인된 경로 둘**에서만 뜬다(`lib/rewardAccrue.ts`).
     const out = await accrueReward({
       admin,
       staffId: staff.id,

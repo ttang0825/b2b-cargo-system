@@ -5,7 +5,10 @@ import { resolveSmsSender } from "@/lib/smsSenderPhone";
 import { smsSubjectFor } from "@/lib/sms/templates";
 import type { SmsRelatedType, SmsRecipientType, SmsTemplateType } from "@/lib/sendSms";
 
-const RELATED_TYPES: SmsRelatedType[] = ["dispatch", "application", "portal_account", "quote"];
+// 🔴 `reward`(적립 안내)는 2026-09-21 신설 — `SmsPreview.relatedType` 과 DB
+//    `sms_logs_related_type_check` 셋이 같아야 한다. 여기만 빠뜨리면 확인창의
+//    [발송]이 **400 「필수 값이 누락되었습니다」**로 막힌다.
+const RELATED_TYPES: SmsRelatedType[] = ["dispatch", "application", "portal_account", "quote", "reward"];
 const RECIPIENT_TYPES: SmsRecipientType[] = ["driver", "customer", "applicant"];
 
 // 발송 전 확인·수정 모달(components/SmsConfirmModal.tsx)에서 "발송"을 눌렀을 때만

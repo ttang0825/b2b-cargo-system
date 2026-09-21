@@ -44,6 +44,7 @@ export type PortalIconName =
   | "locations"
   | "profile"
   | "guide"
+  | "reward"
   | "menu";
 
 type PathSpec = {
@@ -142,6 +143,18 @@ const ICONS: Record<PortalIconName, { line: IconSpec; fill: IconSpec }> = {
     ] },
     fill: { fill: "none", stroke: "currentColor", strokeWidth: 1.5, paths: [
       { d: "M12 7.6C10.4 6.3 8.3 5.6 5.9 5.6H4.2v11.2h1.7c2.4 0 4.5.7 6.1 2 1.6-1.3 3.7-2 6.1-2h1.7V5.6h-1.7c-2.4 0-4.5.7-6.1 2M12 7.6v11.2", fillRule: "evenodd" },
+    ] },
+  },
+  // 🔴 **11번째 아이콘이다**(2026-09-21, 포털 「적립금」). `NavItem.icon` 이 필수라
+  //    항목을 더하면 아이콘도 있어야 한다 — `invoices`(서류)를 돌려쓰면 정산과 뜻이
+  //    겹친다. 동전에 원화 표시이고, 다른 선 아이콘들과 **같은 사양**이다(채움 변형 없음).
+  //    🔴 **이미지 파일 0건 · 인라인 path 하나**(PR #149 가 세운 규칙 그대로).
+  reward: {
+    line: { fill: "none", stroke: "currentColor", strokeWidth: 1.4, paths: [
+      { d: "M20.4 12a8.4 8.4 0 1 1-16.8 0 8.4 8.4 0 1 1 16.8 0M8.6 9.2 12 13.6l3.4-4.4M9.1 13.3h5.8M9.1 15.5h5.8M12 13.6v2.9", fillRule: "evenodd" },
+    ] },
+    fill: { fill: "none", stroke: "currentColor", strokeWidth: 1.5, paths: [
+      { d: "M20.4 12a8.4 8.4 0 1 1-16.8 0 8.4 8.4 0 1 1 16.8 0M8.6 9.2 12 13.6l3.4-4.4M9.1 13.3h5.8M9.1 15.5h5.8M12 13.6v2.9", fillRule: "evenodd" },
     ] },
   },
   menu: {

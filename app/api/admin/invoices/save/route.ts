@@ -184,6 +184,12 @@ async function runRewardForPaymentChange(
     sourceId: invoiceId,
     // 🚨 해제 = **회수**다. 원본 적립행을 지우지 않고 `reversal` 한 줄을 넣는다.
     reverse: !now,
+    // 🔴 **입금이 방금 확인된 경로라 확인창을 띄운다**(2026-09-21) — 소급 적립
+    //    (`/api/admin/reward/backfill`)에서는 켜지 말 것(창이 100번 뜬다).
+    //    회수일 때는 `accrueReward` 가 스스로 안 만든다.
+    // 🚨 **이것만으로는 문자가 안 나간다** — 화면이 `out.sms` 를 받아 확인창을 띄우고
+    //    담당자가 [발송]을 눌러야 `/api/admin/send-sms` 가 실제로 보낸다.
+    withSmsPreview: true,
   });
   return out;
 }

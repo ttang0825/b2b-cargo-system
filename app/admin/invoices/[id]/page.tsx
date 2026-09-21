@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
@@ -27,6 +27,7 @@ import MixableBadge from "@/components/MixableBadge";
 import LockedBadge from "@/components/LockedBadge";
 import AmendmentReasonModal from "@/components/AmendmentReasonModal";
 import InvoiceRewardLine from "@/components/InvoiceRewardLine";
+import SmsConfirmModal, { SmsPreview } from "@/components/SmsConfirmModal";
 import { getDispatchExtraChargeCategoryLabel } from "@/lib/dispatchExtraCharges";
 import {
   customerOutstandingOf,
@@ -50,6 +51,14 @@ export default function InvoiceDetailPage() {
   const [saving, setSaving] = useState(false);
   // 🔴 저장 직후 서버가 돌려준 적립 결과 — 조용히 넘어간 실패를 화면에 알리는 유일한 길이다
   const [rewardResult, setRewardResult] = useState<any>(undefined);
+  // 🚨 **적립 안내 문자는 확인창을 거친다**(2026-09-21 · 사용자 확정) — 서버는 문구만
+  //    만들어 올려보내고, 담당자가 [발송]을 눌러야 나간다. 🔴 서버에서 바로 보내는
+  //    구조로 되돌리지 말 것(그러면 이 창이 무의미해진다).
+  const [smsQueue, setSmsQueue] = useState<SmsPreview[]>([]);
+  const smsTotalRef = useRef(0);
+  // 🔴 **확인창이 끝난 뒤에 할 일**(목록으로 나가기 / 머물러 실패 보여주기)을 들고 있는다 —
+  //    창이 떠 있는 동안 화면을 떠나면 **창이 그려질 자리 자체가 사라진다.**
+  const afterSmsRef = useRef<null | (() => void | Promise<void>)>(null);
   const [deleting, setDeleting] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -354,16 +363,54 @@ export default function InvoiceDetailPage() {
     setSaving(false);
     setAmendmentReasonOpen(false);
 
+    // ── 적립 안내 문자 확인창 (2026-09-21) ─────────────────────────────────
+    //
+    // 🚨 **서버는 문구만 만들어 올려보낸다.** 여기서 창을 띄우고 담당자가 [발송]을
+    //    눌러야 `/api/admin/send-sms` 가 실제로 보낸다 — 다른 문자 여섯 종과 같다.
+    // 🔴 **창이 떠 있는 동안 목록으로 나가지 말 것** — 나가면 창이 그려질 화면이
+    //    사라져서 담당자가 확인도 건너뛰기도 못 한다. 그래서 「그 뒤에 할 일」을
+    //    `afterSmsRef` 에 넣어 두고 창이 다 끝난 뒤에 실행한다.
+    // 🔴 **꺼진 화주는 배열이 비어 있다** — 그때는 창 없이 지금까지처럼 흐른다.
+    const previews: SmsPreview[] = result.reward?.sms || [];
+    const finish = rewardFailed(result.reward)
+      ? async () => {
+          await load();
+        }
+      : () => {
+          router.push("/admin/invoices");
+        };
+    if (previews.length > 0) {
+      afterSmsRef.current = finish;
+      smsTotalRef.current = previews.length;
+      setSmsQueue(previews);
+      return;
+    }
+
     // 🔴 **적립이 실패했으면 목록으로 나가지 않는다.** 입금확인은 이미 저장됐고
     //    (적립이 본업을 막지 않는다) 담당자에게 알릴 자리가 **이 화면뿐**이다 —
     //    그대로 나가면 조용히 넘어간 실패를 아무도 모른다.
     //    ⚠️ 이 화면은 저장하면 목록으로 나가는 구조라, 머물지 않으면 아래 리워드
     //       한 줄이 그려질 기회 자체가 없다.
-    if (rewardFailed(result.reward)) {
-      await load();
-      return;
-    }
-    router.push("/admin/invoices");
+    await finish();
+  }
+
+  /**
+   * 확인창 하나가 끝났다(발송이든 건너뛰기든) — 다음 창으로 넘기고, 다 끝나면
+   * 미뤄 둔 일(목록으로 나가기 / 머물러 실패 보여주기)을 한다.
+   *
+   * 🔴 **발송과 건너뛰기를 가르지 않는다** — 입금확인·적립은 이미 저장된 뒤이고,
+   *    문자는 곁다리다(다른 여섯 종과 같은 자세).
+   */
+  function advanceSms() {
+    setSmsQueue((q) => {
+      const rest = q.slice(1);
+      if (rest.length === 0) {
+        const after = afterSmsRef.current;
+        afterSmsRef.current = null;
+        if (after) void after();
+      }
+      return rest;
+    });
   }
 
   /** 🔴 적립이 「안 됐다」가 아니라 「실패했다」인 경우만 참이다 — 대상이 아니어서
@@ -1177,6 +1224,24 @@ export default function InvoiceDetailPage() {
           onCancel={() => setAmendmentReasonOpen(false)}
           onConfirm={(reason) => handleSave(false, reason)}
           saving={saving}
+        />
+      )}
+
+      {smsQueue.length > 0 && (
+        /* 🔴 `key` 가 없으면 두 번째 창에 **첫 번째 창의 본문이 그대로 남는다**
+              (모달이 `useState(preview.message)` 로 초기값을 잡는다).
+           ⚠️ 배차 상세는 `templateType` 을 열쇠로 쓰지만 여기는 **전부 `reward_earned`**
+              이라 구분이 안 된다 — 원장 줄 id(`relatedId`)가 회사마다 다르다. */
+        <SmsConfirmModal
+          key={smsQueue[0].relatedId}
+          preview={smsQueue[0]}
+          step={
+            smsTotalRef.current > 1
+              ? { index: smsTotalRef.current - smsQueue.length + 1, total: smsTotalRef.current }
+              : undefined
+          }
+          onSent={advanceSms}
+          onSkip={advanceSms}
         />
       )}
 

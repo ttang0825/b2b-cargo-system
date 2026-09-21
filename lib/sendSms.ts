@@ -6,7 +6,10 @@ import { SMS_BYTE_LIMIT, byteLength } from "@/lib/sms/byteLength";
 // Provider 구현체는 여기 한 곳에서만 선택됨 — 나중에 벤더를 바꾸면 이 한 줄만 교체
 const provider: SmsProvider = solapiProvider;
 
-export type SmsRelatedType = "dispatch" | "application" | "portal_account" | "quote";
+// 🔴 **DB `sms_logs_related_type_check` 와 같아야 한다** — 값을 늘릴 때는
+//    마이그레이션이 **먼저** 나가야 한다(2026-09-21 `reward` 추가). 코드가 먼저면
+//    문자는 나가는데 **이력만 조용히 안 남는다**(이 파일은 예외를 안 던진다).
+export type SmsRelatedType = "dispatch" | "application" | "portal_account" | "quote" | "reward";
 export type SmsRecipientType = "driver" | "customer" | "applicant";
 // 🔴 **`pickup_completed`·`delivery_completed` 를 지우지 말 것**(2026-09-18 폐지).
 //    문구·발송 경로는 없앴지만 **이 두 값은 유니언에 남는다** — `sms-logs/resend` 가
@@ -24,7 +27,8 @@ export type SmsTemplateType =
   | "application_rejected"
   | "portal_account_issued"
   | "portal_password_reissued"
-  | "quote_summary";
+  | "quote_summary"
+  | "reward_earned"; // 적립 안내 (2026-09-21 신설) — 🔴 DB CHECK 도 같이 늘렸다
 
 export interface SendSmsLogParams {
   relatedType: SmsRelatedType;

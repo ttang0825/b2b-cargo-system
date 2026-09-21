@@ -358,6 +358,41 @@ export function portalAccountIssuedMessage(
   ].join("\n");
 }
 
+/**
+ * 적립 안내(2차, 2026-09-21) — 🔴 **적립이 확정되는 순간에만 나간다**(입금 확인).
+ *
+ * 🔴 **금액 둘만 적는다** — 이번에 적립된 금액과 누적 잔액. 어느 오더인지·어떤 운임의
+ *    몇 %인지는 **포털 「적립금」 화면**이 말한다(이 문자는 「가서 보라」는 신호다).
+ *    ⚠️ 한 번에 여러 건이 적립되는 경우가 있어서(월정산 묶음은 13건도 된다) 건별로
+ *       적으면 문자가 한없이 길어지고, 무엇보다 **문자가 13통 나간다.**
+ *       🔴 **건별로 쪼개지 말 것** — 한 번의 적립에 한 통이다.
+ *
+ * 🚨 **지급 방식을 적지 말 것**(「상품권으로 드립니다」류) — 세무·법무 검수 전이고,
+ *    문자로 나간 말은 회수되지 않는다(HANDOFF §5-27).
+ * 🚨 **사용 조건을 약속하지 말 것** — 최소 사용 금액·사용 기한은 캠페인 값이라 바뀔 수
+ *    있고, 이미 나간 문자는 고쳐지지 않는다. 포털 화면이 **그때의 값**을 보여준다.
+ *
+ * ⚠️ **LMS 다**(151byte · 실측). 나머지 여섯 종과 같고, 90byte 안에 넣으려면 머리말이나
+ *    문의 줄을 빼야 한다 — 둘 다 뺄 수 없다(머리말은 7종 공통, 문의는 회신 경로).
+ */
+export function rewardEarnedMessage(
+  params: WithContact & {
+    /** 이번에 적립된 금액(여러 건이면 합계) */
+    amount: number;
+    /** 적립 후 잔액 */
+    balance: number;
+    staffName?: string | null;
+  }
+): string {
+  return [
+    `${SMS_HEADER} 적립 안내`,
+    `운송 정산이 확인되어 ${params.amount.toLocaleString("ko-KR")}원이 적립되었습니다.`,
+    `누적 적립금 ${params.balance.toLocaleString("ko-KR")}원`,
+    "운송관리에서 적립 내역을 확인하실 수 있습니다.",
+    contactLine(params),
+  ].join("\n");
+}
+
 export function portalPasswordReissuedMessage(
   params: WithContact & { loginId: string; password: string; portalUrl: string; staffName?: string | null }
 ): string {
