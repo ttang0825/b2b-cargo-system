@@ -50,9 +50,14 @@ export async function GET(req: Request) {
   }
 
   // ── 전체 (리워드 관리 화면 · 화주 목록) ──────────────────────────────────
+  // 🔴 **회사명을 여기서 조인해 내려준다** — 그전에는 화면이 원장(적립 이력)에서만
+  //    이름을 모아서, **적립 이력이 아직 없는 기업은 이름을 못 찾고** `화주 a1b2c3d4`
+  //    로 떨어졌다(원장이 0행이던 초기에는 전부 그랬다). 이름의 출처를 「이력」이
+  //    아니라 「멤버십 그 자신」으로 옮긴 것이다. 🔴 화면이 `companies` 를 따로
+  //    조회하게 되돌리지 말 것 — 리워드 표는 서버 라우트가 유일한 통로다.
   const { data: memberships, error: msErr } = await admin
     .from("reward_memberships")
-    .select("*")
+    .select("*,companies(name)")
     .eq("campaign_id", campaign.id);
   if (msErr) return NextResponse.json({ error: msErr.message }, { status: 400 });
 

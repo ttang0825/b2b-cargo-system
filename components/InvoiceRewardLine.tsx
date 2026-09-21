@@ -51,15 +51,20 @@ const SKIP_LABEL: Record<string, string> = {
 export default function InvoiceRewardLine({ invoiceId, companyId, lastResult }: Props) {
   const [rows, setRows] = useState<LedgerRow[] | null>(null);
   const [member, setMember] = useState<boolean | null>(null);
+  /** 🔴 **예상 적립** — 아직 안 쌓인 건에만 쓴다. 원장에는 한 줄도 안 들어간다. */
+  const [preview, setPreview] = useState<{ amount: number; reason?: string } | null>(null);
 
   useEffect(() => {
     if (!companyId) return;
     let alive = true;
     (async () => {
       try {
-        const [sumRes, ledRes] = await Promise.all([
+        const [sumRes, ledRes, preRes] = await Promise.all([
           fetch(`/api/admin/reward/summary?company_id=${encodeURIComponent(companyId)}`, { cache: "no-store" }),
           fetch(`/api/admin/reward/ledger?company_id=${encodeURIComponent(companyId)}`, { cache: "no-store" }),
+          // 🔴 **이 정산 건 하나만** 미리 계산한다(읽기 전용) — 입금 확인 전에도
+          //    담당자가 얼마가 쌓일지 알 수 있어야 한다는 요청(2026-09-21).
+          fetch(`/api/admin/reward/preview?invoice_id=${encodeURIComponent(invoiceId)}`, { cache: "no-store" }),
         ]);
         if (!alive) return;
         if (sumRes.ok) {
@@ -72,6 +77,14 @@ export default function InvoiceRewardLine({ invoiceId, companyId, lastResult }: 
           const j = await ledRes.json();
           // 🔴 이 정산 건의 줄만 고른다 — 원장은 화주 단위로 쌓인다.
           setRows((j.rows || []).filter((r: any) => r.source_id === invoiceId));
+        }
+        // 🔴 예상 적립이 실패하면 **그 줄만 조용히 빠진다** — 이미 쌓인 금액과
+        //    실패 안내가 본문이고 예상은 곁다리다(원칙 55번의 「곁다리가 본문을
+        //    못 막는다」 쪽).
+        if (preRes.ok) {
+          const j = await preRes.json();
+          const one = (j.rows || [])[0];
+          setPreview(one ? { amount: one.amount || 0, reason: one.reason } : null);
         }
       } catch {
         if (alive) setMember(false);
@@ -108,6 +121,14 @@ export default function InvoiceRewardLine({ invoiceId, companyId, lastResult }: 
     tone = "ok";
   } else if (mine && mine.status === "skipped") {
     text = SKIP_LABEL[mine.reason || ""] || `대상 아님 — ${mine.reason}`;
+  } else if (preview && !preview.reason && preview.amount > 0) {
+    // 🔴 **「예상」이라고 분명히 적는다** — 쌓인 금액과 같은 말투로 쓰면 담당자가
+    //    이미 적립된 것으로 읽는다.
+    text = `예상 적립 +${won(preview.amount)} — 입금 확인 시 쌓입니다.`;
+  } else if (preview && preview.reason) {
+    // 🔴 입금 전이라도 **대상이 아닌 이유**를 미리 알린다(선착불·캠페인 밖 등) —
+    //    입금 확인을 누른 뒤에야 알면 그때는 되돌릴 것이 없다.
+    text = SKIP_LABEL[preview.reason] || `대상 아님 — ${preview.reason}`;
   } else {
     text = "아직 적립되지 않았습니다 — 입금 확인 시 자동으로 쌓입니다.";
   }

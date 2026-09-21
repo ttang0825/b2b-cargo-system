@@ -9676,29 +9676,36 @@ tbody tr:hover {
   color: #6b7280;
 }
 
+/* 🔴 **라벨이 위, 값이 아래다**(사용자 지시 2026-09-21). 이 화면의 다른 항목
+   (`Field` — 라벨 11.5px muted 위 / 값 13.5px 아래 / `margin-bottom: 10`)과
+   **같은 모양**이라야 한 화면 안에서 두 가지 읽는 법이 생기지 않는다.
+   🔴 좌우 배치(`space-between` + `text-align: right`)로 되돌리지 말 것 —
+   값 길이가 제각각(「ON」 / 「2026.09.01」 / 「운임 할인」)이라 오른쪽 끝이
+   들쭉날쭉해서 세로로 읽히지 않았다.
+   ⚠️ 격자 값(`minmax(180px, 1fr)` · `gap: 4px`)은 화주 상세 요약 격자에서
+   그대로 가져온 것이다 — 한쪽을 바꾸면 두 블록이 어긋난다. */
 .reward-kv {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 4px 16px;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 4px;
   margin-bottom: 14px;
 }
 .reward-kv-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 10px;
-  padding: 3px 0;
-  font-size: 12.5px;
+  margin-bottom: 10px;
+  min-width: 0;
 }
 .reward-kv-row > span {
+  display: block;
+  font-size: 11.5px;
   color: var(--text-muted);
-  flex-shrink: 0;
 }
 .reward-kv-row > b {
+  display: block;
+  font-size: 13.5px;
   font-weight: 600;
-  text-align: right;
   /* 이메일·메모처럼 공백 없는 값이 칸을 뚫는 것을 막는다 */
   overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .reward-note {
@@ -9733,6 +9740,17 @@ tbody tr:hover {
   font-size: 15.5px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+/* 예상 적립(미입금) — 🔴 **확정 적립금보다 조용해야 한다.** 같은 무게로 그리면
+   담당자가 받지 않은 돈을 잔액으로 읽는다. 그래서 값만 옅은 회색으로 낮추고
+   왼쪽에 칸막이를 둬서 앞의 세 칸과 **다른 종류의 숫자**임을 보인다.
+   🔴 `.reward-balance b` 의 크기·굵기를 여기서 키우지 말 것. */
+.reward-balance > div.reward-pending {
+  padding-left: 22px;
+  border-left: 1px solid var(--border);
+}
+.reward-balance > div.reward-pending > b {
+  color: var(--text-muted);
 }
 
 .reward-form .field {

@@ -204,46 +204,31 @@ async function handleOne(
   //       (클라이언트가 보낸 상태를 믿지 않는다 — 원칙 53번과 같은 결).
   if (!inv.payment_received) return { invoice_id: inv.id, status: "skipped", reason: "not_received" };
 
-  const base = rewardBaseAmount({
-    customerChargeTotal: inv.customer_charge_total,
-    customerChargeVatIncluded: inv.customer_charge_vat_included,
-    includedExtraChargeTotal: includedExtra,
-  });
-  const ineligible = rewardIneligibleReason({
-    collectionMethod: inv.collection_method,
-    companyId: inv.company_id,
-    baseAmount: base,
-  });
-  if (ineligible) return { invoice_id: inv.id, status: "skipped", reason: ineligible };
-
   // 멤버십 — 🔴 켜져 있고, 시작일 이후인가
-  const { data: memberships, error: mErr } = await admin
-    .from("reward_memberships")
-    .select("enabled,started_at,ended_at")
-    .eq("company_id", inv.company_id)
-    .eq("campaign_id", campaign.id)
-    .limit(1);
+  //
+  // 🔴 **화주가 없으면 질의 자체를 건너뛴다.** 게스트(비회원) 오더의 정산 건은
+  //    `company_id` 가 `null` 이고(그 컬럼은 nullable 이다 — §7), 그대로
+  //    `.eq("company_id", null)` 을 보내면 PostgREST 가 uuid 파싱 오류를 낸다.
+  //    그러면 「대상 아님 — 화주가 연결되지 않은 건」이어야 할 것이 **「적립 실패」
+  //    빨간 줄**로 정산 상세에 뜬다. 🔴 이 분기를 지우지 말 것.
+  // ⚠️ **사유는 여기서 정하지 않는다** — `evaluateReward` 가 선착불을 먼저 보므로
+  //    「선착불 + 게스트」 건은 예전처럼 `direct_collection` 으로 남는다.
+  const { data: memberships, error: mErr } = inv.company_id
+    ? await admin
+        .from("reward_memberships")
+        .select("enabled,started_at,ended_at")
+        .eq("company_id", inv.company_id)
+        .eq("campaign_id", campaign.id)
+        .limit(1)
+    : { data: [], error: null };
   if (mErr) return { invoice_id: inv.id, status: "error", message: mErr.message };
-  const membership = (memberships || [])[0];
-  if (!membership || !membership.enabled) {
-    return { invoice_id: inv.id, status: "skipped", reason: "not_member" };
-  }
 
-  // 🔴 기준일은 **정산 건의 기준일**이다(`created_at` 의 날짜). 오늘로 재면
-  //    캠페인이 끝난 뒤에 뒤늦게 입금확인한 옛 건이 통째로 빠진다.
-  const refDate = (inv.created_at || "").slice(0, 10);
-  if (refDate && (refDate < campaign.start_date || refDate > campaign.earn_end_date)) {
-    return { invoice_id: inv.id, status: "skipped", reason: "out_of_campaign" };
-  }
-  if (membership.started_at && refDate && refDate < membership.started_at) {
-    return { invoice_id: inv.id, status: "skipped", reason: "before_start" };
-  }
-  if (membership.ended_at && refDate && refDate > membership.ended_at) {
-    return { invoice_id: inv.id, status: "skipped", reason: "after_end" };
-  }
-
-  const amount = rewardEarnAmount(base, campaign.earn_rate);
-  if (amount <= 0) return { invoice_id: inv.id, status: "skipped", reason: "zero_amount" };
+  // 🔴 판정·금액은 **`evaluateReward` 하나**가 한다 — 예상 적립(미입금 건)이 같은
+  //    함수를 쓰므로, 여기에 조건을 따로 적으면 화면이 약속한 예상액과 실제로
+  //    쌓이는 금액이 갈린다.
+  const verdict = evaluateReward(campaign, inv, includedExtra, (memberships || [])[0]);
+  if (verdict.status !== "eligible") return { invoice_id: inv.id, status: "skipped", reason: verdict.reason };
+  const { base, amount } = verdict;
 
   const { error } = await admin.from("reward_ledger").insert({
     company_id: inv.company_id,
@@ -278,4 +263,169 @@ function invoiceLabel(inv: InvoiceRow): string {
 /** 🔴 `code` 만 보지 말 것 — 같은 23505 여도 다른 제약일 수 있다 */
 function isDuplicate(error: { code?: string; message?: string }): boolean {
   return error?.code === "23505" && (error.message || "").includes("reward_ledger_source_unique");
+}
+
+// ── 예상 적립 (미입금 건) ───────────────────────────────────────────────────
+//
+// 🔴 **원장에는 한 줄도 쓰지 않는다.** 예상은 **표시 시점 계산**이고, 확정은 입금
+//    확인이 일어나는 순간에만 만들어진다(원칙 47번과 같은 결 — 「예상」을 미리
+//    원장에 넣어 두면 입금이 안 된 돈이 잔액에 섞인다).
+//
+// 🔴 **판정은 실제 적립과 같은 `evaluateReward` 를 쓴다** — 갈라 적으면 화면이
+//    약속한 금액과 실제로 쌓이는 금액이 어긋난다(사용자가 그 숫자를 보고 영업한다).
+//
+// ⚠️ **입금 확인만이 둘을 가른다** — `evaluateReward` 가 `payment_received` 를
+//    보지 않는 이유다(그 조건은 부르는 쪽이 판단한다).
+
+/**
+ * 🔴 **판별자가 문자열인 것은 의도다** — 이 저장소는 `strict: false` 라
+ *    참/거짓 판별자로는 타입이 좁혀지지 않는다(32차·37차가 같은 자리에서
+ *    `tsc` 에 걸렸고 이번에도 걸렸다). boolean 으로 되돌리지 말 것.
+ */
+export type RewardEvaluation =
+  | { status: "eligible"; base: number; amount: number }
+  | { status: "skipped"; base: number; reason: string };
+
+export type RewardMembershipLite = {
+  enabled?: boolean | null;
+  started_at?: string | null;
+  ended_at?: string | null;
+};
+
+/**
+ * 적립 대상인가 · 얼마인가 — **유일한 판정처**.
+ * 🔴 **`payment_received` 는 보지 않는다**(위 주석).
+ */
+export function evaluateReward(
+  campaign: RewardCampaign,
+  inv: InvoiceRow,
+  includedExtra: number,
+  membership: RewardMembershipLite | null | undefined
+): RewardEvaluation {
+  const base = rewardBaseAmount({
+    customerChargeTotal: inv.customer_charge_total,
+    customerChargeVatIncluded: inv.customer_charge_vat_included,
+    includedExtraChargeTotal: includedExtra,
+  });
+
+  const ineligible = rewardIneligibleReason({
+    collectionMethod: inv.collection_method,
+    companyId: inv.company_id,
+    baseAmount: base,
+  });
+  if (ineligible) return { status: "skipped", base, reason: ineligible };
+
+  if (!membership || !membership.enabled) return { status: "skipped", base, reason: "not_member" };
+
+  // 🔴 기준일은 **정산 건의 기준일**이다(`created_at` 의 날짜). 오늘로 재면
+  //    캠페인이 끝난 뒤에 뒤늦게 입금확인한 옛 건이 통째로 빠진다.
+  const refDate = (inv.created_at || "").slice(0, 10);
+  if (refDate && (refDate < campaign.start_date || refDate > campaign.earn_end_date)) {
+    return { status: "skipped", base, reason: "out_of_campaign" };
+  }
+  if (membership.started_at && refDate && refDate < membership.started_at) {
+    return { status: "skipped", base, reason: "before_start" };
+  }
+  if (membership.ended_at && refDate && refDate > membership.ended_at) {
+    return { status: "skipped", base, reason: "after_end" };
+  }
+
+  const amount = rewardEarnAmount(base, campaign.earn_rate);
+  if (amount <= 0) return { status: "skipped", base, reason: "zero_amount" };
+  return { status: "eligible", base, amount };
+}
+
+export type RewardPreviewRow = {
+  invoice_id: string;
+  company_id: string | null;
+  label: string;
+  created_at: string;
+  /** 예상 적립액 — 대상이 아니면 0 */
+  amount: number;
+  /** 대상이 아닌 사유(있으면 `amount` 는 0) */
+  reason?: string;
+};
+
+/**
+ * 🔴 상한을 빼지 말 것 — 미입금 건이 쌓이면 이 조회가 목록 전체를 끌어온다.
+ *    상한에 닿으면 `truncated` 로 알리고 화면이 「이상」으로 표시한다(조용히
+ *    적게 보여 주면 담당자가 그 숫자를 합계로 믿는다).
+ */
+const PREVIEW_LIMIT = 500;
+
+/**
+ * 미입금 정산 건의 예상 적립을 낸다.
+ *
+ * - `invoiceId` — 그 한 건만(입금 여부와 무관하게 계산해서 돌려준다)
+ * - `companyId` — 그 화주의 **미입금** 건 전부
+ * - 둘 다 없으면 — **전체 화주의 미입금** 건
+ */
+export async function previewRewards(opts: {
+  admin: any;
+  campaign: RewardCampaign;
+  invoiceId?: string | null;
+  companyId?: string | null;
+}): Promise<{ rows: RewardPreviewRow[]; truncated: boolean; error?: string }> {
+  const { admin, campaign, invoiceId, companyId } = opts;
+
+  let q = admin.from("invoices").select(INVOICE_SELECT);
+  if (invoiceId) {
+    q = q.eq("id", invoiceId);
+  } else {
+    // 🔴 **`is not true` 다**(`eq false` 가 아니다) — `payment_received` 가 `null`
+    //    인 옛 행이 통째로 빠진다.
+    q = q
+      .not("payment_received", "is", true)
+      // 캠페인 밖은 애초에 안 끌어온다 — 정확한 판정은 아래 `evaluateReward` 가 한다
+      // (여기서 거른 것과 어긋나지 않게 **느슨한 쪽**으로만 자른다).
+      .gte("created_at", campaign.start_date)
+      .lte("created_at", `${campaign.earn_end_date}T23:59:59.999Z`)
+      .order("created_at", { ascending: false })
+      .limit(PREVIEW_LIMIT + 1);
+    if (companyId) q = q.eq("company_id", companyId);
+  }
+
+  const { data, error } = await q;
+  if (error) return { rows: [], truncated: false, error: error.message };
+
+  let rows = (data || []) as unknown as InvoiceRow[];
+  const truncated = !invoiceId && rows.length > PREVIEW_LIMIT;
+  if (truncated) rows = rows.slice(0, PREVIEW_LIMIT);
+  if (rows.length === 0) return { rows: [], truncated: false };
+
+  // 멤버십 — 🔴 건마다 조회하지 말 것(미입금 건이 수백이면 질의도 수백이다)
+  const { data: memberships, error: mErr } = await admin
+    .from("reward_memberships")
+    .select("company_id,enabled,started_at,ended_at")
+    .eq("campaign_id", campaign.id);
+  if (mErr) return { rows: [], truncated: false, error: mErr.message };
+  const byCompany: Record<string, RewardMembershipLite> = {};
+  for (const m of (memberships || []) as any[]) byCompany[m.company_id] = m;
+
+  // 🔴 현장 추가비를 못 읽으면 **예상을 내지 않는다** — 0 으로 때우면 예상액이
+  //    실제보다 크고, 담당자는 그 차이를 적립 누락으로 읽는다(실제 적립과 같은 판단).
+  let extraByInvoice: Record<string, number> = {};
+  try {
+    extraByInvoice = await fetchIncludedExtraChargeTotals(admin, rows);
+  } catch (e: any) {
+    return { rows: [], truncated: false, error: e?.message || "현장 추가비를 읽지 못했습니다" };
+  }
+
+  return {
+    truncated,
+    rows: rows.map((inv) => {
+      const verdict = evaluateReward(
+        campaign, inv, extraByInvoice[inv.id] || 0,
+        inv.company_id ? byCompany[inv.company_id] : null
+      );
+      return {
+        invoice_id: inv.id,
+        company_id: inv.company_id,
+        label: invoiceLabel(inv),
+        created_at: inv.created_at,
+        amount: verdict.status === "eligible" ? verdict.amount : 0,
+        ...(verdict.status === "eligible" ? {} : { reason: verdict.reason }),
+      };
+    }),
+  };
 }

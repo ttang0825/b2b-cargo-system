@@ -75,6 +75,12 @@ export default function CompanyRewardPanel({ companyId }: { companyId: string })
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [membership, setMembership] = useState<Membership | null>(null);
   const [balance, setBalance] = useState({ balance: 0, earned: 0, used: 0 });
+  /**
+   * 🔴 **예상 적립 — 아직 입금 확인이 안 된 건의 합계다.** 원장에는 한 줄도
+   *    들어가지 않고 표시 시점에만 센다. 🔴 `balance` 에 더하지 말 것 —
+   *    받지 않은 돈이 적립금으로 읽히면 화주에게 그만큼 약속한 것이 된다.
+   */
+  const [pending, setPending] = useState<{ amount: number; count: number } | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -95,10 +101,14 @@ export default function CompanyRewardPanel({ companyId }: { companyId: string })
     setLoading(true);
     setLoadError(null);
     try {
-      const res = await fetch(
-        `/api/admin/reward/summary?company_id=${encodeURIComponent(companyId)}`,
-        { cache: "no-store" }
-      );
+      const [res, preRes] = await Promise.all([
+        fetch(`/api/admin/reward/summary?company_id=${encodeURIComponent(companyId)}`, {
+          cache: "no-store",
+        }),
+        fetch(`/api/admin/reward/preview?company_id=${encodeURIComponent(companyId)}`, {
+          cache: "no-store",
+        }),
+      ]);
       const json = await res.json().catch(() => ({}));
       // 🔴 `error` 를 삼키지 않는다(원칙 55번) — 실패를 「적립 0원」으로 두면
       //    담당자가 「이 화주는 리워드를 안 쓰는구나」로 잘못 읽는다.
@@ -110,6 +120,12 @@ export default function CompanyRewardPanel({ companyId }: { companyId: string })
         earned: json.earned || 0,
         used: json.used || 0,
       });
+
+      // 🔴 예상 적립이 실패해도 **본문(설정·잔액)은 그대로 그린다** — 곁다리가
+      //    본문을 막지 않는다. 대신 `null` 로 두어 그 칸을 아예 안 그린다
+      //    (0원으로 그리면 「미입금 건이 없다」는 거짓말이 된다).
+      const pre = await preRes.json().catch(() => ({}));
+      setPending(preRes.ok ? { amount: pre.total || 0, count: pre.count || 0 } : null);
     } catch (e: any) {
       setLoadError(e?.message || "리워드 정보를 불러오지 못했습니다.");
     }
@@ -319,6 +335,14 @@ export default function CompanyRewardPanel({ companyId }: { companyId: string })
               <span>누적 사용·회수</span>
               <b>{won(balance.used)}</b>
             </div>
+            {/* 🔴 **잔액과 나란히 두되 말로 갈라 둔다** — 「예상」·「미입금」이 둘 다
+                들어가야 담당자가 확정 적립금과 헷갈리지 않는다. */}
+            {pending && (
+              <div className="reward-pending">
+                <span>예상 적립 (미입금 {pending.count}건)</span>
+                <b>{pending.amount > 0 ? `+${won(pending.amount)}` : won(0)}</b>
+              </div>
+            )}
           </div>
 
           {saveError && (
