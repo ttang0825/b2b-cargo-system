@@ -26,7 +26,8 @@
 //      🔴 「적립이 한 번만」을 잴 때는 **호출 횟수가 아니라 원장 행 수로** 재라.
 
 import { loadActiveCampaign, type RewardCampaign } from "./rewardServer";
-import { notifyRewardEarned } from "./rewardNotify";
+import type { SmsPreview } from "@/components/SmsConfirmModal";
+import { buildRewardSmsPreview } from "./rewardNotify";
 import { fetchIncludedExtraChargeTotals } from "./rewardExtraCharges";
 import {
   rewardBaseAmount,
@@ -45,16 +46,20 @@ export type RewardAccrueInput = {
   /** 🚨 입금확인 **해제** — 원본 적립을 지우지 않고 `reversal` 한 줄을 넣는다 */
   reverse?: boolean;
   /**
-   * 적립 안내 문자를 보낼 것인가 — 🔴 **기본값은 「안 보냄」이다.**
+   * 적립 안내 문자의 **확인창을 띄울 것인가** — 🔴 **기본값은 「안 띄움」이다.**
+   *
+   * 🚨 **이 값은 「보낸다」가 아니라 「미리보기를 만든다」다**(2026-09-21 · 사용자 확정
+   *    「확인창을 붙인다」). 문자는 담당자가 `SmsConfirmModal` 에서 [발송]을 눌러야
+   *    나간다. 🔴 **여기서 바로 보내는 구조로 되돌리지 말 것.**
    *
    * 🔴 **소급 적립(`/api/admin/reward/backfill`)에서는 켜지 말 것** — 그 버튼은 한 번에
-   *    최대 100건을 적립하므로, 켜면 담당자가 버튼 한 번에 **몇 달 치 문자를 한꺼번에**
-   *    보낸다. 켜는 곳은 **입금이 방금 확인된 경로 둘**뿐이다
+   *    최대 100건을 적립하므로, 켜면 담당자가 **확인창을 100번** 눌러야 한다.
+   *    켜는 곳은 **입금이 방금 확인된 경로 둘**뿐이다
    *    (`invoices/save` · `billing-batches/mark-payment-received`).
-   * 🔴 **회수(`reverse`)에서는 안 나간다** — 「적립이 취소됐습니다」를 문자로 알리는 것은
+   * 🔴 **회수(`reverse`)에서는 안 뜬다** — 「적립이 취소됐습니다」를 문자로 알리는 것은
    *    사용자가 정한 적이 없다(담당자가 말할 일이다).
    */
-  notify?: boolean;
+  withSmsPreview?: boolean;
 };
 
 export type RewardAccrueOutcome = {
@@ -76,7 +81,7 @@ export const REWARD_ACCRUE_TIMEOUT_MS = 3000;
  */
 export async function accrueRewardSafely(
   input: RewardAccrueInput
-): Promise<{ results: RewardAccrueOutcome[]; timedOut?: boolean; error?: string }> {
+): Promise<{ results: RewardAccrueOutcome[]; sms?: SmsPreview[]; timedOut?: boolean; error?: string }> {
   try {
     const raced = await Promise.race([
       accrueReward(input),
@@ -91,7 +96,7 @@ export async function accrueRewardSafely(
 
 export async function accrueReward(
   input: RewardAccrueInput
-): Promise<{ results: RewardAccrueOutcome[]; error?: string }> {
+): Promise<{ results: RewardAccrueOutcome[]; sms?: SmsPreview[]; error?: string }> {
   const { admin, staffId, sourceType, sourceId, reverse } = input;
 
   const { campaign, error: campaignError } = await loadActiveCampaign(admin);
@@ -150,16 +155,20 @@ export async function accrueReward(
     );
   }
 
-  // ── 적립 안내 문자 (2차, 2026-09-21) ─────────────────────────────────────
+  // ── 적립 안내 문자의 **확인창 미리보기** (2차, 2026-09-21) ────────────────
   //
-  // 🔴 **여기서 한 번만 부른다**(원칙 53번) — 적립이 나는 경로가 셋이라 라우트마다
-  //    적으면 한쪽만 문자가 나간다.
-  // 🔴 **회사별로 한 통이다** — 묶음은 한 화주의 건들이지만 구조상 섞일 수 있어
-  //    `company_id` 로 묶는다. 건별로 보내면 13건짜리 묶음에 **문자가 13통** 나간다.
-  // 🔴 **`already`(이미 적립됨)는 세지 않는다** — 두 번째 클릭에 문자가 또 나간다.
-  // ⚠️ 문자 시간이 `REWARD_ACCRUE_TIMEOUT_MS`(3초) 안에 같이 든다 — 상한을 넘기면
-  //    **적립은 남고 문자만 빠진다.** 그 순서가 맞다(입금확인이 본업이다).
-  if (input.notify === true && reverse !== true) {
+  // 🚨 **여기서 보내지 않는다.** 문구·수신번호만 만들어 호출부(라우트 → 화면)로
+  //    올려보내고, 담당자가 `SmsConfirmModal` 에서 [발송]을 눌러야 나간다.
+  //    🔴 **`sendSmsWithLog` 를 이 자리에 되돌리지 말 것**(사용자 확정 2026-09-21).
+  // 🔴 **여기서 한 번만 만든다**(원칙 53번) — 적립이 나는 경로가 셋이라 라우트마다
+  //    적으면 한쪽만 창이 뜬다.
+  // 🔴 **회사별로 창 하나다** — 묶음은 한 화주의 건들이지만 구조상 섞일 수 있어
+  //    `company_id` 로 묶는다. 건별로 만들면 13건짜리 묶음에 **창이 13번** 뜬다.
+  // 🔴 **`already`(이미 적립됨)는 세지 않는다** — 두 번째 클릭에 창이 또 뜬다.
+  // 🟢 **미리보기는 읽기만 해서 상한(3초) 걱정이 줄었다** — 자동 발송이던 때는
+  //    솔라피 왕복이 이 안에 들어 있었다.
+  const smsPreviews: SmsPreview[] = [];
+  if (input.withSmsPreview === true && reverse !== true) {
     const byCompany = new Map<string, { amount: number; ledgerId: string }>();
     for (let i = 0; i < results.length; i++) {
       const r = results[i];
@@ -173,17 +182,20 @@ export async function accrueReward(
       });
     }
     for (const [companyId, v] of byCompany) {
-      await notifyRewardEarned({
+      const preview = await buildRewardSmsPreview({
         admin,
         campaignId: campaign.id,
         companyId,
         amount: v.amount,
         ledgerId: v.ledgerId,
       });
+      // 🔴 **못 만든 것은 조용히 빠진다** — 「문자 적립 안내」가 꺼진 화주가 그렇고,
+      //    그때는 건너뛸 것도 없으니 창을 띄우면 안 된다.
+      if (preview) smsPreviews.push(preview);
     }
   }
 
-  return { results };
+  return { results, sms: smsPreviews };
 }
 
 /** 🔴 정산 건 하나를 적립하는 데 필요한 컬럼 — 화면이 아니라 여기서 다시 읽는다 */

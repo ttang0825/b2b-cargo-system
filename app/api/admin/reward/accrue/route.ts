@@ -27,9 +27,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 });
   }
 
-  // 🔴 **`notify` 를 켜지 말 것** — 담당자가 손으로 부르는 경로라 「방금 입금이
+  // 🔴 **`withSmsPreview` 를 켜지 말 것** — 담당자가 손으로 부르는 경로라 「방금 입금이
   //    확인됐다」가 아닐 수 있고(24시콜 ⓒ 같은 가져오기 포함), 여러 건을 한꺼번에
-  //    부르는 자리이기도 하다. 문자는 입금확인 경로 둘에서만 나간다.
+  //    부르는 자리이기도 하다. 확인창은 입금확인 경로 둘에서만 뜬다.
   const out = await accrueReward({
     admin,
     staffId: staff.id,

@@ -6,7 +6,10 @@ import { COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
 import { getSmsTemplateLabel, getSmsRecipientTypeLabel } from "@/lib/smsLogLabels";
 
 export interface SmsPreview {
-  relatedType: "dispatch" | "application" | "portal_account" | "quote";
+  // 🔴 `reward` 는 2026-09-21 신설 — `/api/admin/send-sms` 의 `RELATED_TYPES` 와
+  //    DB `sms_logs_related_type_check` **셋이 같아야 한다**(하나만 늘리면 발송이
+  //    400 으로 막히거나 이력만 조용히 안 남는다).
+  relatedType: "dispatch" | "application" | "portal_account" | "quote" | "reward";
   relatedId: string;
   templateType: string;
   recipientType: "driver" | "customer" | "applicant";
