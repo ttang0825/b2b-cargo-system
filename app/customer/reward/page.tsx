@@ -227,15 +227,20 @@ export default function PortalRewardPage() {
                     {PORTAL_REWARD_LABEL[r.kind]}
                   </span>
                   <div className="pv2-rwbody">
-                    {/* 🔴 오더번호가 없으면 **날짜만** 말한다 — 내부 id 를 잘라 보여주지 말 것 */}
+                    {/* 🔴 오더번호가 없으면 **날짜만** 말한다 — 내부 id 를 잘라 보여주지 말 것
+                        🔴 **담당자가 적은 안내가 있으면 그것이 제목이다**(3차) — 아니면
+                           배지와 제목이 둘 다 「차감」이 되어 같은 말이 두 번 나온다
+                           (렌더링해서 발견했다). 그때는 아래 보조 줄을 안 그린다. */}
                     <div className="pv2-rwtitle">
-                      {r.order_no ? `오더 ${r.order_no}` : PORTAL_REWARD_LABEL[r.kind]}
+                      {r.order_no
+                        ? `오더 ${r.order_no}`
+                        : r.note || PORTAL_REWARD_LABEL[r.kind]}
                     </div>
                     {/* 🚨 **`description`(담당자 내부 메모)은 여기 오지 않는다** — 서버가
                         애초에 안 준다. 나오는 것은 담당자가 **화주에게 보이라고 적은**
                         `customer_note` 뿐이다(3차, 2026-09-21 · 사용자 요청 「어떻게
                         사용됐고」). 🔴 두 칸을 합치지 말 것. */}
-                    {r.note ? <div className="pv2-rwmeta">{r.note}</div> : null}
+                    {r.note && r.order_no ? <div className="pv2-rwmeta">{r.note}</div> : null}
                     {r.kind === "earn" && r.base_amount ? (
                       <div className="pv2-rwmeta">
                         운임 {won(r.base_amount)}원 (부가세 별도)

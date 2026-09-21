@@ -400,7 +400,10 @@ export default function CustomerHomePage() {
                   🔴 잔액에 더해 한 숫자로 만들지 말 것 · 🔴 「예정」을 빼지 말 것. */}
               {reward.pending && (
                 <div className="pv2-rwhome-pending">
-                  정산 후 적립 예정 +{won(reward.pending.amount)}원 · 운송{" "}
+                  {/* ⚠️ **이 화면의 `won()` 은 「원」까지 붙인다** — 적립금 화면의
+                      것과 다르다. 안 보고 적었다가 「58,600원원」이 되었고
+                      **렌더링해서 잡았다**(2026-09-21). */}
+                  정산 후 적립 예정 +{won(reward.pending.amount)} · 운송{" "}
                   {reward.pending.count}건
                 </div>
               )}
