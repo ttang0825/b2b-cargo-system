@@ -1926,3 +1926,70 @@ select (select count(*) from public.reward_campaigns)   as 캠페인,
        (select count(*) from public.reward_memberships) as 멤버십,
        (select count(*) from public.reward_ledger)      as 원장,
        (select count(*) from public.invoices)           as 정산건;
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- ㉞  🚨 리워드 2차(포털·문자) 착수 전 실측 (2026-09-21 · 읽기 전용)
+--
+--   2차는 **화주가 보는 화면**과 **화주에게 나가는 문자**를 만든다. 그래서 1차가
+--   저장만 해 두고 아무도 안 읽던 칸 둘(`portal_visible`·`sms_notification_enabled`)이
+--   처음으로 동작을 가르고, **수신처(연락처)와 포털 계정이 실제로 있는지**가
+--   「만들었는데 아무한테도 안 보이는」 결과를 가른다.
+--
+-- 🔴 **이름·연락처를 그대로 찍지 말 것**(⑪·㉝ 과 같은 규칙) — 이 저장소는 public 이고
+--    Actions 로그는 로그인 없이 누구나 읽는다. **있는지 없는지만** 센다.
+-- ════════════════════════════════════════════════════════════════════════════
+\echo ''
+\echo '=== ㉞ 🚨 리워드 2차 착수 전 실측 (읽기 전용 · 값은 마스킹) ==='
+
+\echo '--- ㉞-a 멤버십 설정 넷 — 2차가 처음으로 읽는 칸이 어떤 값인가 ---'
+select left(m.company_id::text, 8) as 화주id,
+       left(c.name, 1) || repeat('*', greatest(length(c.name) - 1, 0)) as 화주,
+       m.enabled                   as 적립켬,
+       m.portal_visible            as 포털노출,
+       m.reward_method             as 지급방식,
+       m.sms_notification_enabled  as 문자안내
+  from public.reward_memberships m
+  left join public.companies c on c.id = m.company_id
+ order by m.created_at;
+
+\echo '--- ㉞-b 🚨 수신처·포털 계정이 실제로 있는가 (값은 안 찍는다) ---'
+select left(m.company_id::text, 8)                     as 화주id,
+       (c.contact_mobile is not null
+        and btrim(c.contact_mobile) <> '')             as 대표연락처있음,
+       (select count(*) from public.customer_accounts a
+         where a.company_id = m.company_id)            as 포털계정수,
+       (select count(*) from public.customer_push_subscriptions s
+          join public.customer_accounts a2 on a2.id = s.customer_account_id
+         where a2.company_id = m.company_id)           as 포털푸시구독수
+  from public.reward_memberships m
+  left join public.companies c on c.id = m.company_id
+ order by m.created_at;
+
+\echo '--- ㉞-c 원장 구성 — 적립내역 화면이 실제로 그리게 될 것 ---'
+select transaction_type as 유형,
+       count(*)         as 건수,
+       sum(amount)      as 합계,
+       min(created_at)  as 처음,
+       max(created_at)  as 마지막
+  from public.reward_ledger
+ group by transaction_type
+ order by 1;
+
+\echo '--- ㉞-c2 🔴 화주별 — 「적립 줄만 보여주면」 합계가 잔액과 어긋나는가 ---'
+select left(company_id::text, 8) as 화주id,
+       sum(amount) filter (where transaction_type = 'transport_earn') as 적립합,
+       sum(amount) filter (where transaction_type <> 'transport_earn') as 조정회수합,
+       sum(amount)                                                     as 잔액
+  from public.reward_ledger
+ group by company_id
+ order by 1;
+
+\echo '--- ㉞-d 🚨 sms_logs 종류 제약 — 새 종류를 더하려면 DB 가 먼저다 ---'
+select conname                        as 제약,
+       pg_get_constraintdef(oid)      as 정의
+  from pg_constraint
+ where conrelid = 'public.sms_logs'::regclass
+   and conname like '%template_type%';
+
+\echo '--- ㉞-e 기준선 — _migrations 행 수(47이어야 한다) ---'
+select count(*) as 적용된_마이그레이션 from public._migrations;
