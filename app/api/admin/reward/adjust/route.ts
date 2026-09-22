@@ -7,6 +7,7 @@
 
 import { NextResponse } from "next/server";
 import { rewardGuard, loadActiveCampaign } from "@/lib/rewardServer";
+import { buildRewardDeductedSmsPreview } from "@/lib/rewardNotify";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,14 @@ export async function POST(req: Request) {
   const companyId = typeof body.company_id === "string" ? body.company_id : "";
   const amount = Math.round(Number(body.amount));
   const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+  // 🚨 **화주에게 보이는 한 줄** — `reason`(내부 사유)과 **다른 칸이다.**
+  //    🔴 `reason` 을 여기에 복사하지 말 것: 그것은 담당자의 내부 메모이고
+  //       2차에 「화주에게 절대 주지 않는다」고 못박았다(`lib/rewardPortal.ts`).
+  //    ⚠️ 선택 입력이다 — 비면 포털 줄에도 문자에도 그 줄이 안 나온다.
+  const customerNote =
+    typeof body.customer_note === "string" && body.customer_note.trim()
+      ? body.customer_note.trim()
+      : null;
 
   if (!companyId) return NextResponse.json({ error: "화주가 지정되지 않았습니다." }, { status: 400 });
   if (!Number.isFinite(amount) || amount === 0) {
@@ -44,11 +53,33 @@ export async function POST(req: Request) {
       source_type: "manual",
       source_id: null,
       description: reason,
+      customer_note: customerNote,
       created_by: staff.id,
     })
     .select("*")
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-  return NextResponse.json({ ok: true, row: data });
+  // ── 차감 안내 문자의 **확인창 미리보기** (3차, 2026-09-21) ──────────────────
+  //
+  // 🚨 **여기서 보내지 않는다** — 적립과 같은 자세다. 담당자가 `SmsConfirmModal`
+  //    에서 [발송]을 눌러야 나간다. 🔴 `sendSmsWithLog` 를 이 라우트에 들이지 말 것.
+  // 🔴 **차감(음수)일 때만 만든다** — 양수 조정에 「차감되었습니다」를 보내면 거짓이다.
+  // 🔴 **미리보기를 못 만들어도 조정은 이미 저장됐다** — 절대 던지지 않고, 그 경우
+  //    `sms` 가 없을 뿐이다(화면은 그냥 목록을 새로 그린다).
+  let sms = null;
+  try {
+    sms = await buildRewardDeductedSmsPreview({
+      admin,
+      campaignId: campaign.id,
+      companyId,
+      amount,
+      ledgerId: (data as any)?.id,
+      customerNote,
+    });
+  } catch {
+    /* 조정은 이미 저장됐다 — 미리보기 때문에 되돌리지 않는다 */
+  }
+
+  return NextResponse.json({ ok: true, row: data, sms });
 }

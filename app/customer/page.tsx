@@ -130,7 +130,12 @@ export default function CustomerHomePage() {
   //       빈 배열**이 온다). 통로는 `/api/customer/reward` 하나다.
   //    🔴 **참여하지 않은 화주에게는 카드 자체를 그리지 않는다** — 「0원」을 보여주면
   //       받을 수 있는 것을 못 받고 있다고 읽는다(리워드는 선택된 기업만 참여한다).
-  const [reward, setReward] = useState<{ balance: number; earned: number } | null>(null);
+  const [reward, setReward] = useState<{
+    balance: number;
+    earned: number;
+    /** 🔴 **정산 전이라 아직 안 쌓인 금액** — `balance` 에 더하지 말 것(3차) */
+    pending: { amount: number; count: number } | null;
+  } | null>(null);
   const [noticeLastSeen, setNoticeLastSeen] = useState<string | null>(null);
 
   async function load() {
@@ -254,7 +259,16 @@ export default function CustomerHomePage() {
         const body = full?.ok ? await full.json().catch(() => null) : null;
         setReward(
           body?.visible === true
-            ? { balance: body.balance || 0, earned: body.earned || 0 }
+            ? {
+                balance: body.balance || 0,
+                earned: body.earned || 0,
+                // 🔴 서버가 못 셌으면 `pending` 이 아예 안 온다 — 그때는 `null` 이고
+                //    화면이 줄을 안 그린다(0원으로 두면 「쌓일 것이 없다」가 된다).
+                pending:
+                  body.pending && body.pending.amount > 0
+                    ? { amount: body.pending.amount, count: body.pending.count }
+                    : null,
+              }
             : null
         );
       }
@@ -381,6 +395,18 @@ export default function CustomerHomePage() {
                 사용 가능 적립금
               </div>
               <div className="pv2-rwhome-value num">{won(reward.balance)}</div>
+              {/* 🚨 **월정산 화주는 이 줄이 없으면 홈에서 계속 0원만 본다**(3차) —
+                  한 달치를 한 번에 입금하므로 그 전까지 원장이 비어 있다.
+                  🔴 잔액에 더해 한 숫자로 만들지 말 것 · 🔴 「예정」을 빼지 말 것. */}
+              {reward.pending && (
+                <div className="pv2-rwhome-pending">
+                  {/* ⚠️ **이 화면의 `won()` 은 「원」까지 붙인다** — 적립금 화면의
+                      것과 다르다. 안 보고 적었다가 「58,600원원」이 되었고
+                      **렌더링해서 잡았다**(2026-09-21). */}
+                  정산 후 적립 예정 +{won(reward.pending.amount)} · 운송{" "}
+                  {reward.pending.count}건
+                </div>
+              )}
             </div>
             <Link href="/customer/reward" className="pv2-btn-ghost">
               적립 내역 <ArrowRight size={15} />

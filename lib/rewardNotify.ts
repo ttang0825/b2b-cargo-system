@@ -22,7 +22,7 @@
 //
 // 🔴 **던지지 않는다.** 미리보기를 못 만들어도 적립과 입금확인은 이미 끝난 일이다.
 
-import { rewardEarnedMessage } from "./sms/templates";
+import { rewardEarnedMessage, rewardDeductedMessage, rewardStatusMessage } from "./sms/templates";
 import { resolveSmsSender, contactPhoneForBody } from "./smsSenderPhone";
 import type { SmsPreview } from "@/components/SmsConfirmModal";
 
@@ -34,6 +34,16 @@ export type RewardNotifyInput = {
   amount: number;
   /** `sms_logs.related_id` 로 남을 원장 줄 하나 — 🔴 이력에서 되짚는 열쇠다 */
   ledgerId: string;
+  /**
+   * 아직 입금이 확인되지 않은 건의 **예상 적립** — 3차(2026-09-21).
+   *
+   * 🔴 **여기서 세지 않고 받아 온다.** `previewRewards` 는 `lib/rewardAccrue.ts` 에
+   *    있고 그 파일이 이 파일을 import 하므로, 여기서 가져오면 **순환 import** 가 된다.
+   *    부르는 쪽(`accrueReward`)이 캠페인을 이미 들고 있으니 거기서 세는 것이 맞다.
+   * 🔴 **못 셌으면 `null` 이고 그러면 문구에 줄이 안 붙는다** — 0 으로 때우지 말 것.
+   */
+  pendingAmount?: number | null;
+  pendingCount?: number | null;
 };
 
 /**
@@ -62,13 +72,16 @@ export async function buildRewardSmsPreview(
 
     const { data: memberships, error: mErr } = await admin
       .from("reward_memberships")
-      .select("sms_notification_enabled")
+      // 🚨 `portal_visible` 도 읽는다(2026-09-21) — 꺼진 화주에게 「운송관리에서
+      //    확인하실 수 있습니다」를 보내면 **없는 화면을 찾아가라는 말**이 된다.
+      .select("sms_notification_enabled,portal_visible")
       .eq("company_id", companyId)
       .eq("campaign_id", campaignId)
       .limit(1);
     // 🔴 조회에 실패하면 **안 만든다** — 못 띄운 창은 나중에 띄울 수 있지만,
     //    꺼 둔 화주에게 보낸 문자는 되돌릴 수 없다.
     if (mErr || !(memberships || [])[0]?.sms_notification_enabled) return null;
+    const portalVisible = (memberships || [])[0]?.portal_visible === true;
 
     const { data: company, error: cErr } = await admin
       .from("companies")
@@ -108,6 +121,11 @@ export async function buildRewardSmsPreview(
       message: rewardEarnedMessage({
         amount,
         balance,
+        // 🔴 **잔액에 더하지 않는다** — 문구가 두 줄로 나눠 적는다(입금이 확인돼야
+        //    적립되므로 「예정」과 「적립됨」은 다른 돈이다).
+        pendingAmount: input.pendingAmount ?? null,
+        pendingCount: input.pendingCount ?? null,
+        portalVisible,
         // 🔴 안내번호가 없으면 문구가 스스로 대표번호로 떨어진다(`contact()`)
         contactPhone: sender ? contactPhoneForBody(sender) : null,
         staffName: sender?.staffName ?? null,
@@ -118,6 +136,254 @@ export async function buildRewardSmsPreview(
     };
   } catch {
     // 🔴 적립·입금확인은 이미 끝난 일이다 — 미리보기 때문에 그것을 되돌리지 않는다.
+    return null;
+  }
+}
+
+// ── 차감(적립금 사용) 안내 — 3차, 2026-09-21 ────────────────────────────────
+//
+// 사용자 요청 — *"적립금을 차감했을때도 문자가 발송되어야 한다. 얼마 차감됐고,
+// 어떻게 사용됐고 얼마 남았는지..."*
+//
+// 🔴 **적립과 같은 자세다 — 여기서 보내지 않는다.** 담당자가 수동 조정을 저장하면
+//    확인창이 뜨고 [발송]을 눌러야 나간다.
+// 🔴 **차감(음수)일 때만 만든다** — 양수 조정은 적립을 늘리는 것이라 이 문구가
+//    거짓이 된다(「차감되었습니다」).
+// 🚨 **「어떻게 사용됐는지」는 `customer_note` 다 — `description` 을 쓰지 말 것.**
+//    그 칸은 담당자의 내부 메모이고 2차에 화주 비공개로 못박았다.
+//
+// 🔴 **부르는 곳은 `/api/admin/reward/adjust` 하나다.** 지금 차감이 나는 경로가
+//    그것뿐이라 적립처럼 정의처를 따로 두지 않았다 — ⚠️ **경로가 늘면 그때는
+//    `accrueReward` 처럼 한 곳으로 모을 것**(원칙 53번).
+
+export type RewardDeductNotifyInput = {
+  admin: any;
+  campaignId: string;
+  companyId: string;
+  /** 차감액 — 부호는 상관없다(문구가 절대값을 쓴다) */
+  amount: number;
+  /** `sms_logs.related_id` 로 남을 원장 줄 */
+  ledgerId: string;
+  /** 🔴 화주에게 보이는 한 줄 — 없으면 문구에서 그 줄이 빠진다 */
+  customerNote?: string | null;
+};
+
+export async function buildRewardDeductedSmsPreview(
+  input: RewardDeductNotifyInput
+): Promise<SmsPreview | null> {
+  try {
+    const { admin, campaignId, companyId, amount, ledgerId } = input;
+    // 🔴 **차감이 아니면 안 만든다**(0원 조정도 마찬가지다)
+    if (!(amount < 0)) return null;
+
+    const { data: memberships, error: mErr } = await admin
+      .from("reward_memberships")
+      // 🚨 `portal_visible` 도 읽는다 — 위 적립 미리보기와 같은 이유다.
+      .select("sms_notification_enabled,portal_visible")
+      .eq("company_id", companyId)
+      .eq("campaign_id", campaignId)
+      .limit(1);
+    // 🔴 꺼 둔 화주에게 보낸 문자는 되돌릴 수 없다 — 조회 실패도 「안 만듦」이다.
+    if (mErr || !(memberships || [])[0]?.sms_notification_enabled) return null;
+    const portalVisible = (memberships || [])[0]?.portal_visible === true;
+
+    const { data: company, error: cErr } = await admin
+      .from("companies")
+      .select("contact_mobile")
+      .eq("id", companyId)
+      .maybeSingle();
+    if (cErr) return null;
+
+    // 🔴 **잔액은 지금 다시 센다** — 방금 넣은 차감 줄까지 포함된 값이라야
+    //    문자의 「남은 적립금」과 포털 화면이 같은 숫자를 말한다.
+    const { data: ledger, error: lErr } = await admin
+      .from("reward_ledger")
+      .select("amount")
+      .eq("company_id", companyId)
+      .eq("campaign_id", campaignId);
+    if (lErr) return null;
+    const balance = (ledger || []).reduce(
+      (sum: number, r: any) => sum + Math.round(r.amount || 0),
+      0
+    );
+
+    // 🔴 적립 미리보기와 **같은 이유**로 발신번호 실패를 따로 잡는다 — 여기서
+    //    던지면 창이 통째로 안 뜨고 담당자는 문자 차례였다는 것조차 모른다.
+    let sender: Awaited<ReturnType<typeof resolveSmsSender>> | null = null;
+    try {
+      sender = await resolveSmsSender();
+    } catch {
+      sender = null;
+    }
+
+    return {
+      relatedType: "reward",
+      relatedId: ledgerId,
+      templateType: "reward_deducted",
+      recipientType: "customer",
+      recipientPhone: company?.contact_mobile || null,
+      message: rewardDeductedMessage({
+        amount,
+        balance,
+        note: input.customerNote ?? null,
+        portalVisible,
+        contactPhone: sender ? contactPhoneForBody(sender) : null,
+        staffName: sender?.staffName ?? null,
+      }),
+      senderDisplay: sender?.display ?? null,
+      senderStaffName: sender?.staffName ?? null,
+      senderIsStaffPhone: sender?.isStaffPhone ?? false,
+    };
+  } catch {
+    // 🔴 조정은 이미 저장됐다 — 미리보기 때문에 그것을 되돌리지 않는다.
+    return null;
+  }
+}
+
+// ── 적립 «현황» 안내 — 3차 후속, 2026-09-21 ─────────────────────────────────
+//
+// 🚨 **사용자 확정이 채널의 주종을 뒤집었다** — *"기본적으로 화주포털에는 리워드
+//    상황을 노출안하는 경우가 많을 것 같다. … 그래서 문자로 현 리워드 상황을
+//    알려주는게 중요하다. 월정산건도 한건의 운송이 완료되면 예상 적립금을 알려주고
+//    얼마가 쌓이고 있는지 확인이 문자메세지로 필요한거다."*
+//
+//    🔴 그래서 이 문자는 **포털이 꺼져 있어도 나간다.** 오히려 꺼진 화주에게
+//       **더 중요하다**(그 화주는 이 문자 말고는 볼 길이 없다).
+//       🔴 **`portal_visible` 로 막지 말 것.** 막는 것은 `sms_notification_enabled` 뿐이다.
+//
+// 🔴 **`reward_earned`(쌓였다)와 다른 종류다** — 이것은 **아직 안 쌓인 예상**이다.
+//    한 종류로 묶으면 이력에서 둘을 구분할 수 없다.
+//
+// 🔴 **두 자리에서 쓴다**(원칙 53번 — 정의처는 이 함수 하나):
+//      ① 수동    화주 상세 리워드 패널의 「적립 안내 문자」
+//      ② 운송완료 배차가 `운송완료` 로 바뀔 때 확인창(`thisInvoiceId` 를 준다)
+//
+// 🔴 **여기서 보내지 않는다** — 담당자가 [발송]을 눌러야 나간다(다른 리워드 문자와 같다).
+
+export type RewardStatusNotifyInput = {
+  admin: any;
+  campaign: { id: string; start_date: string; earn_end_date: string; earn_rate: number };
+  companyId: string;
+  /**
+   * 🔴 **운송완료 안내일 때만** 준다 — 그 한 건의 예상 적립을 첫 줄에 적는다.
+   *    수동 버튼에서는 주지 않는다(「이번 운송」이 없다).
+   */
+  thisInvoiceId?: string | null;
+  /** `sms_logs.related_id` — 🔴 원장 줄이 없으므로 **화주 id** 를 쓴다(아래 참고) */
+  relatedId: string;
+};
+
+export async function buildRewardStatusSmsPreview(
+  input: RewardStatusNotifyInput
+): Promise<SmsPreview | null> {
+  try {
+    const { admin, campaign, companyId, thisInvoiceId } = input;
+
+    const { data: memberships, error: mErr } = await admin
+      .from("reward_memberships")
+      .select("enabled,sms_notification_enabled,portal_visible")
+      .eq("company_id", companyId)
+      .eq("campaign_id", campaign.id)
+      .limit(1);
+    if (mErr) return null;
+    const m = (memberships || [])[0];
+    // 🔴 **참여하지 않는 화주에게는 만들지 않는다** — `enabled` 가 꺼진 것은
+    //    「신규 적립 중단」이라 「앞으로 쌓입니다」가 거짓이 된다.
+    //    ⚠️ 적립 안내(`reward_earned`)는 `enabled` 를 안 보는데, 그쪽은 **이미
+    //       쌓인 것**을 알리는 문자라 중단 뒤에도 사실이기 때문이다.
+    if (!m || m.enabled !== true || m.sms_notification_enabled !== true) return null;
+    const portalVisible = m.portal_visible === true;
+
+    const { data: company, error: cErr } = await admin
+      .from("companies")
+      .select("contact_mobile")
+      .eq("id", companyId)
+      .maybeSingle();
+    if (cErr) return null;
+
+    // 🔴 **잔액은 표시 시점 계산이다**(원장 합계) — 저장 컬럼을 만들지 말 것.
+    const { data: ledger, error: lErr } = await admin
+      .from("reward_ledger")
+      .select("amount")
+      .eq("company_id", companyId)
+      .eq("campaign_id", campaign.id);
+    if (lErr) return null;
+    const balance = (ledger || []).reduce(
+      (sum: number, r: any) => sum + Math.round(r.amount || 0),
+      0
+    );
+
+    // 🔴 **판정·금액은 실제 적립과 같은 `previewRewards`(→ `evaluateReward`) 다** —
+    //    갈라 적으면 문자가 약속한 예상액과 실제로 쌓이는 금액이 어긋난다.
+    //    ⚠️ 순환 import 를 피하려고 **함수 안에서** 늦게 가져온다
+    //       (`lib/rewardAccrue.ts` 가 이 파일을 맨 위에서 import 한다).
+    const { previewRewards } = await import("./rewardAccrue");
+
+    let pendingAmount: number | null = null;
+    let pendingCount: number | null = null;
+    try {
+      const pre = await previewRewards({ admin, campaign: campaign as any, companyId });
+      if (!pre.error) {
+        const eligible = pre.rows.filter((r) => !r.reason);
+        pendingAmount = eligible.reduce((sum, r) => sum + r.amount, 0);
+        pendingCount = eligible.length;
+      }
+    } catch {
+      /* 곁다리다 — 현재 적립금만이라도 알린다 */
+    }
+
+    // 이번 운송 한 건 — 🔴 **입금 여부와 무관하게** 그 건만 계산한다
+    //    (`previewRewards` 는 `invoiceId` 를 주면 거르지 않는다).
+    let thisAmount: number | null = null;
+    if (thisInvoiceId) {
+      try {
+        const one = await previewRewards({ admin, campaign: campaign as any, invoiceId: thisInvoiceId });
+        if (!one.error) {
+          const row = (one.rows || [])[0];
+          // 🔴 대상이 아니면(`reason`) **0 이 아니라 `null`** 이다 — 「0원 적립될
+          //    예정」이라는 줄이 나가면 안 된다.
+          thisAmount = row && !row.reason ? row.amount : null;
+        }
+      } catch {
+        /* 곁다리다 */
+      }
+    }
+
+    // 🔴 **아무 숫자도 못 낸 경우엔 만들지 않는다** — 「현재 적립금 0원」만 적힌
+    //    문자는 받는 사람에게 아무 뜻이 없다(그 화주는 아직 아무 일도 없다).
+    if (!thisAmount && !pendingAmount && balance === 0) return null;
+
+    // 🔴 발신번호 실패를 따로 잡는다 — 여기서 던지면 **창이 통째로 안 뜨고**
+    //    담당자는 문자 차례였다는 것조차 모른다(2차에 실제로 겪었다).
+    let sender: Awaited<ReturnType<typeof resolveSmsSender>> | null = null;
+    try {
+      sender = await resolveSmsSender();
+    } catch {
+      sender = null;
+    }
+
+    return {
+      relatedType: "reward",
+      // 🔴 원장에 새 줄이 생기지 않는 문자다(예상은 기록하지 않는다) — 그래서
+      //    열쇠가 **화주 id** 다. ⚠️ `sms_logs.related_id` 에는 FK 가 없다(다형 참조).
+      relatedId: input.relatedId,
+      templateType: "reward_status",
+      recipientType: "customer",
+      recipientPhone: company?.contact_mobile || null,
+      message: rewardStatusMessage({
+        thisAmount,
+        pendingAmount,
+        pendingCount,
+        balance,
+        portalVisible,
+        contactPhone: sender ? contactPhoneForBody(sender) : null,
+        staffName: sender?.staffName ?? null,
+      }),
+      senderDisplay: sender?.display ?? null,
+      senderStaffName: sender?.staffName ?? null,
+      senderIsStaffPhone: sender?.isStaffPhone ?? false,
+    };
+  } catch {
     return null;
   }
 }

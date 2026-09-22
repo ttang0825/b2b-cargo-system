@@ -13,16 +13,13 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "./supabaseServiceClient";
 import { getCurrentStaff } from "./getCurrentStaff";
 
-export type RewardCampaign = {
-  id: string;
-  name: string;
-  start_date: string;
-  earn_end_date: string;
-  use_end_date: string;
-  earn_rate: number;
-  minimum_use_amount: number;
-  active: boolean;
-};
+// 🔴 **캠페인 조회는 `lib/rewardCampaign.ts` 로 옮겼다**(3차, 2026-09-21) — 이 파일은
+//    `getCurrentStaff()` 를 들이므로, 그것을 import 하는 모듈은 무엇이든 **직원 세션
+//    코드를 함께 끌고 간다.** 화주포털 라우트가 `previewRewards`(읽기 전용)를 쓰려면
+//    그 고리를 끊어야 했다. 🔴 **여기로 되돌리지 말 것** · 🟢 옛 이름은 아래 재수출로
+//    그대로 쓸 수 있다(호출부 변경 0).
+export { loadActiveCampaign } from "./rewardCampaign";
+export type { RewardCampaign } from "./rewardCampaign";
 
 export function rewardAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -55,25 +52,4 @@ export async function rewardGuard(opts?: { requireAdmin?: boolean }) {
     };
   }
   return { staff, admin };
-}
-
-/**
- * 지금 살아 있는 캠페인 한 행.
- *
- * 🔴 **요율·기간을 코드에 적지 말 것** — 여기가 유일한 출처다.
- * 🔴 **`error` 를 삼키지 말 것**(원칙 55번) — 조회 실패를 「캠페인 없음」으로 두면
- *    적립이 조용히 0건이 되고 아무도 원인을 모른다.
- */
-export async function loadActiveCampaign(
-  admin: NonNullable<ReturnType<typeof rewardAdminClient>>
-): Promise<{ campaign: RewardCampaign | null; error: string | null }> {
-  const { data, error } = await admin
-    .from("reward_campaigns")
-    .select("id,name,start_date,earn_end_date,use_end_date,earn_rate,minimum_use_amount,active")
-    .eq("active", true)
-    .order("start_date", { ascending: false })
-    .limit(1);
-  if (error) return { campaign: null, error: error.message };
-  const row = (data || [])[0] as RewardCampaign | undefined;
-  return { campaign: row ? { ...row, earn_rate: Number(row.earn_rate) } : null, error: null };
 }

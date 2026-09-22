@@ -66,6 +66,7 @@ import {
   dispatchSmsEventCount,
   type DispatchSmsEvent,
 } from "@/lib/notifyDispatchSms";
+import { fetchRewardStatusSmsPreview } from "@/lib/notifyRewardSms";
 import { notifyPortalPushForDispatchStatus } from "@/lib/notifyPortalPush";
 import { DISPATCH_ISSUE_REASONS, dispatchIssueNeedsGuide } from "@/lib/dispatchIssue";
 import { getIncidentGuide, INCIDENT_PHOTO_NOTE } from "@/lib/incidentGuide";
@@ -793,6 +794,25 @@ export default function DispatchDetailPage() {
     // "운송완료"로 새로 바뀌면 정산이 없을 경우 자동 등록
     if (status === "운송완료" && prevStatus !== "운송완료" && dispatch?.orders?.id) {
       await autoCreateInvoiceIfNeeded(dispatch.orders.id);
+    }
+
+    // 🚨 **운송완료 → 「적립 현황 안내」 확인창**(리워드 3차 후속, 2026-09-21)
+    //
+    //    사용자 확정 — *"월정산건도 한건의 운송이 완료되면 예상 적립금을 알려주고
+    //    얼마가 쌓이고 있는지 확인이 문자메세지로 필요한거다."*
+    //
+    // 🔴 **2026-09-18 에 폐지한 상차·하차완료 문자와 다른 것이다**(그것은 운송
+    //    상태 안내였고 이것은 적립 안내다) · 🔴 **`autoCreateInvoiceIfNeeded` 뒤여야
+    //    한다**(이번 건의 정산이 있어야 「이번 운송 예상 적립」을 센다) ·
+    // 🔴 **대상이 아니면 조용히 `null`** 이고 그때는 오류가 아니다.
+    // 🔴 **목록 화면에도 같은 것이 있다**(원칙 53번) — 정의처는
+    //    `lib/notifyRewardSms.ts` 하나이고, 한쪽만 고치지 말 것.
+    if (status === "운송완료" && prevStatus !== "운송완료") {
+      const rewardPreview = await fetchRewardStatusSmsPreview({ dispatchId: id });
+      if (rewardPreview) {
+        smsTotalRef.current = 1;
+        setSmsQueue([rewardPreview]);
+      }
     }
 
     // 상차완료/하차완료는 상태를 바꿀 때마다 팝업이 자동으로 뜨면 번거롭다는

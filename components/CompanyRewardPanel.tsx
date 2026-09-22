@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getCurrentStaffRole } from "@/lib/currentStaff";
+import SmsConfirmModal, { type SmsPreview } from "@/components/SmsConfirmModal";
+import { fetchRewardStatusSmsPreview } from "@/lib/notifyRewardSms";
 import {
   REWARD_METHOD_OPTIONS,
   rewardMethodLabel,
@@ -55,6 +57,8 @@ type LedgerRow = {
   amount: number;
   earning_base_amount: number | null;
   description: string | null;
+  /** 🚨 화주에게 보인 한 줄(3차) — `description`(내부 사유)과 **다른 칸이다** */
+  customer_note?: string | null;
   created_at: string;
 };
 
@@ -96,6 +100,15 @@ export default function CompanyRewardPanel({ companyId }: { companyId: string })
   const [ledgerOpen, setLedgerOpen] = useState(false);
   const [ledger, setLedger] = useState<LedgerRow[] | null>(null);
   const [adjustOpen, setAdjustOpen] = useState(false);
+  /** 차감·현황 안내 문자의 확인창 — 🔴 `null` 이면 안 뜬다 */
+  const [smsPreview, setSmsPreview] = useState<SmsPreview | null>(null);
+  const [smsLoading, setSmsLoading] = useState(false);
+  /**
+   * 🔴 **액션 실패는 로딩 실패(`loadError`)·저장 실패(`saveError`)와 따로 둔다**
+   *    (원칙 33번) — 섞으면 문자 준비 실패가 이미 불러온 카드를 통째로 덮는다.
+   *    이 저장소에서 같은 버그를 네 번 겪은 자리다.
+   */
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -161,6 +174,28 @@ export default function CompanyRewardPanel({ companyId }: { companyId: string })
       setSaveError(e?.message || "저장하지 못했습니다.");
     }
     setSaving(false);
+  }
+
+  /**
+   * 「적립 안내 문자」 — 🔴 **여기서 보내지 않는다.** 미리보기를 받아 확인창을 띄우고,
+   * 담당자가 [발송]을 눌러야 나간다(리워드 문자 셋이 전부 같은 자세다).
+   *
+   * 🔴 **못 만든 이유를 말해준다**(원칙 55번) — 조용히 아무 일도 안 일어나면
+   *    담당자가 버튼이 고장난 것으로 읽는다. 사유는 셋이다:
+   *    리워드 꺼짐 · 문자 안내 꺼짐 · 아직 알릴 숫자가 없음.
+   */
+  async function sendStatusSms() {
+    setSmsLoading(true);
+    setActionError(null);
+    const preview = await fetchRewardStatusSmsPreview({ companyId });
+    setSmsLoading(false);
+    if (!preview) {
+      setActionError(
+        "안내할 내용이 없습니다. 「리워드 적용」과 「문자 적립 안내」가 켜져 있는지, 적립되었거나 적립 예정인 운송이 있는지 확인해 주세요."
+      );
+      return;
+    }
+    setSmsPreview(preview);
   }
 
   async function openLedger() {
@@ -357,9 +392,28 @@ export default function CompanyRewardPanel({ companyId }: { companyId: string })
               {saveError}
             </div>
           )}
+          {/* 🔴 **누른 자리 바로 위에 띄운다**(원칙 33번 · PR #154 의 교훈) —
+              카드 맨 위에만 그리면 버튼에서 멀어 「아무 일도 안 일어난다」가 된다. */}
+          {actionError && (
+            <div className="error-box" style={{ fontSize: 12, marginBottom: 8 }}>
+              {actionError}
+            </div>
+          )}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button className="btn btn-ghost" onClick={openLedger}>
               적립·사용 내역 보기
+            </button>
+            {/* 🚨 **이 버튼이 리워드의 주 채널이다**(2026-09-21 사용자 확정) —
+                포털은 대부분 꺼져 있고, 화주가 「얼마가 쌓이고 있는지」를 아는 길이
+                이 문자다. 🔴 관리자 전용 블록 **밖**에 둔다(재직 직원이면 누구나
+                안내할 수 있다 — 다른 문자 발송 버튼과 같은 기준이고, 설정·조정만
+                관리자다). 🔴 감추거나 지우지 말 것. */}
+            <button
+              className="btn btn-ghost"
+              onClick={sendStatusSms}
+              disabled={smsLoading}
+            >
+              {smsLoading ? "준비 중…" : "적립 안내 문자"}
             </button>
             {isAdmin && (
               <>
@@ -382,10 +436,24 @@ export default function CompanyRewardPanel({ companyId }: { companyId: string })
         <AdjustModal
           companyId={companyId}
           onClose={() => setAdjustOpen(false)}
-          onDone={async () => {
+          onDone={async (sms) => {
             setAdjustOpen(false);
             await load();
+            // 🔴 **조정이 저장된 뒤에 띄운다** — 창을 먼저 띄우면 담당자가 [발송]을
+            //    눌렀을 때 아직 없는 원장 줄을 가리킨다.
+            if (sms) setSmsPreview(sms);
           }}
+        />
+      )}
+      {/* ── 차감 안내 문자 확인창 (3차, 2026-09-21) ──────────────────────────
+          🚨 **문자는 여기서만 나간다.** 서버는 문구만 만들고, 담당자가 [발송]을
+             눌러야 `/api/admin/send-sms` 가 돈다(적립 안내와 **같은 자세**).
+          🔴 **자동 발송으로 되돌리지 말 것**(2026-09-21 사용자 확정). */}
+      {smsPreview && (
+        <SmsConfirmModal
+          preview={smsPreview}
+          onSent={() => setSmsPreview(null)}
+          onSkip={() => setSmsPreview(null)}
         />
       )}
     </div>
@@ -467,7 +535,17 @@ function LedgerModal({ rows, onClose }: { rows: LedgerRow[] | null; onClose: () 
                     {r.amount > 0 ? "+" : ""}
                     {won(r.amount)}
                   </td>
-                  <td>{r.description || "—"}</td>
+                  <td>
+                    {r.description || "—"}
+                    {/* 🚨 **화주가 본 문장을 같이 보여준다**(3차) — 담당자가 나중에
+                        「우리가 화주에게 뭐라고 했더라」를 되짚을 자리가 여기뿐이다.
+                        🔴 위 내부 사유와 **한 칸으로 합치지 말 것.** */}
+                    {r.customer_note ? (
+                      <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 3 }}>
+                        화주 안내: {r.customer_note}
+                      </div>
+                    ) : null}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -490,10 +568,19 @@ function AdjustModal({
 }: {
   companyId: string;
   onClose: () => void;
-  onDone: () => void;
+  /** 🔴 차감이면 서버가 **차감 안내 문자 미리보기**를 함께 준다(3차) — 화면이
+   *  확인창을 띄우고, 담당자가 [발송]을 눌러야 문자가 나간다. */
+  onDone: (sms?: SmsPreview | null) => void;
 }) {
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
+  /**
+   * 🚨 **화주에게 보이는 한 줄** — 위 `reason`(내부 사유)과 **다른 칸이다.**
+   *    🔴 둘을 하나로 합치지 말 것: 내부 메모를 화주에게 그대로 보내게 된다
+   *       (2차가 `description` 을 화주 응답에서 뺀 이유와 같다).
+   *    ⚠️ 선택 입력이다 — 비우면 포털 줄에도 문자에도 그 줄이 안 나온다.
+   */
+  const [customerNote, setCustomerNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -508,11 +595,18 @@ function AdjustModal({
       const res = await fetch("/api/admin/reward/adjust", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company_id: companyId, amount: n, reason: reason.trim() }),
+        body: JSON.stringify({
+          company_id: companyId,
+          amount: n,
+          reason: reason.trim(),
+          customer_note: customerNote.trim() || null,
+        }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || "조정하지 못했습니다.");
-      onDone();
+      // 🔴 **미리보기가 없으면 그냥 닫는다** — 양수 조정이거나 「문자 안내」가 꺼진
+      //    화주다. 그때 창을 띄우면 건너뛸 것도 없는 확인을 시키는 셈이다.
+      onDone(json.sms || null);
       return;
     } catch (e: any) {
       setError(e?.message || "조정하지 못했습니다.");
@@ -551,9 +645,31 @@ function AdjustModal({
           />
         </div>
         <div className="field">
-          <label>사유 (필수)</label>
+          <label>사유 (필수 · 내부용)</label>
           <textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />
+          {/* 🚨 **이 줄을 지우지 말 것** — 두 칸의 차이를 담당자가 모르면 내부 메모를
+              화주에게 보내거나, 반대로 화주 안내를 비워 「무엇 때문에 차감됐는지」를
+              알 수 없는 문자가 나간다. */}
+          <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 4 }}>
+            화주에게 보이지 않습니다.
+          </div>
         </div>
+        {/* 🔴 **차감일 때만 그린다** — 적립을 늘리는 조정에는 「사용처」가 없다. */}
+        {n < 0 && (
+          <div className="field">
+            <label>화주 안내 (선택)</label>
+            <input
+              type="text"
+              value={customerNote}
+              onChange={(e) => setCustomerNote(e.target.value)}
+              placeholder="예: 오더 20260921003 운임 차감"
+              maxLength={60}
+            />
+            <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 4 }}>
+              화주의 적립 내역과 안내 문자에 그대로 표시됩니다.
+            </div>
+          </div>
+        )}
         {error && (
           <div className="error-box" style={{ fontSize: 12, marginBottom: 8 }}>
             {error}

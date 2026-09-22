@@ -23,6 +23,8 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabaseServiceClient";
 import { rewardBalance } from "@/lib/rewardCalc";
+import { loadActiveCampaign } from "@/lib/rewardCampaign";
+import { previewRewards } from "@/lib/rewardAccrue";
 import { portalRewardKind, type PortalRewardRow } from "@/lib/rewardPortal";
 
 // 🔴 원칙 21번 — 이 둘은 **한 벌이다.** `force-dynamic` 만으로는 supabase-js 가
@@ -66,17 +68,12 @@ export async function GET(req: Request) {
 
   // ── 캠페인 ────────────────────────────────────────────────────────────────
   // 🔴 요율·기간을 코드에 적지 말 것 — 캠페인 행이 정의처다.
-  // ⚠️ `lib/rewardServer.ts` 의 `loadActiveCampaign()` 을 쓰지 않는다 — 그 파일은
-  //    `getCurrentStaff()`(직원 쿠키 세션)를 들여서, 화주 라우트가 import 하면
-  //    직원용 인증 코드가 이 경로에 딸려 들어온다. 질의는 여섯 줄이라 따로 적었다.
-  const { data: campaigns, error: cErr } = await admin
-    .from("reward_campaigns")
-    .select("id,name,earn_rate,earn_end_date,use_end_date,minimum_use_amount")
-    .eq("active", true)
-    .order("start_date", { ascending: false })
-    .limit(1);
-  if (cErr) return NextResponse.json({ error: cErr.message }, { status: 400 });
-  const campaign = (campaigns || [])[0];
+  // 🟢 **`lib/rewardCampaign.ts` 에서 가져온다**(3차, 2026-09-21) — 그전에는 질의를
+  //    여기에 따로 적었다. 이유는 `lib/rewardServer.ts` 가 `getCurrentStaff()`(직원
+  //    쿠키 세션)를 들이기 때문이었는데, 3차에 캠페인 조회만 **의존성 0** 파일로
+  //    갈라내서 그 고리가 끊겼다. 🔴 `lib/rewardServer` 에서 가져오도록 되돌리지 말 것.
+  const { campaign, error: cErr } = await loadActiveCampaign(admin);
+  if (cErr) return NextResponse.json({ error: cErr }, { status: 400 });
   if (!campaign) return NextResponse.json({ visible: false });
 
   // ── 멤버십 ────────────────────────────────────────────────────────────────
@@ -104,7 +101,11 @@ export async function GET(req: Request) {
   //    `source_id` 도 안 준다 — 대신 오더번호를 조인해 준다.
   const { data: ledger, error: lErr } = await admin
     .from("reward_ledger")
-    .select("id,transaction_type,amount,earning_base_amount,earn_rate_snapshot,source_type,source_id,created_at")
+    // 🚨 `customer_note` 는 **화주에게 보이라고 만든 칸**이다(3차) — `description`
+    //    (내부 사유)과 혼동하지 말 것. 앞엣것만 준다.
+    .select(
+      "id,transaction_type,amount,earning_base_amount,earn_rate_snapshot,source_type,source_id,customer_note,created_at"
+    )
     .eq("company_id", companyId)
     .eq("campaign_id", campaign.id)
     .order("created_at", { ascending: false })
@@ -145,11 +146,45 @@ export async function GET(req: Request) {
     base_amount: r.earning_base_amount == null ? null : Math.round(r.earning_base_amount),
     earn_rate: r.earn_rate_snapshot == null ? null : Number(r.earn_rate_snapshot),
     order_no: r.source_id ? orderNoByInvoice.get(r.source_id) ?? null : null,
+    note: r.customer_note || null,
     created_at: r.created_at,
   }));
 
+  // ── 예상 적립 (3차, 2026-09-21) ───────────────────────────────────────────
+  //
+  // 🚨 **왜 필요한가** — 월정산 화주는 **한 달치를 한 번에** 입금하므로, 그 전까지
+  //    운송을 아무리 많이 해도 원장이 비어 있어 이 화면이 **0원만 보여준다**
+  //    (실측 2026-09-21 — 포털 노출이 켜진 화주의 정산 13건이 전부 미입금이었고
+  //    그 화주의 원장은 0행이었다). 사용자 지적이 정확히 그 자리다.
+  //
+  // 🔴 **원장에는 한 줄도 쓰지 않는다** — 표시 시점 계산이고 확정은 입금 확인 때만
+  //    만들어진다(원칙 47번과 같은 결). 🔴 `balance` 에 더하지 말 것.
+  // 🔴 **판정·금액은 관리자 쪽과 같은 `previewRewards`(→ `evaluateReward`) 하나다** —
+  //    갈라 적으면 화주가 보는 예상액과 담당자가 보는 예상액이 어긋난다.
+  // 🔴 **실패해도 본문은 그대로 준다** — 예상은 곁다리이고, 여기서 막으면 잔액까지
+  //    못 본다. 못 셌으면 `pending` 을 **주지 않는다**(0 으로 주면 「앞으로 쌓일 것이
+  //    없다」는 거짓말이 된다).
+  let pending: { amount: number; count: number } | null = null;
+  try {
+    const pre = await previewRewards({ admin, campaign, companyId });
+    if (!pre.error) {
+      // 🔴 대상이 아닌 건(`reason` 이 있는 것)은 빼고 센다 — `amount` 가 0 이라 합계는
+      //    같지만 **건수**가 부풀어 「N건 예정」이 거짓이 된다(관리자 쪽과 같은 규칙).
+      const eligible = pre.rows.filter((r) => !r.reason);
+      pending = {
+        amount: eligible.reduce((sum, r) => sum + r.amount, 0),
+        count: eligible.length,
+      };
+    }
+  } catch {
+    /* 예상은 곁다리다 — 잔액을 막지 않는다 */
+  }
+
   return NextResponse.json({
     visible: true,
+    // 🔴 **`pending` 을 `balance` 와 나란히 두되 더하지 않는다** — 화면이 둘을
+    //    다른 무게로 그린다(예상은 아직 화주의 돈이 아니다).
+    pending,
     campaign: {
       name: campaign.name,
       earn_rate: Number(campaign.earn_rate),

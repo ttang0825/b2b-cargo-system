@@ -1995,5 +1995,95 @@ select conname                        as 제약,
    and contype = 'c'
  order by conname;
 
-\echo '--- ㉞-e 기준선 — _migrations 행 수(47이어야 한다) ---'
+\echo '--- ㉞-e 기준선 — _migrations 행 수(48이어야 한다) ---'
+select count(*) as 적용된_마이그레이션 from public._migrations;
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- ㉟  🚨 리워드 3차(예상적립·차감 안내) 착수 전 실측 (2026-09-21 · 읽기 전용)
+--
+--   사용자 요청 넷 — ① 활성화주 목록에 **예상적립** ② 화주포털에도 예상적립금
+--   ③ 문자에 예상·현재 적립금 ④ **차감 시에도 문자**(얼마 · 어디에 썼고 · 얼마 남았는지).
+--
+--   재는 것은 셋이다:
+--     · ④ 를 담을 **원장 유형이 있는가**(`transaction_type` CHECK) — 없으면 DB 가 먼저다
+--     · ①② 의 **모수가 실재하는가**(미입금 건이 얼마나 · 어느 화주에게)
+--     · ③ 의 새 문자 종류를 더하려면 CHECK 를 또 넓혀야 하는가
+--
+-- 🔴 **이름·연락처를 그대로 찍지 말 것**(⑪·㉝·㉞ 과 같은 규칙).
+-- ════════════════════════════════════════════════════════════════════════════
+\echo ''
+\echo '=== ㉟ 🚨 리워드 3차 착수 전 실측 (읽기 전용 · 값은 마스킹) ==='
+
+\echo '--- ㉟-a 🚨 reward_ledger 제약 전수 — 「차감·사용」 유형이 이미 있는가 ---'
+-- 🔴 `transaction_type` 허용값이 여기 나온다. 사용자가 말한 「차감 · 어떻게 사용됐고」를
+--    담을 유형이 없으면 **DB 를 먼저 넓혀야 한다**(코드가 먼저면 저장이 통째로 막힌다).
+select conname                   as 제약,
+       pg_get_constraintdef(oid) as 정의
+  from pg_constraint
+ where conrelid = 'public.reward_ledger'::regclass
+   and contype in ('c','u')
+ order by contype, conname;
+
+\echo '--- ㉟-a2 reward_ledger 컬럼 전수 — 「어디에 썼는가」를 담을 칸이 있는가 ---'
+select column_name as 컬럼, data_type as 타입, is_nullable as 널
+  from information_schema.columns
+ where table_schema = 'public' and table_name = 'reward_ledger'
+ order by ordinal_position;
+
+\echo '--- ㉟-b 🔴 ①② 의 모수 — 미입금(= 예상 적립 후보) 정산 건이 실재하는가 ---'
+-- 🔴 「미입금」은 수금방식마다 보는 칸이 다르다(broker=payment_received ·
+--    선착불=brokerage_fee_paid) — 한 줄짜리 필터로 세면 틀린다(`rewardReceiptConfirmed`).
+select coalesce(i.collection_method,'(null)') as 수금방식,
+       coalesce(i.billing_cycle,'(null)')     as 청구주기,
+       count(*)                                as 전체,
+       count(*) filter (
+         where case when i.collection_method = 'driver_direct'
+                    then coalesce(i.brokerage_fee_paid,false)
+                    else coalesce(i.payment_received,false) end)  as 입금확인됨,
+       count(*) filter (
+         where not case when i.collection_method = 'driver_direct'
+                        then coalesce(i.brokerage_fee_paid,false)
+                        else coalesce(i.payment_received,false) end) as 미입금
+  from public.invoices i
+ group by 1,2
+ order by 3 desc;
+
+\echo '--- ㉟-c 🚨 ② 의 근거 — 멤버십 켜진 화주의 미입금 건 (월정산이 실제로 기다리는가) ---'
+select left(m.company_id::text, 8) as 화주id,
+       m.enabled                   as 적립켬,
+       m.portal_visible            as 포털노출,
+       count(i.id)                                                    as 정산건수,
+       count(i.id) filter (
+         where not case when i.collection_method = 'driver_direct'
+                        then coalesce(i.brokerage_fee_paid,false)
+                        else coalesce(i.payment_received,false) end)  as 미입금건수,
+       coalesce(sum(i.customer_charge_total) filter (
+         where not case when i.collection_method = 'driver_direct'
+                        then coalesce(i.brokerage_fee_paid,false)
+                        else coalesce(i.payment_received,false) end), 0) as 미입금청구합
+  from public.reward_memberships m
+  left join public.invoices i on i.company_id = m.company_id
+ group by 1,2,3
+ order by 1;
+
+\echo '--- ㉟-d 월정산 묶음 상태 — ② 가 「정산 전」이라 부르는 구간이 실재하는가 ---'
+-- ⚠️ 이 표에는 `status` 컬럼이 없다(2026-09-21 실측 — 넣었다가 42703 으로 멈췄다).
+--    묶음의 「확정됐는가」는 `confirmed_at` 이 채워졌는지로 본다.
+select coalesce(payment_status,'(null)')      as 입금상태,
+       (confirmed_at is not null)             as 확정됨,
+       count(*)                               as 건수
+  from public.customer_billing_batches
+ group by 1,2
+ order by 3 desc;
+
+\echo '--- ㉟-e 적립 안내 문자 이력 — 2차가 넣은 종류가 실제로 쓰였는가 ---'
+select template_type as 종류, status as 상태, count(*) as 건수
+  from public.sms_logs
+ where template_type like 'reward%'
+ group by 1,2
+ order by 1,2;
+
+-- ⚠️ 기준선은 차수마다 는다 — **적을 때마다 같이 고칠 것**(안 고치면 다음 세션이
+--    「줄었다」로 오해한다). 3차가 둘을 더해 48 → 50 이 됐다.
+\echo '--- ㉟-f 기준선 — _migrations 행 수(50이어야 한다) ---'
 select count(*) as 적용된_마이그레이션 from public._migrations;

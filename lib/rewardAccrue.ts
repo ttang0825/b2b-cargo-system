@@ -25,7 +25,11 @@
 //   ⚠️ dev 는 StrictMode 라 effect 가 두 번 돈다(함정 34번) — 그래도 **원장은 한 줄**이다.
 //      🔴 「적립이 한 번만」을 잴 때는 **호출 횟수가 아니라 원장 행 수로** 재라.
 
-import { loadActiveCampaign, type RewardCampaign } from "./rewardServer";
+// 🔴 **`./rewardServer` 가 아니라 `./rewardCampaign` 에서 가져온다**(3차, 2026-09-21) —
+//    앞엣것은 `getCurrentStaff()`(직원 쿠키 세션)를 들여서, 이 파일의 읽기 전용 함수
+//    (`previewRewards`)를 **화주포털 라우트가 쓰는 순간 직원 인증 코드가 딸려 들어온다.**
+//    🔴 되돌리지 말 것.
+import { loadActiveCampaign, type RewardCampaign } from "./rewardCampaign";
 import type { SmsPreview } from "@/components/SmsConfirmModal";
 import { buildRewardSmsPreview } from "./rewardNotify";
 import { fetchIncludedExtraChargeTotals } from "./rewardExtraCharges";
@@ -182,12 +186,34 @@ export async function accrueReward(
       });
     }
     for (const [companyId, v] of byCompany) {
+      // 🔴 **예상 적립은 여기서 센다**(3차, 2026-09-21) — `lib/rewardNotify.ts` 가
+      //    `previewRewards` 를 가져오면 **순환 import** 가 된다(그 파일을 이 파일이
+      //    이미 import 한다). 캠페인을 들고 있는 것도 이쪽이다.
+      // 🔴 **방금 적립한 건은 안 섞인다** — `previewRewards` 가 입금이 확인된 건을
+      //    걸러내므로, 지금 막 확인된 것들은 「예정」에서 빠지고 「적립됨」으로 간다.
+      // 🔴 **못 세면 `null` 이고 문구에 줄이 안 붙는다** — 0 으로 때우면 「앞으로
+      //    쌓일 것이 없다」는 거짓말이 된다(원칙 55번과 같은 결).
+      let pendingAmount: number | null = null;
+      let pendingCount: number | null = null;
+      try {
+        const pre = await previewRewards({ admin, campaign, companyId });
+        if (!pre.error) {
+          const eligible = pre.rows.filter((r) => !r.reason);
+          pendingAmount = eligible.reduce((sum, r) => sum + r.amount, 0);
+          pendingCount = eligible.length;
+        }
+      } catch {
+        /* 예상은 곁다리다 — 확인창을 막지 않는다 */
+      }
+
       const preview = await buildRewardSmsPreview({
         admin,
         campaignId: campaign.id,
         companyId,
         amount: v.amount,
         ledgerId: v.ledgerId,
+        pendingAmount,
+        pendingCount,
       });
       // 🔴 **못 만든 것은 조용히 빠진다** — 「문자 적립 안내」가 꺼진 화주가 그렇고,
       //    그때는 건너뛸 것도 없으니 창을 띄우면 안 된다.

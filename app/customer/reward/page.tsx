@@ -25,6 +25,12 @@ type RewardResponse = {
   balance?: number;
   earned?: number;
   used?: number;
+  /**
+   * 정산(입금 확인)이 끝나면 쌓일 금액 — 🔴 **아직 적립된 것이 아니다.**
+   * 서버가 못 셌으면 아예 안 온다(`undefined`) — 그때는 줄을 그리지 않는다.
+   * 🔴 `balance` 에 더하지 말 것.
+   */
+  pending?: { amount: number; count: number } | null;
   rows?: PortalRewardRow[];
 };
 
@@ -130,6 +136,8 @@ export default function PortalRewardPage() {
   const rows = data.rows || [];
   const balance = data.balance || 0;
   const canUse = balance >= (campaign.minimum_use_amount || 0);
+  // 🔴 0원이면 줄을 그리지 않는다 — 「예상 0원」은 「앞으로 쌓일 것이 없다」로 읽힌다.
+  const pending = data.pending && data.pending.amount > 0 ? data.pending : null;
 
   return (
     <>
@@ -156,6 +164,17 @@ export default function PortalRewardPage() {
                 : `${won(campaign.minimum_use_amount)}원부터 사용할 수 있습니다`
               : "담당자와 협의 후 사용"}
           </div>
+          {/* 🚨 **월정산 화주가 이 줄 때문에 이 화면을 연다**(3차, 2026-09-21) —
+              한 달치를 한 번에 입금하므로 그 전까지는 위 잔액이 계속 0원이다.
+              🔴 **잔액에 더해서 한 숫자로 보여주지 말 것** — 아직 화주의 돈이 아니다
+                 (입금이 확인돼야 적립된다). 그래서 글자도 더 작고 흐리다.
+              🔴 **「예정」이라는 말을 빼지 말 것** — 빼면 약속으로 읽힌다. */}
+          {pending && (
+            <div className="pv2-isum-pending">
+              정산 후 적립 예정 <b>+{won(pending.amount)}원</b>
+              <span className="pv2-isum-pending-count"> · 운송 {pending.count}건</span>
+            </div>
+          )}
         </div>
         <div className="pv2-isum-card">
           <div className="pv2-isum-label">누적 적립</div>
@@ -189,6 +208,14 @@ export default function PortalRewardPage() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/portal/wecarry-eng-cropped.svg" alt="" className="pv2-empty-logo" />
             <div className="pv2-empty-title">아직 적립된 내역이 없습니다</div>
+            {/* 🔴 **비어 있는 이유를 말해준다** — 월정산 화주는 운송을 한 달 내내
+                하고도 이 목록이 비어 있어서, 아무 말이 없으면 「적립이 안 되고 있다」로
+                읽는다(그 화주가 이 화면을 여는 이유가 바로 그것이다). */}
+            {pending && (
+              <div className="pv2-empty-desc">
+                운송 {pending.count}건이 정산을 기다리고 있습니다. 입금이 확인되면 적립됩니다.
+              </div>
+            )}
           </div>
         ) : (
           <div className="pv2-rwlist">
@@ -200,12 +227,20 @@ export default function PortalRewardPage() {
                     {PORTAL_REWARD_LABEL[r.kind]}
                   </span>
                   <div className="pv2-rwbody">
-                    {/* 🔴 오더번호가 없으면 **날짜만** 말한다 — 내부 id 를 잘라 보여주지 말 것 */}
+                    {/* 🔴 오더번호가 없으면 **날짜만** 말한다 — 내부 id 를 잘라 보여주지 말 것
+                        🔴 **담당자가 적은 안내가 있으면 그것이 제목이다**(3차) — 아니면
+                           배지와 제목이 둘 다 「차감」이 되어 같은 말이 두 번 나온다
+                           (렌더링해서 발견했다). 그때는 아래 보조 줄을 안 그린다. */}
                     <div className="pv2-rwtitle">
-                      {r.order_no ? `오더 ${r.order_no}` : PORTAL_REWARD_LABEL[r.kind]}
+                      {r.order_no
+                        ? `오더 ${r.order_no}`
+                        : r.note || PORTAL_REWARD_LABEL[r.kind]}
                     </div>
-                    {/* 🚨 **조정·차감 줄에는 사유를 적지 않는다** — 그 칸(`description`)은
-                        담당자의 내부 메모라 서버가 애초에 안 준다. 화면이 지어내지도 않는다. */}
+                    {/* 🚨 **`description`(담당자 내부 메모)은 여기 오지 않는다** — 서버가
+                        애초에 안 준다. 나오는 것은 담당자가 **화주에게 보이라고 적은**
+                        `customer_note` 뿐이다(3차, 2026-09-21 · 사용자 요청 「어떻게
+                        사용됐고」). 🔴 두 칸을 합치지 말 것. */}
+                    {r.note && r.order_no ? <div className="pv2-rwmeta">{r.note}</div> : null}
                     {r.kind === "earn" && r.base_amount ? (
                       <div className="pv2-rwmeta">
                         운임 {won(r.base_amount)}원 (부가세 별도)
