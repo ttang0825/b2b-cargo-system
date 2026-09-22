@@ -1,4 +1,5 @@
 import { COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
+import { SITE_URL } from "@/lib/siteUrl";
 import { ARRIVAL_FILLER_TIME } from "@/lib/arrivalType";
 import { SMS_BYTE_LIMIT, byteLength } from "@/lib/sms/byteLength";
 
@@ -854,6 +855,16 @@ export function rewardIntroMessage(
     ...(params.portalVisible
       ? ["운송관리에서 적립 내역을 확인하실 수 있습니다.", ""]
       : ["적립 현황은 담당자가 문자로 안내드립니다.", ""]),
+    // 🚨 **이 링크는 2026-09-22 에야 붙일 수 있게 됐다.** 그전에는 외부 이벤트 안내
+    //    페이지가 *「별도 신청 절차 없이 이용 시 자동 적립됩니다」* 라고 적고 있어서
+    //    **선택된 기업만 참여하는 실제 정책과 달랐고**(표시광고법 제3조 · HANDOFF §5-3)
+    //    그래서 문자에서 링크를 일부러 뺐다. 지금 가리키는 곳은 **저장소 안에 새로 만든
+    //    `/reward-event`** 이고, 그 페이지는 조건·기간을 **캠페인 값으로** 적고 맨 위에
+    //    「선정된 고객사 한정」을 적는다.
+    // 🔴 **외부 페이지 주소로 바꾸지 말 것** — 그 문구가 고쳐졌는지 우리가 알 수 없다.
+    // 🔴 **주소를 여기 문자열로 적지 말 것** — 정의처는 `lib/siteUrl.ts` 하나다.
+    `자세한 안내 ${SITE_URL}/reward-event`,
+    "",
     contactLine(params),
   ].join("\n");
 }

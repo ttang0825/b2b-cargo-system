@@ -19,7 +19,12 @@ export default function robots(): MetadataRoute.Robots {
       // 🔴 `/q` 는 **견적서 공유 링크**다(2026-09-15) — 특정 화주의 상호·구간·금액이
       //    담기므로 절대 색인되면 안 된다. 핵심 방어선은 `app/q/layout.tsx` 의
       //    `robots: { index: false }` 이고 여기는 보조다(**둘 다 유지할 것**).
-      disallow: ["/admin", "/customer", "/q"],
+      // 🔴 `/reward-event` 는 **선택된 고객사만** 참여하는 프로모션 안내다
+      //    (2026-09-22) — 검색으로 누구나 닿으면 선택되지 않은 사람에게 **사실이
+      //    아닌 광고**가 된다(표시광고법 제3조). 핵심 방어선은
+      //    `app/reward-event/layout.tsx` 의 `robots: { index: false }` 이고 여기는
+      //    보조다(**둘 다 유지할 것**). 🚨 `app/sitemap.ts` 의 `NOINDEX` 도 한 벌이다.
+      disallow: ["/admin", "/customer", "/q", "/reward-event"],
     },
     sitemap: `${SITE_URL}/sitemap.xml`,
   };
