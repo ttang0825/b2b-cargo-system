@@ -9823,6 +9823,22 @@ tbody tr:hover {
   margin-top: 3px;
 }
 
+/* 「운송완료 확인창」 자식 스위치 (2026-09-22) — 🔴 부모(`문자 적립 안내`) 아래에
+   딸린 칸이라는 것이 **눈에 보여야** 한다. 들여쓰기와 왼쪽 선이 그 역할이다.
+   🔴 두 클래스로 특성도를 올려 쓴다(`.reward-check.reward-check-sub`) — 순서로
+   이기려 들면 다음에 누가 정렬할 때 조용히 되돌아간다(원칙 58번). */
+.reward-check.reward-check-sub {
+  margin-left: 22px;
+  padding-left: 10px;
+  border-left: 2px solid var(--border, #E5E3DE);
+}
+/* 부모가 꺼져 있으면 이 칸은 아무 일도 하지 않는다 — 그것을 색으로 말한다.
+   🔴 `display: none` 으로 감추지 말 것: 담당자가 「그 설정이 없어졌다」로 읽는다. */
+.reward-check.reward-check-sub.is-muted {
+  opacity: 0.55;
+  cursor: default;
+}
+
 /* 정산 상세의 리워드 한 줄 (C장 4-3) — 🔴 읽기 전용이다. 버튼을 만들지 말 것. */
 .reward-invoice-line {
   display: flex;

@@ -9,6 +9,12 @@
 //      { company_id }    수동 — 화주 상세의 「적립 안내 문자」
 //      { dispatch_id }   운송완료 — 그 건의 예상 적립을 첫 줄에 적는다
 //
+// 🚨 **그 둘을 가르는 것이 이 라우트의 일이다**(2026-09-22) — `sms_on_delivery_enabled`
+//    가 꺼진 화주는 **운송완료 자리에서만** 창이 안 뜨고 수동 버튼은 그대로다.
+//    🔴 **`trigger` 를 요청 바디에서 받지 말 것** — 화면이 보낸 값을 믿으면 배차
+//       화면이 「수동」이라고 주장해 꺼 둔 확인창을 되살릴 수 있다. **어느 id 가
+//       왔는지로 서버가 정한다**(원칙 30·53번과 같은 자세).
+//
 // 🔴 **`dispatch_id` 를 받으면 화주도 정산 건도 서버가 다시 조회한다** — 화면이
 //    보낸 `company_id` 를 믿지 않는다(`notify-dispatch-status` 와 같은 자세 ·
 //    원칙 53번). 그래야 배차 목록이 select 에 컬럼을 더 실을 필요도 없다.
@@ -75,12 +81,15 @@ export async function POST(req: Request) {
     admin,
     campaign,
     companyId,
+    // 🔴 **화면이 아니라 여기서 정한다** — `dispatch_id` 로 들어온 것만 운송완료다.
+    trigger: dispatchId ? "delivery" : "manual",
     thisInvoiceId: invoiceId,
     relatedId: companyId,
   });
 
   // 🔴 **`null` 은 오류가 아니다** — 리워드를 안 쓰거나, 문자 안내가 꺼져 있거나,
-  //    아직 알릴 숫자가 없는 화주다. 화면이 그것을 구분해 말한다.
+  //    **운송완료 안내를 꺼 뒀거나**, 아직 알릴 숫자가 없는 화주다.
+  //    화면이 그것을 구분해 말한다.
   //    ⚠️ 404 로 내려보내지 말 것 — 자동 흐름(운송완료)이 그것을 오류로 읽는다.
   return NextResponse.json({ preview: preview ?? null });
 }

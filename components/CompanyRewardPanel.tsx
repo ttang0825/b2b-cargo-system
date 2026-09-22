@@ -46,6 +46,12 @@ type Membership = {
   portal_visible: boolean;
   reward_method: RewardMethod;
   sms_notification_enabled: boolean;
+  /**
+   * 🚨 **「운송완료 확인창」만 끄는 자식 스위치**(2026-09-22) — 부모는 바로 위
+   *    `sms_notification_enabled` 이고, 그것이 꺼지면 이 값과 무관하게 셋 다
+   *    안 나간다. 🔴 **기본이 켜짐이다**(지금 동작 유지 · DB `default true`).
+   */
+  sms_on_delivery_enabled: boolean;
   started_at: string | null;
   ended_at: string | null;
   internal_note: string | null;
@@ -70,6 +76,10 @@ const EMPTY_FORM: Membership = {
   portal_visible: false,
   reward_method: "manual",
   sms_notification_enabled: false,
+  // 🔴 **넷과 달리 기본이 `true` 다** — DB `default true` 와 같아야 한다.
+  //    false 로 두면 리워드를 처음 켜는 화주가 **아무도 끄지 않았는데** 운송완료
+  //    안내만 빠진 채로 저장된다.
+  sms_on_delivery_enabled: true,
   started_at: null,
   ended_at: null,
   internal_note: null,
@@ -151,7 +161,14 @@ export default function CompanyRewardPanel({ companyId }: { companyId: string })
   }, [load]);
 
   function startEdit() {
-    setForm(membership ? { ...membership } : { ...EMPTY_FORM });
+    // 🔴 **`?? true` 는 보험이다** — DB 가 먼저 반영되므로 이 칸은 항상 온다.
+    //    다만 없는 응답을 만나면 **켜짐**(지금 동작)으로 떨어져야지, `undefined`
+    //    가 체크박스에 들어가 React 가 uncontrolled 로 바꿔 버리면 안 된다.
+    setForm(
+      membership
+        ? { ...membership, sms_on_delivery_enabled: membership.sms_on_delivery_enabled ?? true }
+        : { ...EMPTY_FORM }
+    );
     setSaveError(null);
     setEditing(true);
   }
@@ -314,6 +331,36 @@ export default function CompanyRewardPanel({ companyId }: { companyId: string })
             </span>
           </label>
 
+          {/* 🚨 **「운송완료 확인창」만 끄는 자식 스위치**(2026-09-22 · 사용자
+              *"운송완료 확인창만 따로 끄는 스위치 만들어줘"*).
+              🔴 **부모가 꺼져 있으면 아무 일도 하지 않는다** — 그때는 비활성으로
+                 두고 그 사실을 말한다. 🔴 **감추지 말 것**(설정이 없어진 것으로 읽힌다).
+              🔴 **수동 「적립 안내 문자」 버튼은 이 칸과 무관하다** — 꺼도 담당자는
+                 언제든 보낼 수 있고, 그것이 이 스위치를 「안 보낸다」가 아니라
+                 「자동으로 뜨지 않는다」로 만드는 이유다. */}
+          <label
+            className={`reward-check reward-check-sub${
+              form.sms_notification_enabled ? "" : " is-muted"
+            }`}
+          >
+            <input
+              type="checkbox"
+              checked={form.sms_on_delivery_enabled}
+              disabled={!form.sms_notification_enabled}
+              onChange={(e) =>
+                setForm({ ...form, sms_on_delivery_enabled: e.target.checked })
+              }
+            />
+            <span>
+              <b>└ 운송완료 때도 안내</b>
+              <em>
+                {form.sms_notification_enabled
+                  ? "끄면 배차를 운송완료로 바꿀 때 확인창이 뜨지 않습니다. 적립·차감 안내와 화주 상세의 「적립 안내 문자」 버튼은 그대로입니다."
+                  : "위 「문자 적립 안내」를 켜야 쓸 수 있습니다."}
+              </em>
+            </span>
+          </label>
+
           <div className="field">
             <label>적용 시작일</label>
             <input
@@ -356,6 +403,18 @@ export default function CompanyRewardPanel({ companyId }: { companyId: string })
             <Row label="화주포털 노출" value={membership?.portal_visible ? "노출" : "비노출"} />
             <Row label="혜택 제공 방식" value={rewardMethodLabel(membership?.reward_method)} />
             <Row label="문자 적립 안내" value={membership?.sms_notification_enabled ? "ON" : "OFF"} />
+            {/* 🔴 **부모가 꺼져 있으면 「—」다** — 그때 「ON」이라 적으면 운송완료마다
+                문자가 나가는 것으로 읽힌다(실제로는 부모가 셋 다 막고 있다). */}
+            <Row
+              label="운송완료 때도 안내"
+              value={
+                !membership?.sms_notification_enabled
+                  ? "—"
+                  : membership?.sms_on_delivery_enabled === false
+                    ? "OFF"
+                    : "ON"
+              }
+            />
             <Row label="적용 시작일" value={ymd(membership?.started_at)} />
             <Row label="적립 종료일" value={ymd(campaign.earn_end_date)} />
             <Row label="사용 기한" value={ymd(campaign.use_end_date)} />

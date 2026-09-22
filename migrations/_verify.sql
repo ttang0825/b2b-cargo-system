@@ -1941,13 +1941,17 @@ select (select count(*) from public.reward_campaigns)   as 캠페인,
 \echo ''
 \echo '=== ㉞ 🚨 리워드 2차 착수 전 실측 (읽기 전용 · 값은 마스킹) ==='
 
-\echo '--- ㉞-a 멤버십 설정 넷 — 2차가 처음으로 읽는 칸이 어떤 값인가 ---'
+\echo '--- ㉞-a 멤버십 설정 다섯 — 2차가 처음으로 읽는 칸이 어떤 값인가 ---'
+-- ⚠️ **「넷」이 2026-09-22 에 다섯이 됐다** — `sms_on_delivery_enabled`(운송완료
+--    확인창만 끄는 자식 스위치)가 늘었다. 🔴 **부모가 꺼져 있으면 이 칸은 뜻이
+--    없다**(셋 다 안 나간다) — 아래 두 칸을 **함께** 읽을 것.
 select left(m.company_id::text, 8) as 화주id,
        left(c.name, 1) || repeat('*', greatest(length(c.name) - 1, 0)) as 화주,
        m.enabled                   as 적립켬,
        m.portal_visible            as 포털노출,
        m.reward_method             as 지급방식,
-       m.sms_notification_enabled  as 문자안내
+       m.sms_notification_enabled  as 문자안내,
+       m.sms_on_delivery_enabled   as 운송완료안내
   from public.reward_memberships m
   left join public.companies c on c.id = m.company_id
  order by m.created_at;
@@ -1995,7 +1999,11 @@ select conname                        as 제약,
    and contype = 'c'
  order by conname;
 
-\echo '--- ㉞-e 기준선 — _migrations 행 수(48이어야 한다) ---'
+-- ⚠️ **이 줄의 기대값은 2차(2026-09-21) 시점의 것이라 낡는다** — 차수마다 늘기
+--    때문이다(2026-09-22 실측에 48 이라 적혀 있는데 실제는 50 이었다).
+--    🔴 **살아 있는 기준선은 이 파일의 마지막 절 하나만 본다** — 여기서는 숫자를
+--       더 이상 주장하지 않는다(두 곳에 적으면 반드시 한쪽이 낡는다).
+\echo '--- ㉞-e 기준선 — _migrations 행 수(살아 있는 기대값은 마지막 절에서 본다) ---'
 select count(*) as 적용된_마이그레이션 from public._migrations;
 
 -- ════════════════════════════════════════════════════════════════════════════
@@ -2085,5 +2093,5 @@ select template_type as 종류, status as 상태, count(*) as 건수
 
 -- ⚠️ 기준선은 차수마다 는다 — **적을 때마다 같이 고칠 것**(안 고치면 다음 세션이
 --    「줄었다」로 오해한다). 3차가 둘을 더해 48 → 50 이 됐다.
-\echo '--- ㉟-f 기준선 — _migrations 행 수(50이어야 한다) ---'
+\echo '--- ㉟-f 기준선 — _migrations 행 수(51이어야 한다) ---'
 select count(*) as 적용된_마이그레이션 from public._migrations;

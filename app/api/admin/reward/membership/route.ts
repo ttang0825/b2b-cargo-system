@@ -1,8 +1,11 @@
 // POST /api/admin/reward/membership — 기업별 리워드 설정 저장 (🔴 관리자만)
 //
-// 🔴 **설정 넷은 각각 독립이다** — `enabled`·`portal_visible`·`reward_method`·
-//    `sms_notification_enabled`. 하나로 묶으면 **「적립은 하되 포털에는 안 보이고
-//    상품권으로 주는」 고객**을 운영할 수 없게 된다(전달문서 §3-1·§38 ②).
+// 🔴 **설정 다섯은 각각 독립이다** — `enabled`·`portal_visible`·`reward_method`·
+//    `sms_notification_enabled`·`sms_on_delivery_enabled`. 하나로 묶으면
+//    **「적립은 하되 포털에는 안 보이고 상품권으로 주는」 고객**을 운영할 수
+//    없게 된다(전달문서 §3-1·§38 ②).
+//    ⚠️ **넷 → 다섯이 된 것은 2026-09-22 이다**(사용자 *"운송완료 확인창만 따로
+//       끄는 스위치"*) — 옛 「넷」 표기를 보고 새 칸을 지우지 말 것.
 //
 // 🔴 **`enabled = false` 는 「신규 적립 중단」이다** — 기존 원장을 건드리지 않는다.
 //    🔴 여기서 원장을 지우거나 고치는 코드를 만들지 말 것.
@@ -40,6 +43,12 @@ export async function POST(req: Request) {
     portal_visible: body.portal_visible === true,
     reward_method: method,
     sms_notification_enabled: body.sms_notification_enabled === true,
+    // 🚨 **여기만 `!== false` 다.** 나머지 넷과 달리 **기본이 켜짐**이라(지금
+    //    동작 유지 · 마이그레이션 `default true`), 값을 안 보낸 옛 호출부가
+    //    생겼을 때 **조용히 꺼지는 쪽**으로 떨어지면 안 된다.
+    //    🔴 `=== true` 로 바꾸지 말 것 — 그 순간 이 칸을 모르는 요청 하나가
+    //       그 화주의 운송완료 안내를 꺼 버린다.
+    sms_on_delivery_enabled: body.sms_on_delivery_enabled !== false,
     // 🔴 시작일이 곧 「이 날부터 적립」이다 — 비면 오늘로 둔다(적립 판정이 이 값을 본다).
     started_at: body.started_at || new Date().toISOString().slice(0, 10),
     ended_at: body.ended_at || null,

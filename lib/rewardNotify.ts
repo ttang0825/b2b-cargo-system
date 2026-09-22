@@ -258,10 +258,24 @@ export async function buildRewardDeductedSmsPreview(
 //      ① 수동    화주 상세 리워드 패널의 「적립 안내 문자」
 //      ② 운송완료 배차가 `운송완료` 로 바뀔 때 확인창(`thisInvoiceId` 를 준다)
 //
+// 🚨 **그 둘을 따로 끌 수 있다**(2026-09-22 · 사용자 *"운송완료 확인창만 따로 끄는
+//    스위치 만들어줘"*). `reward_memberships.sms_on_delivery_enabled` 가 **②만**
+//    막는다 — ①(수동 버튼)은 그 칸을 보지 않는다. 담당자가 끈 뒤에도 원할 때는
+//    같은 문자를 보낼 수 있어야 하기 때문이다.
+//    🔴 **그래서 `trigger` 가 필수 인자다** — 선택 인자로 두면 새 호출부가 그것을
+//       빠뜨렸을 때 **조용히 「수동」으로 떨어져** 꺼 둔 확인창이 되살아난다
+//       (PR #180 의 `collectionMethod` 와 같은 자리).
+//
 // 🔴 **여기서 보내지 않는다** — 담당자가 [발송]을 눌러야 나간다(다른 리워드 문자와 같다).
 
 export type RewardStatusNotifyInput = {
   admin: any;
+  /**
+   * 🔴 **누가 이 문자를 띄우는가** — `delivery` 일 때만 `sms_on_delivery_enabled`
+   *    를 본다. 🔴 **화면이 정하지 않는다** — 서버(`/api/admin/reward/notify`)가
+   *    `dispatch_id` 가 왔는지로 판정한다(원칙 53번 · 화면 값을 믿지 않는다).
+   */
+  trigger: "manual" | "delivery";
   campaign: { id: string; start_date: string; earn_end_date: string; earn_rate: number };
   companyId: string;
   /**
@@ -281,7 +295,7 @@ export async function buildRewardStatusSmsPreview(
 
     const { data: memberships, error: mErr } = await admin
       .from("reward_memberships")
-      .select("enabled,sms_notification_enabled,portal_visible")
+      .select("enabled,sms_notification_enabled,sms_on_delivery_enabled,portal_visible")
       .eq("company_id", companyId)
       .eq("campaign_id", campaign.id)
       .limit(1);
@@ -292,6 +306,18 @@ export async function buildRewardStatusSmsPreview(
     //    ⚠️ 적립 안내(`reward_earned`)는 `enabled` 를 안 보는데, 그쪽은 **이미
     //       쌓인 것**을 알리는 문자라 중단 뒤에도 사실이기 때문이다.
     if (!m || m.enabled !== true || m.sms_notification_enabled !== true) return null;
+
+    // 🚨 **운송완료 확인창만 끄는 자식 스위치**(2026-09-22) — 부모
+    //    (`sms_notification_enabled`)가 켜져 있어도 이 칸이 꺼져 있으면 **운송완료
+    //    자리에서는 창을 만들지 않는다.** 적립(`reward_earned`)·차감
+    //    (`reward_deducted`)은 그대로 나가고, 화주 상세의 **수동 버튼도 그대로**다.
+    // 🔴 **`trigger` 를 안 보고 무조건 막지 말 것** — 그러면 수동 버튼까지 죽어
+    //    담당자가 끈 화주에게는 영영 이 문자를 보낼 수 없게 된다.
+    // 🔴 **`!== false` 로 쓰지 말 것** — 칸이 없는(마이그레이션 전) DB 에서는
+    //    `undefined` 가 와서 「꺼짐」으로 읽혀야 하는 게 아니라, 애초에 DB 가
+    //    먼저라 그 상황이 오면 위 `select` 가 실패해 여기까지 오지 않는다.
+    if (input.trigger === "delivery" && m.sms_on_delivery_enabled !== true) return null;
+
     const portalVisible = m.portal_visible === true;
 
     const { data: company, error: cErr } = await admin
