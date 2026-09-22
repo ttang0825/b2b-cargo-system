@@ -2095,3 +2095,75 @@ select template_type as 종류, status as 상태, count(*) as 건수
 --    「줄었다」로 오해한다). 3차가 둘을 더해 48 → 50 이 됐다.
 \echo '--- ㉟-f 기준선 — _migrations 행 수(51이어야 한다) ---'
 select count(*) as 적용된_마이그레이션 from public._migrations;
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- ㊱  🚨 「미적립 건 목록」 착수 전 실측 (2026-09-22 · 읽기 전용)
+--
+--   적립은 **「입금 체크가 바뀌는 순간」에만** 난다. 그래서 그 순간을 놓친 건은
+--   **관문을 통과하는데도 원장이 비어 있고 화면에 증상이 0이다.** 지금 담당자가
+--   그것을 볼 자리는 **정산 상세의 읽기 전용 한 줄뿐**이다(HANDOFF §7).
+--
+-- 🔴 **이 절은 크기를 재는 것이지 판정하는 것이 아니다.** 진짜 판정은 코드의
+--    `evaluateReward()` 하나가 한다(예상 적립·실제 적립·소급이 같은 함수를 쓴다).
+--    🔴 **여기 SQL 을 화면 판정의 근거로 옮겨 적지 말 것** — 두 벌이 되는 순간
+--       갈린다(원칙 51번과 같은 결).
+-- 🔴 이름·연락처를 찍지 않는다(⑪·㉝·㉞ 과 같은 규칙 — Actions 로그는 공개다).
+-- ════════════════════════════════════════════════════════════════════════════
+\echo ''
+\echo '=== ㊱ 🚨 「미적립 건 목록」 착수 전 실측 (읽기 전용 · 값은 마스킹) ==='
+
+\echo '--- ㊱-a 화면이 훑게 될 모수 — 캠페인 기간 안 정산 건이 몇 건인가 ---'
+select count(*) as 기간안_정산건,
+       count(*) filter (where i.company_id is null) as 화주없음,
+       count(*) filter (where i.collection_method = 'driver_direct') as 선착불,
+       count(*) filter (where i.collection_method is distinct from 'driver_direct') as 주선사수금
+  from public.invoices i
+  cross join lateral (select start_date, earn_end_date from public.reward_campaigns limit 1) c
+ where i.created_at >= (c.start_date::timestamptz)
+   and i.created_at <  ((c.earn_end_date + 1)::timestamptz);
+
+\echo '--- ㊱-b 🚨 원장에 없는 건이 몇 건이고 무엇을 기다리는가 ---'
+-- 🔴 「입금확인됨」의 기준이 수금방식마다 다르다(`rewardReceiptConfirmed`) —
+--    선착불은 `brokerage_fee_paid`, 나머지는 `payment_received` 다.
+select case when i.collection_method = 'driver_direct'
+            then coalesce(i.brokerage_fee_paid, false)
+            else coalesce(i.payment_received, false) end as 입금확인됨,
+       (i.company_id is null)                            as 화주없음,
+       count(*)                                          as 건수
+  from public.invoices i
+  cross join lateral (select id, start_date, earn_end_date from public.reward_campaigns limit 1) c
+ where i.created_at >= (c.start_date::timestamptz)
+   and i.created_at <  ((c.earn_end_date + 1)::timestamptz)
+   and not exists (
+     select 1 from public.reward_ledger l
+      where l.campaign_id = c.id and l.transaction_type = 'transport_earn'
+        and l.source_type = 'invoice' and l.source_id = i.id)
+ group by 1,2
+ order by 3 desc;
+
+\echo '--- ㊱-c 🔴 조용히 막힌 건 — 입금은 됐는데 멤버십이 없거나 꺼져 있다 ---'
+select coalesce(m.enabled::text, '(멤버십 없음)') as 멤버십,
+       count(*)                                   as 건수
+  from public.invoices i
+  cross join lateral (select id, start_date, earn_end_date from public.reward_campaigns limit 1) c
+  left join public.reward_memberships m
+         on m.company_id = i.company_id and m.campaign_id = c.id
+ where i.created_at >= (c.start_date::timestamptz)
+   and i.created_at <  ((c.earn_end_date + 1)::timestamptz)
+   and i.company_id is not null
+   and (case when i.collection_method = 'driver_direct'
+             then coalesce(i.brokerage_fee_paid, false)
+             else coalesce(i.payment_received, false) end)
+   and not exists (
+     select 1 from public.reward_ledger l
+      where l.campaign_id = c.id and l.transaction_type = 'transport_earn'
+        and l.source_type = 'invoice' and l.source_id = i.id)
+ group by 1
+ order by 2 desc;
+
+\echo '--- ㊱-d ⚠️ 캠페인 밖 정산 건 — 목록이 훑지 않는 구간이 얼마나 되는가 ---'
+select count(*) filter (where i.created_at <  (c.start_date::timestamptz))          as 시작일_이전,
+       count(*) filter (where i.created_at >= ((c.earn_end_date + 1)::timestamptz)) as 종료일_이후,
+       count(*)                                                                     as 정산건_전체
+  from public.invoices i
+  cross join lateral (select start_date, earn_end_date from public.reward_campaigns limit 1) c;
