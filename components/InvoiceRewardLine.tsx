@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { REWARD_INELIGIBLE_LABEL, type RewardIneligibleReason } from "@/lib/rewardCalc";
+import { REWARD_SKIP_REASON_LABEL, type RewardIneligibleReason } from "@/lib/rewardCalc";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 정산 상세의 「리워드」 **읽기 전용 한 줄** (C장 4-3, 2026-09-20)
@@ -38,18 +38,9 @@ type Props = {
 const won = (n: number | null | undefined) => `${Math.round(n || 0).toLocaleString()}원`;
 const ymd = (s: string | null | undefined) => (s ? s.slice(0, 10).replace(/-/g, ".") : "");
 
-const SKIP_LABEL: Record<string, string> = {
-  ...REWARD_INELIGIBLE_LABEL,
-  not_member: "대상 아님 — 리워드 미적용 화주",
-  not_received: "대상 아님 — 입금이 확인되지 않음",
-  // 🔴 선착불은 화주 입금이 아니라 **주선수수료 입금**이 적립 시점이다(2026-09-21).
-  //    말을 「입금 확인」으로 뭉개지 말 것 — 담당자가 없는 체크박스를 찾는다.
-  fee_not_received: "대상 아님 — 주선수수료 입금이 확인되지 않음",
-  out_of_campaign: "대상 아님 — 캠페인 기간 밖",
-  before_start: "대상 아님 — 리워드 적용 시작일 이전",
-  after_end: "대상 아님 — 리워드 적용 종료일 이후",
-  no_accrual: "회수할 적립 내역이 없음",
-};
+// 🔴 **정의처는 `lib/rewardCalc.ts` 하나다**(2026-09-22 에 그리로 올렸다) —
+//    「미적립 건 목록」이 같은 사유를 그리므로 **여기에 다시 적지 말 것.**
+const SKIP_LABEL = REWARD_SKIP_REASON_LABEL;
 
 export default function InvoiceRewardLine({ invoiceId, companyId, lastResult }: Props) {
   const [rows, setRows] = useState<LedgerRow[] | null>(null);

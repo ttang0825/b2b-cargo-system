@@ -626,11 +626,44 @@ export type RewardBackfillCandidate = {
  *
  * 🔴 판정·금액은 `evaluateReward` 하나가 한다(예상 적립·실제 적립과 같은 함수).
  */
-export async function findUnaccruedPaid(opts: {
+/**
+ * 🚨 **미적립 건 한 줄** — 「목록」이 쓰는 모양이다(2026-09-22 신설).
+ *
+ * 🔴 **`reason` 과 `receipt_confirmed` 는 다른 축이다.**
+ *      reason 있음            → 관문에 걸렸다(입금돼도 안 쌓인다)
+ *      reason 없음 + 입금 전  → **정상**이다. 입금 확인 때 자동으로 쌓인다
+ *      reason 없음 + 입금됨   → 🔴 **조용히 빠진 건**이다(소급 대상)
+ *    한 칸으로 뭉치지 말 것 — 셋의 처리가 전부 다르다.
+ */
+export type RewardUnaccruedRow = {
+  invoice_id: string;
+  company_id: string | null;
+  label: string;
+  created_at: string;
+  /** 적립 기준 금액(공급가액) — 대상이 아니어도 얼마짜리 건인지는 보여준다 */
+  base: number;
+  /** 대상일 때의 적립액. 대상이 아니면 0 */
+  amount: number;
+  /** 관문에 걸린 사유. 없으면 대상이다 */
+  reason?: string;
+  is_direct: boolean;
+  /** 🔴 수금방식마다 보는 칸이 다르다(`rewardReceiptConfirmed`) */
+  receipt_confirmed: boolean;
+};
+
+/**
+ * 캠페인 기간 안에서 **원장에 아직 없는** 정산 건을 전부 훑는다.
+ *
+ * 🔴 **소급(`findUnaccruedPaid`)과 목록(`findUnaccrued`)이 이 한 함수를 같이 쓴다.**
+ *    예전에는 소급 쪽에만 이 흐름이 있었고, 목록을 따로 짰으면 **판정이 두 벌**이
+ *    되어 「목록에는 적립 가능이라 적혀 있는데 소급 버튼이 안 잡는」 상태가 난다.
+ *    🔴 갈라 적지 말 것(원칙 51번과 같은 결).
+ */
+async function scanUnaccrued(opts: {
   admin: any;
   campaign: RewardCampaign;
   companyId?: string | null;
-}): Promise<{ rows: RewardBackfillCandidate[]; truncated: boolean; error?: string }> {
+}): Promise<{ rows: RewardUnaccruedRow[]; scanTruncated: boolean; error?: string }> {
   const { admin, campaign, companyId } = opts;
 
   // ⚠️ 캠페인 밖은 느슨하게 잘라 둔다(정확한 판정은 `evaluateReward`) — KST 로
@@ -645,36 +678,43 @@ export async function findUnaccruedPaid(opts: {
   if (companyId) q = q.eq("company_id", companyId);
 
   const { data, error } = await q;
-  if (error) return { rows: [], truncated: false, error: error.message };
+  if (error) return { rows: [], scanTruncated: false, error: error.message };
 
   let rows = (data || []) as unknown as InvoiceRow[];
   const scanTruncated = rows.length > PREVIEW_LIMIT;
   if (scanTruncated) rows = rows.slice(0, PREVIEW_LIMIT);
-  // 🔴 **입금이 확인된 것만**이다 — 미입금 건은 「예상 적립」이 맡는다.
-  rows = rows.filter((r) => rewardReceiptConfirmed(receiptInput(r)));
-  if (rows.length === 0) return { rows: [], truncated: false };
+  if (rows.length === 0) return { rows: [], scanTruncated };
 
   // 이미 쌓인 것 빼기 — 🔴 건마다 묻지 말 것(한 번에 읽어 집합으로 본다)
-  const { data: ledger, error: lErr } = await admin
-    .from("reward_ledger")
-    .select("source_id")
-    .eq("campaign_id", campaign.id)
-    .eq("transaction_type", "transport_earn")
-    .eq("source_type", "invoice")
-    .in(
-      "source_id",
-      rows.map((r) => r.id)
-    );
-  if (lErr) return { rows: [], truncated: false, error: lErr.message };
-  const accrued = new Set((ledger || []).map((r: any) => r.source_id));
+  //
+  // ⚠️ **`.in()` 을 통째로 던지지 않는다.** 이 스캔은 최대 `PREVIEW_LIMIT`(500)건을
+  //    훑는데, uuid 500개를 한 URL 에 실으면 **18KB 가 넘어** PostgREST 가 414 로
+  //    거절할 수 있다. 🔴 **거절되면 「원장에 없다」로 읽혀 멀쩡히 쌓인 건이 다시
+  //    소급 대상으로 뜬다**(중복은 UNIQUE 가 막지만 담당자가 헛것을 본다).
+  // 🔴 **`.in()` 을 빼고 캠페인 전체를 읽는 쪽으로 바꾸지 말 것** — 그쪽은 기본
+  //    1,000행 상한에 조용히 잘려서 같은 증상이 **에러 없이** 난다.
+  const CHUNK = 100;
+  const accrued = new Set<string>();
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const ids = rows.slice(i, i + CHUNK).map((r) => r.id);
+    const { data: ledger, error: lErr } = await admin
+      .from("reward_ledger")
+      .select("source_id")
+      .eq("campaign_id", campaign.id)
+      .eq("transaction_type", "transport_earn")
+      .eq("source_type", "invoice")
+      .in("source_id", ids);
+    if (lErr) return { rows: [], scanTruncated: false, error: lErr.message };
+    for (const r of (ledger || []) as any[]) accrued.add(r.source_id);
+  }
   rows = rows.filter((r) => !accrued.has(r.id));
-  if (rows.length === 0) return { rows: [], truncated: false };
+  if (rows.length === 0) return { rows: [], scanTruncated };
 
   const { data: memberships, error: mErr } = await admin
     .from("reward_memberships")
     .select("company_id,enabled,started_at,ended_at")
     .eq("campaign_id", campaign.id);
-  if (mErr) return { rows: [], truncated: false, error: mErr.message };
+  if (mErr) return { rows: [], scanTruncated: false, error: mErr.message };
   const byCompany: Record<string, RewardMembershipLite> = {};
   for (const m of (memberships || []) as any[]) byCompany[m.company_id] = m;
 
@@ -684,32 +724,74 @@ export async function findUnaccruedPaid(opts: {
   try {
     extraByInvoice = await fetchIncludedExtraChargeTotals(admin, rows);
   } catch (e: any) {
-    return { rows: [], truncated: false, error: e?.message || "현장 추가비를 읽지 못했습니다" };
+    return { rows: [], scanTruncated: false, error: e?.message || "현장 추가비를 읽지 못했습니다" };
   }
 
-  const out: RewardBackfillCandidate[] = [];
-  for (const inv of rows) {
+  const out: RewardUnaccruedRow[] = rows.map((inv) => {
     const verdict = evaluateReward(
       campaign,
       inv,
       extraByInvoice[inv.id] || 0,
       inv.company_id ? byCompany[inv.company_id] : null
     );
-    // 🔴 대상이 아닌 건은 **아예 담지 않는다** — 「소급 12건」이라 적어 놓고 실제로는
-    //    2건만 쌓이면 담당자가 그 차이를 적립 누락으로 읽는다.
-    if (verdict.status !== "eligible") continue;
-    out.push({
+    return {
       invoice_id: inv.id,
       company_id: inv.company_id,
       label: invoiceLabel(inv),
       created_at: inv.created_at,
-      amount: verdict.amount,
+      base: verdict.base,
+      amount: verdict.status === "eligible" ? verdict.amount : 0,
       is_direct: inv.collection_method === "driver_direct",
-    });
-  }
+      receipt_confirmed: rewardReceiptConfirmed(receiptInput(inv)),
+      ...(verdict.status === "eligible" ? {} : { reason: verdict.reason }),
+    };
+  });
+  return { rows: out, scanTruncated };
+}
 
-  // 🔴 상한을 넘으면 **앞에서 자르고 알린다** — 조용히 일부만 하면 담당자가
-  //    「다 했다」로 믿는다(다시 누르면 이어서 된다).
+/**
+ * 🚨 **미적립 건 목록** — 원장에 없는 건을 **거르지 않고 전부** 돌려준다
+ *    (2026-09-22 · 사용자 *"미적립 건 목록도 만들어줘"*).
+ *
+ * 🔴 **`findUnaccruedPaid` 와 달리 대상이 아닌 건도 담는다** — 이 화면의 목적이
+ *    바로 **「왜 안 쌓였는가」**이기 때문이다. 걸러서 내보내면 그 자리가 또 없어진다.
+ * 🔴 **상한을 걸지 않는다**(소급과 다르다) — 여기서는 원장에 쓰지 않으므로
+ *    서버리스 함수가 얼어붙을 일이 없고, 잘라 보여주면 담당자가 그 수를 전부로 믿는다.
+ *    다만 훑는 범위 자체가 잘렸으면(`truncated`) 화면이 그것을 말한다.
+ */
+export async function findUnaccrued(opts: {
+  admin: any;
+  campaign: RewardCampaign;
+  companyId?: string | null;
+}): Promise<{ rows: RewardUnaccruedRow[]; truncated: boolean; error?: string }> {
+  const { rows, scanTruncated, error } = await scanUnaccrued(opts);
+  if (error) return { rows: [], truncated: false, error };
+  return { rows, truncated: scanTruncated };
+}
+
+export async function findUnaccruedPaid(opts: {
+  admin: any;
+  campaign: RewardCampaign;
+  companyId?: string | null;
+}): Promise<{ rows: RewardBackfillCandidate[]; truncated: boolean; error?: string }> {
+  const { rows, scanTruncated, error } = await scanUnaccrued(opts);
+  if (error) return { rows: [], truncated: false, error };
+
+  // 🔴 **입금이 확인된 것만**이다 — 미입금 건은 「예상 적립」이 맡는다.
+  // 🔴 **대상이 아닌 건은 아예 담지 않는다** — 「소급 12건」이라 적어 놓고 실제로는
+  //    2건만 쌓이면 담당자가 그 차이를 적립 누락으로 읽는다.
+  //    ⚠️ 그 건들을 **보여 주는** 자리는 따로 있다 — `findUnaccrued`(미적립 건 목록).
+  const out: RewardBackfillCandidate[] = rows
+    .filter((r) => r.receipt_confirmed && !r.reason)
+    .map((r) => ({
+      invoice_id: r.invoice_id,
+      company_id: r.company_id,
+      label: r.label,
+      created_at: r.created_at,
+      amount: r.amount,
+      is_direct: r.is_direct,
+    }));
+
   const truncated = scanTruncated || out.length > REWARD_BACKFILL_LIMIT;
   return { rows: out.slice(0, REWARD_BACKFILL_LIMIT), truncated };
 }

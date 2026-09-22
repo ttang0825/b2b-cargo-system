@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { rewardMethodLabel } from "@/lib/rewardCalc";
+import { rewardMethodLabel, rewardSkipReasonLabel } from "@/lib/rewardCalc";
 import { getCurrentStaffRole } from "@/lib/currentStaff";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -60,11 +60,37 @@ const TYPE_LABEL: Record<string, string> = {
   adjustment: "수동 조정",
 };
 
+type UnaccruedRow = {
+  invoice_id: string;
+  company_id: string | null;
+  label: string;
+  created_at: string;
+  base: number;
+  amount: number;
+  reason?: string;
+  is_direct: boolean;
+  receipt_confirmed: boolean;
+};
+
 const TABS = [
   { key: "companies", label: "기업별 현황" },
   { key: "ledger", label: "적립·사용 이력" },
   { key: "todo", label: "처리 필요" },
+  // 🚨 **「왜 안 쌓였는가」를 보는 자리**(2026-09-22 신설) — 그전에는 정산 상세의
+  //    읽기 전용 한 줄뿐이었다. 🔴 없애지 말 것(없애면 조용한 실패가 다시 안 보인다).
+  { key: "unaccrued", label: "미적립 건" },
 ] as const;
+
+/**
+ * 🔴 **세 갈래는 뜻도 처리도 다르다 — 한 숫자로 합치지 말 것.**
+ *    지금 운영은 미적립 13건이 **전부 `waiting`** 이라(실측 `_verify.sql` ㊱-b),
+ *    합쳐 세면 「미적립 13건」이 사고처럼 읽힌다. 실제로는 아무 문제가 없다.
+ */
+const UNACCRUED_KIND = {
+  backfill: { label: "적립 가능", tone: "#B4423A", desc: "입금이 확인됐는데 원장에 없습니다 — 위 「소급 적립」으로 처리합니다." },
+  blocked: { label: "대상 아님", tone: "#8A6D1F", desc: "관문에 걸려 있어 입금이 확인돼도 쌓이지 않습니다." },
+  waiting: { label: "입금 대기", tone: "var(--text-muted)", desc: "아직 입금 전입니다 — 입금이 확인되면 자동으로 쌓입니다(정상)." },
+} as const;
 
 export default function RewardAdminPage() {
   const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("companies");
@@ -98,16 +124,26 @@ export default function RewardAdminPage() {
   // 🔴 로딩 실패와 액션 실패를 나눈다(원칙 33번). 이 화면은 아직 액션이 없어
   //    로딩 하나뿐이지만, 조정·지급이 붙을 때 합치지 말 것.
   const [loadError, setLoadError] = useState<string | null>(null);
+  /**
+   * 🚨 **미적립 건** — 원장에 없는 정산 건 전부(막힌 것 포함).
+   * 🔴 **곁다리다** — 못 불러와도 본문은 그린다(탭 안에서만 말한다).
+   */
+  const [unaccrued, setUnaccrued] = useState<{
+    rows: UnaccruedRow[];
+    truncated: boolean;
+  } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
-      const [sumRes, ledRes, preRes, backRes] = await Promise.all([
+      const [sumRes, ledRes, preRes, backRes, unaccRes] = await Promise.all([
         fetch("/api/admin/reward/summary", { cache: "no-store" }),
         fetch("/api/admin/reward/ledger", { cache: "no-store" }),
         fetch("/api/admin/reward/preview", { cache: "no-store" }),
         fetch("/api/admin/reward/backfill", { cache: "no-store" }),
+        // 🔴 읽기 전용이다 — 이 조회로는 원장에 아무것도 안 들어간다.
+        fetch("/api/admin/reward/unaccrued", { cache: "no-store" }),
       ]);
       const sum = await sumRes.json().catch(() => ({}));
       // 🔴 `error` 를 삼키지 않는다(원칙 55번) — 실패를 「아직 아무도 안 쓴다」로
@@ -145,6 +181,12 @@ export default function RewardAdminPage() {
         setPending(pre.byCompany || {});
         setPendingTruncated(!!pre.truncated);
       }
+
+      // 🔴 미적립 목록도 곁다리다 — 실패하면 탭 안에서만 말한다(본문은 그대로).
+      const unacc = await unaccRes.json().catch(() => ({}));
+      setUnaccrued(
+        unaccRes.ok ? { rows: (unacc.rows || []) as UnaccruedRow[], truncated: !!unacc.truncated } : null
+      );
 
       // 🔴 소급 대상도 곁다리다 — 실패해도 본문은 그린다(줄이 안 나올 뿐).
       const back = await backRes.json().catch(() => ({}));
@@ -205,6 +247,25 @@ export default function RewardAdminPage() {
       .map((m) => ({ m, b: balances[m.company_id] }))
       .filter((x) => x.m.enabled && (x.b?.balance || 0) >= min && min > 0);
   }, [memberships, balances, campaign]);
+
+  /**
+   * 🔴 **주의가 필요한 것을 맨 위로** — 「적립 가능」(소급) → 「대상 아님」(막힘) →
+   *    「입금 대기」(정상) 순. 🔴 날짜순으로만 늘어놓지 말 것: 지금 운영은 13건이
+   *    전부 정상이라, 섞어 놓으면 정작 봐야 할 한 줄이 묻힌다.
+   */
+  const unaccruedRows = useMemo(() => {
+    const rank = (r: UnaccruedRow) =>
+      r.reason ? 1 : r.receipt_confirmed ? 0 : 2;
+    return [...(unaccrued?.rows || [])].sort(
+      (a, b) => rank(a) - rank(b) || (a.created_at < b.created_at ? 1 : -1)
+    );
+  }, [unaccrued]);
+
+  const unaccruedCounts = useMemo(() => {
+    const c = { backfill: 0, blocked: 0, waiting: 0 };
+    for (const r of unaccruedRows) c[r.reason ? "blocked" : r.receipt_confirmed ? "backfill" : "waiting"] += 1;
+    return c;
+  }, [unaccruedRows]);
 
   return (
     <main className="container admin-wide">
@@ -294,7 +355,7 @@ export default function RewardAdminPage() {
       ) : loadError ? (
         <div className="error-box">{loadError}</div>
       ) : tab === "companies" ? (
-        <div className="card" style={{ padding: 0 }}>
+        <div className="card reward-tablewrap" style={{ padding: 0 }}>
           {memberships.length === 0 ? (
             <Empty>
               아직 리워드를 적용한 기업이 없습니다. 화주 상세의 「기업고객 리워드」에서
@@ -373,7 +434,7 @@ export default function RewardAdminPage() {
           )}
         </div>
       ) : tab === "ledger" ? (
-        <div className="card" style={{ padding: 0 }}>
+        <div className="card reward-tablewrap" style={{ padding: 0 }}>
           {ledger.length === 0 ? (
             <Empty>아직 적립·사용 이력이 없습니다.</Empty>
           ) : (
@@ -408,8 +469,8 @@ export default function RewardAdminPage() {
             </table>
           )}
         </div>
-      ) : (
-        <div className="card" style={{ padding: 0 }}>
+      ) : tab === "todo" ? (
+        <div className="card reward-tablewrap" style={{ padding: 0 }}>
           {/* 🔴 1차에서는 **목록만**이다 — 상품권 지급 버튼은 3차다. 여기에 버튼을
               만들면 눌러도 아무 일이 안 일어난다. */}
           <div style={{ padding: "14px 16px 0", fontSize: 12.5, color: "var(--text-muted)" }}>
@@ -441,6 +502,104 @@ export default function RewardAdminPage() {
                     </td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      ) : (
+        /* ── ④ 미적립 건 (2026-09-22) ─────────────────────────────────────────
+           🚨 **이 탭의 목적은 「왜 안 쌓였는가」다.** 적립은 「입금 체크가 바뀌는
+              순간」에만 나므로, 그 순간을 놓친 건과 관문에 걸린 건은 **원장이 비어
+              있는데 화면에 증상이 0**이었다(HANDOFF §7 의 ⏳ 항목).
+           🔴 **읽기 전용이다** — 여기에 적립 버튼을 만들지 말 것. 소급은 화면 위쪽
+              「N건 적립하기」 한 곳뿐이다(관리자만 · 돈이 걸린 경로를 둘로 만들지 않는다). */
+        <div className="card reward-tablewrap" style={{ padding: 0 }}>
+          <div style={{ padding: "14px 16px 0", fontSize: 12.5, color: "var(--text-muted)" }}>
+            원장에 아직 줄이 없는 정산 건입니다.{" "}
+            <b style={{ color: UNACCRUED_KIND.waiting.tone }}>입금 대기</b>는 <b>정상</b>이고
+            — 입금이 확인되면 자동으로 쌓입니다.{" "}
+            <b style={{ color: UNACCRUED_KIND.backfill.tone }}>적립 가능</b>과{" "}
+            <b style={{ color: UNACCRUED_KIND.blocked.tone }}>대상 아님</b>만 손이 필요합니다.
+            {unaccruedRows.length > 0 && (
+              <>
+                {" "}· 적립 가능 <b>{unaccruedCounts.backfill}</b> · 대상 아님{" "}
+                <b>{unaccruedCounts.blocked}</b> · 입금 대기 <b>{unaccruedCounts.waiting}</b>
+              </>
+            )}
+            {/* 🔴 훑은 범위가 잘렸으면 반드시 말한다 — 조용히 일부만 보여주면
+                담당자가 그 수를 전부로 믿는다(`/preview` 와 같은 자세). */}
+            {unaccrued?.truncated && (
+              <b style={{ color: UNACCRUED_KIND.backfill.tone }}>
+                {" "}· ⚠️ 건이 많아 일부만 훑었습니다
+              </b>
+            )}
+          </div>
+          {/* 🔴 **「0건」과 「못 불러왔다」를 같은 말로 쓰지 않는다**(원칙 55번) —
+              이 화면에서 앞엣것은 「문제 없음」으로 읽힌다. */}
+          {!unaccrued ? (
+            <Empty>미적립 건을 불러오지 못했습니다. 새로고침해 주세요.</Empty>
+          ) : unaccruedRows.length === 0 ? (
+            <Empty>미적립 건이 없습니다 — 기간 안 정산 건이 모두 적립되었습니다.</Empty>
+          ) : (
+            <table className="table table-compact">
+              <thead>
+                <tr>
+                  <th>상태</th>
+                  <th>회사명</th>
+                  <th>정산 건</th>
+                  <th>정산일</th>
+                  <th style={{ textAlign: "right" }}>기준 금액</th>
+                  <th style={{ textAlign: "right" }}>적립 예정</th>
+                  <th>사유 · 기다리는 것</th>
+                </tr>
+              </thead>
+              <tbody>
+                {unaccruedRows.map((r) => {
+                  const kind = r.reason ? "blocked" : r.receipt_confirmed ? "backfill" : "waiting";
+                  const k = UNACCRUED_KIND[kind];
+                  return (
+                    <tr key={r.invoice_id}>
+                      <td className="cell-nowrap" style={{ color: k.tone, fontWeight: 600 }}>
+                        {k.label}
+                      </td>
+                      <td className="cell-nowrap">
+                        {r.company_id ? (
+                          <Link href={`/admin/companies/${r.company_id}?from=customers`}>
+                            {nameOf(r.company_id)}
+                          </Link>
+                        ) : (
+                          <span style={{ color: "var(--text-muted)" }}>—</span>
+                        )}
+                      </td>
+                      <td className="cell-nowrap">
+                        <Link href={`/admin/invoices/${r.invoice_id}`}>{r.label}</Link>
+                      </td>
+                      <td className="cell-nowrap">{ymd(r.created_at)}</td>
+                      <td className="cell-nowrap" style={{ textAlign: "right" }}>
+                        {won(r.base)}
+                      </td>
+                      <td
+                        className="cell-nowrap"
+                        style={{ textAlign: "right", fontWeight: r.amount ? 600 : 400 }}
+                      >
+                        {/* 🔴 막힌 건은 **0원이 아니라 「—」**다 — 0 으로 적으면
+                            「0원 쌓일 예정」이라는 딴 뜻이 된다. */}
+                        {r.reason ? <span style={{ color: "var(--text-muted)" }}>—</span> : won(r.amount)}
+                      </td>
+                      <td style={{ fontSize: 12.5, color: "var(--text-muted)" }}>
+                        {/* 🔴 **선착불은 화주 입금이 아니다** — 기다리는 칸 이름을
+                            수금방식에 맞게 적는다(2026-09-21 · 없는 체크박스를 찾게 된다). */}
+                        {r.reason
+                          ? rewardSkipReasonLabel(r.reason)
+                          : r.receipt_confirmed
+                            ? "입금 확인됨 — 소급 적립 대상"
+                            : r.is_direct
+                              ? "주선수수료 입금을 기다리는 중"
+                              : "화주 입금을 기다리는 중"}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}

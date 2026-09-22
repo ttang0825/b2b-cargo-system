@@ -247,6 +247,40 @@ export const REWARD_INELIGIBLE_LABEL: Record<RewardIneligibleReason, string> = {
   zero_amount: "대상 아님 — 적립 기준 금액이 0원",
 };
 
+/**
+ * 적립이 안 되는 **모든** 사유의 말 — 🔴 **유일한 정의처다.**
+ *
+ * ⚠️ **2026-09-22 까지 이 표는 `components/InvoiceRewardLine.tsx` 안에만 있었다.**
+ *    「미적립 건 목록」이 같은 사유를 그려야 해서 여기로 올렸다 —
+ *    🔴 **화면 파일에 다시 적지 말 것.** 두 벌이 되면 한쪽만 고쳐져서 같은 사유가
+ *    화면마다 다른 말로 나온다(이 저장소가 여러 번 겪은 자리 · 원칙 51번과 같은 결).
+ *
+ * 🔴 **`evaluateReward()` 가 내는 값과 짝이다** — 그쪽에 사유를 늘리면 **여기도
+ *    같이** 늘릴 것. 모르는 값이 와도 화면이 죽지 않도록 `rewardSkipReasonLabel()`
+ *    이 받아 준다(원칙 50번 — 상수를 늘렸을 때 인덱싱이 `undefined` 가 되는 사고).
+ */
+export const REWARD_SKIP_REASON_LABEL: Record<string, string> = {
+  ...REWARD_INELIGIBLE_LABEL,
+  not_member: "대상 아님 — 리워드 미적용 화주",
+  not_received: "대상 아님 — 입금이 확인되지 않음",
+  // 🔴 선착불은 화주 입금이 아니라 **주선수수료 입금**이 적립 시점이다(2026-09-21).
+  //    말을 「입금 확인」으로 뭉개지 말 것 — 담당자가 없는 체크박스를 찾는다.
+  fee_not_received: "대상 아님 — 주선수수료 입금이 확인되지 않음",
+  out_of_campaign: "대상 아님 — 캠페인 기간 밖",
+  before_start: "대상 아님 — 리워드 적용 시작일 이전",
+  after_end: "대상 아님 — 리워드 적용 종료일 이후",
+  no_accrual: "회수할 적립 내역이 없음",
+};
+
+/**
+ * 🔴 **모르는 사유가 와도 빈칸으로 두지 않는다** — 담당자가 「왜 안 쌓였는지」를
+ *    보러 온 자리라, 아무 말도 없으면 그 화면의 존재 이유가 사라진다.
+ */
+export function rewardSkipReasonLabel(reason: string | null | undefined): string {
+  if (!reason) return "";
+  return REWARD_SKIP_REASON_LABEL[reason] || `대상 아님 — ${reason}`;
+}
+
 export type RewardLedgerAmountRow = {
   transaction_type?: string | null;
   amount: number | null;
