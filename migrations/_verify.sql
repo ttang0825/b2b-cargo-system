@@ -2195,7 +2195,9 @@ select conname as 제약명, pg_get_constraintdef(oid) as 정의
  order by conname;
 
 \echo '--- ㊲-b 캠페인의 사용 조건 (최소 사용액 · 사용 종료일) ---'
-select is_active                                as 활성,
+-- ⚠️ 활성 칸의 이름은 `active` 다(`is_active` 가 아니다 — 처음에 그렇게 적었다가
+--    42703 으로 멈췄다. **컬럼은 짐작하지 말 것** · 원칙 55번과 같은 자리).
+select active                                   as 활성,
        earn_rate                                as 적립률,
        minimum_use_amount                       as 최소사용액,
        use_end_date                             as 사용종료일,
