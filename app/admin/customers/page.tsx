@@ -317,6 +317,12 @@ export default function CustomersPage() {
             업체입니다.
           </p>
         </div>
+        {/* 🔴 **이 목록의 입구다**(2026-09-22) — 이 화면은 여태 읽기 전용이라
+            「활성 화주를 하나 더 만들려면 어디로 가야 하나」가 답이 없었다.
+            빠른 등록은 `견적요청`(활성)으로 열리므로 **저장하면 이 목록에 바로 뜬다.** */}
+        <Link href="/admin/companies/new" className="btn">
+          + 신규 화주 등록
+        </Link>
       </div>
 
       <div

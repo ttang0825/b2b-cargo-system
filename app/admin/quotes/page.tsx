@@ -35,7 +35,8 @@ import { applyMixedDiscount } from "@/lib/settlementCalc";
 import { roundToUnit } from "@/lib/roundToUnit";
 // 🔴 차량형태 선택지는 DB(`rate_surcharges`)가 정본이고 **표시 순서만** 코드가 정한다.
 //    모르는 옵션은 버리지 않고 맨 뒤에 붙인다(`lib/vehicleBodyTypes.ts` 참고).
-import { orderBodyTypes } from "@/lib/vehicleBodyTypes";
+import { orderBodyTypes, bodyTypeInfo } from "@/lib/vehicleBodyTypes";
+import CompanySearchBox from "@/components/CompanySearchBox";
 import { CUSTOMER_APPROVED_LABEL, formatCustomerApprovedAt } from "@/lib/quoteApproval";
 // 🔴 관리자 화면도 `상담중` 을 「확인중」으로 그린다(사용자 지시 2026-09-16).
 //    DB 값은 그대로이고 **보이는 글자만** 바꾼다 — 정의처는 이 파일 하나다.
@@ -1264,77 +1265,48 @@ function QuotesPageInner() {
             </div>
 
             {customerMode === "company" ? (
-              <div style={{ marginBottom: 14 }}>
-                {/* 🔴 `quote-form-half` — 이 칸은 `.form-grid` **밖**이라 폼 전체 폭
-                    (1600px 화면에서 910px)을 먹고 있었다. 회사명은 길어야 스무 글자라
-                    그만큼 필요 없다(실사용 지적). 2열 한 칸과 같은 폭으로 묶는다. */}
-                <div className="field quote-form-half">
-                  <label>화주 업체 검색</label>
-                  <input
-                    value={selectedCompany ? selectedCompany.name : companySearch}
-                    onChange={(e) => {
-                      setSelectedCompany(null);
-                      setCompanySearch(e.target.value);
-                    }}
-                    placeholder="회사명 입력"
-                  />
-                </div>
-                {!selectedCompany && companyResults.length > 0 && (
-                  <div
-                    className="card"
-                    style={{ marginTop: 6, maxHeight: 160, overflowY: "auto" }}
-                  >
-                    {companyResults.map((c) => (
-                      <div
-                        key={c.id}
-                        onClick={() => {
-                          setSelectedCompany(c);
-                          setCompanyResults([]);
-                          // 🔴 소수정 ③ — 화주를 고르는 순간 아래를 펼친다(사용자 확정
-                          //    *"회사명 입력시 자동으로 펼쳐져도 된다"*). 골랐다는 것은
-                          //    이제 내용을 적겠다는 뜻이다.
-                          setDetailsOpen(true);
-                          // 🔴 36차 A장 — 계약 청구주기를 **기본값으로 복사**한다.
-                          //   🔴 아직 손대지 않은 초기값(`per_order`)일 때만 갈아끼운다 —
-                          //      35차 자동 기입의 「차량만 예외」와 같은 규칙이고,
-                          //      담당자가 이미 고른 값을 조용히 덮으면 안 된다.
-                          //   🔴 계약이 「미정」(null)이면 건드리지 않는다.
-                          if (
-                            c.billing_cycle_default === "monthly" &&
-                            form.billing_cycle === "per_order"
-                          ) {
-                            setForm((prev) => ({ ...prev, billing_cycle: "monthly" }));
-                          }
-                          // 출발지가 비어있으면 화주의 등록 주소를 기본값으로 채워줍니다 (수정 가능)
-                          if (c.address && !form.origin.trim()) {
-                            setForm((prev) => ({ ...prev, origin: c.address || "" }));
-                          }
-                        }}
-                        style={{
-                          padding: "8px 12px",
-                          fontSize: 13,
-                          cursor: "pointer",
-                          borderBottom: "1px solid var(--border)",
-                        }}
-                      >
-                        {c.name}
-                        {c.address && (
-                          <span
-                            style={{
-                              display: "block",
-                              fontSize: 11.5,
-                              color: "var(--text-muted)",
-                              marginTop: 2,
-                            }}
-                          >
-                            {c.address}
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              /* 🔴 입력창·목록·키보드 조작은 **`components/CompanySearchBox.tsx` 하나**다
+                 (2026-09-22) — 운송오더에 같은 코드가 복사돼 있어서 한쪽만 고치면
+                 담당자가 화면마다 다르게 동작하는 검색창을 쓰게 된다.
+                 🔴 **고른 뒤에 할 일은 여기 남는다**(청구주기·출발지·펼침) — 그 로직을
+                 부품으로 옮기지 말 것. 오더는 「지난 오더 불러오기」로 다르다.
+                 🔴 `quote-form-half` — 이 칸은 `.form-grid` **밖**이라 폼 전체 폭
+                 (1600px 화면에서 910px)을 먹고 있었다. 회사명은 길어야 스무 글자라
+                 그만큼 필요 없다(실사용 지적). 2열 한 칸과 같은 폭으로 묶는다. */
+              <CompanySearchBox
+                wrapClassName="field quote-form-half"
+                query={companySearch}
+                onQueryChange={(v) => {
+                  setSelectedCompany(null);
+                  setCompanySearch(v);
+                }}
+                results={companyResults}
+                selected={selectedCompany}
+                showAddress
+                onSelect={(c) => {
+                  setSelectedCompany(c);
+                  setCompanyResults([]);
+                  // 🔴 소수정 ③ — 화주를 고르는 순간 아래를 펼친다(사용자 확정
+                  //    *"회사명 입력시 자동으로 펼쳐져도 된다"*). 골랐다는 것은
+                  //    이제 내용을 적겠다는 뜻이다.
+                  setDetailsOpen(true);
+                  // 🔴 36차 A장 — 계약 청구주기를 **기본값으로 복사**한다.
+                  //   🔴 아직 손대지 않은 초기값(`per_order`)일 때만 갈아끼운다 —
+                  //      35차 자동 기입의 「차량만 예외」와 같은 규칙이고,
+                  //      담당자가 이미 고른 값을 조용히 덮으면 안 된다.
+                  //   🔴 계약이 「미정」(null)이면 건드리지 않는다.
+                  if (
+                    c.billing_cycle_default === "monthly" &&
+                    form.billing_cycle === "per_order"
+                  ) {
+                    setForm((prev) => ({ ...prev, billing_cycle: "monthly" }));
+                  }
+                  // 출발지가 비어있으면 화주의 등록 주소를 기본값으로 채워줍니다 (수정 가능)
+                  if (c.address && !form.origin.trim()) {
+                    setForm((prev) => ({ ...prev, origin: c.address || "" }));
+                  }
+                }}
+              />
             ) : (
               <div className="form-grid quote-form-grid" style={{ padding: 0, marginBottom: 14 }}>
                 {/* 🔴 필수는 **연락처**다(사용자 확정 2026-09-11) — 개인·신규 고객은
@@ -1784,6 +1756,16 @@ function QuotesPageInner() {
               </div>
               <div className="field">
                 <label>차량형태</label>
+                {/* 🔴 **설명 정의처는 `lib/vehicleBodyTypes.ts` 하나다**(2026-09-22 ·
+                    사용자 요청 *"차량 형태 선택시 차종의 간단한 정보가 … 커서를 올렸을
+                    때 보여지면 좋겠다"*). 화면에 문구를 다시 적지 말 것.
+                    🔴 **두 겹으로 보여준다** — `title` 은 펼친 목록에서 커서를 올렸을 때
+                    뜨는 **브라우저 기본 풍선말**이고, 아래 줄은 **지금 고른 차종**의
+                    설명이다. ⚠️ 풍선말은 브라우저·OS 가 그리는 것이라 안 뜨는 환경이
+                    있어서, 그것 하나에만 기대면 **정보가 통째로 안 보일 수 있다.**
+                    🔴 그래서 아래 줄을 지우지 말 것.
+                    🔴 **네이티브 `select` 를 커스텀 부품으로 바꾸지 말 것** — 원칙 57번은
+                    포털 한정이고 관리자 화면은 네이티브를 그대로 쓴다. */}
                 <select
                   value={form.차량형태}
                   onChange={(e) => setForm({ ...form, 차량형태: e.target.value })}
@@ -1791,11 +1773,16 @@ function QuotesPageInner() {
                   {orderBodyTypes(
                     surcharges.filter((s) => s.category === "차량형태").map((s) => s.option_name)
                   ).map((name) => (
-                    <option key={name} value={name}>
+                    <option key={name} value={name} title={bodyTypeInfo(name) || undefined}>
                       {name}
                     </option>
                   ))}
                 </select>
+                {/* 🔴 모르는 차종이면 아무것도 안 그린다(`bodyTypeInfo` 가 빈 문자열) —
+                    담당자가 `/admin/rates` 에서 넣은 새 옵션이 그 경우다. */}
+                {bodyTypeInfo(form.차량형태) && (
+                  <p className="quote-bodytype-info">{bodyTypeInfo(form.차량형태)}</p>
+                )}
               </div>
               <div className="field">
                 <label>물품특성</label>
