@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { getCurrentStaffRole } from "@/lib/currentStaff";
 import SmsConfirmModal, { type SmsPreview } from "@/components/SmsConfirmModal";
-import { fetchRewardStatusSmsPreview } from "@/lib/notifyRewardSms";
+import {
+  fetchRewardStatusSmsPreview,
+  fetchRewardIntroSmsPreview,
+} from "@/lib/notifyRewardSms";
 import {
   REWARD_METHOD_OPTIONS,
   rewardMethodLabel,
@@ -95,6 +98,7 @@ export default function CompanyRewardPanel({ companyId }: { companyId: string })
    *    받지 않은 돈이 적립금으로 읽히면 화주에게 그만큼 약속한 것이 된다.
    */
   const [pending, setPending] = useState<{ amount: number; count: number } | null>(null);
+  const [introLoading, setIntroLoading] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -209,6 +213,34 @@ export default function CompanyRewardPanel({ companyId }: { companyId: string })
     if (!preview) {
       setActionError(
         "안내할 내용이 없습니다. 「리워드 적용」과 「문자 적립 안내」가 켜져 있는지, 적립되었거나 적립 예정인 운송이 있는지 확인해 주세요."
+      );
+      return;
+    }
+    setSmsPreview(preview);
+  }
+
+  /**
+   * 「리워드 안내 문자」 (2026-09-22 · 사용자 요청) — **제도를 소개하는 문자**다.
+   *
+   * 사용자가 그리는 흐름: 첫 거래 → 전화로 계정 등록 유도 → 계정 발급 안내 문자
+   * (`portal_account_issued`) → **이 문자**.
+   *
+   * 🔴 **「적립 안내 문자」와 다른 종류다 — 합치지 말 것.** 저쪽은 *얼마가 쌓였는지/
+   *    쌓일지*를 알리고(그래서 알릴 숫자가 없으면 안 만든다), 이것은 *이런 제도가
+   *    있다*를 알린다. 계정 발급 직후에는 보통 쌓인 것이 0 이라, 저쪽 조건으로는
+   *    **정작 보내야 할 때 안 나간다.**
+   *
+   * 🔴 **못 만든 이유를 말해준다**(원칙 55번) — 조용히 아무 일도 안 일어나면 담당자가
+   *    버튼이 고장난 것으로 읽는다.
+   */
+  async function sendIntroSms() {
+    setIntroLoading(true);
+    setActionError(null);
+    const preview = await fetchRewardIntroSmsPreview(companyId);
+    setIntroLoading(false);
+    if (!preview) {
+      setActionError(
+        "안내 문자를 만들지 못했습니다. 「리워드 적용」과 「문자 적립 안내」가 켜져 있는지, 진행 중인 캠페인이 있는지 확인해 주세요."
       );
       return;
     }
@@ -474,6 +506,20 @@ export default function CompanyRewardPanel({ companyId }: { companyId: string })
             >
               {smsLoading ? "준비 중…" : "적립 안내 문자"}
             </button>
+            {/* 「리워드 안내 문자」 (2026-09-22 · 사용자 요청) — 계정 발급 안내 문자
+                **다음에** 보내는 제도 소개다.
+                🔴 **「적립 안내 문자」 옆에 둔다** — 담당자가 한 자리에서 고른다.
+                🔴 관리자 전용 블록 **밖**이다(안내는 재직 직원이면 누구나 · 설정·조정만
+                   관리자다 · 옆 버튼과 같은 기준).
+                🚨 **이 버튼은 금액을 적지 않는다** — 계정 발급 직후엔 보통 0 이고,
+                   「0원」을 적으면 제도를 소개하는 자리에서 혜택이 없다는 인상만 남는다. */}
+            <button
+              className="btn btn-ghost"
+              onClick={sendIntroSms}
+              disabled={introLoading}
+            >
+              {introLoading ? "준비 중…" : "리워드 안내 문자"}
+            </button>
             {isAdmin && (
               <>
                 <button className="btn btn-ghost" onClick={() => setAdjustOpen(true)}>
@@ -510,6 +556,11 @@ export default function CompanyRewardPanel({ companyId }: { companyId: string })
           🔴 **자동 발송으로 되돌리지 말 것**(2026-09-21 사용자 확정). */}
       {smsPreview && (
         <SmsConfirmModal
+          /* ⚠️ **`key` 를 빼지 말 것**(2026-09-18 배차확정에서 실제로 겪었다) — 모달의
+             `message`·`phone` 이 `useState` 초기값이라, 같은 인스턴스를 재사용하면
+             두 번째로 연 창에 **첫 번째 문자의 본문이 그대로 남는다.** 이 패널은
+             2026-09-22 부터 문자가 **세 종류**(적립 현황 · 차감 · 리워드 안내)다. */
+          key={smsPreview.templateType}
           preview={smsPreview}
           onSent={() => setSmsPreview(null)}
           onSkip={() => setSmsPreview(null)}

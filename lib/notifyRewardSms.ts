@@ -42,3 +42,33 @@ export async function fetchRewardStatusSmsPreview(opts: {
     return null;
   }
 }
+
+/**
+ * 「리워드 이용 안내」 미리보기 (2026-09-22 · 사용자 요청)
+ *
+ * 🔴 **부르는 곳은 지금 하나뿐이다**(화주 상세 리워드 패널) — 그래도 위 함수와 같은
+ *    자리에 둔다. 화면에 `fetch` 를 적으면 두 번째 호출부가 생기는 날 **한쪽만
+ *    고쳐진다**(이 저장소에서 여러 번 났다 · 원칙 53번).
+ *
+ * 🔴 **`fetchRewardStatusSmsPreview` 와 합치지 말 것** — 라우트가 다르고(`/intro` vs
+ *    `/notify`) 무엇을 알리는지가 다르다(제도 vs 금액).
+ *
+ * 🔴 **던지지 않는다** — 못 받으면 `null` 이고, 호출부가 그때 무엇을 할지 정한다.
+ */
+export async function fetchRewardIntroSmsPreview(
+  companyId: string
+): Promise<SmsPreview | null> {
+  if (!companyId) return null;
+  try {
+    const res = await fetch("/api/admin/reward/intro", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ company_id: companyId }),
+    });
+    if (!res.ok) return null;
+    const json = await res.json().catch(() => ({}));
+    return json.preview ?? null;
+  } catch {
+    return null;
+  }
+}

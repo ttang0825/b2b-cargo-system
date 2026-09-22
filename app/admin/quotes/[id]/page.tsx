@@ -197,6 +197,10 @@ export default function QuoteDetailPage() {
   const [reviseAmount, setReviseAmount] = useState(false);
   const [sendingQuoteSms, setSendingQuoteSms] = useState(false);
   const [quoteSmsSent, setQuoteSmsSent] = useState(false);
+  // 🔴 「정보 회신 요청」은 **견적 문자와 별개의 state 다** — 한 깃발로 묶으면 한쪽을
+  //    보냈을 때 다른 쪽 버튼까지 「발송 완료 ✓」가 된다.
+  const [sendingInfoReq, setSendingInfoReq] = useState(false);
+  const [infoReqSent, setInfoReqSent] = useState(false);
   const [excelBusy, setExcelBusy] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [quoteSmsError, setQuoteSmsError] = useState<string | null>(null);
@@ -448,6 +452,42 @@ export default function QuoteDetailPage() {
       setQuoteSmsError("문자 미리보기를 불러오지 못했습니다.");
     } finally {
       setSendingQuoteSms(false);
+    }
+  }
+
+  /**
+   * 「정보 회신 요청」 문자 (2026-09-22) — 상·하차지 **상세주소**와 **현장 담당자
+   * 연락처**를 문자로 회신해 달라고 청한다.
+   *
+   * 🔴 **견적 문자 뒤에 자동으로 잇지 않는다.** 사용자 원문이 *"화주통화 내용에 따라
+   *    보낼수도 있고 보내지 않을수도 있다"* 이고, 큐로 이으면 **안 보낼 때마다 창을
+   *    닫아야 한다.** 별도 버튼이면 견적 문자를 이미 보낸 뒤에 이것만 따로 보내는
+   *    경우(주소가 빈 것은 보통 통화가 끝난 뒤에 드러난다)도 그대로 된다.
+   *    🔴 배차확정(2026-09-18)의 두 통 큐 구조로 바꾸지 말 것.
+   *
+   * 🔴 **여기서 보내지 않는다** — 미리보기를 받아 확인창을 띄우고 담당자가 [발송]을
+   *    눌러야 나간다(이 저장소의 문자 전부가 같은 자세다).
+   */
+  async function handleSendInfoRequestSms() {
+    if (!quote) return;
+    setSendingInfoReq(true);
+    setQuoteSmsError(null);
+    try {
+      const res = await fetch("/api/admin/send-quote-info-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quote_id: quote.id }),
+      });
+      const preview = await res.json();
+      if (!res.ok) {
+        setQuoteSmsError(preview.error || "문자 미리보기를 불러오지 못했습니다.");
+        return;
+      }
+      setSmsPreview(preview);
+    } catch {
+      setQuoteSmsError("문자 미리보기를 불러오지 못했습니다.");
+    } finally {
+      setSendingInfoReq(false);
     }
   }
 
@@ -1609,9 +1649,26 @@ export default function QuoteDetailPage() {
                    LMS 로 내려가서**(`send-quote-sms`) 그때는 틀린 이름이 된다. */}
             {sendingQuoteSms ? "발송 중..." : quoteSmsSent ? "문자 발송 완료 ✓" : "견적서 문자 발송"}
           </button>
+          {/* 「정보 회신 요청」 (2026-09-22 · 사용자 요청) — 상·하차지 **상세주소**와
+              **현장 담당자 연락처**를 회신해 달라고 청하는 문자.
+              🔴 **견적 문자의 두 번째 통이 아니라 별도 버튼이다** — 사용자 원문이
+                 *「화주통화 내용에 따라 보낼수도 있고 보내지 않을수도 있다」* 라,
+                 큐로 이으면 **안 보낼 때마다 창을 닫아야 한다.** 이으려 하지 말 것.
+              🔴 옆 버튼들과 같은 `btn-ghost` 다 — 이 줄에서 눈에 띄어야 하는 것은
+                 맨 앞의 「견적서 출력 (PDF)」 하나뿐이다. */}
+          <button
+            className="btn btn-ghost"
+            onClick={handleSendInfoRequestSms}
+            disabled={sendingInfoReq}
+          >
+            {sendingInfoReq ? "발송 중..." : infoReqSent ? "회신 요청 완료 ✓" : "정보 회신 요청 문자"}
+          </button>
         </div>
         <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 8 }}>
           견적서 링크를 단문 문자로 보냅니다. 받는 분은 로그인 없이 바로 열어볼 수 있습니다.
+          <br />
+          「정보 회신 요청 문자」는 상·하차지 상세주소와 현장 담당자 연락처를 문자로 회신해
+          달라고 요청합니다. 필요할 때만 보내면 됩니다.
         </p>
         {quoteSmsError && <div className="error-box" style={{ marginTop: 8 }}>{quoteSmsError}</div>}
       </div>
@@ -1624,10 +1681,19 @@ export default function QuoteDetailPage() {
 
       {smsPreview && (
         <SmsConfirmModal
+          /* ⚠️ **`key` 를 빼지 말 것**(2026-09-18 배차확정에서 실제로 겪었다) — 모달의
+             `message`·`phone` 이 `useState` 초기값이라, 같은 인스턴스를 재사용하면
+             두 번째로 연 창에 **첫 번째 문자의 본문과 수신번호가 그대로 남는다.**
+             이 화면은 이제 문자가 **두 종류**라 그 자리에 실제로 닿는다. */
+          key={smsPreview.templateType}
           preview={smsPreview}
           onSent={() => {
+            // 🔴 **어느 문자를 보냈는지로 깃발을 가른다** — 한 깃발로 묶으면 회신
+            //    요청만 보냈는데 「견적서 문자 발송 완료 ✓」가 떠서 담당자가 견적서를
+            //    보낸 것으로 읽는다.
+            if (smsPreview?.templateType === "quote_info_request") setInfoReqSent(true);
+            else setQuoteSmsSent(true);
             setSmsPreview(null);
-            setQuoteSmsSent(true);
           }}
           onSkip={() => setSmsPreview(null)}
         />
