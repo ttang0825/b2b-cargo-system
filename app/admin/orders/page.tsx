@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
+import CompanySearchBox from "@/components/CompanySearchBox";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { notifyBadgeRefresh } from "@/lib/notifyBadgeRefresh";
@@ -843,60 +844,42 @@ function OrdersPageInner() {
             </div>
 
             {customerMode === "company" ? (
-              <div style={{ marginBottom: 14 }}>
-                <div className="field">
-                  <label>화주 업체 검색</label>
-                  <input
-                    value={selectedCompany ? selectedCompany.name : companySearch}
-                    onChange={(e) => {
-                      setSelectedCompany(null);
-                      setCompanySearch(e.target.value);
-                    }}
-                    placeholder="회사명 입력"
-                  />
-                  {lastOrderNote && (
-                    <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 4, marginBottom: 0 }}>
-                      {lastOrderNote}
-                    </p>
-                  )}
-                </div>
-                {!selectedCompany && companyResults.length > 0 && (
-                  <div
-                    className="card"
-                    style={{ marginTop: 6, maxHeight: 160, overflowY: "auto" }}
-                  >
-                    {companyResults.map((c) => (
-                      <div
-                        key={c.id}
-                        onClick={() => {
-                          setSelectedCompany(c);
-                          setCompanyResults([]);
-                          // 🔴 36차 A장 — 계약 청구주기를 **기본값으로 복사**한다.
-                          //   🔴 아직 손대지 않은 초기값(`per_order`)일 때만 갈아끼운다 —
-                          //      35차 자동 기입의 「차량만 예외」와 같은 규칙이고,
-                          //      담당자가 이미 고른 값을 조용히 덮으면 안 된다.
-                          //   🔴 계약이 「미정」(null)이면 건드리지 않는다.
-                          if (
-                            c.billing_cycle_default === "monthly" &&
-                            form.billing_cycle === "per_order"
-                          ) {
-                            setForm((prev) => ({ ...prev, billing_cycle: "monthly" }));
-                          }
-                          prefillFromLastOrder(c.id);
-                        }}
-                        style={{
-                          padding: "8px 12px",
-                          fontSize: 13,
-                          cursor: "pointer",
-                          borderBottom: "1px solid var(--border)",
-                        }}
-                      >
-                        {c.name}
-                      </div>
-                    ))}
-                  </div>
+              /* 🔴 견적관리와 **같은 부품**이다(2026-09-22) — 두 화면에 복사돼 있던 것을
+                 `components/CompanySearchBox.tsx` 하나로 모았다. 키보드 조작(↑↓·Enter·
+                 Esc)이 두 화면에서 똑같이 동작해야 한다. 🔴 여기에 다시 적지 말 것.
+                 🔴 **고른 뒤에 할 일은 여기 남는다** — 오더는 「지난 오더 불러오기」이고
+                 견적은 출발지·펼침이라 서로 다르다. */
+              <CompanySearchBox
+                query={companySearch}
+                onQueryChange={(v) => {
+                  setSelectedCompany(null);
+                  setCompanySearch(v);
+                }}
+                results={companyResults}
+                selected={selectedCompany}
+                onSelect={(c) => {
+                  setSelectedCompany(c);
+                  setCompanyResults([]);
+                  // 🔴 36차 A장 — 계약 청구주기를 **기본값으로 복사**한다.
+                  //   🔴 아직 손대지 않은 초기값(`per_order`)일 때만 갈아끼운다 —
+                  //      35차 자동 기입의 「차량만 예외」와 같은 규칙이고,
+                  //      담당자가 이미 고른 값을 조용히 덮으면 안 된다.
+                  //   🔴 계약이 「미정」(null)이면 건드리지 않는다.
+                  if (
+                    c.billing_cycle_default === "monthly" &&
+                    form.billing_cycle === "per_order"
+                  ) {
+                    setForm((prev) => ({ ...prev, billing_cycle: "monthly" }));
+                  }
+                  prefillFromLastOrder(c.id);
+                }}
+              >
+                {lastOrderNote && (
+                  <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 4, marginBottom: 0 }}>
+                    {lastOrderNote}
+                  </p>
                 )}
-              </div>
+              </CompanySearchBox>
             ) : (
               <div className="form-grid" style={{ padding: 0, marginBottom: 14 }}>
                 <div className="field">

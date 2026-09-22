@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { STATUS_OPTIONS, getStatusColor } from "@/lib/statusColors";
@@ -320,9 +321,18 @@ export default function CompaniesPage() {
             영업대상 업체와 실제 화주를 하나의 목록에서 상태값으로 관리합니다.
           </p>
         </div>
-        <button className="btn" onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "닫기" : "+ 신규 업체 등록"}
-        </button>
+        {/* 🔴 **두 버튼은 하는 일이 다르다** — 왼쪽은 **영업 대상**을 쌓는 자리라
+            영업상태가 `미접촉` 으로 열리고, 오른쪽은 **바로 거래할 화주**를 여는
+            자리라 `견적요청`(활성)으로 열리고 계정 발급까지 이어진다.
+            🔴 **하나로 합치지 말 것**(기본값이 다르고, 539건이 왼쪽으로 들어와 있다). */}
+        <div className="home-actions">
+          <button className="btn" onClick={() => setShowForm((v) => !v)}>
+            {showForm ? "닫기" : "+ 신규 업체 등록"}
+          </button>
+          <Link href="/admin/companies/new" className="btn btn-ghost">
+            빠른 등록 + 계정 발급
+          </Link>
+        </div>
       </div>
 
       {/* 🔴 조회 실패 배너는 어느 조건에도 넣지 말 것 — 아래 두 블록 바깥에 있어야

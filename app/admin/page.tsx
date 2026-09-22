@@ -75,7 +75,16 @@ export default function AdminHomePage() {
           <h1 className="page-title">WeCarry 운송 통합 운영 시스템</h1>
           <p className="page-desc">원하는 업무를 선택해 바로 이동하세요.</p>
         </div>
-        <InstallAppButton appName="내부관리" className="install-app-btn" />
+        {/* 🔴 **카드 격자에 넣지 않았다**(2026-09-22 · 사용자 요청 *"신규업체 등록을
+            메인화면 어딘가에 두는건 어떨까?"*) — 위 주석이 못박은 대로 카드는
+            **4의 배수**라야 4칸 2줄이 유지되고, 하나를 더하면 9칸이 되어 줄이 깨진다.
+            🔴 그래서 제목 줄의 **행동 버튼**이다. 카드로 옮기려면 4개를 같이 더할 것. */}
+        <div className="home-actions">
+          <Link href="/admin/companies/new" className="btn">
+            + 신규 화주 등록
+          </Link>
+          <InstallAppButton appName="내부관리" className="install-app-btn" />
+        </div>
       </div>
 
       <div className="home-grid">
