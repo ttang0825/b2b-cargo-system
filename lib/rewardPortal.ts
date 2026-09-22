@@ -16,7 +16,7 @@
 //    · `reward_method` 🚨 「상품권으로 드립니다」가 화면에 적히면 **약속**이 된다.
 //                      세무·법무 검수(접대비·판촉비 / 포인트 귀속)가 아직 안 끝났다.
 
-export type PortalRewardKind = "earn" | "adjust" | "deduct";
+export type PortalRewardKind = "earn" | "adjust" | "deduct" | "discount";
 
 /**
  * 원장 한 줄을 화주가 읽는 세 갈래로 옮긴다.
@@ -27,12 +27,18 @@ export type PortalRewardKind = "earn" | "adjust" | "deduct";
  *    화주가 곧바로 되묻는다. 줄은 보여주되 **사유는 안 보여주는** 것이 답이다.
  * 🔴 **`reversal` 과 음수 `adjustment` 를 한 갈래로 묶는다** — 화주에게는 둘 다
  *    「차감」이고, 왜 깎였는지는 담당자가 말할 일이다(화면이 지어내지 않는다).
+ *
+ * 🚨 **운임 할인만 따로 뺀다**(2026-09-22) — 화주는 그 줄에서 「왜 깎였나」를
+ *    되묻지 않아야 한다. **운임에서 깎아 드린 것**이라고 말해 주는 편이 맞고,
+ *    그것이 「차감」과 섞이면 회수·착오 보정과 구분이 안 된다.
+ *    🔴 **`deduct` 로 되돌리지 말 것.**
  */
 export function portalRewardKind(
   transactionType: string | null | undefined,
   amount: number | null | undefined
 ): PortalRewardKind {
   if (transactionType === "transport_earn") return "earn";
+  if (transactionType === "freight_discount") return "discount";
   return Math.round(amount || 0) < 0 ? "deduct" : "adjust";
 }
 
@@ -40,6 +46,7 @@ export const PORTAL_REWARD_LABEL: Record<PortalRewardKind, string> = {
   earn: "운송 적립",
   adjust: "적립 조정",
   deduct: "차감",
+  discount: "운임 할인",
 };
 
 /** 화주 화면에 내려가는 한 줄 — 🔴 여기에 없는 칸은 응답에도 담지 않는다. */

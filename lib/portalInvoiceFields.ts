@@ -3,8 +3,13 @@
 // network_settlement_type처럼 화주에게 노출되면 안 되는 내부 정산 정보,
 // 원칙 3·9·42번과 같은 결) 화주포털 select문에 자동으로 새지 않도록
 // 화면에서 이 상수만 조회 필드로 쓸 것(작업지시서 4-6).
+// 🚨 `reward_discount_amount` 는 2026-09-22 신설 — **화주 본인의 청구서에 적용된
+//    할인액**이라 감출 것이 아니다(내부 정산 정보가 아니다). 🔴 이것이 없으면
+//    화주는 **까닭 없이 줄어든 금액**만 보게 된다.
+//    ⚠️ `invoices` 는 컬럼 단위 GRANT 가 아니라 표 단위다 — 13차가 더한
+//       `collection_method`·`billing_cycle` 이 이 목록에서 그대로 읽히는 것이 근거다.
 export const PORTAL_INVOICE_FIELDS =
-  "id,order_id,billing_period,customer_charge_total,tax_invoice_issued,tax_invoice_date,payment_received,payment_received_date,status,collection_method,billing_cycle,direct_collection_point,created_at,orders(order_no,loading_type)";
+  "id,order_id,billing_period,customer_charge_total,reward_discount_amount,tax_invoice_issued,tax_invoice_date,payment_received,payment_received_date,status,collection_method,billing_cycle,direct_collection_point,created_at,orders(order_no,loading_type)";
 
 // 로드맵③ addendum(2-5 변경) — 현장 추가비를 화주포털에도 항목별 내역으로
 // 노출하되, driver_payout_amount(차주 지급액)는 절대 포함하지 않음. 이

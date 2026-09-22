@@ -132,11 +132,29 @@ export async function POST(req: Request) {
   const isDirect = collectionMethod === "driver_direct";
   const fee = dispatch.brokerage_fee ?? null;
 
+  // 🚨 **리워드 운임 할인을 도로 빼 준다** (2026-09-22).
+  //
+  //    `invoices.customer_charge_total` 은 **할인을 이미 뺀 값**이다
+  //    (`lib/rewardUse.ts` 머리말 — 그래야 금액을 읽는 여덟 자리와 월정산 묶음
+  //    DB 함수 둘이 저절로 맞는다). 그런데 이 라우트는 그 값을 **배차 기준으로
+  //    다시 쓴다.**
+  //
+  // 🔴 **이 한 줄이 없으면 재동기화가 할인을 조용히 지운다** — 원장에는 「썼다」가
+  //    남아 적립금은 줄어든 채로, 청구서만 제값으로 돌아간다. 화면에는 증상이 0이다.
+  // 🔴 **원장은 건드리지 않는다** — append-only 이고, 할인 자체를 무르는 것은
+  //    담당자가 정산 상세에서 금액을 0 으로 바꾸는 별도 경로다.
+  const rewardDiscount = Math.max(0, Math.round((current as any).reward_discount_amount || 0));
+  const chargeAfterDiscount = Math.max(0, (charge || 0) - rewardDiscount);
+
   // 🔴 마진도 `lib/marginCalc.ts` 하나로 — 화면은 이 저장값을 읽지 않지만
   //    (표시 시점 계산), 저장값이 옛 공식으로 남으면 다시 갈린다.
+  // 🔴 **마진은 깎은 뒤 금액으로 센다** — 할인은 매출 에누리라 우리 몫이 그만큼
+  //    줄어드는 것이 사실이고, 화면의 표시 시점 마진(`marginOf()`)도
+  //    `customer_charge_total`(= 깎은 뒤)을 읽는다. 여기만 깎기 전으로 두면
+  //    **저장값과 화면이 갈린다**(바로 아래 주석이 경고하는 바로 그 일이다).
   const commission = calcMargin({
     collectionMethod,
-    customerCharge: charge,
+    customerCharge: chargeAfterDiscount,
     customerChargeVatIncluded: !!dispatch.customer_charge_vat_included,
     driverPayout: payout,
     driverVatIncluded: !!dispatch.driver_vat_included,
@@ -144,10 +162,10 @@ export async function POST(req: Request) {
   });
 
   const patch: Record<string, any> = {
-    customer_charge_total: charge || null,
+    customer_charge_total: chargeAfterDiscount || null,
     driver_payout_total: payout || null,
     commission_total: commission || null,
-    receivable_amount: isDirect ? fee : charge || null,
+    receivable_amount: isDirect ? fee : chargeAfterDiscount || null,
     payable_amount: isDirect ? 0 : payout || null,
     customer_charge_vat_included: !!dispatch.customer_charge_vat_included,
     driver_vat_included: !!dispatch.driver_vat_included,
@@ -156,6 +174,8 @@ export async function POST(req: Request) {
     direct_collection_point:
       dispatch.direct_collection_point ?? current.direct_collection_point ?? null,
     brokerage_fee: fee,
+    // 🔴 **여기는 할인을 빼지 않는다** — 「총 운임」은 깎기 전 금액이다
+    //    (깎은 뒤 금액은 `customer_charge_total` 이 말한다).
     total_freight_amount: dispatch.total_freight_amount ?? charge ?? null,
     driver_direct_collection_amount: dispatch.driver_direct_collection_amount ?? null,
     updated_by: currentStaff.id,

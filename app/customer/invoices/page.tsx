@@ -414,6 +414,16 @@ export default function CustomerInvoicesPage() {
                         <> · 포함 {wonVatIncluded(i.customer_charge_total)}</>
                       )}
                     </div>
+                    {/* 🚨 **깎인 금액이면 그 사실을 적는다**(2026-09-22) — 위 숫자는
+                        리워드 운임 할인을 **이미 뺀 값**이라, 안 적으면 화주는
+                        **까닭 없이 줄어든 금액**만 보게 된다.
+                        🔴 **`portal_visible` 로 감추지 말 것** — 그 칸은 「적립 현황을
+                           보여줄까」이고, 이것은 **본인 청구서의 한 줄**이다. */}
+                    {(i.reward_discount_amount || 0) > 0 && (
+                      <div className="pv2-idiscount">
+                        리워드 운임 할인 −{won(i.reward_discount_amount)} 적용
+                      </div>
+                    )}
                     {/* 🔴 현장 추가비 펼치기는 데스크탑·모바일 둘 다 유지한다 */}
                     {extras.length > 0 && (
                       <button type="button" className="pv2-iextra-btn" onClick={() => toggleExpanded(i.id)}>
@@ -510,6 +520,13 @@ export default function CustomerInvoicesPage() {
                       )}
                     </span>
                   </div>
+                  {/* 🔴 원칙 13번 — 데스크탑 표와 모바일 카드는 **완전히 별개 JSX** 다.
+                      위 데스크탑 쪽에 줄을 더하면 여기도 같이 더해야 한다. */}
+                  {(i.reward_discount_amount || 0) > 0 && (
+                    <div className="pv2-idiscount">
+                      리워드 운임 할인 −{won(i.reward_discount_amount)} 적용
+                    </div>
+                  )}
                   <div className="pv2-imbadges">
                     <span className="pv2-ibadge" style={{ background: tax.bg, color: tax.color }}>
                       {tax.label}

@@ -27,6 +27,7 @@ import MixableBadge from "@/components/MixableBadge";
 import LockedBadge from "@/components/LockedBadge";
 import AmendmentReasonModal from "@/components/AmendmentReasonModal";
 import InvoiceRewardLine from "@/components/InvoiceRewardLine";
+import InvoiceRewardUse from "@/components/InvoiceRewardUse";
 import SmsConfirmModal, { SmsPreview } from "@/components/SmsConfirmModal";
 import { getDispatchExtraChargeCategoryLabel } from "@/lib/dispatchExtraCharges";
 import {
@@ -777,6 +778,19 @@ export default function InvoiceDetailPage() {
                     {vatBasisLabel(invoice.customer_charge_vat_included)}
                   </div>
                 )}
+                {/* 🚨 **깎인 금액이면 그 사실을 적는다**(2026-09-22) — 위 숫자는
+                    운임 할인을 이미 뺀 값이라, 안 적으면 담당자가 배차 금액과 견주다가
+                    「왜 다르지」로 멈춘다. 🔴 지우지 말 것. */}
+                {(invoice.reward_discount_amount || 0) > 0 && (
+                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                    리워드 운임 할인 −{won(invoice.reward_discount_amount)}
+                    <br />
+                    할인 전:{" "}
+                    {won(
+                      (invoice.customer_charge_total || 0) + (invoice.reward_discount_amount || 0)
+                    )}
+                  </div>
+                )}
                 {trailingExtraCharges.length > 0 && (
                   <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
                     현장 추가비 +
@@ -919,6 +933,14 @@ export default function InvoiceDetailPage() {
           companyId={invoice.companies?.id}
           lastResult={rewardResult}
         />
+
+        {/* 🚨 **운임 할인** (2026-09-22) — 위 한 줄은 「얼마 쌓였나」이고 이것은
+            「쌓인 것을 이 건에서 깎아 준다」다. 🔴 **합치지 말 것**(적립은 자동이고
+            할인은 담당자가 내리는 결정이라, 한 덩어리가 되면 버튼이 적립 쪽으로
+            읽힌다 — `InvoiceRewardLine` 머리말의 「버튼을 만들지 말 것」이 그것이다).
+            🔴 **`customer_charge_total` 이 바뀌므로 저장 뒤 `load()` 로 전체를 다시
+               부른다**(원칙 36번 — 부분 병합하면 낙관적 잠금이 오탐한다). */}
+        <InvoiceRewardUse invoiceId={id} isAdmin={isAdmin} onChanged={load} />
 
         {/* 35차 A-7 — 배차 기준 재동기화. 🔴 **금액 칸을 직접 편집하게 만들지 말 것** —
             정본은 배차이고, 직접 입력을 열면 배차와 정산이 서로 다른 값을 갖게 된다.

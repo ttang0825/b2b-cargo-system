@@ -58,8 +58,16 @@
 
 import { splitVat } from "./vat";
 
-/** 🔴 원장 유형 — DB CHECK 와 같아야 한다. 3차에 늘릴 때 제약도 같이 고칠 것. */
-export type RewardTransactionType = "transport_earn" | "reversal" | "adjustment";
+/**
+ * 🔴 원장 유형 — DB CHECK 와 같아야 한다.
+ * ⚠️ `freight_discount`(운임 할인)는 2026-09-22 에 늘렸다(`_migrations` 52행째).
+ *    남은 것은 `giftcard` · `expiry` 이고, 늘릴 때 **DB CHECK 도 같이 고칠 것.**
+ */
+export type RewardTransactionType =
+  | "transport_earn"
+  | "reversal"
+  | "adjustment"
+  | "freight_discount";
 /** 🔴 원본 종류 — DB CHECK 와 같아야 한다. */
 export type RewardSourceType = "invoice" | "billing_batch" | "manual";
 /** 🔴 혜택 제공 방식 — DB CHECK 와 같아야 한다. */
@@ -113,6 +121,17 @@ export type RewardBaseInput = {
  *    세금계산서를 끊는 금액이라 구분이 실제 뜻을 갖는다(포함가 건이 실재한다).
  * ⚠️ **정산 화면의 부가세 표시는 그대로다** — 그 화면은 저장된 구분을 보여 준다.
  *    선착불 건에서 적립 기준과 그 표시가 갈리는 것은 **의도된 것**이다.
+ *
+ * ── 🚨 운임 할인이 걸린 건은 **깎은 뒤 금액**으로 적립한다 (2026-09-22) ──────
+ *
+ * `customer_charge_total` 은 운임 할인을 **이미 뺀 값**이다(`lib/rewardUse.ts`
+ * 머리말). 그래서 이 함수는 손대지 않아도 **화주가 실제로 낸 금액의 5%** 를
+ * 적립한다 — 깎아 준 돈에까지 적립이 붙으면 같은 돈이 두 번 혜택이 된다.
+ *
+ * 🔴 **`reward_discount_amount` 를 여기서 도로 더하지 말 것.**
+ * 🟢 **순서가 엇갈릴 일이 없다** — 운임 할인은 **입금 완료된 건에는 걸 수 없고**
+ *    (`rewardUseBlockReason` 의 `payment_received`), 적립은 입금 확인 때 나므로
+ *    **할인이 항상 먼저**다.
  */
 export function rewardBaseAmount(input: RewardBaseInput): number {
   const total = Math.round(input.customerChargeTotal || 0);

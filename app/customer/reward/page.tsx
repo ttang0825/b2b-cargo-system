@@ -61,6 +61,9 @@ const KIND_STYLE: Record<string, { bg: string; color: string }> = {
   earn: { bg: "#FFF9D6", color: "#5B4A00" },
   adjust: { bg: "#F4F3EF", color: "#4A4945" },
   deduct: { bg: "#FDF3F2", color: "#B4423A" },
+  // 🔴 차감(붉은 계열)과 **다른 색이다** — 운임에서 깎아 드린 것이라 나쁜 소식이
+  //    아니다. 적립(옐로)과도 갈라야 부호를 혼동하지 않는다.
+  discount: { bg: "#EAF4EE", color: "#2F6B46" },
 };
 
 export default function PortalRewardPage() {
