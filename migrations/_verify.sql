@@ -2093,7 +2093,7 @@ select template_type as 종류, status as 상태, count(*) as 건수
 
 -- ⚠️ 기준선은 차수마다 는다 — **적을 때마다 같이 고칠 것**(안 고치면 다음 세션이
 --    「줄었다」로 오해한다). 3차가 둘을 더해 48 → 50 이 됐다.
-\echo '--- ㉟-f 기준선 — _migrations 행 수(51이어야 한다) ---'
+\echo '--- ㉟-f 기준선 — _migrations 행 수(살아 있는 기대값은 마지막 절에서 본다) ---'
 select count(*) as 적용된_마이그레이션 from public._migrations;
 
 -- ════════════════════════════════════════════════════════════════════════════
@@ -2167,3 +2167,82 @@ select count(*) filter (where i.created_at <  (c.start_date::timestamptz))      
        count(*)                                                                     as 정산건_전체
   from public.invoices i
   cross join lateral (select start_date, earn_end_date from public.reward_campaigns limit 1) c;
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- ㊲  🚨 「운임 할인 적용」 착수 전 실측 (2026-09-22 · 읽기 전용)
+--
+--   리워드 1차가 남긴 `reward_method = 'freight_discount'` 는 **저장만 되고 읽는
+--   코드가 0건**이다. 쌓인 적립금을 **운임에서 깎아 주는** 경로를 이제 만든다.
+--
+-- 🔴 **이 절이 재는 것은 「할인이 어디에 닿는가」다.** 할인은 **화주가 낼 돈을
+--    바꾸므로**, 금액을 보여주는 자리를 하나라도 빠뜨리면 **화면마다 금액이 갈린다**
+--    (36차 C장의 미수금 신고가 정확히 그 모양이었다).
+--
+-- 🚨 **가장 큰 물음 — 월정산 묶음이다.** 묶음 항목은 `customer_charge_total` 을
+--    **스냅샷으로 복사**하는데 그 로직이 **DB 함수 안**에 있다(14차 산출물 ·
+--    저장소 밖). 할인을 정산 건에만 적으면 **묶음은 깎기 전 금액으로 청구한다.**
+--    🔴 **그래서 본문을 읽고 착수한다 — 짐작하지 않는다.**
+--
+-- 🔴 이름·연락처·오더번호를 찍지 않는다(⑪·㉝·㉞·㊱ 과 같은 규칙 — Actions 로그는 공개다).
+-- ════════════════════════════════════════════════════════════════════════════
+\echo ''
+\echo '=== ㊲ 🚨 「운임 할인 적용」 착수 전 실측 (읽기 전용) ==='
+
+\echo '--- ㊲-a 원장이 지금 허용하는 유형 (할인은 새 유형이 필요한가) ---'
+select conname as 제약명, pg_get_constraintdef(oid) as 정의
+  from pg_constraint
+ where conrelid = 'public.reward_ledger'::regclass and contype = 'c'
+ order by conname;
+
+\echo '--- ㊲-b 캠페인의 사용 조건 (최소 사용액 · 사용 종료일) ---'
+select is_active                                as 활성,
+       earn_rate                                as 적립률,
+       minimum_use_amount                       as 최소사용액,
+       use_end_date                             as 사용종료일,
+       (use_end_date < current_date)            as 사용기간_지났나
+  from public.reward_campaigns
+ order by created_at;
+
+\echo '--- ㊲-c 🚨 지금 쓸 수 있는 화주가 있는가 (잔액 vs 최소사용액) ---'
+select substr(m.company_id::text, 1, 8)         as 화주id앞8,
+       m.reward_method                          as 지급방식,
+       coalesce(sum(l.amount), 0)               as 잔액,
+       c.minimum_use_amount                     as 최소사용액,
+       (coalesce(sum(l.amount), 0) >= c.minimum_use_amount) as 쓸수있나
+  from public.reward_memberships m
+  join public.reward_campaigns c on c.id = m.campaign_id
+  left join public.reward_ledger l
+         on l.campaign_id = m.campaign_id and l.company_id = m.company_id
+ group by m.company_id, m.reward_method, c.minimum_use_amount
+ order by 3 desc;
+
+\echo '--- ㊲-d 🚨 할인을 걸 수 있는 정산 건이 있는가 (선착불은 청구서 자체가 없다) ---'
+select i.collection_method                      as 수금방식,
+       coalesce(i.billing_cycle, '(미지정)')     as 청구주기,
+       count(*)                                 as 건수,
+       count(*) filter (where coalesce(i.locked, false))          as 확정잠김,
+       count(*) filter (where coalesce(i.payment_received, false)) as 입금됨
+  from public.invoices i
+  join public.reward_memberships m on m.company_id = i.company_id
+ group by 1, 2
+ order by 3 desc;
+
+\echo '--- ㊲-e 🚨 묶음 스냅샷을 만드는 함수 본문 (할인이 흘러가는가) ---'
+select p.proname as 함수명, pg_get_functiondef(p.oid) as 본문
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+ where n.nspname = 'public'
+   and p.proname in ('refresh_item_snapshot', 'is_billing_batch_candidate')
+ order by p.proname;
+
+\echo '--- ㊲-f 정산 표에 할인 칸이 이미 있는가 (원칙 27번 — 같은 이름이면 조용히 안 만들어진다) ---'
+select column_name as 컬럼, data_type as 타입, column_default as 기본값
+  from information_schema.columns
+ where table_schema = 'public' and table_name = 'invoices'
+   and (column_name like '%discount%' or column_name like '%reward%')
+ order by ordinal_position;
+
+-- 🔴 **살아 있는 기준선은 여기 하나뿐이다** — 같은 숫자를 여러 절에 적으면 반드시
+--    한쪽이 낡는다(㉞-e 가 실제로 48 인 채로 굳어 있었다 · 2026-09-22 에 고쳤다).
+--    🔴 **절을 새로 더할 때는 이 기대값을 그 절로 옮기고 여기를 안내로 바꿀 것.**
+\echo '--- ㊲-g 🔴 기준선 — _migrations 행 수(착수 시점 51 · 이 차수 반영 후 52) ---'
+select count(*) as 반영된_마이그레이션 from public._migrations;
