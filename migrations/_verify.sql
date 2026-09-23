@@ -2449,6 +2449,64 @@ select count(*)                                          as 오더수,
   from public.orders o
  where o.origin is not null and o.origin <> '';
 
+\echo '--- ㊳-k1 ② 「정산날짜」 후보 — invoices 의 날짜 칸이 무엇이고 얼마나 채워졌나 ---'
+select column_name as 칸, data_type as 타입
+  from information_schema.columns
+ where table_schema = 'public' and table_name = 'invoices'
+   and (data_type like 'timestamp%' or data_type = 'date' or column_name like '%period%')
+ order by ordinal_position;
+
+\echo '--- ㊳-k2 ② 세 날짜가 실제로 어긋나는가 (정산생성 vs 운송완료 vs 정산월) ---'
+select i.billing_period                                   as 정산월,
+       count(*)                                           as 건수,
+       min(i.created_at::date)                            as 정산생성_최초,
+       max(i.created_at::date)                            as 정산생성_최종,
+       count(*) filter (where to_char(i.created_at, 'YYYY-MM') <> i.billing_period) as 생성월과_정산월_다름,
+       count(*) filter (where i.payment_received_date is not null)                   as 입금일_있음
+  from public.invoices i
+ group by 1
+ order by 1;
+
+\echo '--- ㊳-k3 ① 견적서 공유 링크가 실제로 쓰이는가 ---'
+select count(*)                                              as 견적_전체,
+       count(*) filter (where q.share_token is not null)      as 토큰_발급됨,
+       count(*) filter (where q.share_token is not null
+                          and q.company_id is not null)       as 그중_회원화주,
+       count(*) filter (where q.share_token is not null
+                          and q.company_id is null)           as 그중_비회원
+  from public.quotes q;
+
+\echo '--- ㊳-k4 ①·⑥ 견적 문자 이력 · 견적 상태 분포 ---'
+select template_type as 문자종류, count(*) as 건수
+  from public.sms_logs
+ where template_type like 'quote%'
+ group by 1
+ order by 2 desc;
+
+select coalesce(q.status, '(null)')                       as 견적상태,
+       count(*)                                            as 건수,
+       count(*) filter (where q.company_id is not null)     as 회원화주,
+       count(*) filter (where q.approved_by_customer_at is not null) as 포털승인_있음
+  from public.quotes q
+ group by 1
+ order by 2 desc;
+
+\echo '--- ㊳-k5 ③·④ 묶음의 날짜·상태 칸이 무엇이고 채워졌나 ---'
+select column_name as 칸, data_type as 타입
+  from information_schema.columns
+ where table_schema = 'public' and table_name = 'customer_billing_batches'
+ order by ordinal_position;
+
+\echo '--- ㊳-k6 ⑤ 화주별 세금계산서 발행 방식 (거래명세서와의 관계) ---'
+select coalesce(c.tax_invoice_method, '(미지정)')          as 세금계산서방식,
+       count(*)                                            as 화주수,
+       count(*) filter (
+         where exists (select 1 from public.customer_accounts a where a.company_id = c.id)
+       )                                                   as 그중_포털계정있음
+  from public.companies c
+ group by 1
+ order by 2 desc;
+
 -- 🔴 **살아 있는 기준선은 여기 하나뿐이다** — 같은 숫자를 여러 절에 적으면 반드시
 --    한쪽이 낡는다(㉞-e 가 48 인 채로 굳어 있었던 사고 · ㊲-g 는 안내로 바꿨다).
 --    🔴 **절을 새로 더할 때는 이 기대값을 그 새 절로 옮기고 여기를 안내로 바꿀 것.**
