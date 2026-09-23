@@ -2354,6 +2354,25 @@ select count(*)                                                        as 정산
        count(*) filter (where coalesce(locked, false))                   as 확정잠김
   from public.invoices;
 
+-- 🚨 **㊳-e2 가 결함을 가리켰다 — 선착불 3건인데 입금완료가 0건이다.**
+--    `lib/autoCreateInvoice.ts` 는 선착불이면 `payment_received: true` 로 만든다
+--    (35차 #11 확정 — 화주가 차주에게 직접 내므로 운송완료면 완료로 둔다).
+--    그런데 실측이 전부 false 다. 🔴 **그 3건이 어느 경로로 만들어졌는지 가른다** —
+--    담당자가 정산관리에서 손으로 등록했으면 그 경로는 기본값 false 다.
+\echo '--- ㊳-e3 🚨 정산 건 교차표 — 수금방식 × 입금·확정·지급 × 생성일 ---'
+select substr(i.company_id::text, 1, 8)          as 화주키,
+       coalesce(i.collection_method, '(null)')    as 수금방식,
+       coalesce(i.billing_cycle, '(null)')        as 청구주기,
+       coalesce(i.payment_received, false)        as 입금완료,
+       coalesce(i.locked, false)                  as 확정잠김,
+       coalesce(i.driver_paid, false)             as 차주지급,
+       count(*)                                   as 건수,
+       min(i.created_at::date)                    as 최초생성일,
+       max(i.created_at::date)                    as 최종생성일
+  from public.invoices i
+ group by 1, 2, 3, 4, 5, 6
+ order by 7 desc, 1;
+
 \echo '--- ㊳-f 🔴 월별 통계 화면을 그대로 재현 (최근 12개월 · 입금완료만) ---'
 with lim as (
   select to_char(date_trunc('month', (now() at time zone 'Asia/Seoul')) - interval '11 months', 'YYYY-MM') as from_m,
