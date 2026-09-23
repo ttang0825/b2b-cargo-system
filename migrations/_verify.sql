@@ -1798,7 +1798,10 @@ from information_schema.tables
 where table_schema = 'public' and table_name like 'reward%'
 order by 1;
 
--- ㉜-h  🔴 기준선 — `_migrations` 행 수(45여야 한다)
+-- ⚠️ **이 줄은 더 이상 숫자를 주장하지 않는다**(2026-09-23) — 「45여야 한다」로
+--    적혀 있었는데 그 뒤 여덟 차수가 늘어 낡았다. 🔴 **살아 있는 기준선은
+--    이 파일의 마지막 절 하나만 본다**(두 곳에 적으면 반드시 한쪽이 낡는다).
+-- ㉜-h  기준선 — `_migrations` 행 수(살아 있는 기대값은 마지막 절에서 본다)
 select count(*) as "_migrations 행 수" from public._migrations;
 
 
@@ -2243,8 +2246,179 @@ select column_name as 컬럼, data_type as 타입, column_default as 기본값
    and (column_name like '%discount%' or column_name like '%reward%')
  order by ordinal_position;
 
+-- ⚠️ **살아 있는 기준선은 이 절에 없다 — 마지막 절(㊳-l)로 옮겼다**(2026-09-23).
+--    🔴 **같은 숫자를 여러 절에 적지 말 것**(㉞-e 가 48 인 채로 굳어 있었던 사고).
+--    🔴 **절을 새로 더할 때는 기대값을 그 새 절로 옮기고 여기처럼 안내만 남길 것.**
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- ㊳  🚨 화주포털 개편 ① 사전조사 — 월별 통계·정산 데이터 (2026-09-23 · 읽기 전용)
+--
+--   사용자 신고: *「월별통계가 제대로 구현되고 있지 않다. 실제로 화주 한 곳의 건이
+--   하나도 구현이 되어 있지 않다.」* 기획 문서(정리 v1 §6)가 **가설 넷**을 세웠고
+--   이 절이 그것을 순서대로 잰다.
+--
+-- 🔴 **짐작으로 고치지 않기 위한 절이다.** 월정산 묶음 때 화면만 세 번 고치다가
+--    진짜 원인이 **저장소 밖 DB 함수**였던 전례가 있다(PR #154).
+--
+-- 🚨 **가설에 없는 다섯째를 같이 잰다 — `payment_received` 다.**
+--    `app/customer/stats/page.tsx` 는 **입금이 확인된 정산 건만** 실적으로 센다
+--    (`i.payment_received && i.billing_period between fromMonth and toMonth`).
+--    ㊴ 가 아니라 여기서 재는 이유는, **미입금이면 화면이 「비어 있는 것이 정상」**
+--    이어서 가설 넷 전부가 헛다리가 되기 때문이다. 🔴 **이것부터 보라.**
+--
+-- 🔴 **이름을 그대로 찍지 않는다** — 이 저장소는 public 이고 **Actions 로그는 누구나
+--    읽는다.** 화주는 `id` 앞 8자 + 첫 글자 + 글자수로만 나타낸다.
+--    🔴 **`c.name` 을 그대로 select 하도록 고치지 말 것.**
+-- ════════════════════════════════════════════════════════════════════════════
+
+\echo ''
+\echo '════════ ㊳ 화주포털 개편 ① 사전조사 — 월별 통계·정산 (읽기 전용) ════════'
+
+\echo '--- ㊳-a 포털을 쓰는 화주가 누구인가 (이름은 마스킹) ---'
+select substr(c.id::text, 1, 8)                                as 화주키,
+       left(c.name, 1) || '…(' || length(c.name)::text || '자)'  as 화주,
+       coalesce(c.status, '(null)')                            as 화주상태,
+       coalesce(c.billing_cycle_default, '(미지정)')             as 청구주기기본,
+       count(a.id)                                             as 포털계정,
+       count(a.id) filter (where a.is_active)                   as 활성계정
+  from public.companies c
+  join public.customer_accounts a on a.company_id = c.id
+ group by 1, 2, 3, 4
+ order by 5 desc, 1;
+
+\echo '--- ㊳-b 🚨 가설 1 — 그 화주의 운송완료 건이 정말 0건인가 (배차 상태별) ---'
+select substr(c.id::text, 1, 8)     as 화주키,
+       d.dispatch_status            as 배차상태,
+       count(*)                     as 건수
+  from public.dispatches d
+  join public.orders o    on o.id = d.order_id
+  join public.companies c on c.id = o.company_id
+ where exists (select 1 from public.customer_accounts a where a.company_id = c.id)
+ group by 1, 2
+ order by 1, 3 desc;
+
+\echo '--- ㊳-c 🚨 가설 2 — 운송완료인데 정산 건이 없는가 (자동 생성은 fire-and-forget) ---'
+select substr(c.id::text, 1, 8)                                                as 화주키,
+       count(*)                                                                as 운송완료_배차,
+       count(*) filter (
+         where not exists (select 1 from public.invoices i where i.order_id = d.order_id)
+       )                                                                       as 정산건_없음
+  from public.dispatches d
+  join public.orders o    on o.id = d.order_id
+  join public.companies c on c.id = o.company_id
+ where d.dispatch_status = '운송완료'
+ group by 1
+ order by 3 desc, 2 desc;
+
+\echo '--- ㊳-c2 🔴 화주 구분 없이 전체로 한 번 더 (포털 계정이 없는 화주·게스트까지) ---'
+select count(*)                                                                as 운송완료_배차_전체,
+       count(*) filter (
+         where not exists (select 1 from public.invoices i where i.order_id = d.order_id)
+       )                                                                       as 정산건_없음,
+       count(*) filter (where o.company_id is null)                            as 게스트오더
+  from public.dispatches d
+  join public.orders o on o.id = d.order_id
+ where d.dispatch_status = '운송완료';
+
+\echo '--- ㊳-d 🚨 가설 3 — 포털 계정이 보는 회사에 정산·오더가 달려 있는가 ---'
+select substr(a.company_id::text, 1, 8)                                          as 계정이_보는_화주키,
+       count(distinct a.id)                                                      as 계정수,
+       (select count(*) from public.orders   o where o.company_id = a.company_id) as 그_화주_오더,
+       (select count(*) from public.invoices i where i.company_id = a.company_id) as 그_화주_정산건
+  from public.customer_accounts a
+ where a.company_id is not null
+ group by 1, a.company_id
+ order by 4 desc, 3 desc;
+
+\echo '--- ㊳-d2 회사가 안 붙은 포털 계정이 있는가 (있으면 그 계정은 아무것도 못 본다) ---'
+select count(*) as 회사없는_포털계정 from public.customer_accounts where company_id is null;
+
+\echo '--- ㊳-e 🚨 다섯째(가설에 없던 것) — 정산 건의 입금 여부·정산월 ---'
+select substr(i.company_id::text, 1, 8)                            as 화주키,
+       count(*)                                                    as 정산건,
+       count(*) filter (where coalesce(i.payment_received, false))  as 입금완료,
+       count(*) filter (where i.billing_period is null)             as 정산월_비었음,
+       min(i.billing_period)                                        as 가장_오래된_정산월,
+       max(i.billing_period)                                        as 가장_최근_정산월,
+       coalesce(sum(i.customer_charge_total), 0)                    as 청구합계
+  from public.invoices i
+ where i.company_id is not null
+ group by 1
+ order by 2 desc;
+
+\echo '--- ㊳-f 🔴 월별 통계 화면을 그대로 재현 (최근 12개월 · 입금완료만) ---'
+with lim as (
+  select to_char(date_trunc('month', (now() at time zone 'Asia/Seoul')) - interval '11 months', 'YYYY-MM') as from_m,
+         to_char(date_trunc('month', (now() at time zone 'Asia/Seoul')),                        'YYYY-MM') as to_m
+)
+select substr(i.company_id::text, 1, 8)                       as 화주키,
+       (select from_m from lim) || ' ~ ' || (select to_m from lim) as 기간,
+       count(*) filter (
+         where coalesce(i.payment_received, false)
+           and i.billing_period between (select from_m from lim) and (select to_m from lim)
+       )                                                      as 화면에_세는_건수,
+       count(*)                                               as 그_화주_전체_정산건
+  from public.invoices i
+ where i.company_id is not null
+ group by 1
+ order by 3 desc, 4 desc;
+
+\echo '--- ㊳-g 포털(authenticated)이 무엇을 읽을 수 있는가 — 배지가 회사 필터 없이 센다 ---'
+select tablename as 표, cmd as 명령, policyname as 정책, roles::text as 롤
+  from pg_policies
+ where schemaname = 'public'
+   and tablename in ('invoices', 'orders', 'dispatches', 'quotes',
+                     'customer_billing_batches', 'customer_billing_batch_items',
+                     'portal_order_requests', 'announcements')
+ order by 1, 2, 3;
+
+\echo '--- ㊳-h 월정산 묶음 ↔ 정산 건 (② 정산 화면 두 갈래의 근거) ---'
+select coalesce(b.payment_status, '(null)')                  as 입금상태,
+       (b.confirmed_at is not null)                          as 확정됨,
+       count(distinct b.id)                                  as 묶음,
+       count(it.id)                                          as 항목,
+       count(it.id) filter (where it.released_at is null)     as 활성항목
+  from public.customer_billing_batches b
+  left join public.customer_billing_batch_items it on it.batch_id = b.id
+ group by 1, 2
+ order by 3 desc;
+
+\echo '--- ㊳-h2 정산 건이 묶음에 담겨 있는가 (건별/월별 갈래를 무엇으로 가를 수 있나) ---'
+select coalesce(i.billing_cycle, '(미지정)')                   as 청구주기,
+       count(*)                                               as 정산건,
+       count(*) filter (
+         where exists (select 1 from public.customer_billing_batch_items it
+                        where it.invoice_id = i.id and it.released_at is null)
+       )                                                      as 묶음에_담김,
+       count(*) filter (where coalesce(i.payment_received, false)) as 입금완료
+  from public.invoices i
+ group by 1
+ order by 2 desc;
+
+\echo '--- ㊳-i 「접수」 카드 신호가 승인 → 오더로 바뀐다 (PR #177 자리) ---'
+select (select count(*) from public.quotes q where q.status = '수주')                      as 수주견적,
+       (select count(*) from public.quotes q
+         where q.status = '수주'
+           and not exists (select 1 from public.orders o where o.quote_id = q.id))         as 수주인데_오더없음,
+       (select count(*) from public.orders o where o.quote_id is null)                     as 견적연결_없는_오더,
+       (select count(*) from public.orders o
+         where o.status in ('접수', '배차중')
+           and not exists (select 1 from public.dispatches d where d.order_id = o.id))     as 오더인데_배차없음,
+       (select count(*) from public.portal_order_requests r where r.status = '대기중')      as 대기중_발주요청;
+
+\echo '--- ㊳-j 「시·구·동만」 표기가 가능한 모양인가 (4-7 · 저장된 주소 실측) ---'
+select count(*)                                          as 오더수,
+       count(*) filter (where o.origin ~ '(시|군|구)')     as 시군구_있음,
+       count(*) filter (where o.origin ~ '(읍|면|동|리)')  as 읍면동_있음,
+       count(*) filter (where o.origin ~ '(로|길)')        as 도로명_있음,
+       count(*) filter (where o.origin_sigungu is not null and o.origin_sigungu <> '') as 시군구칸_채워짐,
+       min(length(o.origin))                             as 가장짧은글자수,
+       max(length(o.origin))                             as 가장긴글자수
+  from public.orders o
+ where o.origin is not null and o.origin <> '';
+
 -- 🔴 **살아 있는 기준선은 여기 하나뿐이다** — 같은 숫자를 여러 절에 적으면 반드시
---    한쪽이 낡는다(㉞-e 가 실제로 48 인 채로 굳어 있었다 · 2026-09-22 에 고쳤다).
---    🔴 **절을 새로 더할 때는 이 기대값을 그 절로 옮기고 여기를 안내로 바꿀 것.**
-\echo '--- ㊲-g 🔴 기준선 — _migrations 행 수(착수 시점 51 · 이 차수 반영 후 52) ---'
+--    한쪽이 낡는다(㉞-e 가 48 인 채로 굳어 있었던 사고 · ㊲-g 는 안내로 바꿨다).
+--    🔴 **절을 새로 더할 때는 이 기대값을 그 새 절로 옮기고 여기를 안내로 바꿀 것.**
+\echo '--- ㊳-l 🔴 기준선 — _migrations 행 수(이 조사 시점 53 · 이 절은 DB 를 안 바꾼다) ---'
 select count(*) as 반영된_마이그레이션 from public._migrations;
