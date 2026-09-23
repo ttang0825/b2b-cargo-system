@@ -34,23 +34,31 @@ export type IntakeKind = "portalRequests" | "publicQuotes" | "applications" | "a
 // 🔴 **말을 여기서 완성한다 — 부르는 쪽에서 `새 {label}` 로 조립하지 말 것.**
 //    조립하면 「새 견적 승인」처럼 어색해지고, 무엇보다 **조립하는 곳이 둘**이라
 //    (`TopNav` 배너 · `lib/pushNotify.ts` 푸시) 한쪽만 고치면 화면과 폰의 말이 갈린다.
-//    ⚠️ 2026-09-16 에 `label` 에서 `title` 로 바꿨다 — 「화주 견적 승인」이 `새` 를
-//    앞에 붙일 수 없는 첫 항목이었다.
+//    ⚠️ 2026-09-16 에 `label` 에서 `title` 로 바꿨다 — 「화주 견적 승인」(지금 이름은
+//    「수주 · 오더 대기」)이 `새` 를 앞에 붙일 수 없는 첫 항목이었다.
 export const INTAKE_ALERTS: Record<IntakeKind, { title: string; href: string }> = {
   // 🔴 발주요청이 맨 앞이다 — 기존 화주가 실제 운송을 의뢰하는 것이라 답이 늦으면
   //    바로 돈이 걸린다(사용자 원문: *「발주요청이 가장 급하다」*).
   portalRequests: { title: "새 발주요청", href: "/admin/portal-requests" },
   publicQuotes: { title: "새 견적문의", href: "/admin/public-quotes" },
   applications: { title: "새 화주신청", href: "/admin/applications" },
-  // 🔴 이것만 「접수」가 아니라 **이미 있던 화주가 답을 준 것**이다 — 그래도 급하기는
+  // 🔴 이것만 「접수」가 아니라 **오더를 만들어야 하는 건**이다 — 그래도 급하기는
   //    마찬가지라 같은 줄에 뒀다(위 ⚠️ 참고).
+  //    ⚠️ **한동안 「이미 있던 화주가 답을 준 것」이라 적고 있었다** — 화주 승인이
+  //    없어져(B장) 이제 그 상태를 놓는 사람은 담당자다.
   //    ⚠️ **세는 값은 「수주인데 운송오더가 없는 견적」**이라(`lib/unlinkedWonQuotes.ts`)
   //    담당자가 견적 상세에서 직접 「수주」로 바꿔도 같이 울린다. 🔴 **그것을 막겠다고
   //    화주 승인분만 세도록 고치지 말 것** — 그 수는 `TopNav` 배지와 같은 값이어야 하고
   //    (38차 규칙), 배지는 「오더를 만들어야 할 건」을 세는 것이 맞다.
-  //    🟢 **웹 푸시는 화주 승인일 때만 나간다**(`app/api/customer/approve-quote/route.ts`) —
-  //    담당자가 스스로 바꾼 것까지 폰으로 부를 이유는 없다.
-  approvedQuotes: { title: "화주 견적 승인", href: "/admin/quotes" },
+  //    🚨 **웹 푸시가 없어졌다**(2026-09-23 · 화주포털 개편 B장) — 「화주 승인일 때만
+  //    나간다」의 그 경로(`/api/customer/approve-quote`)를 **화주 승인 기능과 함께
+  //    지웠다**(확정은 전화로 받는다). 🔴 **배지·배너는 그대로 돈다** — 세는 값이
+  //    「수주인데 운송오더가 없는 견적」이라(`lib/unlinkedWonQuotes.ts`) 담당자가 손으로
+  //    「수주」로 바꿔도 잡힌다. 🔴 **푸시를 되살리려면 「담당자가 수주로 바꿀 때」로
+  //    새로 걸 것** — 옛 라우트를 되살리는 것이 아니다.
+  //    🔴 **제목을 「화주 견적 승인」으로 되돌리지 말 것** — 화주가 승인할 수 없게 된
+  //    뒤로는 거짓이다. 지금 뜻은 「수주로 바뀌었는데 오더가 없다」다.
+  approvedQuotes: { title: "수주 · 오더 대기", href: "/admin/quotes" },
 };
 
 export const INTAKE_KINDS: IntakeKind[] = [
