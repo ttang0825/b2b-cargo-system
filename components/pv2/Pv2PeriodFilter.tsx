@@ -26,6 +26,12 @@ export type PortalPeriod = {
 
 export const PORTAL_PERIOD_ALL: PortalPeriod = { preset: "all", from: "", to: "" };
 
+/**
+ * 🔴 **기간 칩이 없는 화면에서 쓰는 「이번 달」**(2026-09-23 · 홈 「금액 요약」).
+ *    🔴 `{ preset: "month" }` 를 화면마다 적지 말 것 — 「이번 달」의 뜻이 갈린다.
+ */
+export const PORTAL_PERIOD_MONTH: PortalPeriod = { preset: "month", from: "", to: "" };
+
 const CHIPS: { value: PortalPeriod["preset"]; label: string }[] = [
   { value: "today", label: "오늘" },
   { value: "week", label: "이번주" },

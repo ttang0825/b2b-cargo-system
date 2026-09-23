@@ -41,8 +41,12 @@ import { sendWebPush } from "@/lib/webPush";
  *    🔴 **되살리지 말 것** — 화면 안 알림(`lib/portalAlert.ts`)에서도 정산·공지를
  *    같이 없앴으므로, 푸시만 되살리면 **폰으로는 오는데 화면에는 안 뜨는** 상태가 된다.
  */
+// 🔴 **`quote_submitted` 은 없앴다**(2026-09-23 · 화주포털 개편 A장).
+//    화주가 견적을 보는 화면(「견적 확인」)이 메뉴에서 없어졌고 승인도 전화로 받는다
+//    (사용자 확정). 푸시의 `url` 이 **메뉴에 없는 화면**을 가리키게 된다.
+//    🔴 **화면 안 알림(`lib/portalAlert.ts`)에서도 같이 없앴다** — 한쪽만 되살리면
+//    「폰으로는 오는데 화면에는 안 뜨는」 상태가 된다. **되살리려면 둘 다.**
 export type PortalPushEvent =
-  | "quote_submitted"
   | "dispatch_confirmed"
   | "transport_completed"
   // 🔴 **배차 취소**(2026-09-17 · 사용자 확정 2번 「화면 배너 + 웹 푸시까지」).
@@ -54,7 +58,6 @@ export type PortalPushEvent =
 
 /** 🔴 **무슨 일이 있었는가만** 적는다. 금액·구간·상호·차주는 넣지 않는다. */
 const PORTAL_PUSH_MESSAGES: Record<PortalPushEvent, { title: string; url: string }> = {
-  quote_submitted: { title: "새 견적서가 도착했습니다", url: "/customer/quotes" },
   dispatch_confirmed: { title: "배차가 확정되었습니다", url: "/customer/dispatches" },
   transport_completed: { title: "운송이 완료되었습니다", url: "/customer/dispatches" },
   // 🔴 **사유를 본문에 넣지 말 것** — 잠금화면·배너에 그대로 뜨고 옆사람이 본다.

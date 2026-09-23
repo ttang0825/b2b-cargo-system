@@ -10389,3 +10389,78 @@ tbody tr:hover {
     width: 100%;
   }
 }
+
+/* ══ 홈 「금액 요약」 (2026-09-23 · 화주포털 개편 A장) ══════════════════════
+   🔴 **「응답 확인하기」를 대체한 카드**다(사용자 확정 7번). 그 카드는 `견적제출`
+      견적과 미입금 정산을 줄로 그렸는데, 화주가 견적을 보는 화면이 없어졌다.
+   🔴 **글자 규격은 정산 화면의 요약 카드(`.pv2-isum-*`)를 그대로 쓴다** — 같은
+      숫자를 두 화면이 말하므로 크기·색까지 같아야 한다. 여기서 새로 정의하지 말 것.
+   🔴 **안쪽에 카드 배경을 다시 깔지 않는다**(`.pv2-isum-card` 를 쓰지 않는 이유) —
+      이미 `.pv2-card` 안이라 겹 카드가 되면 무거워진다. */
+.pv2-home-sum {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.pv2-home-sum-item {
+  min-width: 0;
+}
+/* 🔴 좁은 화면에서는 한 줄에 셋이 들어가지 않는다 — 390px 에서 값이 잘려 나갔다.
+      두 칸으로 접고, 더 좁으면 한 칸으로 내린다. */
+@media (max-width: 720px) {
+  .pv2-home-sum {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 430px) {
+  .pv2-home-sum {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+/* ══ 홈 「접수되지 않은 발주 요청」 띠 (2026-09-23 · 화주포털 개편 B장) ════════
+   🚨 **화주가 반려를 알 수 있는 유일한 자리다.** 반려에는 문자도 웹 푸시도 나가지
+      않고(관리자 화면이 `status='반려'` + `staff_note` 만 쓴다), A장이 그전에 그것을
+      보여주던 「견적 확인」 메뉴를 없앴다. 🔴 **이 블록을 지우지 말 것.**
+   🔴 **위험색(`--danger`)을 쓰지만 배경은 옅게** — 화주 잘못이 아니라 접수가 안 된
+      것을 알리는 띠다. 빨간 판을 깔면 사고처럼 읽힌다. */
+.pv2-rejnote {
+  border-left: 4px solid var(--danger);
+  margin-bottom: 16px;
+}
+.pv2-rejnote-head {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--danger);
+  margin-bottom: 10px;
+}
+.pv2-rejnote-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--pv2-line, rgba(0, 0, 0, 0.07));
+}
+.pv2-rejnote-body {
+  min-width: 0;
+  flex: 1;
+}
+.pv2-rejnote-title {
+  font-size: 14.5px;
+  font-weight: 600;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+.pv2-rejnote-meta {
+  font-size: 13px;
+  color: var(--pv2-text-3);
+  margin-top: 2px;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+.pv2-rejnote-foot {
+  font-size: 13px;
+  color: var(--pv2-text-3);
+  margin-top: 10px;
+}

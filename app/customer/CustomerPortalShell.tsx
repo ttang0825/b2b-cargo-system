@@ -11,8 +11,6 @@ import {
   ANNOUNCEMENT_NOTICE_FIELD,
   getLastSeen,
   markSeen,
-  getAcknowledgedRequestIds,
-  acknowledgeRequestIds,
 } from "@/lib/portalNotifications";
 import { COMPANY_SUPPORT_PHONE, COMPANY_SUPPORT_HOURS } from "@/lib/contactInfo";
 import AlertToast, { type AlertToastItem } from "@/components/AlertToast";
@@ -22,7 +20,6 @@ import { applyUnseenTitle, dropToastsForPath, isAlertSoundOn, playAlertChime } f
 import {
   PORTAL_ALERTS,
   PORTAL_ALERT_DISPATCH_STATUSES,
-  PORTAL_ALERT_QUOTE_STATUSES,
   collectPortalRises,
   type PortalAlertCounts,
   type PortalAlertSignals,
@@ -40,7 +37,10 @@ const PUBLIC_PATHS = ["/customer/login", "/customer/support-verify"];
 //    ⚠️ `/customer/support-verify` 는 자체 헤더가 없으므로 계속 공용 헤더를 받는다.
 const PATHS_WITH_OWN_HEADER = ["/customer/login"];
 
-type NotifyKey = "quotes" | "dispatches" | "invoices";
+// 🔴 **`quotes` 가 빠졌다**(2026-09-23 · 화주포털 개편 A장 · 사용자 확정
+//    「견적 확인을 뺀다」). 🔴 **되살리지 말 것** — 배지를 세도 누를 메뉴가 없어서
+//    숫자가 영영 안 줄어든다(「확인함」의 신호가 그 화면에 들어가는 것뿐이다).
+type NotifyKey = "dispatches" | "invoices";
 
 type NavItem = { href: string; label: string; icon: PortalIconName; key?: NotifyKey };
 
@@ -55,29 +55,37 @@ type NavItem = { href: string; label: string; icon: PortalIconName; key?: Notify
 //     지우면 must_change_password 인 신규 계정의 첫 로그인이 갇힌다(21차)
 const NAV_GROUPS: NavItem[][] = [
   [{ href: "/customer", label: "홈", icon: "home" }],
+  // 🔴 **화주가 매일 보는 셋이 한 그룹이다**(2026-09-23 · 사용자 확정
+  //    「견적 확인을 뺀다. 발주요청 · 배차·운송 조회 · 정산·결제내역 순서」).
+  //    ⚠️ **「견적 확인」이 여기 있었다** — 화주가 견적을 승인하는 화면이었고, 실무가
+  //    「견적 → 전화 확정 → 배차하며 금액 조정 → 완료 후 확정 금액」이라 포털이
+  //    **확정되지 않은 금액을 확정된 것처럼** 보여주고 있었다.
+  //    🔴 **메뉴에 되살리지 말 것** — 라우트는 남아 있지만 진입로는 일부러 없앴다.
   [
     // 🔴 **「발주 요청」에는 배지를 달지 않는다**(27차 리뷰 3라운드 확정).
     //    이 화면은 **폼 하나**다 — 26차가 「내 요청 내역」을 지웠고, 담당자가 무엇을
-    //    하든(승인·반려) 그 결과는 **「견적 확인」에** 뜬다(승인 → 견적, 반려 → 접수 반려,
-    //    대기중 → 상담 중). 여기에 배지를 달면 눌러도 볼 것이 없다.
+    //    하든(승인·반려) 그 결과는 **홈 「접수」 카드와 「배차·운송 조회」에** 뜬다.
+    //    ⚠️ 한동안 「견적 확인에 뜬다」였다 — 그 메뉴가 없어졌다. 여기에 배지를 달면
+    //    눌러도 볼 것이 없다(화면이 폼 하나라는 사실은 그대로다).
     { href: "/customer/request", label: "발주 요청", icon: "request" },
-    { href: "/customer/quotes", label: "견적 확인", icon: "quotes", key: "quotes" },
     { href: "/customer/dispatches", label: "배차·운송 조회", icon: "dispatch", key: "dispatches" },
-  ],
-  [
     { href: "/customer/invoices", label: "정산·결제내역", icon: "invoices", key: "invoices" },
-    { href: "/customer/stats", label: "월별 통계", icon: "stats" },
-    // 🔴 **「적립금」은 조건부다**(2026-09-21) — `reward_memberships.portal_visible` 이
-    //    켜진 화주에게만 그린다. 켜지지 않은 화주에게 메뉴만 보이면 눌러도 빈 화면이고,
-    //    리워드는 **선택된 기업만** 참여하는 프로모션이라 「나는 왜 없나」가 된다.
-    //    판정은 `NavList` 가 `rewardVisible` 로 받는다 — 여기 배열은 **자리**만 정한다.
-    //    ⚠️ 그래서 이 그룹은 2~3항목이다(다른 그룹과 달리 개수가 고정이 아니다).
-    { href: "/customer/reward", label: "적립금", icon: "reward" },
   ],
+  // 🔴 **자주 보지는 않지만 늘 있는 셋**(2026-09-23 · 사용자 확정 「나머지는 아래 그룹」).
+  //    ⚠️ 「정산·결제내역」이 이 그룹 맨 위에 있었다 — 위 그룹으로 올렸다.
   [
+    { href: "/customer/stats", label: "월별 통계", icon: "stats" },
     { href: "/customer/locations", label: "배송지·화물 관리", icon: "locations" },
     { href: "/customer/profile", label: "담당자 정보", icon: "profile" },
   ],
+  // 🔴 **「적립금」은 조건부다**(2026-09-21) — `reward_memberships.portal_visible` 이
+  //    켜진 화주에게만 그린다. 켜지지 않은 화주에게 메뉴만 보이면 눌러도 빈 화면이고,
+  //    리워드는 **선택된 기업만** 참여하는 프로모션이라 「나는 왜 없나」가 된다.
+  //    판정은 `NavList` 가 `rewardVisible` 로 받는다 — 여기 배열은 **자리**만 정한다.
+  //    🔴 **혼자 한 그룹이다**(2026-09-23) — 그래서 꺼져 있으면 **그룹째 비어서**
+  //    구분선만 남을 수 있다. `NavList` 가 **빈 그룹을 그리지 않도록** 막고 있으니
+  //    그 가드를 지우지 말 것.
+  [{ href: "/customer/reward", label: "적립금", icon: "reward" }],
   // 🔴 **「이용가이드」는 맨 아래 혼자 한 그룹이다**(2026-09-14) — 매일 쓰는 메뉴가
   //    아니라 처음 쓰는 사람이 한 번 찾아보는 자리다.
   // 🔴 라벨이 공개 화면의 「운송관리 이용안내」와 **일부러 다르다** — 같은 말이면 같은
@@ -89,16 +97,23 @@ const NAV_GROUPS: NavItem[][] = [
 ];
 
 // 모바일 하단 탭 5개 — 마지막 "전체"는 화면 이동이 아니라 바텀시트 토글이다.
+//
+// 🚨 **이 배열은 `NAV_GROUPS` 와 별개다 — 한쪽만 고치면 갈린다.**
+//    HANDOFF 가 *「`NAV_GROUPS` 한 곳만 고치면 데스크탑·모바일이 함께 바뀝니다」* 라고
+//    적고 있는데 그 문장은 **「전체」 바텀시트까지만** 맞다. 2026-09-23 에 「견적 확인」을
+//    뺄 때 여기를 같이 고치지 않으면 **사이드바에서는 사라지는데 폰 하단에는 남아**,
+//    그 탭을 누르면 메뉴에 없는 화면이 열린다. 🔴 **둘을 함께 볼 것.**
+//    🔴 빈 자리는 **「정산」**으로 채웠다(사용자 확정의 세 메뉴가 곧 탭 셋이 된다).
 const MOBILE_TABS: { href: string; label: string; icon: PortalIconName; key?: NotifyKey }[] = [
   { href: "/customer", label: "홈", icon: "home" },
   { href: "/customer/request", label: "발주", icon: "request" },
-  { href: "/customer/quotes", label: "견적", icon: "quotes", key: "quotes" },
   { href: "/customer/dispatches", label: "운송", icon: "dispatch", key: "dispatches" },
+  { href: "/customer/invoices", label: "정산", icon: "invoices", key: "invoices" },
 ];
 
 // pathname이 이 항목의 화면일 때 "확인함"으로 표시할 매핑
 const PATH_TO_NOTIFY_KEY: Record<string, NotifyKey | "announcements"> = {
-  "/customer/quotes": "quotes",
+  // ⚠️ `/customer/quotes` 가 여기 있었다 — 메뉴에서 빠지면서 함께 없앴다(A장).
   "/customer/dispatches": "dispatches",
   "/customer/invoices": "invoices",
   "/customer/announcements": "announcements",
@@ -125,11 +140,17 @@ function NavList({
 }) {
   return (
     <>
-      {NAV_GROUPS.map((group, gi) => (
+      {NAV_GROUPS.map((group, gi) => {
+        // 🔴 **거르는 일은 여기 한 곳이다** — 사이드바와 바텀시트가 같은 `NavList` 를
+        //    쓰므로, 화면마다 따로 거르면 「모바일에만 보이는 메뉴」가 생긴다.
+        const items = group.filter((item) => item.href !== "/customer/reward" || rewardVisible);
+        // 🔴 **빈 그룹은 그리지 않는다**(2026-09-23) — 「적립금」이 혼자 한 그룹이라
+        //    `portal_visible` 이 꺼진 화주에게는 이 그룹이 통째로 빈다. 그대로 그리면
+        //    **항목 없는 구분선**이 남는다(그룹 사이를 선과 여백으로만 나누기 때문).
+        if (items.length === 0) return null;
+        return (
         <div key={gi} className="pv2-nav-group">
-          {/* 🔴 **거르는 일은 여기 한 곳이다** — 사이드바와 바텀시트가 같은 `NavList` 를
-              쓰므로, 화면마다 따로 거르면 「모바일에만 보이는 메뉴」가 생긴다. */}
-          {group.filter((item) => item.href !== "/customer/reward" || rewardVisible).map((item) => {
+          {items.map((item) => {
             const active = isActive(pathname, item.href);
             const count = item.key ? counts[item.key] || 0 : 0;
             return (
@@ -149,7 +170,8 @@ function NavList({
             );
           })}
         </div>
-      ))}
+        );
+      })}
     </>
   );
 }
@@ -164,7 +186,6 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
   //    느슨하게 두면 알림 정의처(`lib/portalAlert.ts`)와 키가 어긋나도 `tsc` 가 못 잡는다.
   //    이 저장소는 `strict: false` 라 이런 자리를 타입으로 묶어 두는 값이 크다.
   const [counts, setCounts] = useState<PortalAlertCounts>({
-    quotes: 0,
     dispatches: 0,
     invoices: 0,
     announcements: 0,
@@ -189,7 +210,6 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
   //    배지는 「무엇이든 바뀌었다」를 세고 이쪽은 **「울릴 일인가」**만 센다 —
   //    목록은 `lib/portalAlert.ts` 한 곳이다. 🔴 다시 합치지 말 것(사유는 그 파일에).
   const [alertSignals, setAlertSignals] = useState<PortalAlertSignals>({
-    quotes: 0,
     dispatches: 0,
   });
   // 🔴 키가 **없는 것**과 **0인 것**을 갈라야 한다(첫 조회에는 울리지 않는다).
@@ -208,21 +228,12 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
   //       방금 등록한 대기중 건까지 안읽음으로 잡힌다 — 그래서 id 집합을 쓴다.
   async function loadCounts(company: string | null) {
     const epoch = "1970-01-01T00:00:00.000Z";
-    const quotesSince = getLastSeen("quotes") || epoch;
     const dispatchesSince = getLastSeen("dispatches") || epoch;
-    const [
-      quotesRes,
-      dispatchesRes,
-      invoicesRes,
-      announcementsRes,
-      requestRes,
-      quoteSignalRes,
-      dispatchSignalRes,
-    ] = await Promise.all([
-      supabase
-        .from("quotes")
-        .select("id", { count: "exact", head: true })
-        .gt("updated_at", quotesSince),
+    // 🔴 **`company` 를 더 이상 쓰지 않는다**(2026-09-23 A장) — 발주 요청의 결과를
+    //    세던 질의가 빠졌기 때문이다(아래 주석). 인자는 부르는 곳 넷을 다 고치지
+    //    않으려고 그대로 뒀다. 🔴 **「안 쓰니 지우자」로 지우려면 네 호출부를 함께 볼 것.**
+    void company;
+    const [dispatchesRes, invoicesRes, announcementsRes, dispatchSignalRes] = await Promise.all([
       supabase
         .from("dispatches")
         .select("id", { count: "exact", head: true })
@@ -238,18 +249,11 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
         //    고쳐도 「화주에게 다시 알림」을 켜지 않았으면 배지가 안 오른다.
         //    🔴 홈 「안 읽음 N」·목록 NEW 알약과 **같은 기준**이어야 한다.
         .gt(ANNOUNCEMENT_NOTICE_FIELD, getLastSeen("announcements") || epoch),
-      company
-        ? supabase.from("portal_order_requests").select("id").eq("company_id", company).neq("status", "대기중")
-        : Promise.resolve({ data: [] as { id: string }[] }),
-      // ── 배너용(좁은) 신호 두 개 ─────────────────────────────────────────────
+      // ── 배너용(좁은) 신호 ───────────────────────────────────────────────────
       // 🔴 **배지와 같은 `마지막으로 본 시각`을 쓴다** — 따로 두면 화면에 들어가도
       //    배너 기준만 안 밀려서 같은 소식으로 계속 울린다.
       // 🔴 `in(...)` 의 목록을 여기에 적지 말 것 — 정의처는 `lib/portalAlert.ts` 다.
-      supabase
-        .from("quotes")
-        .select("id", { count: "exact", head: true })
-        .gt("updated_at", quotesSince)
-        .in("status", PORTAL_ALERT_QUOTE_STATUSES as unknown as string[]),
+      // ⚠️ **견적 신호가 여기 있었다**(`PORTAL_ALERT_QUOTE_STATUSES`) — A장에 없앴다.
       supabase
         .from("dispatches")
         .select("id", { count: "exact", head: true })
@@ -257,24 +261,20 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
         .in("dispatch_status", PORTAL_ALERT_DISPATCH_STATUSES as unknown as string[]),
     ]);
 
-    const acknowledged = new Set(getAcknowledgedRequestIds());
-    const requestUnread = ((requestRes.data as { id: string }[]) || []).filter(
-      (r) => !acknowledged.has(r.id)
-    ).length;
-
+    // 🚨 **발주 요청의 결과(승인·반려)를 세던 자리가 여기였다**(2026-09-23 A장에 뺐다).
+    //    그 수는 **「견적 확인」 배지**에 더해지고 있었는데 그 메뉴가 없어졌다.
+    //    🔴 **다른 배지로 옮기지 말 것** — 반려된 건은 「배차·운송 조회」에도
+    //    「정산·결제내역」에도 **나오지 않는다**(배차도 정산도 없다). 옮기면 눌러도
+    //    볼 것이 없는 배지가 된다.
+    //    🟢 **자리는 홈 「접수」 카드다**(B장) — 거기서 승인 건과 반려 건을 함께 그리고,
+    //    「확인」을 누르면 `acknowledgeRequestIds()` 로 감춘다(그 장치는 그대로 쓴다).
     setCounts({
-      quotes: (quotesRes.count || 0) + requestUnread,
       dispatches: dispatchesRes.count || 0,
       invoices: invoicesRes.count || 0,
       announcements: announcementsRes.count || 0,
     });
 
-    // 🔴 **`requestUnread` 를 여기에 더하지 말 것.** 배지에는 들어가야 맞지만
-    //    (승인·반려 결과를 「견적 확인」에서 보게 해야 한다) 배너는 다르다 —
-    //    승인된 요청은 `상담중` 견적이 되어 아직 화주가 할 일이 없고, 반려 건은
-    //    목록에서 빨간 「접수 반려」 배지로 이미 눈에 띈다.
     setAlertSignals({
-      quotes: quoteSignalRes.count || 0,
       dispatches: dispatchSignalRes.count || 0,
     });
   }
@@ -319,16 +319,9 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
       // 이 화면에 들어왔으면 해당 항목은 "확인함"으로 기록
       const notifyKey = PATH_TO_NOTIFY_KEY[pathname || ""];
       if (notifyKey) markSeen(notifyKey);
-      // 🔴 발주 요청의 결과(승인·반려)도 「견적 확인」에서 확인한 것으로 친다 —
-      //    그 결과가 뜨는 화면이 여기이기 때문이다.
-      if (notifyKey === "quotes" && account.company_id) {
-        const { data: settled } = await supabase
-          .from("portal_order_requests")
-          .select("id")
-          .eq("company_id", account.company_id)
-          .neq("status", "대기중");
-        acknowledgeRequestIds(((settled as { id: string }[]) || []).map((r) => r.id));
-      }
+      // ⚠️ **여기에서 발주 요청의 결과를 「확인함」으로 기록하고 있었다** — 「견적 확인」
+      //    화면에 들어온 것을 신호로 썼는데 그 메뉴가 없어졌다(A장).
+      //    🔴 그 기록은 이제 **홈 「접수」 카드의 「확인」 버튼**이 한다(B장).
 
       loadCounts(account.company_id || null);
     }
@@ -483,7 +476,8 @@ export default function CustomerPortalShell({ children }: { children: React.Reac
 
     const channel = supabase
       .channel("customer_layout_notifications")
-      .on("postgres_changes", { event: "*", schema: "public", table: "quotes" }, () => loadCounts(companyId))
+      // ⚠️ `quotes` 구독이 있었다 — 배지가 견적을 세지 않게 되어 함께 뺐다(A장).
+      //    🔴 홈 「접수」 카드는 **그 화면이 자기 구독으로** 듣는다(여기서 듣지 말 것).
       .on("postgres_changes", { event: "*", schema: "public", table: "dispatches" }, () => loadCounts(companyId))
       .on("postgres_changes", { event: "*", schema: "public", table: "invoices" }, () => loadCounts(companyId))
       // 🔴 `INSERT` 만 듣지 말 것 — 공지 「수정」이 생기면서 **고칠 때 「다시 알림」을

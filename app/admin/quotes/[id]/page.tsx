@@ -12,7 +12,6 @@ import { handleFormKeyDown } from "@/lib/preventEnterSubmit";
 import { calcInclusiveAmount } from "@/lib/vat";
 import { downloadQuoteExcel } from "@/lib/quoteExcel";
 import { optimisticUpdate } from "@/lib/optimisticUpdate";
-import { notifyPortalPush } from "@/lib/notifyPortalPush";
 import {
   getMixedLoadingDiscountTiers,
   pickMixedDiscountTier,
@@ -387,13 +386,11 @@ export default function QuoteDetailPage() {
     }
     setQuote((q) => (q ? { ...q, status } : q));
 
-    // 🔴 화주포털 푸시 — **「견적제출」로 새로 바뀜 때뿐이다.**
-    //    같은 값을 다시 고르는 일이 흔한데 그때마다 화주 폰이 울리면 알림을 꺼 버린다.
-    //    🔴 **`await` 하지 않는다**(원칙 53번) · 🔴 **회사는 서버가 다시 찾는다**(원칙 30번).
-    //    ⚠️ 게스트 견적(`company_id` 없음)은 서버가 조용히 건너뛴다 — 보낼 곳이 없다.
-    if (status === "견적제출" && prevStatus !== "견적제출") {
-      notifyPortalPush("quote", id, "quote_submitted");
-    }
+    // 🔴 **화주포털 푸시를 여기서 보내지 않는다**(2026-09-23 · 화주포털 개편 A장).
+    //    「견적제출」로 바뀔 때 `quote_submitted` 푸시를 보내고 있었는데, 화주가 견적을
+    //    보는 화면이 메뉴에서 없어졌고 확정은 전화로 받는다(사용자 확정). 푸시만 남기면
+    //    **메뉴에 없는 화면으로 데려간다.** 🔴 **되살리려면 화면 안 알림
+    //    (`lib/portalAlert.ts`)과 함께** — 한쪽만 되살리면 신호가 갈린다.
 
     // 견적을 실제로 화주에게 "발송"한 시점 = 화주 영업상태도 "견적발송"으로 승격 (뒤로는 안 돌아감)
     if (status === "견적제출" && quote?.company_id) {

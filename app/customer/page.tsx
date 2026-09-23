@@ -24,8 +24,30 @@ import {
   DISPATCH_ISSUE_STYLE,
 } from "@/lib/dispatchStage";
 import { calcInclusiveAmount } from "@/lib/vat";
-import { ANNOUNCEMENT_NOTICE_FIELD, getLastSeen } from "@/lib/portalNotifications";
+// 🔴 요약 계산은 이 함수 하나다 — 정산 화면과 같은 수를 말해야 한다(원칙 51번).
+import { summarizePortalInvoices } from "@/lib/portalInvoiceSummary";
+// 🔴 구간 표기는 `lib/shortAddress.ts` 하나다 — 화면마다 자르지 말 것.
+import { shortAddress } from "@/lib/shortAddress";
+import { PORTAL_PERIOD_MONTH } from "@/components/pv2/Pv2PeriodFilter";
+import {
+  ANNOUNCEMENT_NOTICE_FIELD,
+  getLastSeen,
+  getAcknowledgedRequestIds,
+  acknowledgeRequestIds,
+} from "@/lib/portalNotifications";
 import InstallAppButton from "@/components/InstallAppButton";
+
+/** 숫자만. 🔴 단위를 따로 그려야 해서(`.pv2-isum-unit`) 「원」을 붙이지 않는다. */
+function wonNum(n: number | null | undefined) {
+  if (n === null || n === undefined) return "-";
+  return Math.round(n).toLocaleString("ko-KR");
+}
+
+/** 「2026. 9. 23.」 — 정산 화면과 같은 모양이다. */
+function formatDate(d: string | null | undefined) {
+  if (!d) return "-";
+  return new Date(d).toLocaleDateString("ko-KR");
+}
 
 function won(n: number | null | undefined) {
   if (!n) return "-";
@@ -70,22 +92,30 @@ function ArrowRight({ size = 18 }: { size?: number }) {
   );
 }
 
-type QuoteRow = {
-  id: string;
-  quote_no: string | null;
-  origin: string | null;
-  destination: string | null;
-  vehicle_type: string | null;
-  item: string | null;
-  final_amount: number | null;
-  created_at: string;
-};
+// ⚠️ **`QuoteRow` 가 있었다** — 홈 「응답 확인하기」가 `견적제출` 견적을 그리는 데
+//    쓰던 타입이고, 그 카드가 2026-09-23(A장)에 **「금액 요약」으로 교체**되면서
+//    함께 없어졌다. 🔴 되살리려면 먼저 「화주가 견적을 보는 화면이 있는가」를 볼 것.
+//
+// 🔴 `PortalInvoiceLike` 를 **그대로 넓힌 모양**이다 — 요약 계산은
+//    `lib/portalInvoiceSummary.ts` 한 곳이 하고, 여기서는 그 칸들을 받아오기만 한다.
 type InvoiceRow = {
   id: string;
   customer_charge_total: number | null;
+  payment_received: boolean | null;
   tax_invoice_issued: boolean | null;
-  orders: { order_no: string | null } | null;
+  tax_invoice_date: string | null;
+  settlement_reference_date: string | null;
+  created_at: string;
 };
+/** 반려된 발주 요청 — 띠에 그릴 최소한의 칸만. `staff_note` 가 반려 사유다. */
+type RejectedRequestRow = {
+  id: string;
+  created_at: string;
+  origin: string | null;
+  destination: string | null;
+  staff_note: string | null;
+};
+
 type DispatchRow = {
   id: string;
   order_id: string | null;
@@ -114,8 +144,16 @@ type AnnouncementRow = {
 export default function CustomerHomePage() {
   const [loading, setLoading] = useState(true);
   const [companyName, setCompanyName] = useState("");
-  const [pendingQuotes, setPendingQuotes] = useState<QuoteRow[]>([]);
-  const [unpaidInvoices, setUnpaidInvoices] = useState<InvoiceRow[]>([]);
+  const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
+  // 🚨 **반려된 발주 요청 — 화주가 그것을 볼 자리가 여기밖에 없다**(2026-09-23 · B장).
+  //    그전에는 「견적 확인」 목록이 빨간 「접수 반려」 알약으로 보여줬는데 그 메뉴가
+  //    A장에 없어졌다. 🔴 **반려에는 문자도 푸시도 나가지 않는다**(관리자 화면이
+  //    `status='반려'` + `staff_note` 만 쓴다 — 실측). 그래서 이 띠를 지우면 화주는
+  //    자기 요청이 반려된 것을 **영영 모른다.**
+  const [rejectedRequests, setRejectedRequests] = useState<RejectedRequestRow[]>([]);
+  // 🔴 「확인」을 누른 것은 `localStorage` 에 남는다(`acknowledgeRequestIds`) — 표에
+  //    쓰지 않는다(화주가 본인 요청 행을 고칠 권한이 없고, 그럴 일도 아니다).
+  const [acknowledged, setAcknowledged] = useState<string[]>([]);
   const [activeDispatches, setActiveDispatches] = useState<DispatchRow[]>([]);
   // 🔴 재배차가 접수 중인 오더의 취소 이력 — 조회 화면과 **같은 함수**가 채운다.
   const [redispatch, setRedispatch] = useState<PortalRedispatchMap>(new Map());
@@ -154,7 +192,15 @@ export default function CustomerHomePage() {
     //    한 번이 홈 화면 전체를 그만큼 늦춘다(「로그인 뒤 로딩이 길다」, 2026-09-08).
     //    🔴 다시 위로 빼서 먼저 기다리게 만들지 말 것 — 나머지 질의가 이 결과를
     //    쓰지 않으므로 순서를 지킬 이유가 없다.
-    const [accountRes, quotesRes, invoicesRes, dispatchesRes, announcementRes, pendingRes, unreadRes] = await Promise.all([
+    const [
+      accountRes,
+      invoicesRes,
+      dispatchesRes,
+      announcementRes,
+      pendingRes,
+      unreadRes,
+      rejectedRes,
+    ] = await Promise.all([
       session
         ? supabase
             .from("customer_accounts")
@@ -162,20 +208,19 @@ export default function CustomerHomePage() {
             .eq("auth_user_id", session.user.id)
             .single()
         : Promise.resolve({ data: null }),
-      // 「응답 확인하기」 — 화주가 지금 볼 것이 있는 견적(담당자가 견적을 제출한 건)
-      supabase
-        .from("quotes")
-        .select("id,quote_no,origin,destination,vehicle_type,item,final_amount,created_at")
-        .eq("status", "견적제출")
-        .order("created_at", { ascending: false })
-        .limit(5),
-      // 「응답 확인하기」 — 아직 입금이 확인되지 않은 정산 건
+      // 🔴 **「금액 요약」 카드용**(2026-09-23 A장) — 미결제 건만 받아오지 않는다.
+      //    카드가 「이번 달 청구금액」까지 말하므로 **입금된 건도 필요**하다.
+      //    🔴 `limit` 은 정산 화면과 같은 100이다 — 다르게 두면 같은 카드가 화면마다
+      //    다른 수를 말한다(그 화면도 최근 100건만 읽는다).
+      //    ⚠️ **여기에 `.eq("payment_received", false)` 를 다시 걸지 말 것** — 걸면
+      //    청구금액이 「아직 안 낸 것」만 세어 실제보다 작게 나온다.
       supabase
         .from("invoices")
-        .select("id,customer_charge_total,tax_invoice_issued,orders(order_no)")
-        .eq("payment_received", false)
+        .select(
+          "id,customer_charge_total,payment_received,tax_invoice_issued,tax_invoice_date,settlement_reference_date,created_at"
+        )
         .order("created_at", { ascending: false })
-        .limit(5),
+        .limit(100),
       supabase
         .from("dispatches")
         .select(
@@ -213,11 +258,21 @@ export default function CustomerHomePage() {
         // 🔴 `created_at` 이 아니라 `announced_at` 이다 — 사이드바 배지·목록 NEW 와
         //    **같은 기준**이어야 한다(셋이 갈리면 숫자가 서로 안 맞는다).
         .gt(ANNOUNCEMENT_NOTICE_FIELD, lastSeen || "1970-01-01T00:00:00.000Z"),
+      // 🔴 **반려된 발주 요청**(B장) — 회사 범위는 RLS 가 거른다(`customer_view_own_requests`).
+      //    🔴 `대기중` 을 같이 가져오지 말 것 — 그것은 「아직 답이 없다」이고 띠로 알릴
+      //    일이 아니다(담당자가 보는 중이다).
+      supabase
+        .from("portal_order_requests")
+        .select("id,created_at,origin,destination,staff_note")
+        .eq("status", "반려")
+        .order("created_at", { ascending: false })
+        .limit(5),
     ]);
 
     setCompanyName(((accountRes?.data as any)?.companies as any)?.name || "");
-    setPendingQuotes((quotesRes.data as QuoteRow[]) || []);
-    setUnpaidInvoices((invoicesRes.data as unknown as InvoiceRow[]) || []);
+    setInvoices((invoicesRes.data as unknown as InvoiceRow[]) || []);
+    setRejectedRequests((rejectedRes?.data as unknown as RejectedRequestRow[]) || []);
+    setAcknowledged(getAcknowledgedRequestIds());
     // 🔴 규칙은 화면이 아니라 `lib/portalCancelledDispatches.ts` 에 있다 —
     //    배차·운송 조회와 **같은 함수**를 쓴다.
     const dispatchView = await filterCancelledForCustomer(
@@ -298,7 +353,19 @@ export default function CustomerHomePage() {
     return <div className="pv2-empty">불러오는 중...</div>;
   }
 
-  const responseCount = pendingQuotes.length + unpaidInvoices.length;
+  // 🔴 **요약 계산은 `lib/portalInvoiceSummary.ts` 한 곳이다** — 정산 화면의 카드
+  //    셋과 **같은 함수**를 쓴다. 화면마다 더하면 같은 금액이 홈과 정산에서 갈린다.
+  //    🔴 기간은 **이번 달**이다(홈은 기간 칩이 없다 — 고르는 자리는 정산 화면이다).
+  //    ⚠️ 미결제 잔액은 그 함수가 **기간을 보지 않고 누적**으로 센다(사용자 확정).
+  const invoiceSummary = summarizePortalInvoices(invoices, PORTAL_PERIOD_MONTH);
+
+  // 🔴 「확인」을 누른 건은 감춘다 — 안 감추면 반려 건이 **영원히 홈 맨 위**에 남는다.
+  const unseenRejected = rejectedRequests.filter((r) => !acknowledged.includes(r.id));
+
+  function dismissRejected(id: string) {
+    acknowledgeRequestIds([id]);
+    setAcknowledged(getAcknowledgedRequestIds());
+  }
 
   return (
     <>
@@ -314,7 +381,41 @@ export default function CustomerHomePage() {
         <InstallAppButton appName="운송관리" className="pv2-install-btn" />
       </div>
 
-      {/* ② 발주 CTA + 응답 확인하기 */}
+      {/* ①-2 🚨 **반려된 발주 요청**(2026-09-23 · B장) — 화주가 이것을 볼 자리가
+          여기밖에 없다(문자도 푸시도 안 나간다 · A장이 「견적 확인」 메뉴를 없앴다).
+          🔴 **CTA 위다** — 「새 운송 요청하기」를 누르기 전에 지난 요청이 왜 접수되지
+          않았는지 먼저 읽어야 한다.
+          🔴 **사유(`staff_note`)를 빼지 말 것** — 담당자 화면이 *「화주에게 표시됩니다」*
+          라고 적고 받는 값이다. 없으면 「사유 없음」이 아니라 안내 문장만 남는다. */}
+      {unseenRejected.length > 0 && (
+        <section className="pv2-card pv2-rejnote" aria-labelledby="pv2-rejnote-title">
+          <div className="pv2-rejnote-head" id="pv2-rejnote-title">
+            접수되지 않은 발주 요청 {unseenRejected.length}건
+          </div>
+          {unseenRejected.map((r) => (
+            <div key={r.id} className="pv2-rejnote-row">
+              <div className="pv2-rejnote-body">
+                <div className="pv2-rejnote-title">
+                  {shortAddress(r.origin)} <span className="pv2-arrow-glyph">→</span>{" "}
+                  {shortAddress(r.destination)}
+                </div>
+                <div className="pv2-rejnote-meta">
+                  {formatDate(r.created_at)} 요청
+                  {r.staff_note ? ` · 사유: ${r.staff_note}` : ""}
+                </div>
+              </div>
+              <button type="button" className="pv2-btn-ghost" onClick={() => dismissRejected(r.id)}>
+                확인
+              </button>
+            </div>
+          ))}
+          <div className="pv2-rejnote-foot">
+            다시 요청하시거나 담당자에게 전화로 문의해주세요.
+          </div>
+        </section>
+      )}
+
+      {/* ② 발주 CTA + 금액 요약 */}
       <div className="pv2-home-top">
         <Link href="/customer/request" className="pv2-cta">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -332,55 +433,71 @@ export default function CustomerHomePage() {
           </span>
         </Link>
 
-        <section className="pv2-card pv2-response" aria-labelledby="pv2-response-title">
+        {/* 🔴 **「금액 요약」 — 「응답 확인하기」를 대체한 카드**(2026-09-23 · A장 ·
+            사용자 확정 7번 「홈 「응답 확인하기」는 빼고 금액 요약으로」).
+            ⚠️ 그 카드는 `견적제출` 견적(「견적 도착」)과 미입금 정산(「입금 대기」)을
+            줄로 그리고 있었다. 앞의 것은 **화주가 견적을 보는 화면 자체가 없어져서**
+            그릴 수 없고, 뒤의 것은 이 카드의 「미결제 잔액」이 대신한다.
+            🔴 **「견적 도착」 줄을 되살리지 말 것.**
+            🔴 세 숫자는 정산 화면의 카드 셋과 **같은 함수**에서 온다 — 한쪽만 고치지 말 것. */}
+        <section className="pv2-card pv2-block" aria-labelledby="pv2-sum-title">
           <div className="pv2-block-head">
-            <span className="pv2-section-title" id="pv2-response-title">
-              응답 확인하기
+            <span className="pv2-section-title" id="pv2-sum-title">
+              금액 요약
             </span>
-            {responseCount > 0 && <span className="pv2-count-chip">{responseCount}건</span>}
+            <Link href="/customer/invoices" className="pv2-btn-ghost">
+              정산·결제내역 <ArrowRight size={15} />
+            </Link>
           </div>
 
-          {responseCount === 0 ? (
-            <div className="pv2-empty">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/portal/wecarry-eng-cropped.svg" alt="" className="pv2-empty-logo" style={{ width: 92 }} />
-              <div className="pv2-empty-title">기다리는 응답이 없습니다</div>
+          <div className="pv2-home-sum">
+            <div className="pv2-home-sum-item">
+              <div className="pv2-isum-label">이번 달 청구금액</div>
+              <div className="pv2-isum-value">
+                {wonNum(invoiceSummary.billedTotal)}
+                <span className="pv2-isum-unit"> 원</span>
+              </div>
+              <div className="pv2-isum-sub">
+                {invoiceSummary.billedCount > 0
+                  ? `${invoiceSummary.billedCount}건 · 부가세 포함 ${wonNum(
+                      calcInclusiveAmount(invoiceSummary.billedTotal)
+                    )}원`
+                  : "청구된 건이 없습니다"}
+              </div>
             </div>
-          ) : (
-            <div className="pv2-response-list">
-              {pendingQuotes.map((q) => (
-                <div key={q.id} className="pv2-response-row">
-                  <span className="pv2-badge-info">견적 도착</span>
-                  <div className="pv2-response-body">
-                    <div className="pv2-response-title">
-                      {q.origin} <span className="pv2-arrow-glyph">→</span> {q.destination}
-                    </div>
-                    <div className="pv2-response-meta">
-                      {[q.quote_no, q.vehicle_type, q.item].filter(Boolean).join(" · ")}
-                    </div>
-                  </div>
-                  <Link href="/customer/quotes" className="pv2-btn-yellow">
-                    견적 확인 <ArrowRight size={15} />
-                  </Link>
-                </div>
-              ))}
-              {unpaidInvoices.map((i) => (
-                <div key={i.id} className="pv2-response-row">
-                  <span className="pv2-badge-warn">입금 대기</span>
-                  <div className="pv2-response-body">
-                    <div className="pv2-response-title">{i.orders?.order_no || "-"} 운송비</div>
-                    <div className="pv2-response-meta">
-                      부가세 포함 {won(calcInclusiveAmount(i.customer_charge_total || 0))} ·{" "}
-                      {i.tax_invoice_issued ? "세금계산서 발행완료" : "세금계산서 발행 예정"}
-                    </div>
-                  </div>
-                  <Link href="/customer/invoices" className="pv2-btn-yellow">
-                    정산 확인 <ArrowRight size={15} />
-                  </Link>
-                </div>
-              ))}
+
+            {/* 🔴 **미결제 잔액만 값 색이 다르다**(정산 화면 카드와 같은 `#B4423A`).
+                🔴 이 숫자는 **누적**이다 — 기간을 걸면 지난달 미납이 사라져 화주가
+                「낼 게 없구나」로 읽는다(사용자 확정 2026-09-23). */}
+            <div className="pv2-home-sum-item">
+              <div className="pv2-isum-label">미결제 잔액 (전체)</div>
+              <div className="pv2-isum-value" style={{ color: "#B4423A" }}>
+                {wonNum(invoiceSummary.unpaidTotal)}
+                <span className="pv2-isum-unit" style={{ color: "#B4423A" }}>
+                  {" "}
+                  원
+                </span>
+              </div>
+              <div className="pv2-isum-sub">
+                {invoiceSummary.unpaidCount > 0
+                  ? `${invoiceSummary.unpaidCount}건 입금 대기 중`
+                  : "입금 대기 건이 없습니다"}
+              </div>
             </div>
-          )}
+
+            <div className="pv2-home-sum-item">
+              <div className="pv2-isum-label">세금계산서</div>
+              <div className="pv2-isum-value">
+                {invoiceSummary.taxCount}
+                <span className="pv2-isum-unit"> 건 발행</span>
+              </div>
+              <div className="pv2-isum-sub">
+                {invoiceSummary.latestTaxDate
+                  ? `최근 발행일 ${formatDate(invoiceSummary.latestTaxDate)}`
+                  : "이번 달 발행 이력 없음"}
+              </div>
+            </div>
+          </div>
         </section>
       </div>
 

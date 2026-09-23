@@ -92,8 +92,20 @@ const SORT_OPTIONS = [
   { value: "final_amount:asc", label: "금액 낮은순" },
 ];
 
-/** 승인 버튼이 뜨는 유일한 상태 — 「견적 도착」 */
-const APPROVABLE_STATUS = "견적제출";
+// 🔴 **견적 승인 기능은 없앴다**(2026-09-23 · 화주포털 개편 B장 · 사용자 확정
+//    「화주의 견적 승인 기능도 같이 없앤다. 확정은 전화로 받는다」).
+//
+//    ⚠️ 여기에 `APPROVABLE_STATUS = "견적제출"`(승인 버튼이 뜨는 유일한 상태)이 있었다.
+//    왜 없앴나 — 실무가 **「견적 → 전화 확정 → 배차하며 금액 조정 → 완료 후 확정 금액」**
+//    인데, 포털이 승인 버튼을 내밀어 **확정되지 않은 금액을 확정된 것처럼** 보여주고
+//    있었다(사용자 원문: *「차주와 배차 상황에 따라 견적이 바뀌어야 될 여지가 많기
+//    때문에 여기서 견적서를 확정하지 않는다」*).
+//
+// 🔴 **이 화면 자체는 메뉴에서도 빠졌다**(A장) — 라우트는 남겼지만 진입로가 없다.
+//    🔴 **승인 버튼·모달·`/api/customer/approve-quote` 를 되살리지 말 것.**
+//    🟢 담당자가 견적 상세에서 상태를 「수주」로 바꾸면 화주 화면에는 **홈·배차·운송
+//    조회의 「접수」 카드**로 나타난다(`lib/portalPendingDispatches.ts` — 그 신호는
+//    원래부터 `수주` 였고 누가 놓았는지는 보지 않는다).
 
 export default function CustomerQuotesPage() {
   const router = useRouter();
@@ -118,10 +130,6 @@ export default function CustomerQuotesPage() {
    *    아예 안 한다(`filterCancelledForCustomer` 와 같은 「필요할 때만」 방식).
    */
   const [revisedVisible, setRevisedVisible] = useState<Record<string, boolean>>({});
-  // 견적 승인 확인 모달
-  const [approveTarget, setApproveTarget] = useState<any | null>(null);
-  const [approveBusy, setApproveBusy] = useState(false);
-  const [approveError, setApproveError] = useState<string | null>(null);
   // 견적서 PDF — 🔴 새 탭이 아니라 포털 안 모달로 띄운다(27차 리뷰 3라운드)
   const [printTarget, setPrintTarget] = useState<{ id: string; no: string } | null>(null);
 
@@ -153,41 +161,6 @@ export default function CustomerQuotesPage() {
       // 🔴 error 를 삼키지 않는다 — 가산 내역이 조용히 비면 금액이 안 맞아 보인다
       if (error) setPageError(`가산 내역을 불러오지 못했습니다: ${error.message}`);
       setItemsByQuote((prev) => ({ ...prev, [row.id]: data || [] }));
-    }
-  }
-
-  async function handleApprove() {
-    if (!approveTarget) return;
-    setApproveBusy(true);
-    setApproveError(null);
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) {
-        setApproveError("로그인이 만료되었습니다. 다시 로그인해주세요.");
-        return;
-      }
-      const res = await fetch("/api/customer/approve-quote", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ quote_id: approveTarget.id }),
-        cache: "no-store",
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setApproveError(json?.error || "승인하지 못했습니다.");
-        return;
-      }
-      setApproveTarget(null);
-      await load();
-    } catch (e: any) {
-      setApproveError(e?.message || "승인하지 못했습니다.");
-    } finally {
-      setApproveBusy(false);
     }
   }
 
@@ -551,18 +524,6 @@ export default function CustomerQuotesPage() {
                         )}
                       </div>
                     )}
-                    {!isRequest && q.status === APPROVABLE_STATUS && !priceless && (
-                      <button
-                        type="button"
-                        className="pv2-qapprove"
-                        onClick={() => {
-                          setApproveError(null);
-                          setApproveTarget(q);
-                        }}
-                      >
-                        견적 승인
-                      </button>
-                    )}
                     <button
                       type="button"
                       className={`pv2-qtoggle${open ? " pv2-qtoggle-on" : ""}`}
@@ -812,71 +773,6 @@ export default function CustomerQuotesPage() {
         />
       )}
 
-      {/* 견적 승인 확인 — 🔴 한 번 누르면 담당자가 배차를 시작한다. 확인 없이 바로
-          바꾸지 말 것(시안도 확인 모달을 그린다). */}
-      {approveTarget && (
-        <div
-          className="pv2-modal-dim"
-          role="presentation"
-          onClick={() => !approveBusy && setApproveTarget(null)}
-        >
-          <div
-            className="pv2-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="pv2-approve-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="pv2-modal-title" id="pv2-approve-title">
-              이 견적을 승인할까요?
-            </div>
-            <div className="pv2-modal-desc">
-              승인하면 정식 운송오더로 접수되어 담당자가 배차를 시작합니다.
-            </div>
-            <div className="pv2-qapv-box">
-              <div className="pv2-qapv-row">
-                <span className="pv2-qapv-k">견적번호</span>
-                <span className="pv2-qapv-v">{approveTarget.quote_no || "-"}</span>
-              </div>
-              <div className="pv2-qapv-row">
-                <span className="pv2-qapv-k">운송 구간</span>
-                <span className="pv2-qapv-v">
-                  {shortAddress(approveTarget.origin) || "-"} →{" "}
-                  {shortAddress(approveTarget.destination) || "-"}
-                </span>
-              </div>
-              <div className="pv2-qapv-rule" />
-              <div className="pv2-qapv-row">
-                <span className="pv2-qapv-k">견적 금액 (부가세 별도)</span>
-                <span className="pv2-qapv-v pv2-qapv-amount">{won(approveTarget.final_amount)}</span>
-              </div>
-            </div>
-            {approveError && (
-              <div className="pv2-alert pv2-alert-error" style={{ marginTop: 14 }}>
-                {approveError}
-              </div>
-            )}
-            <div className="pv2-modal-actions">
-              <button
-                type="button"
-                className="pv2-modal-cancel"
-                disabled={approveBusy}
-                onClick={() => setApproveTarget(null)}
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                className="pv2-modal-confirm pv2-modal-confirm-yellow"
-                disabled={approveBusy}
-                onClick={handleApprove}
-              >
-                {approveBusy ? "승인 중..." : "견적 승인"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }
