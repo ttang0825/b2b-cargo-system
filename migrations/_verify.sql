@@ -2346,6 +2346,14 @@ select substr(i.company_id::text, 1, 8)                            as 화주키,
  group by 1
  order by 2 desc;
 
+\echo '--- ㊳-e2 🚨 이 시스템에 입금완료 정산 건이 하나라도 있는가 (게스트·비포털까지) ---'
+select count(*)                                                        as 정산건_전체,
+       count(*) filter (where coalesce(payment_received, false))         as 입금완료,
+       count(*) filter (where coalesce(driver_paid, false))              as 차주지급완료,
+       count(*) filter (where collection_method = 'driver_direct')       as 선착불건,
+       count(*) filter (where coalesce(locked, false))                   as 확정잠김
+  from public.invoices;
+
 \echo '--- ㊳-f 🔴 월별 통계 화면을 그대로 재현 (최근 12개월 · 입금완료만) ---'
 with lim as (
   select to_char(date_trunc('month', (now() at time zone 'Asia/Seoul')) - interval '11 months', 'YYYY-MM') as from_m,
@@ -2363,8 +2371,13 @@ select substr(i.company_id::text, 1, 8)                       as 화주키,
  group by 1
  order by 3 desc, 4 desc;
 
-\echo '--- ㊳-g 포털(authenticated)이 무엇을 읽을 수 있는가 — 배지가 회사 필터 없이 센다 ---'
-select tablename as 표, cmd as 명령, policyname as 정책, roles::text as 롤
+-- 🔴 **정책 이름만 보지 말 것 — 조건(`qual`)을 같이 본다.** `staff_all_…` 이라는
+--    이름이 붙어 있어도 롤이 `authenticated` 면 **화주도 그 롤**이라(2차 리워드 조사),
+--    조건 안에서 직원인지 가리지 않으면 화주가 남의 회사 것을 읽는다.
+--    🚨 **② 월별 탭이 묶음을 포털에서 읽으려 하면 이 조건이 곧 답이다.**
+\echo '--- ㊳-g 포털(authenticated)이 무엇을 읽을 수 있는가 — 조건까지 본다 ---'
+select tablename as 표, cmd as 명령, policyname as 정책, roles::text as 롤,
+       coalesce(qual, '(없음)') as 조건
   from pg_policies
  where schemaname = 'public'
    and tablename in ('invoices', 'orders', 'dispatches', 'quotes',
