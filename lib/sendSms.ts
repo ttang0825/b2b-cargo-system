@@ -28,10 +28,15 @@ export type SmsTemplateType =
   | "portal_account_issued"
   | "portal_password_reissued"
   | "quote_summary"
+  // 🔴 견적 문자와 **다른 종류다** — 저쪽은 금액을 알리고 이것은 정보를 청한다.
+  //    합치면 이력에서 「견적을 보냈나 주소를 물었나」를 되짚을 수 없다.
+  | "quote_info_request" // 상·하차지 상세주소·담당자 회신 요청 (2026-09-22 신설)
   | "reward_earned" // 적립 안내 (2026-09-21 신설) — 🔴 DB CHECK 도 같이 늘렸다
   | "reward_deducted" // 적립금 사용(차감) 안내 (2026-09-21 신설) — 🔴 DB CHECK 도 같이
   // 🔴 **`reward_earned` 와 합치지 말 것** — 앞엣것은 「쌓였다」, 이것은 「쌓일 것이다」.
-  | "reward_status"; // 적립 현황 안내 (예상 적립 · 2026-09-21 신설)
+  | "reward_status" // 적립 현황 안내 (예상 적립 · 2026-09-21 신설)
+  // 🔴 **위 셋과 합치지 말 것** — 이것은 「이런 제도가 있습니다」이고 금액을 적지 않는다.
+  | "reward_intro"; // 리워드 이용 안내 (계정 발급 직후 · 2026-09-22 신설)
 
 export interface SendSmsLogParams {
   relatedType: SmsRelatedType;

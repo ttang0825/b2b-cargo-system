@@ -205,6 +205,9 @@ function TopNavInner() {
     // 🔴 견적서 공유 링크(2026-09-15) — 원칙 11번. 빼면 화주가 문자로 받아 연
     //    견적서 위에 **관리자 메뉴가 얹힌다.**
     pathname?.startsWith("/q/") ||
+    // 🔴 적립 이벤트 안내(2026-09-22) — 원칙 11번. 빼면 화주가 문자로 받아 연
+    //    안내 페이지 위에 **관리자 메뉴가 얹힌다.**
+    pathname?.startsWith("/reward-event") ||
     pathname?.startsWith("/terms") ||
     pathname?.startsWith("/privacy") ||
     pathname?.startsWith("/email-policy");

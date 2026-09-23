@@ -10199,3 +10199,193 @@ tbody tr:hover {
   gap: 8px;
   align-items: center;
 }
+
+/* ── 적립 이벤트 안내 (공개 화면 `/reward-event`, 2026-09-22) ──────────────────
+   사용자가 준 초안 HTML 의 짜임(어두운 히어로 + 흰 카드 + 예시 박스 + 어두운 문의
+   블록)을 옮긴 것이다.
+   🔴 **서체를 새로 불러오지 않았다** — 초안은 Pretendard·Paperlogy 를 CDN 에서
+      받았지만 이 저장소는 SUIT·Space Grotesk 를 쓴다(`app/layout.tsx`). 한 화면만
+      다른 서체를 받으면 그 화면만 폰트가 늦게 뜨고, 이 환경에서는 CDN 이 막혀 있어
+      렌더링 확인도 못 한다.
+   🔴 **색은 토큰으로 쓴다**(`--brand-yellow` 는 초안의 `#FFD834` 와 같은 값이다).
+   🔴 **`.portal-v2` 토큰을 끌어오지 말 것** — 그 스코프 밖에서는 색이 안 나온다.
+   🔴 **클래스 앞가지는 `.rwe-` 다** — `.guide-*` 처럼 이 화면 전용이다. */
+.rwe-page {
+  background: #f4f3f0;
+}
+.rwe-hero {
+  background: #0e0f12;
+  color: #fff;
+  text-align: center;
+  /* 🔴 위 여백은 `PublicPageHeader` 가 `fixed` 라 그 높이만큼 비워야 한다 */
+  padding: 128px 20px 64px;
+}
+.rwe-eyebrow {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--brand-yellow);
+}
+.rwe-title {
+  margin: 14px 0 0;
+  /* 🔴 `clamp` 으로 두어 390px 에서도 한 줄이 안 넘치게 한다(렌더링으로 확인했다) */
+  font-size: clamp(28px, 6vw, 52px);
+  line-height: 1.18;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  word-break: keep-all;
+}
+.rwe-rate {
+  color: var(--brand-yellow);
+}
+.rwe-scope {
+  margin: 18px auto 0;
+  max-width: 520px;
+  font-size: 14px;
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.72);
+  word-break: keep-all;
+}
+.rwe-body {
+  max-width: 760px;
+  padding: 20px 20px 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.rwe-card {
+  padding: 26px 28px 28px;
+}
+.rwe-h2 {
+  margin: 0 0 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e6e4dd;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+.rwe-lead {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.6;
+  letter-spacing: -0.02em;
+  word-break: keep-all;
+}
+.rwe-list {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.rwe-h2 + .rwe-list {
+  margin-top: 0;
+}
+.rwe-list li {
+  position: relative;
+  padding-left: 13px;
+  font-size: 14.5px;
+  line-height: 1.7;
+  color: #4a4945;
+  word-break: keep-all;
+}
+.rwe-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 10px;
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: #c7c5be;
+}
+.rwe-ex {
+  margin-top: 16px;
+  padding: 15px 17px;
+  border-radius: 12px;
+  background: #f7f6f3;
+}
+.rwe-ex-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #8b8a85;
+}
+.rwe-ex p {
+  margin: 6px 0 0;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: #4a4945;
+  word-break: keep-all;
+}
+.rwe-cta {
+  margin-top: 6px;
+  padding: 32px 24px 34px;
+  border-radius: 16px;
+  background: #0e0f12;
+  color: #fff;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.rwe-cta p {
+  margin: 0;
+  max-width: 480px;
+  font-size: 15px;
+  line-height: 1.68;
+  color: rgba(255, 255, 255, 0.78);
+  word-break: keep-all;
+}
+.rwe-cta-hours {
+  font-size: 13px !important;
+}
+.rwe-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 26px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 700;
+  /* 🔴 `.btn` 과 같은 이유로 밑줄을 지운다(2026-09-22 · 링크로 만든 버튼) */
+  text-decoration: none;
+  white-space: nowrap;
+}
+.rwe-btn-yellow {
+  background: var(--brand-yellow);
+  color: #0e0f12;
+}
+.rwe-cta-links {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+  color: rgba(255, 255, 255, 0.72);
+}
+.rwe-cta-links a {
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+@media (max-width: 700px) {
+  .rwe-hero {
+    padding: 104px 18px 48px;
+  }
+  .rwe-body {
+    padding: 16px 16px 72px;
+  }
+  .rwe-card {
+    padding: 22px 18px 24px;
+  }
+  .rwe-cta {
+    padding: 28px 18px 30px;
+  }
+  .rwe-btn {
+    width: 100%;
+  }
+}

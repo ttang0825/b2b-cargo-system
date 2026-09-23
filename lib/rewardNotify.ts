@@ -22,7 +22,12 @@
 //
 // 🔴 **던지지 않는다.** 미리보기를 못 만들어도 적립과 입금확인은 이미 끝난 일이다.
 
-import { rewardEarnedMessage, rewardDeductedMessage, rewardStatusMessage } from "./sms/templates";
+import {
+  rewardEarnedMessage,
+  rewardDeductedMessage,
+  rewardStatusMessage,
+  rewardIntroMessage,
+} from "./sms/templates";
 import { resolveSmsSender, contactPhoneForBody } from "./smsSenderPhone";
 import type { SmsPreview } from "@/components/SmsConfirmModal";
 
@@ -402,6 +407,103 @@ export async function buildRewardStatusSmsPreview(
         pendingCount,
         balance,
         portalVisible,
+        contactPhone: sender ? contactPhoneForBody(sender) : null,
+        staffName: sender?.staffName ?? null,
+      }),
+      senderDisplay: sender?.display ?? null,
+      senderStaffName: sender?.staffName ?? null,
+      senderIsStaffPhone: sender?.isStaffPhone ?? false,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ── 「리워드 이용 안내」 (2026-09-22 · 사용자 요청) ─────────────────────────────
+//
+// 사용자 원문: *"포인트 지급 안내 메세지를 보내고 싶다. 고객 첫거래후 전화로 계정등록을
+//   유도할 생각이다. 계정등록후 계정정보 안내 문자를 보낸후 이벤트 포인트 사용안내
+//   문자도 보내고 싶다. 위치는 화주 상세 기업고객 리워드에 문자보내기 기능이 있으면
+//   되고 간단한 내용으로 전달하면 될것 같다."*
+//
+// 🔴 **`buildRewardStatusSmsPreview` 와 합치지 말 것.** 저쪽은 **금액**을 알리고
+//    (그래서 알릴 숫자가 하나도 없으면 안 만든다), 이것은 **제도**를 알린다 —
+//    계정 발급 직후라 보통 아직 쌓인 것이 0 인데, 그 조건으로 막으면 **정작 보내야
+//    할 때 안 나간다.** 두 문자의 「안 만드는 조건」이 정반대다.
+//
+// 🔴 **관문이 둘뿐이다** — 참여(`enabled`)와 문자 안내(`sms_notification_enabled`).
+//    🔴 `sms_on_delivery_enabled` 는 **보지 않는다**(그 칸은 운송완료 자리 전용이고,
+//       이 문자는 담당자가 손으로 누르는 자리다 · 2026-09-22 확정과 같은 자세).
+//    🔴 잔액·예상은 **아예 세지 않는다**(위 주석 — 금액을 적지 않는 문자다).
+
+export type RewardIntroNotifyInput = {
+  admin: any;
+  campaign: {
+    id: string;
+    earn_rate: number;
+    minimum_use_amount: number;
+    use_end_date: string;
+  };
+  companyId: string;
+  /** `sms_logs.related_id` — 원장에 줄이 생기지 않으므로 화주 id 다 */
+  relatedId: string;
+};
+
+export async function buildRewardIntroSmsPreview(
+  input: RewardIntroNotifyInput
+): Promise<SmsPreview | null> {
+  try {
+    const { admin, campaign, companyId } = input;
+
+    const { data: memberships, error: mErr } = await admin
+      .from("reward_memberships")
+      .select("enabled,sms_notification_enabled,portal_visible")
+      .eq("company_id", companyId)
+      .eq("campaign_id", campaign.id)
+      .limit(1);
+    if (mErr) return null;
+    const m = (memberships || [])[0];
+    // 🚨 **멤버십이 없으면 만들지 않는다** — 리워드는 **선택된 기업만** 참여하는
+    //    프로모션이다(표시광고법 제3조 · HANDOFF §5-3). 참여하지 않는 화주에게
+    //    제도를 소개하면 **신청하면 되는 것으로 읽힌다.**
+    // 🔴 `enabled` 가 꺼진 것은 「신규 적립 중단」이라, 「이만큼 쌓입니다」를 새로
+    //    안내하는 이 문자는 그때도 만들지 않는다.
+    if (!m || m.enabled !== true || m.sms_notification_enabled !== true) return null;
+
+    const { data: company, error: cErr } = await admin
+      .from("companies")
+      .select("name,contact_mobile")
+      .eq("id", companyId)
+      .maybeSingle();
+    if (cErr) return null;
+
+    // 🔴 발신번호 실패를 따로 잡는다(2차에 실제로 겪었다 — 던지면 창이 통째로 안 뜬다)
+    let sender: Awaited<ReturnType<typeof resolveSmsSender>> | null = null;
+    try {
+      sender = await resolveSmsSender();
+    } catch {
+      sender = null;
+    }
+
+    return {
+      relatedType: "reward",
+      relatedId: input.relatedId,
+      templateType: "reward_intro",
+      recipientType: "customer",
+      recipientPhone: company?.contact_mobile || null,
+      message: rewardIntroMessage({
+        companyName: company?.name ?? null,
+        // 🔴 **캠페인에서 읽는다 — 리터럴을 적지 말 것**(원칙 40번과 같은 결)
+        // 🚨 **`earn_rate` 는 분수다**(`numeric(6,4)` · CHECK `> 0 and <= 1` ·
+        //    실제 값 `0.0500`). 그대로 넘기면 문자에 **「0.05%」**가 찍힌다.
+        //    화면 둘도 `* 100` 해서 그린다(`/admin/reward` · `CompanyRewardPanel`).
+        //    🔴 **이 곱을 빼지 말 것.**
+        earnRatePercent: Number(campaign.earn_rate) * 100,
+        minimumUseAmount: campaign.minimum_use_amount,
+        useEndDate: campaign.use_end_date,
+        portalVisible: m.portal_visible === true,
+        // 🔴 **문의 줄은 담당자 번호·이름이다**(사용자 확정 2026-09-23) — 같은 파일의
+        //    다른 세 미리보기와 같다. 🔴 대표번호로 고정하지 말 것.
         contactPhone: sender ? contactPhoneForBody(sender) : null,
         staffName: sender?.staffName ?? null,
       }),

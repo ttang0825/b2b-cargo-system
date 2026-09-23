@@ -1,13 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
-import {
-  quoteSummaryMessage,
-  quoteShareLinkMessage,
-  QUOTE_SMS_SUBJECT,
-} from "@/lib/sms/templates";
+import { quoteSummaryMessage, quoteShareLinkMessage } from "@/lib/sms/templates";
 import { generateShareToken, quoteShareUrl } from "@/lib/quoteShare";
-import { SMS_BYTE_LIMIT, byteLength } from "@/lib/sms/byteLength";
 import { resolveSmsSender, contactPhoneForBody } from "@/lib/smsSenderPhone";
 
 // 견적 안내는 자동발송이 아니라 견적 상세의 "견적서 출력(PDF)" 옆 수동 버튼으로만
@@ -111,9 +106,6 @@ export async function POST(req: Request) {
     recipientType: "customer",
     recipientPhone: phone,
     message,
-    // 🔴 **단문에 제목을 주면 솔라피가 LMS 로 올린다** — 링크 문자는 87byte 라
-    //    제목 없이 SMS 로 나가야 한다. 옛 LMS 본문으로 떨어졌을 때만 제목을 준다.
-    subject: byteLength(message) > SMS_BYTE_LIMIT ? QUOTE_SMS_SUBJECT : null,
     senderDisplay: sender.display,
     senderStaffName: sender.staffName,
     senderIsStaffPhone: sender.isStaffPhone,
