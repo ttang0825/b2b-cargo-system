@@ -20,9 +20,8 @@ import { createClient } from "@supabase/supabase-js";
 import { getCurrentStaff } from "@/lib/getCurrentStaff";
 import {
   quoteInfoRequestMessage,
-  QUOTE_INFO_REQUEST_SMS_SUBJECT,
 } from "@/lib/sms/templates";
-import { resolveSmsSender, contactPhoneForBody } from "@/lib/smsSenderPhone";
+import { resolveSmsSender } from "@/lib/smsSenderPhone";
 
 export const dynamic = "force-dynamic";
 
@@ -67,11 +66,11 @@ export async function POST(req: Request) {
 
   const sender = await resolveSmsSender();
 
+  // 🔴 **`contactPhone`·`staffName` 을 넘기지 않는다** — 이 문자의 문의 줄은
+  //    **대표번호 고정**이다(사용자 확정 2026-09-23). 함수가 그 인자를 아예 받지 않는다.
   const message = quoteInfoRequestMessage({
     origin: (quote as any).origin,
     destination: (quote as any).destination,
-    contactPhone: contactPhoneForBody(sender),
-    staffName: sender.staffName,
   });
 
   return NextResponse.json({
@@ -81,8 +80,6 @@ export async function POST(req: Request) {
     recipientType: "customer",
     recipientPhone: phone,
     message,
-    // 🔴 **머리말·제목을 여기 문자열로 적지 말 것** — 정의처는 `lib/sms/templates.ts` 다.
-    subject: QUOTE_INFO_REQUEST_SMS_SUBJECT,
     senderDisplay: sender.display,
     senderStaffName: sender.staffName,
     senderIsStaffPhone: sender.isStaffPhone,

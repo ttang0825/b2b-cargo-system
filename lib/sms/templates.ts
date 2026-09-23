@@ -1,7 +1,6 @@
 import { COMPANY_SUPPORT_PHONE } from "@/lib/contactInfo";
 import { SITE_URL } from "@/lib/siteUrl";
 import { ARRIVAL_FILLER_TIME } from "@/lib/arrivalType";
-import { SMS_BYTE_LIMIT, byteLength } from "@/lib/sms/byteLength";
 
 // SMS 문구 유일 정의처.
 //
@@ -16,6 +15,9 @@ import { SMS_BYTE_LIMIT, byteLength } from "@/lib/sms/byteLength";
 // 고객센터 대표번호를 넘긴다(`lib/smsSenderPhone.ts`의 contactPhoneForBody).
 // **템플릿 안에서 COMPANY_SUPPORT_PHONE을 직접 쓰지 말 것** — 안내번호가 담당자
 // 번호로 바뀌지 않고 대표번호로 고정돼버린다.
+// 🔴 **예외가 둘 있다(2026-09-23 사용자 확정)** — 「정보 회신 요청」·「리워드 이용 안내」는
+// 대표번호로 **고정하는 것이 의도**다. 그 둘만 `supportContactLine()` 을 쓰고 `staffName`
+// 인자를 아예 받지 않는다. 사유는 그 함수 주석. 🔴 **위 금지를 근거로 되돌리지 말 것.**
 //
 // ⚠️ **용어 기준(33차)**: 이 문구들은 고객·차주에게 그대로 발송되므로 고객 접점 용어를
 // 쓴다 — "화주"가 아니라 **"고객"**, "화주포털"이 아니라 **"운송관리"**. 반면 코드
@@ -129,6 +131,26 @@ function scheduleText(value: string | null | undefined): string | null {
 function contactLine(params: WithContact & { staffName?: string | null }): string {
   const who = params.staffName ? ` (담당 ${params.staffName})` : "";
   return `문의 ${contact(params.contactPhone)}${who}`;
+}
+
+/**
+ * **대표번호만** 적는 문의 줄 — 🔴 담당자 이름도, 담당자 개인 번호도 붙이지 않는다.
+ *
+ * 사용자 확정(2026-09-23 · PR #184 리뷰): *「「정보 회신 요청 문자」, 「리워드 안내
+ * 문자」 에 문의 전화번호랑 담당자 이름은 빼자. 대신 문의 전화번호를 대표번호를 넣자.」*
+ *
+ * 🔴 **`contactLine()` 으로 되돌리지 말 것.** 그 함수는 **보낸 담당자**에게 회신이
+ *    오도록 만든 것이라(35차 발신번호 차수) 담당자 번호와 이름을 적는다. 이 두 문자는
+ *    성격이 다르다:
+ *      · 정보 회신 요청 — 회신이 **문자로 그 발신번호에** 오므로, 본문 문의 줄까지
+ *        담당자 번호일 이유가 없다. 담당자가 자리에 없을 때 걸 곳이 필요하다.
+ *      · 리워드 이용 안내 — 제도 소개라 **누가 보냈는지가 중요하지 않다.**
+ * 🔴 **이 줄에 `staffName` 을 받는 인자를 다시 만들지 말 것** — 인자가 있으면 다음
+ *    호출부가 무심코 넘긴다. 두 문자 함수는 `staffName` 자체를 받지 않는다.
+ * 🔴 **번호를 문자열로 적지 말 것** — 정의처는 `lib/contactInfo.ts` 하나다.
+ */
+function supportContactLine(): string {
+  return `문의 ${COMPANY_SUPPORT_PHONE}`;
 }
 
 /**
@@ -536,38 +558,37 @@ export function truncateToBytes(text: string, maxBytes: number): string {
 }
 
 /**
- * LMS 제목 — 알림창에서 바로 구분되도록(지시서 4-4).
- *
- * ⚠️ **2026-09-15 부터 견적안내는 SMS 라 이 제목이 붙지 않는다**(`quoteShareLinkMessage`).
- *    ⚠️ **머리말이 2026-09-18 에 바뀌었다** — 그전에는 띄어쓰기가 있는 표기였다.
- *    이미 나간 LMS 의 제목은 그대로다(`sms_logs` 를 고치지 않는다).
- *    단문에는 제목이 없어서 주면 솔라피가 **LMS 로 올려버린다**(`lib/sms/solapiProvider.ts`).
- *    🔴 그래서 `app/api/admin/send-sms/route.ts` 가 **본문이 90byte 를 넘을 때만** 준다.
- *    상수 자체는 남겨 둔다 — 링크를 못 만든 견적은 옛 LMS 본문으로 나가고 그때 쓴다.
- */
-export const QUOTE_SMS_SUBJECT = `${SMS_HEADER} 견적 안내`;
-
-// 🔴 **머리말을 라우트에 문자열로 다시 적지 말 것** — 정의처는 `SMS_HEADER` 하나다.
-//    이 문구는 항상 90byte 를 넘는 LMS 라(회신 항목을 줄로 나눠 적는 것이 목적이다)
-//    제목을 늘 준다 — 87byte SMS 인 견적 링크 문자와 사정이 다르다.
-export const QUOTE_INFO_REQUEST_SMS_SUBJECT = `${SMS_HEADER} 정보 회신 요청`;
-
-/**
  * 이 문자에 **LMS 제목을 붙일 것인가** — 🔴 **정의처는 여기 하나다.**
  *
- * 🚨 **두 곳에 따로 적은 것이 결함의 원인이었다.** `send-sms` 는 길이를 봤는데
- *    `sms-logs/resend` 는 `template_type` 만 보고 붙여서, **87byte 짜리 견적 링크
- *    문자를 재발송하면 제목이 붙어 LMS 로 나갔다**(솔라피는 제목이 있으면 단문을
- *    장문으로 올린다 — `lib/sms/solapiProvider.ts`). 에러가 아니라 **요금과 알림창
- *    표기만 달라져서** 눈치채기 어려운 자리다.
+ * 🚨 **2026-09-23 부터 어떤 문자에도 제목을 붙이지 않는다**(사용자 확정 · PR #184 리뷰):
+ *    *「문자내용에 [web발신] 상단에 볼드체 제목글처럼 들어간 건 없는게 낫지 않나?
+ *      아래 내용과 중복된다.」*
+ *    LMS 제목은 휴대폰에서 `[web발신]` 위에 **굵은 한 줄**로 그려지는데, 이 저장소의
+ *    문자는 본문 첫 줄이 이미 `[위캐리운송] … 안내` 라서 **같은 말이 두 번** 나온다.
  *
- * 🔴 **`templateType` 만 보고 붙이던 쪽으로 되돌리지 말 것.**
- * ⚠️ 담당자가 확인창에서 본문을 길게 고치면 그때는 LMS 가 맞으므로 제목이 붙는다 —
- *    그래서 판정 기준이 **종류가 아니라 본문 길이**다.
+ * 🟢 **없애도 문자 종류는 안 바뀐다** — 솔라피는 `type` 을 주지 않으면 **본문 길이로**
+ *    SMS/LMS 를 가른다(`lib/sms/solapiProvider.ts`). 90byte 를 넘는 본문은 제목이
+ *    없어도 그대로 LMS 다. 실제로 **13개 판본 중 12개가 이미 제목 없이** 나가고 있었고
+ *    (실측 2026-09-23) 바뀐 것은 견적안내 폴백 LMS 하나뿐이다.
+ * 🔴 **그 하나 때문에 `quoteSummaryMessage` 본문 첫 줄에 머리말을 넣었다** — 그 문자는
+ *    본문에 `[위캐리운송]` 이 **없어서 제목이 유일한 브랜드 표시**였다. 제목만 떼면
+ *    고객이 **누가 보낸 문자인지 알 수 없다.** 🔴 **둘을 따로 되돌리지 말 것.**
+ *
+ * 🚨 **제목을 두 곳에 따로 적은 것이 과거 결함의 원인이었다.** `send-sms` 는 길이를 봤는데
+ *    `sms-logs/resend` 는 `template_type` 만 보고 붙여서, **87byte 짜리 견적 링크 문자를
+ *    재발송하면 제목이 붙어 LMS 로 나갔다**(솔라피는 제목이 있으면 단문을 장문으로
+ *    올린다). 에러가 아니라 **요금과 알림창 표기만 달라져서** 눈치채기 어려운 자리였다.
+ *    ⚠️ **실은 세 곳이었다** — `send-quote-sms` 도 자기만의 판정을 갖고 있었다(실측
+ *    2026-09-23). 셋 다 이 함수로 모았다.
+ *
+ * 🔴 **이 함수를 「항상 null 이니 지우자」로 지우지 말 것.** 판정이 한 곳에 있다는 것이
+ *    위 결함을 막는 구조다 — 지우면 라우트마다 제목이 다시 생긴다.
+ * 🔴 **제목을 되살리려면 본문 첫 줄의 머리말을 함께 빼야 한다**(그러지 않으면 사용자가
+ *    지적한 중복이 그대로 돌아온다). `sendSmsWithLog` 의 `subject` 배관은 남겨 두었다.
+ * ⚠️ **이미 나간 문자의 제목은 그대로다** — `sms_logs` 를 고치지 않는다.
  */
-export function smsSubjectFor(templateType: string, message: string): string | null {
-  if (templateType !== "quote_summary") return null;
-  return byteLength(message) > SMS_BYTE_LIMIT ? QUOTE_SMS_SUBJECT : null;
+export function smsSubjectFor(_templateType: string, _message: string): string | null {
+  return null;
 }
 
 // 시·도 축약. 견적안내의 "구간" 한 줄을 짧게 유지하기 위한 것으로,
@@ -662,7 +683,12 @@ export function quoteSummaryMessage(
       : "견적 금액은 별도 안내드립니다.";
 
   return [
-    "요청하신 운송 건의 견적을 안내드립니다.",
+    // 🔴 **머리말을 빼지 말 것**(2026-09-23 신설) — 이 문자는 2026-09-23 까지 본문에
+    //    `[위캐리운송]` 이 **없었고** LMS 제목이 유일한 브랜드 표시였다. 제목을
+    //    폐지하면서(`smsSubjectFor`) 여기로 옮긴 것이다. 🔴 **제목을 되살리는 것으로
+    //    갈음하지 말 것** — 그러면 사용자가 지적한 「같은 말이 두 번」이 돌아온다.
+    // ⚠️ 이 문자는 견적서 링크를 못 만들었을 때만 나가는 폴백이다(336byte LMS).
+    `${SMS_HEADER} 요청하신 운송 건의 견적을 안내드립니다.`,
     "",
     ...details,
     "",
@@ -741,10 +767,11 @@ export function quoteShareLinkMessage(params: { shareUrl: string }): string {
  *    비었는지 짚지 않는다 — 짚으려면 없는 칸을 새로 만들어야 한다.
  */
 export function quoteInfoRequestMessage(
-  params: WithContact & {
+  // 🔴 **`WithContact`·`staffName` 을 받지 않는다 — 대표번호로 고정이다**(사용자 확정
+  //    2026-09-23). 인자를 두면 다음 호출부가 무심코 담당자 번호를 넘긴다.
+  params: {
     origin?: string | null;
     destination?: string | null;
-    staffName?: string | null;
   }
 ): string {
   const route =
@@ -770,7 +797,7 @@ export function quoteInfoRequestMessage(
     "※ 알려주신 현장 담당자 연락처는 해당 운송 건의 배차·연락 목적으로만 쓰이며,",
     "담당자분께 미리 알려주신 뒤 전달 부탁드립니다.",
     "",
-    contactLine(params),
+    supportContactLine(),
   ].join("\n");
 }
 
@@ -808,7 +835,8 @@ export function quoteInfoRequestMessage(
  *    제도를 소개하는 자리에서 **혜택이 없다는 인상**만 남는다.
  */
 export function rewardIntroMessage(
-  params: WithContact & {
+  // 🔴 **`WithContact`·`staffName` 을 받지 않는다 — 대표번호로 고정이다**(위 참고).
+  params: {
     companyName?: string | null;
     /**
      * 적립률 **퍼센트 값**(5 = 5%). 🔴 리터럴 5 를 적지 말 것 — 캠페인에서 읽는다.
@@ -820,7 +848,6 @@ export function rewardIntroMessage(
     minimumUseAmount?: number | null;
     /** 사용 종료일 `YYYY-MM-DD` — 없으면 줄을 안 그린다 */
     useEndDate?: string | null;
-    staffName?: string | null;
     /** 화주포털 적립금 화면이 켜져 있는가(`portal_visible`) */
     portalVisible?: boolean | null;
   }
@@ -865,6 +892,6 @@ export function rewardIntroMessage(
     // 🔴 **주소를 여기 문자열로 적지 말 것** — 정의처는 `lib/siteUrl.ts` 하나다.
     `자세한 안내 ${SITE_URL}/reward-event`,
     "",
-    contactLine(params),
+    supportContactLine(),
   ].join("\n");
 }
