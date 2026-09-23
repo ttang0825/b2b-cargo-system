@@ -21,7 +21,7 @@ import { getCurrentStaff } from "@/lib/getCurrentStaff";
 import {
   quoteInfoRequestMessage,
 } from "@/lib/sms/templates";
-import { resolveSmsSender } from "@/lib/smsSenderPhone";
+import { resolveSmsSender, contactPhoneForBody } from "@/lib/smsSenderPhone";
 
 export const dynamic = "force-dynamic";
 
@@ -66,11 +66,13 @@ export async function POST(req: Request) {
 
   const sender = await resolveSmsSender();
 
-  // 🔴 **`contactPhone`·`staffName` 을 넘기지 않는다** — 이 문자의 문의 줄은
-  //    **대표번호 고정**이다(사용자 확정 2026-09-23). 함수가 그 인자를 아예 받지 않는다.
+  // 🔴 **문의 줄은 담당자 번호·이름이다**(사용자 확정 2026-09-23) — 열세 판본이 전부 같다.
+  //    번호가 등록돼 있지 않으면 `contactPhoneForBody` 가 대표번호로 떨어뜨린다.
   const message = quoteInfoRequestMessage({
     origin: (quote as any).origin,
     destination: (quote as any).destination,
+    contactPhone: contactPhoneForBody(sender),
+    staffName: sender.staffName,
   });
 
   return NextResponse.json({

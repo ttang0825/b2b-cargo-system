@@ -502,9 +502,10 @@ export async function buildRewardIntroSmsPreview(
         minimumUseAmount: campaign.minimum_use_amount,
         useEndDate: campaign.use_end_date,
         portalVisible: m.portal_visible === true,
-        // 🔴 **문의 줄은 대표번호 고정이다**(사용자 확정 2026-09-23) — `contactPhone`·
-        //    `staffName` 을 넘기지 않는다. 함수가 그 인자를 아예 받지 않는다.
-        //    ⚠️ 발신번호(`senderDisplay`)는 그대로 담당자 번호다 — 다른 축이다.
+        // 🔴 **문의 줄은 담당자 번호·이름이다**(사용자 확정 2026-09-23) — 같은 파일의
+        //    다른 세 미리보기와 같다. 🔴 대표번호로 고정하지 말 것.
+        contactPhone: sender ? contactPhoneForBody(sender) : null,
+        staffName: sender?.staffName ?? null,
       }),
       senderDisplay: sender?.display ?? null,
       senderStaffName: sender?.staffName ?? null,

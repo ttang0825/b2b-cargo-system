@@ -15,9 +15,16 @@ import { ARRIVAL_FILLER_TIME } from "@/lib/arrivalType";
 // 고객센터 대표번호를 넘긴다(`lib/smsSenderPhone.ts`의 contactPhoneForBody).
 // **템플릿 안에서 COMPANY_SUPPORT_PHONE을 직접 쓰지 말 것** — 안내번호가 담당자
 // 번호로 바뀌지 않고 대표번호로 고정돼버린다.
-// 🔴 **예외가 둘 있다(2026-09-23 사용자 확정)** — 「정보 회신 요청」·「리워드 이용 안내」는
-// 대표번호로 **고정하는 것이 의도**다. 그 둘만 `supportContactLine()` 을 쓰고 `staffName`
-// 인자를 아예 받지 않는다. 사유는 그 함수 주석. 🔴 **위 금지를 근거로 되돌리지 말 것.**
+// 🔴 **예외는 없다 — 열세 판본이 전부 담당자 번호·이름을 적는다**(사용자 확정 2026-09-23:
+// *「모든 문자메세지의 마지막에 문의 부분에 담당자의 연락처를 남기자.」*).
+// ⚠️ **같은 날 한 번 갈렸다가 되돌아왔다** — 그 앞 지시(*「문의 전화번호랑 담당자 이름은
+// 빼자. 대신 대표번호를」*)로 「정보 회신 요청」·「리워드 이용 안내」 둘만 대표번호로
+// 고정하는 전용 함수를 뒀는데, 뒤 지시가 그것을 뒤집었다.
+// 🔴 **그 전용 함수를 다시 만들지 말 것** — 두 문자만 다르게 두려는 판단은 한 번 접혔다.
+// 🔴 **번호·이름을 코드에 적지 말 것** — 이 저장소는 public 이다. 값은 로그인한 담당자의
+// `staff_accounts.sms_sender_phone` 과 이름에서 온다(`lib/smsSenderPhone.ts`).
+// 등록된 번호가 없을 때만 대표번호로 떨어지는 것은 그대로 둔다(솔라피 미등록 번호를
+// 안내하면 고객이 걸어도 받을 사람이 없다).
 //
 // ⚠️ **용어 기준(33차)**: 이 문구들은 고객·차주에게 그대로 발송되므로 고객 접점 용어를
 // 쓴다 — "화주"가 아니라 **"고객"**, "화주포털"이 아니라 **"운송관리"**. 반면 코드
@@ -131,26 +138,6 @@ function scheduleText(value: string | null | undefined): string | null {
 function contactLine(params: WithContact & { staffName?: string | null }): string {
   const who = params.staffName ? ` (담당 ${params.staffName})` : "";
   return `문의 ${contact(params.contactPhone)}${who}`;
-}
-
-/**
- * **대표번호만** 적는 문의 줄 — 🔴 담당자 이름도, 담당자 개인 번호도 붙이지 않는다.
- *
- * 사용자 확정(2026-09-23 · PR #184 리뷰): *「「정보 회신 요청 문자」, 「리워드 안내
- * 문자」 에 문의 전화번호랑 담당자 이름은 빼자. 대신 문의 전화번호를 대표번호를 넣자.」*
- *
- * 🔴 **`contactLine()` 으로 되돌리지 말 것.** 그 함수는 **보낸 담당자**에게 회신이
- *    오도록 만든 것이라(35차 발신번호 차수) 담당자 번호와 이름을 적는다. 이 두 문자는
- *    성격이 다르다:
- *      · 정보 회신 요청 — 회신이 **문자로 그 발신번호에** 오므로, 본문 문의 줄까지
- *        담당자 번호일 이유가 없다. 담당자가 자리에 없을 때 걸 곳이 필요하다.
- *      · 리워드 이용 안내 — 제도 소개라 **누가 보냈는지가 중요하지 않다.**
- * 🔴 **이 줄에 `staffName` 을 받는 인자를 다시 만들지 말 것** — 인자가 있으면 다음
- *    호출부가 무심코 넘긴다. 두 문자 함수는 `staffName` 자체를 받지 않는다.
- * 🔴 **번호를 문자열로 적지 말 것** — 정의처는 `lib/contactInfo.ts` 하나다.
- */
-function supportContactLine(): string {
-  return `문의 ${COMPANY_SUPPORT_PHONE}`;
 }
 
 /**
@@ -767,11 +754,11 @@ export function quoteShareLinkMessage(params: { shareUrl: string }): string {
  *    비었는지 짚지 않는다 — 짚으려면 없는 칸을 새로 만들어야 한다.
  */
 export function quoteInfoRequestMessage(
-  // 🔴 **`WithContact`·`staffName` 을 받지 않는다 — 대표번호로 고정이다**(사용자 확정
-  //    2026-09-23). 인자를 두면 다음 호출부가 무심코 담당자 번호를 넘긴다.
-  params: {
+  params: WithContact & {
     origin?: string | null;
     destination?: string | null;
+    /** 담당자 이름 — 「문의 … (담당 …)」 한 줄에 쓴다(사용자 확정 2026-09-23) */
+    staffName?: string | null;
   }
 ): string {
   const route =
@@ -797,7 +784,7 @@ export function quoteInfoRequestMessage(
     "※ 알려주신 현장 담당자 연락처는 해당 운송 건의 배차·연락 목적으로만 쓰이며,",
     "담당자분께 미리 알려주신 뒤 전달 부탁드립니다.",
     "",
-    supportContactLine(),
+    contactLine(params),
   ].join("\n");
 }
 
@@ -835,8 +822,7 @@ export function quoteInfoRequestMessage(
  *    제도를 소개하는 자리에서 **혜택이 없다는 인상**만 남는다.
  */
 export function rewardIntroMessage(
-  // 🔴 **`WithContact`·`staffName` 을 받지 않는다 — 대표번호로 고정이다**(위 참고).
-  params: {
+  params: WithContact & {
     companyName?: string | null;
     /**
      * 적립률 **퍼센트 값**(5 = 5%). 🔴 리터럴 5 를 적지 말 것 — 캠페인에서 읽는다.
@@ -848,6 +834,8 @@ export function rewardIntroMessage(
     minimumUseAmount?: number | null;
     /** 사용 종료일 `YYYY-MM-DD` — 없으면 줄을 안 그린다 */
     useEndDate?: string | null;
+    /** 담당자 이름 — 「문의 … (담당 …)」 한 줄에 쓴다(사용자 확정 2026-09-23) */
+    staffName?: string | null;
     /** 화주포털 적립금 화면이 켜져 있는가(`portal_visible`) */
     portalVisible?: boolean | null;
   }
@@ -892,6 +880,6 @@ export function rewardIntroMessage(
     // 🔴 **주소를 여기 문자열로 적지 말 것** — 정의처는 `lib/siteUrl.ts` 하나다.
     `자세한 안내 ${SITE_URL}/reward-event`,
     "",
-    supportContactLine(),
+    contactLine(params),
   ].join("\n");
 }
